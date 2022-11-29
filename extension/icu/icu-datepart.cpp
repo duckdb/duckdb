@@ -329,24 +329,24 @@ struct ICUDatePart : public ICUDateFunc {
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					res_valid.SetValid(idx);
+					res_valid.SetValid(i);
 					auto micros = SetTime(calendar, tdata[idx]);
 					const auto is_finite = Timestamp::IsFinite(tdata[idx]);
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
-							FlatVector::Validity(*child_entry).SetValid(idx);
+							FlatVector::Validity(*child_entry).SetValid(i);
 							auto pdata = FlatVector::GetData<int64_t>(*child_entry);
 							auto adapter = info.adapters[col];
-							pdata[idx] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						} else {
-							FlatVector::Validity(*child_entry).SetInvalid(idx);
+							FlatVector::Validity(*child_entry).SetInvalid(i);
 						}
 					}
 				} else {
-					res_valid.SetInvalid(idx);
+					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(idx);
+						FlatVector::Validity(*child_entry).SetInvalid(i);
 					}
 				}
 			}

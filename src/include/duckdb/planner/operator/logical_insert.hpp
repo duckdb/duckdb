@@ -16,8 +16,9 @@ namespace duckdb {
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
 public:
-	explicit LogicalInsert(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(0), return_chunk(false) {
+	LogicalInsert(TableCatalogEntry *table, idx_t table_index)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
+	      return_chunk(false) {
 	}
 
 	vector<vector<unique_ptr<Expression>>> insert_values;
@@ -54,5 +55,6 @@ protected:
 	}
 
 	idx_t EstimateCardinality(ClientContext &context) override;
+	vector<idx_t> GetTableIndex() const override;
 };
 } // namespace duckdb

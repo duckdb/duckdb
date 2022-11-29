@@ -1496,6 +1496,16 @@ function duckdb_struct_type_child_count(handle)
 end
 
 """
+Returns the number of members of a union type.
+
+* type: The logical type object
+* returns: The number of members of a union type.
+"""
+function duckdb_union_type_member_count(handle)
+    return ccall((:duckdb_union_type_member_count, libduckdb), UInt64, (duckdb_logical_type,), handle)
+end
+
+"""
 Retrieves the name of the struct child.
 
 The result must be freed with `duckdb_free`
@@ -1515,6 +1525,25 @@ function duckdb_struct_type_child_name(handle, index)
 end
 
 """
+Retrieves the name of the union member.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The member index
+* returns: The name of the union member. Must be freed with `duckdb_free`.
+"""
+function duckdb_union_type_member_name(handle, index)
+    return ccall(
+        (:duckdb_union_type_member_name, libduckdb),
+        Ptr{UInt8},
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
+end
+
+"""
 Retrieves the child type of the given struct type at the specified index.
 
 The result must be freed with `duckdb_destroy_logical_type`
@@ -1526,6 +1555,25 @@ The result must be freed with `duckdb_destroy_logical_type`
 function duckdb_struct_type_child_type(handle, index)
     return ccall(
         (:duckdb_struct_type_child_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
+end
+
+"""
+Retrieves the member type of the given union type at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* index: The member index
+* returns: The member type of the union type. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_union_type_member_type(handle, index)
+    return ccall(
+        (:duckdb_union_type_member_type, libduckdb),
         duckdb_logical_type,
         (duckdb_logical_type, UInt64),
         handle,
@@ -1736,6 +1784,25 @@ function duckdb_struct_vector_get_child(vector, index)
         (duckdb_vector, UInt64),
         vector,
         index - 1
+    )
+end
+
+"""
+Retrieves the member vector of a union vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* index: The member index
+* returns: The member vector
+"""
+function duckdb_union_vector_get_member(vector, index)
+    return ccall(
+        (:duckdb_struct_vector_get_child, libduckdb),
+        duckdb_vector,
+        (duckdb_vector, UInt64),
+        vector,
+        1 + (index - 1)
     )
 end
 

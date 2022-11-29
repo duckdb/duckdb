@@ -370,7 +370,10 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
 	ss << StringUtil::Replace(query, "\n", " ") + "\n";
-	if (query.empty()) {
+
+	// checking the tree to ensure the query is really empty
+	// the query string is empty when a logical plan is deserialized
+	if (query.empty() && !root) {
 		return;
 	}
 
@@ -558,7 +561,7 @@ string QueryProfiler::ToJSON() const {
 	if (!IsEnabled()) {
 		return "{ \"result\": \"disabled\" }\n";
 	}
-	if (query.empty()) {
+	if (query.empty() && !root) {
 		return "{ \"result\": \"empty\" }\n";
 	}
 	if (!root) {

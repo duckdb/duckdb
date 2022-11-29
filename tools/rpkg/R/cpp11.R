@@ -16,8 +16,8 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-rapi_register_df <- function(conn, name, value, integer64, overwrite) {
-  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite))
+rapi_register_df <- function(conn, name, value, integer64, overwrite, experimental) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite, experimental))
 }
 
 rapi_unregister_df <- function(conn, name) {
@@ -52,8 +52,8 @@ rapi_expr_tostring <- function(expr) {
   .Call(`_duckdb_rapi_expr_tostring`, expr)
 }
 
-rapi_rel_from_df <- function(con, df) {
-  .Call(`_duckdb_rapi_rel_from_df`, con, df)
+rapi_rel_from_df <- function(con, df, experimental) {
+  .Call(`_duckdb_rapi_rel_from_df`, con, df, experimental)
 }
 
 rapi_rel_filter <- function(rel, exprs) {
@@ -110,6 +110,18 @@ rapi_rel_sql <- function(rel, sql) {
 
 rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
+}
+
+rapi_rel_to_altrep <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_altrep`, rel)
+}
+
+rapi_rel_from_altrep_df <- function(df) {
+  .Call(`_duckdb_rapi_rel_from_altrep_df`, df)
+}
+
+rapi_df_is_materialized <- function(df) {
+  .Call(`_duckdb_rapi_df_is_materialized`, df)
 }
 
 rapi_release <- function(stmt) {

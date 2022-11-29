@@ -107,9 +107,6 @@ private:
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);
 
-	//! Append a scalar or aggregate function within the given schema
-	CatalogEntry *AddFunction(ClientContext &context, CreateFunctionInfo *info);
-
 	//! Alters a catalog entry
 	void Alter(ClientContext &context, AlterInfo *info);
 

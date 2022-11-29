@@ -242,6 +242,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
+		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
 		bool can_merge = has_range > 0;
 		bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 		switch (op.join_type) {
@@ -254,6 +255,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		default:
 			break;
 		}
+		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
+		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
+			can_iejoin = false;
+			can_merge = false;
+		}
 		if (can_iejoin) {
 			plan = make_unique<PhysicalIEJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                   op.estimated_cardinality);
@@ -261,7 +267,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
-		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions)) {
+		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                           op.estimated_cardinality);

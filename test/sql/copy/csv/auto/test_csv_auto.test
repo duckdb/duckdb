@@ -6,7 +6,7 @@ require vector_size 512
 
 
 statement ok
-SET experimental_parallel_csv=true;
+SET experimental_parallel_csv=false;
 
 
 # CSV file with RFC-conform dialect
