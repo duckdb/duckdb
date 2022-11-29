@@ -23,5 +23,5 @@ class TestQueryInterruption(object):
             # If this is not reached, we could not cancel the query before it completed
             # indicating that the query interruption functionality is broken
             assert True
-        else:
+        except KeyboardInterrupt:
             pytest.fail()
