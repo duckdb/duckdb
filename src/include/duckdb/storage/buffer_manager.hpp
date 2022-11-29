@@ -60,7 +60,7 @@ public:
 	//! blocks can be evicted
 	void SetLimit(idx_t limit = (idx_t)-1);
 
-	static BufferManager &GetBufferManager(ClientContext &context);
+	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 
 	idx_t GetUsedMemory() {

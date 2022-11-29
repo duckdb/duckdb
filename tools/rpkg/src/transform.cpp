@@ -68,7 +68,6 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
 		break;
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
 		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
@@ -152,7 +151,6 @@ void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::LIST:
 		break; // no extra decoration required, do nothing
@@ -363,7 +361,6 @@ void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n,
 	case LogicalTypeId::DOUBLE:
 		VectorToR<double, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 		break;
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);

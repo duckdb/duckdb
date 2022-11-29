@@ -105,12 +105,12 @@ public:
 };
 
 struct DefaultCasts {
-	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
-	                                            const LogicalType &target);
+	DUCKDB_API static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
+	                                                       const LogicalType &target);
 
-	static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-	static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-	static bool ReinterpretCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool ReinterpretCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 private:
 	static BoundCastInfo BlobCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
