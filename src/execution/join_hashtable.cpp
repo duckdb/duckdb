@@ -132,7 +132,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 
 	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
-	auto main_ht = (data_ptr_t *)hash_map.Ptr();
+	auto main_ht = (data_ptr_t *)hash_map.get();
 	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
@@ -314,7 +314,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	hashes.Flatten(count);
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto pointers = (atomic<data_ptr_t> *)hash_map.Ptr();
+	auto pointers = (atomic<data_ptr_t> *)hash_map.get();
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 
 	if (parallel) {
@@ -331,19 +331,19 @@ void JoinHashTable::InitializePointerTable() {
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
 
-	if (!hash_map.IsValid()) {
+	if (!hash_map.get()) {
 		// allocate the HT if not yet done
-		hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+		hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
 	}
-	D_ASSERT(hash_map.GetFileBuffer().size >= capacity * sizeof(data_ptr_t));
+	D_ASSERT(hash_map.GetSize() == capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
-	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));
+	memset(hash_map.get(), 0, capacity * sizeof(data_ptr_t));
 }
 
 void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel) {
 	// Pointer table should be allocated
-	D_ASSERT(hash_map.IsValid());
+	D_ASSERT(hash_map.get());
 
 	vector<BufferHandle> local_pinned_handles;
 
@@ -1225,7 +1225,8 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 		result.local_partition = local_partitions.back().get();
 		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
-		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
+		local_spill_collections.emplace_back(
+		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
 		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 
@@ -1256,7 +1257,8 @@ void ProbeSpill::Finalize() {
 		local_partition_append_states.clear();
 	} else {
 		if (local_spill_collections.empty()) {
-			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+			global_spill_collection =
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			global_spill_collection = move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1273,7 +1275,8 @@ void ProbeSpill::PrepareNextProbe() {
 		auto &partitions = global_partitions->GetPartitions();
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
 			// Can't probe, just make an empty one
-			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+			global_spill_collection =
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = move(partitions[ht.partition_start]);
