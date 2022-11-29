@@ -35,15 +35,18 @@ class BufferManager : public VirtualBufferManager {
 
 public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
+	virtual ~BufferManager();
 
 public:
-	virtual ~BufferManager();
 	static unique_ptr<BufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory,
 	                                                     idx_t maximum_memory);
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
+	idx_t GetUsedMemory() const final override;
+	atomic<idx_t> &GetMutableUsedMemory() final override;
+	idx_t GetMaxMemory() const final override;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -152,6 +155,14 @@ protected:
 	Allocator buffer_allocator;
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
+
+private:
+	//! The lock for changing the memory limit
+	mutex limit_lock;
+	//! The current amount of memory that is occupied by the buffer manager (in bytes)
+	atomic<idx_t> current_memory;
+	//! The maximum amount of memory that the buffer manager can keep (in bytes)
+	atomic<idx_t> maximum_memory;
 };
 
 } // namespace duckdb

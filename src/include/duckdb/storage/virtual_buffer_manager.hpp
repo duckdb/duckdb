@@ -23,7 +23,7 @@ class VirtualBufferManager {
 	friend class BlockManager;
 
 public:
-	VirtualBufferManager(idx_t maximum_memory_p) : current_memory(0), maximum_memory(maximum_memory_p) {
+	VirtualBufferManager() {
 	}
 	virtual ~VirtualBufferManager() {
 	}
@@ -36,12 +36,10 @@ public:
 	//! FIXME: Missing prototype for Destroy??
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
-	virtual idx_t GetUsedMemory() {
-		return current_memory;
-	}
-	virtual idx_t GetMaxMemory() {
-		return maximum_memory;
-	}
+	virtual idx_t GetUsedMemory() const = 0;
+	virtual idx_t GetMaxMemory() const = 0;
+	virtual atomic<idx_t> &GetMutableUsedMemory();
+	// virtual GetMutableMaxMemory() = 0;
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);
@@ -67,14 +65,6 @@ protected:
 	virtual void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
 	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer);
 	virtual void DeleteTemporaryFile(block_id_t id);
-
-protected:
-	//! The lock for changing the memory limit
-	mutex limit_lock;
-	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	atomic<idx_t> current_memory;
-	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	atomic<idx_t> maximum_memory;
 };
 
 } // namespace duckdb

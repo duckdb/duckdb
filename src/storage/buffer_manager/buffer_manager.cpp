@@ -98,14 +98,25 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 }
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
-    : VirtualBufferManager(maximum_memory), db(db), temp_directory(move(tmp)), queue(make_unique<EvictionQueue>()),
+    : VirtualBufferManager(), db(db), temp_directory(move(tmp)), queue(make_unique<EvictionQueue>()),
       temporary_id(MAXIMUM_BLOCK), queue_insertions(0),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
-                       make_unique<BufferAllocatorData>(*this)) {
+                       make_unique<BufferAllocatorData>(*this)),
+      current_memory(0), maximum_memory(maximum_memory) {
 	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
 BufferManager::~BufferManager() {
+}
+
+idx_t BufferManager::GetUsedMemory() const {
+	return current_memory;
+}
+idx_t BufferManager::GetMaxMemory() const {
+	return maximum_memory;
+}
+atomic<idx_t> &BufferManager::GetMutableUsedMemory() {
+	return current_memory;
 }
 
 template <typename... ARGS>

@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+atomic<idx_t> &VirtualBufferManager::GetMutableUsedMemory() {
+	throw NotImplementedException("This type of BufferManager does not have a mutable used memory getter");
+}
+
 shared_ptr<BlockHandle> VirtualBufferManager::RegisterSmallMemory(idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }
@@ -55,19 +59,19 @@ unique_ptr<FileBuffer> VirtualBufferManager::ConstructManagedBuffer(idx_t size, 
 
 // Protected methods
 
-void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+void VirtualBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	throw NotImplementedException("This type of BufferManager does not support 'AddToEvictionQueue");
 }
 
-void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
+void VirtualBufferManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
-unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer) {
+unique_ptr<FileBuffer> VirtualBufferManager::ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }
 
-void DeleteTemporaryFile(block_id_t id) {
+void VirtualBufferManager::DeleteTemporaryFile(block_id_t id) {
 	throw NotImplementedException("This type of BufferManager does not support 'DeleteTemporaryFile");
 }
 

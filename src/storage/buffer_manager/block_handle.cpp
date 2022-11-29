@@ -36,7 +36,7 @@ BlockHandle::~BlockHandle() {
 		D_ASSERT(memory_charge.size > 0);
 		// the block is still loaded in memory: erase it
 		buffer.reset();
-		memory_charge.Resize(buffer_manager.current_memory, 0);
+		memory_charge.Resize(buffer_manager.GetMutableUsedMemory(), 0);
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
@@ -59,7 +59,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 		// temporary block that cannot be destroyed: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(block_id, *buffer);
 	}
-	memory_charge.Resize(block_manager.buffer_manager.current_memory, 0);
+	memory_charge.Resize(block_manager.buffer_manager.GetMutableUsedMemory(), 0);
 	state = BlockState::BLOCK_UNLOADED;
 	return move(buffer);
 }
