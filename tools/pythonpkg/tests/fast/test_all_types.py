@@ -86,6 +86,18 @@ class TestAllTypes(object):
             correct_result = correct_answer_map[cur_type]
             assert recursive_equality(result, correct_result)
 
+    def test_bytearray_with_nulls(self):
+        con = duckdb.connect(database=':memory:')
+        con.execute("CREATE TABLE test (content BLOB)")
+        want = bytearray([1, 2, 0, 3, 4])
+        con.execute("INSERT INTO test VALUES (?)", [want])
+
+        con.execute("SELECT * from test")
+        got = bytearray(con.fetchall()[0][0])
+        # Don't truncate the array on the nullbyte
+        assert want == bytearray(got)
+
+
     def test_fetchnumpy(self, duckdb_cursor):
         conn = duckdb.connect()
 
