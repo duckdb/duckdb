@@ -250,8 +250,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
-		block = buffer_manager.RegisterMemory(alloc_size, false);
-		handle = buffer_manager.Pin(block);
+		handle = buffer_manager.Allocate(alloc_size, false, &block);
 		state.overflow_blocks[block->BlockId()] = new_block.get();
 		new_block->block = move(block);
 		new_block->next = move(state.head);

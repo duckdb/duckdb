@@ -306,6 +306,10 @@ public:
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
+	if (hash_table->Count() == 0) {
+		hash_table->finalized = true;
+		return;
+	}
 	hash_table->InitializePointerTable();
 	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(move(new_event));
