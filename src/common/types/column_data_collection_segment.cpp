@@ -4,7 +4,7 @@ namespace duckdb {
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
-    : allocator(move(allocator_p)), types(move(types_p)), count(0) {
+    : allocator(move(allocator_p)), types(move(types_p)), count(0), heap(allocator->GetAllocator()) {
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {

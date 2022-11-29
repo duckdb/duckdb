@@ -73,10 +73,6 @@ public:
 		return readers;
 	}
 
-	const idx_t &GetMemoryUsage() const {
-		return memory_usage;
-	}
-
 	inline bool IsSwizzled() const {
 		return !unswizzled;
 	}
@@ -87,6 +83,10 @@ public:
 
 	inline void SetCanDestroy(bool can_destroy_p) {
 		can_destroy = can_destroy_p;
+	}
+
+	inline const idx_t &GetMemoryUsage() const {
+		return memory_usage;
 	}
 
 private:

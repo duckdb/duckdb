@@ -45,7 +45,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	if (segment_size < Storage::BLOCK_SIZE) {
 		block = buffer_manager.RegisterSmallMemory(segment_size);
 	} else {
-		block = buffer_manager.RegisterMemory(segment_size, false);
+		buffer_manager.Allocate(segment_size, false, &block);
 	}
 	return make_unique<ColumnSegment>(db, block, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
 	                                  INVALID_BLOCK, 0, segment_size);
@@ -128,9 +128,9 @@ void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > this->segment_size);
 	D_ASSERT(offset == 0);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
 	auto old_handle = buffer_manager.Pin(block);
-	auto new_handle = buffer_manager.Pin(new_block);
+	shared_ptr<BlockHandle> new_block;
+	auto new_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 	this->block_id = new_block->BlockId();
 	this->block = move(new_block);
