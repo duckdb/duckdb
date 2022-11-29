@@ -18,11 +18,6 @@ struct BufferAllocatorData : PrivateAllocatorData {
 	BufferManager &manager;
 };
 
-// unique_ptr<BufferManager> BufferManager::CreateBufferManager(DatabaseInstance &db, string temp_directory,
-//                                                              idx_t maximum_memory) {
-//	return make_unique<BufferManager>(db, temp_directory, maximum_memory);
-// }
-
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                              FileBufferType type) {
 	if (source) {

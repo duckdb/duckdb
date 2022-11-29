@@ -20,7 +20,7 @@ typedef idx_t (*duckdb_used_memory_t)();
 // Contains the information that makes up the virtual buffer manager
 struct CBufferManagerConfig {
 	idx_t max_size; // Do we still need this??
-	duckdb_buffer buffer;
+	void *data;     // Context provided to 'allocate_func'
 	duckdb_allocate_buffer_t allocate_func;
 	duckdb_reallocate_buffer_t reallocate_func;
 	duckdb_destroy_buffer_t destroy_func;
@@ -49,6 +49,9 @@ public:
 private:
 private:
 	CBufferManagerConfig config;
+	unique_ptr<BlockManager> block_manager;
+	//! The temporary id used for managed buffers
+	atomic<block_id_t> temporary_id;
 };
 
 } // namespace duckdb

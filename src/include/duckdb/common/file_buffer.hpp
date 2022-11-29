@@ -25,6 +25,7 @@ public:
 	//! DIRECT_IO
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size);
 	FileBuffer(FileBuffer &source, FileBufferType type);
+	FileBuffer(Allocator &allocator, data_ptr_t buffer, uint64_t size);
 
 	virtual ~FileBuffer();
 
@@ -50,7 +51,7 @@ public:
 
 	void Clear();
 
-	// Same rules as the constructor. We will add room for a header, in additio to
+	// Same rules as the constructor. We will add room for a header, in addition to
 	// the requested user bytes. We will then sector-align the result.
 	void Resize(uint64_t user_size);
 
