@@ -21,6 +21,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("http_timeout", "HTTP timeout read/write/connection/retry (default 30000ms)",
 	                          LogicalType::UBIGINT);
 	config.AddExtensionOption("http_retries", "HTTP retries on I/O error (default 1)", LogicalType::UBIGINT);
+	config.AddExtensionOption("http_retry_wait_ms", "Time between retries (default 100ms)", LogicalType::UBIGINT);
+	config.AddExtensionOption("http_retry_backoff", "Exponential backoff factor for retry wait time (default 1)", LogicalType::FLOAT);
 
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
