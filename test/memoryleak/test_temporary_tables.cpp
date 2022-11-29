@@ -45,17 +45,12 @@ TEST_CASE("DB temporary table insertion", "[memoryleak]") {
 	DeleteDatabase(db_path);
 
 	DuckDB db(db_path);
-//	DuckDB db;
 	{
 		Connection con(db);
-		REQUIRE_NO_FAIL(
-			con.Query("SET threads=8;"));
-		REQUIRE_NO_FAIL(
-			con.Query("SET preserve_insertion_order=false;"));
-		REQUIRE_NO_FAIL(
-			con.Query("SET force_compression='uncompressed';"));
-		REQUIRE_NO_FAIL(
-			con.Query("create table t1 as select i from range(1000000) t(i);"));
+		REQUIRE_NO_FAIL(con.Query("SET threads=8;"));
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false;"));
+		REQUIRE_NO_FAIL(con.Query("SET force_compression='uncompressed';"));
+		REQUIRE_NO_FAIL(con.Query("create table t1 as select i from range(1000000) t(i);"));
 	}
 	Connection con(db);
 	while (true) {
@@ -80,6 +75,5 @@ TEST_CASE("Insert and delete data repeatedly", "[memoryleak]") {
 	while (true) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 SELECT * FROM range(100000)"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM t1"));
-
 	}
 }
