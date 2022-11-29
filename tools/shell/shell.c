@@ -12892,7 +12892,8 @@ static void exec_prepared_stmt(
 ){
   int rc;
   if (pArg->cMode == MODE_DuckBox) {
-	  char *str = sqlite3_print_duckbox(pStmt, pArg->max_rows, pArg->nullValue);
+	  size_t max_rows = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_rows : (size_t) -1;
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, pArg->nullValue);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -20391,7 +20392,7 @@ static void verify_uninitialized(void){
 static void main_init(ShellState *data) {
   memset(data, 0, sizeof(*data));
   data->normalMode = data->cMode = data->mode = MODE_DuckBox;
-  data->max_rows = 20;
+  data->max_rows = 40;
   data->autoExplain = 1;
   memcpy(data->colSeparator,SEP_Column, 2);
   memcpy(data->rowSeparator,SEP_Row, 2);
