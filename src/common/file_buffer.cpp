@@ -18,13 +18,6 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_
 	}
 }
 
-FileBuffer::FileBuffer(Allocator &allocator, data_ptr_t data, uint64_t size)
-    : allocator(allocator), type(FileBufferType::MANAGED_BUFFER) {
-	Init();
-	this->buffer = data;
-	this->size = size;
-}
-
 void FileBuffer::Init() {
 	buffer = nullptr;
 	size = 0;

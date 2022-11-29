@@ -33,13 +33,11 @@ struct CBufferManagerConfig {
 
 struct CBufferAllocatorData : public PrivateAllocatorData {
 	//! User-provided data, provided to the 'allocate_func'
-	void* allocation_context;
 	CBufferManager &manager;
 };
 
 class CBufferManager : public VirtualBufferManager {
 public:
-	// FIXME: take a config instead?
 	CBufferManager(CBufferManagerConfig config);
 	virtual ~CBufferManager() {
 	}
@@ -57,14 +55,15 @@ private:
 	static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
 	static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                         idx_t size);
+	                                          idx_t size);
+
 private:
 	CBufferManagerConfig config;
 	unique_ptr<BlockManager> block_manager;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 	Allocator custom_allocator;
-	//TODO: add some mechanism to keep track of which allocation belongs to which buffer
+	// TODO: add some mechanism to keep track of which allocation belongs to which buffer
 };
 
 } // namespace duckdb

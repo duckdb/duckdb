@@ -55,6 +55,7 @@ class BlockHandle {
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class VirtualBufferManager;
+	friend class CBufferManager;
 	friend class BufferManager;
 
 public:

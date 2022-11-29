@@ -296,6 +296,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
 		return make_unique<Block>(*source_buffer, block_id);
 	} else {
+		// FIXME: use the allocator of the buffer manager instead of the systems allocator?
 		return make_unique<Block>(Allocator::Get(db), block_id);
 	}
 }

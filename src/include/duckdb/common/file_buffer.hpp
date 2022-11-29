@@ -25,7 +25,6 @@ public:
 	//! DIRECT_IO
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size);
 	FileBuffer(FileBuffer &source, FileBufferType type);
-	FileBuffer(Allocator &allocator, data_ptr_t buffer, uint64_t size);
 
 	virtual ~FileBuffer();
 
