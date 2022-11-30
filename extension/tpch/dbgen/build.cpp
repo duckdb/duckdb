@@ -53,10 +53,10 @@ static void gen_phone(DSS_HUGE ind, char *target, seed_t *seed) {
 	RANDOM(exchg, 100, 999, seed);
 	RANDOM(number, 1000, 9999, seed);
 
-	snprintf(target, PHONE_LEN, "%02d", (int)(10 + (ind % NATIONS_MAX)));
-	snprintf(target + 3, PHONE_LEN, "%03d", (int)acode);
-	snprintf(target + 7, PHONE_LEN, "%03d", (int)exchg);
-	snprintf(target + 11, PHONE_LEN, "%04d", (int)number);
+	snprintf(target, 3, "%02d", (int)(10 + (ind % NATIONS_MAX)));
+	snprintf(target + 3, 4, "%03d", (int)acode);
+	snprintf(target + 7, 4, "%03d", (int)exchg);
+	snprintf(target + 11, 5, "%04d", (int)number);
 	target[2] = target[6] = target[10] = '-';
 
 	return;
@@ -68,11 +68,11 @@ long mk_cust(DSS_HUGE n_cust, customer_t *c, DBGenContext *ctx) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		snprintf(szFormat, 100, C_NAME_FMT, 9, &HUGE_FORMAT[1]);
+		snprintf(szFormat, sizeof(szFormat), C_NAME_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	c->custkey = n_cust;
-	snprintf(c->name, C_NAME_LEN + 3, szFormat, C_NAME_TAG, n_cust);
+	snprintf(c->name, sizeof(c->name), szFormat, C_NAME_TAG, n_cust);
 	V_STR(C_ADDR_LEN, &ctx->Seed[C_ADDR_SD], c->address);
 	c->alen = (int)strlen(c->address);
 	RANDOM(i, 0, (nations.count - 1), &ctx->Seed[C_NTRG_SD]);
@@ -121,7 +121,7 @@ long mk_order(DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		snprintf(szFormat, 100, O_CLRK_FMT, 9, &HUGE_FORMAT[1]);
+		snprintf(szFormat, sizeof(szFormat), O_CLRK_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	if (asc_date == NULL)
@@ -142,7 +142,7 @@ long mk_order(DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num) {
 
 	pick_str(&o_priority_set, &ctx->Seed[O_PRIO_SD], o->opriority);
 	RANDOM(clk_num, 1, MAX((ctx->scale_factor * O_CLRK_SCL), O_CLRK_SCL), &ctx->Seed[O_CLRK_SD]);
-	snprintf(o->clerk, O_CLRK_LEN + 1, szFormat, O_CLRK_TAG, clk_num);
+	snprintf(o->clerk, sizeof(o->clerk), szFormat, O_CLRK_TAG, clk_num);
 	TEXT(O_CMNT_LEN, &ctx->Seed[O_CMNT_SD], o->comment);
 	o->clen = (int)strlen(o->comment);
 #ifdef DEBUG
@@ -220,16 +220,16 @@ long mk_part(DSS_HUGE index, part_t *p, DBGenContext *ctx) {
 	static char szBrandFormat[100];
 
 	if (!bInit) {
-		snprintf(szFormat, 100, P_MFG_FMT, 1, &HUGE_FORMAT[1]);
-		snprintf(szBrandFormat, 100, P_BRND_FMT, 2, &HUGE_FORMAT[1]);
+		snprintf(szFormat, sizeof(szFormat), P_MFG_FMT, 1, &HUGE_FORMAT[1]);
+		snprintf(szBrandFormat, sizeof(szBrandFormat), P_BRND_FMT, 2, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	p->partkey = index;
 	agg_str(&colors, (long)P_NAME_SCL, &ctx->Seed[P_NAME_SD], p->name);
 	RANDOM(temp, P_MFG_MIN, P_MFG_MAX, &ctx->Seed[P_MFG_SD]);
-	snprintf(p->mfgr, P_MFG_LEN + 1, szFormat, P_MFG_TAG, temp);
+	snprintf(p->mfgr, sizeof(p->mfgr), szFormat, P_MFG_TAG, temp);
 	RANDOM(brnd, P_BRND_MIN, P_BRND_MAX, &ctx->Seed[P_BRND_SD]);
-	snprintf(p->brand, P_BRND_LEN + 1, szBrandFormat, P_BRND_TAG, (temp * 10 + brnd));
+	snprintf(p->brand, sizeof(p->brand), szBrandFormat, P_BRND_TAG, (temp * 10 + brnd));
 	p->tlen = pick_str(&p_types_set, &ctx->Seed[P_TYPE_SD], p->type);
 	p->tlen = (int)strlen(p_types_set.list[p->tlen].text);
 	RANDOM(p->size, P_SIZE_MIN, P_SIZE_MAX, &ctx->Seed[P_SIZE_SD]);
@@ -255,11 +255,11 @@ long mk_supp(DSS_HUGE index, supplier_t *s, DBGenContext *ctx) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		snprintf(szFormat, 100, S_NAME_FMT, 9, &HUGE_FORMAT[1]);
+		snprintf(szFormat, sizeof(szFormat), S_NAME_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	s->suppkey = index;
-	snprintf(s->name, S_NAME_LEN + 1, szFormat, S_NAME_TAG, index);
+	snprintf(s->name, sizeof(s->name), szFormat, S_NAME_TAG, index);
 	V_STR(S_ADDR_LEN, &ctx->Seed[S_ADDR_SD], s->address);
 	s->alen = (int)strlen(s->address);
 	RANDOM(i, 0, nations.count - 1, &ctx->Seed[S_NTRG_SD]);
