@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -413,7 +414,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
+			throw ParserException("Unrecognized option for force_compression, expected none, uncompressed, rle, "
 			                      "dictionary, pfor, chimp, patas, bitpacking or fsst");
 		}
 		config.options.force_compression = compression_type;
@@ -421,7 +422,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 }
 
 Value ForceCompressionSetting::GetSetting(ClientContext &context) {
-	return Value();
+	return Value(CompressionTypeToString(context.db->config.options.force_compression));
 }
 
 //===--------------------------------------------------------------------===//
@@ -435,7 +436,7 @@ void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 		auto mode = BitpackingModeFromString(mode_str);
 		if (mode == BitpackingMode::AUTO) {
 			throw ParserException(
-			    "Unrecognized option for PRAGMA set bitpacking mode, expected none, constant, constant_delta, "
+			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
 			    "delta_for, or for");
 		}
 		config.options.force_bitpacking_mode = mode;
@@ -443,7 +444,7 @@ void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 }
 
 Value ForceBitpackingModeSetting::GetSetting(ClientContext &context) {
-	return Value();
+	return Value(BitpackingModeToString(context.db->config.options.force_bitpacking_mode));
 }
 
 //===--------------------------------------------------------------------===//

@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types.hpp"
+
+// Undef annoying windows macro
+#undef max
 
 #include <limits>
 

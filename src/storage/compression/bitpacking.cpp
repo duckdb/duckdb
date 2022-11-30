@@ -155,7 +155,10 @@ public:
 			return;
 		}
 
-		D_ASSERT(compression_buffer_idx >= 2);
+		// Don't delta encoding 1 value makes no sense
+		if (compression_buffer_idx < 2) {
+			return;
+		};
 
 		// TODO: handle NULLS here?
 		// Currently we cannot handle nulls because we would need an additional step of patching for this.
@@ -634,7 +637,7 @@ public:
 			current_frame_of_reference = *(T *)(current_group_ptr);
 			current_group_ptr += sizeof(T);
 			break;
-		case BitpackingMode::AUTO:
+		default:
 			throw InternalException("Invalid bitpacking mode");
 		}
 
@@ -651,7 +654,7 @@ public:
 			break;
 		case BitpackingMode::CONSTANT:
 			break;
-		case BitpackingMode::AUTO:
+		default:
 			throw InternalException("Invalid bitpacking mode");
 		}
 
