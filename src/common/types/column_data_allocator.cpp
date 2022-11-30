@@ -192,6 +192,9 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 		if (!validity.RowIsValid(i)) {
 			continue;
 		}
+		if (strings[i].IsInlined()) {
+			continue;
+		}
 		strings[i].SetPointer(base_ptr);
 		base_ptr += strings[i].GetSize();
 	}
