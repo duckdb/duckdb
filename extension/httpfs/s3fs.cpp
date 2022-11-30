@@ -913,8 +913,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    return true;
 	    });
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw IOException("HTTP GET error on '" + listobjectv2_url + "' (Error code " + to_string((int)res.error()) +
-		                  ")");
+		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + listobjectv2_url + "'");
 	}
 
 	return response.str();

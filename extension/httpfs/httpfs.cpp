@@ -113,8 +113,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 				retry_cb();
 			}
 		} else {
-			throw IOException("HTTP " + method + " error on '" + url + "' (Error code " + to_string((int)res.error()) +
-			                  ")");
+			throw IOException(to_string(res.error()) + " error for " + "HTTP " + method + " to '" + url + "'");
 		}
 	}
 }
