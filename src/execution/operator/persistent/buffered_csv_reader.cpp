@@ -531,7 +531,9 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 
 		// init parse chunk and read csv with info candidate
 		InitParseChunk(sql_types.size());
-		ParseCSV(ParserMode::SNIFFING_DATATYPES);
+		if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
+			continue;
+		}
 		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
 			bool is_header_row = row_idx == 0;
 			idx_t row = row_idx - 1;
@@ -956,7 +958,10 @@ add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	finished_chunk = AddRow(insert_chunk, column);
+	finished_chunk = AddRow(insert_chunk, column, error_message);
+	if (!error_message.empty()) {
+		return false;
+	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1094,7 +1099,10 @@ final_state:
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
+		if (!error_message.empty()) {
+			return false;
+		}
 	}
 	// final stage, only reached after parsing the file is finished
 	// flush the parsed chunk and finalize parsing
@@ -1167,7 +1175,13 @@ add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	finished_chunk = AddRow(insert_chunk, column);
+	if (!error_message.empty()) {
+		return false;
+	}
+	finished_chunk = AddRow(insert_chunk, column, error_message);
+	if (!error_message.empty()) {
+		return false;
+	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1278,7 +1292,10 @@ final_state:
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
+		if (!error_message.empty()) {
+			return false;
+		}
 	}
 
 	// final stage, only reached after parsing the file is finished
