@@ -99,9 +99,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		for (auto &col_def : columns.Physical()) {
 			storage_columns.push_back(col_def.Copy());
 		}
-		storage =
-		    make_shared<DataTable>(catalog->db, StorageManager::Get(*catalog).GetTableIOManager(info),
-		                           schema->name, name, move(storage_columns), move(info->data));
+		storage = make_shared<DataTable>(catalog->GetAttached(), StorageManager::Get(*catalog).GetTableIOManager(info),
+		                                 schema->name, name, move(storage_columns), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;

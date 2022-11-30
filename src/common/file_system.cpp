@@ -39,7 +39,7 @@ FileSystem::~FileSystem() {
 }
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db->config.file_system;
+	return FileSystem::GetFileSystem(*context.db);
 }
 
 FileOpener *FileSystem::GetFileOpener(ClientContext &context) {

@@ -32,7 +32,7 @@ OptimisticDataWriter::~OptimisticDataWriter() {
 
 bool OptimisticDataWriter::PrepareWrite() {
 	// check if we should pre-emptively write the table to disk
-	if (table->info->IsTemporary() || StorageManager::GetStorageManager(table->db).InMemory()) {
+	if (table->info->IsTemporary() || StorageManager::Get(table->info->db).InMemory()) {
 		return false;
 	}
 	// we should! write the second-to-last row group to disk

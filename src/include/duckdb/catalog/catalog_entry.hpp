@@ -61,5 +61,7 @@ public:
 
 	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
 	virtual string ToSQL();
+
+	virtual void Verify(Catalog &catalog);
 };
 } // namespace duckdb

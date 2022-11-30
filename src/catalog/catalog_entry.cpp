@@ -29,4 +29,8 @@ string CatalogEntry::ToSQL() {
 }
 // LCOV_EXCL_STOP
 
+void CatalogEntry::Verify(Catalog &catalog_p) {
+	D_ASSERT(&catalog_p == catalog);
+}
+
 } // namespace duckdb

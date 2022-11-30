@@ -25,13 +25,13 @@ class TypeCatalogEntry;
 
 class CheckpointWriter {
 public:
-	explicit CheckpointWriter(DatabaseInstance &db) : db(db), catalog(Catalog::GetCatalog(db, INVALID_CATALOG)) {
+	explicit CheckpointWriter(AttachedDatabase &db) : db(db), catalog(Catalog::GetCatalog(db)) {
 	}
 	virtual ~CheckpointWriter() {
 	}
 
 	//! The database
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	//! The catalog
 	Catalog &catalog;
 
@@ -76,7 +76,7 @@ protected:
 class SingleFileCheckpointReader final : public CheckpointReader {
 public:
 	explicit SingleFileCheckpointReader(SingleFileStorageManager &storage)
-	    : CheckpointReader(Catalog::GetCatalog(storage.db, INVALID_CATALOG)), storage(storage) {
+	    : CheckpointReader(Catalog::GetCatalog(storage.GetAttached())), storage(storage) {
 	}
 
 	void LoadFromStorage();
@@ -94,7 +94,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager);
+	SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)

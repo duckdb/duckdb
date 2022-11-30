@@ -29,6 +29,9 @@ public:
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
+	DatabaseInstance &GetDatabase() {
+		return db;
+	}
 	const string &GetName() const {
 		return name;
 	}

@@ -31,6 +31,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -41,9 +42,14 @@ string SimilarCatalogEntry::GetQualifiedName() const {
 	return schema->name + "." + name;
 }
 
+Catalog::Catalog(AttachedDatabase &db)
+    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
+      dependency_manager(make_unique<DependencyManager>(*this)), attached_db(&db), db(nullptr) {
+	catalog_version = 0;
+}
 Catalog::Catalog(DatabaseInstance &db)
-    : db(db), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
-      dependency_manager(make_unique<DependencyManager>(*this)) {
+    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
+      dependency_manager(make_unique<DependencyManager>(*this)), attached_db(nullptr), db(&db) {
 	catalog_version = 0;
 }
 Catalog::~Catalog() {
@@ -52,7 +58,7 @@ Catalog::~Catalog() {
 void Catalog::Initialize(bool load_builtin) {
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	Connection con(db);
+	Connection con(GetDatabase());
 	con.BeginTransaction();
 
 	// create the default schema
@@ -69,6 +75,23 @@ void Catalog::Initialize(bool load_builtin) {
 
 	// commit transactions
 	con.Commit();
+	Verify();
+}
+
+DatabaseInstance &Catalog::GetDatabase() {
+	if (db) {
+		return *db;
+	} else {
+		D_ASSERT(attached_db);
+		return attached_db->GetDatabase();
+	}
+}
+
+AttachedDatabase &Catalog::GetAttached() {
+	if (!attached_db) {
+		throw InternalException("Catalog does not have an attached database");
+	}
+	return *attached_db;
 }
 
 Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
@@ -372,6 +395,9 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 	for (idx_t i = 0; i < catalogs.size(); i++) {
 		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
 		result = catalogs[i]->GetEntry(context, type, schema, name, if_exists, error_context);
+		if (result) {
+			return result;
+		}
 	}
 	return result;
 }
@@ -384,6 +410,9 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 	for (idx_t i = 0; i < catalogs.size(); i++) {
 		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
 		result = catalogs[i]->GetSchema(context, schema_name, if_exists, error_context);
+		if (result) {
+			return result;
+		}
 	}
 	return result;
 }
@@ -426,6 +455,12 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 		return;
 	}
 	return lookup.schema->Alter(context, info);
+}
+
+void Catalog::Verify() {
+#ifdef DEBUG
+	schemas->Verify(*this);
+#endif
 }
 
 idx_t Catalog::GetCatalogVersion() {

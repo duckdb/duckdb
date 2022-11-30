@@ -20,13 +20,13 @@
 
 namespace duckdb {
 
-bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
-	auto initial_reader = make_unique<BufferedFileReader>(database.GetFileSystem(), path.c_str());
+bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
+	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
 	}
-	Connection con(database);
+	Connection con(database.GetDatabase());
 	con.BeginTransaction();
 
 	// first deserialize the WAL to look for a checkpoint flag
@@ -58,7 +58,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	initial_reader.reset();
 	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
-		auto &manager = StorageManager::GetStorageManager(database);
+		auto &manager = database.GetStorageManager();
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
@@ -67,7 +67,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(database.GetFileSystem(), path.c_str());
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL

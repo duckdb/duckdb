@@ -11,18 +11,26 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
-StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only)
+StorageManager::StorageManager(AttachedDatabase &db, string path, bool read_only)
     : db(db), path(move(path)), read_only(read_only) {
 }
 
 StorageManager::~StorageManager() {
 }
 
+StorageManager &StorageManager::Get(AttachedDatabase &db) {
+	return db.GetStorageManager();
+}
 StorageManager &StorageManager::Get(Catalog &catalog) {
-	throw InternalException("FIXME: get storage manager of catalog")
+	return StorageManager::Get(catalog.GetAttached());
+}
+
+DatabaseInstance &StorageManager::GetDatabase() {
+	return db.GetDatabase();
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
@@ -68,7 +76,7 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only)
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
     : StorageManager(db, move(path), read_only) {
 }
 
@@ -80,8 +88,8 @@ void SingleFileStorageManager::LoadDatabase() {
 	}
 
 	string wal_path = path + ".wal";
-	auto &fs = db.GetFileSystem();
-	auto &config = db.config;
+	auto &fs = FileSystem::Get(db);
+	auto &config = DBConfig::Get(db);
 	bool truncate_wal = false;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
@@ -195,7 +203,8 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	if (InMemory() || read_only || !wal) {
 		return;
 	}
-	if (wal->GetWALSize() > 0 || db.config.options.force_checkpoint || force_checkpoint) {
+	auto &config = DBConfig::Get(db);
+	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
 		SingleFileCheckpointWriter checkpointer(db, *block_manager);
 		checkpointer.CreateCheckpoint();
@@ -228,9 +237,10 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 		return false;
 	}
 
+	auto &config = DBConfig::Get(db);
 	auto initial_size = log->GetWALSize();
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > db.config.options.checkpoint_wal_size;
+	return expected_wal_size > config.options.checkpoint_wal_size;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

@@ -639,4 +639,14 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
 		}
 	}
 }
+
+void CatalogSet::Verify(Catalog &catalog_p) {
+	D_ASSERT(&catalog_p == &catalog);
+	vector<CatalogEntry *> entries;
+	Scan([&](CatalogEntry *entry) { entries.push_back(entry); });
+	for (auto &entry : entries) {
+		entry->Verify(catalog_p);
+	}
+}
+
 } // namespace duckdb

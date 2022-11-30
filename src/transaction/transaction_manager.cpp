@@ -10,6 +10,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ struct CheckpointLock {
 	}
 };
 
-TransactionManager::TransactionManager(DatabaseInstance &db) : db(db), thread_is_checkpointing(false) {
+TransactionManager::TransactionManager(AttachedDatabase &db) : db(db), thread_is_checkpointing(false) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -73,7 +74,7 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto &catalog = Catalog::GetCatalog(db, INVALID_CATALOG);
+	auto &catalog = db.GetCatalog();
 	auto transaction =
 	    make_unique<Transaction>(context, start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
@@ -106,7 +107,7 @@ void TransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, Cl
 }
 
 void TransactionManager::Checkpoint(ClientContext &context, bool force) {
-	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
 		return;
 	}
@@ -155,12 +156,11 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 			D_ASSERT(CanCheckpoint(nullptr));
 		}
 	}
-	auto &storage = StorageManager::GetStorageManager(context);
-	storage.CreateCheckpoint();
+	storage_manager.CreateCheckpoint();
 }
 
 bool TransactionManager::CanCheckpoint(Transaction *current) {
-	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
 		return false;
 	}
@@ -223,7 +223,7 @@ string TransactionManager::CommitTransaction(ClientContext &context, Transaction
 	// checkpoint
 	if (checkpoint) {
 		// checkpoint the database to disk
-		auto &storage_manager = StorageManager::GetStorageManager(db);
+		auto &storage_manager = db.GetStorageManager();
 		storage_manager.CreateCheckpoint(false, true);
 	}
 	return error;

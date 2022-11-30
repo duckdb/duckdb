@@ -39,7 +39,7 @@ void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data
 	auto &data = (PragmaDatabaseListData &)*data_p.global_state;
 
 	idx_t count = 0;
-	for(; count < STANDARD_VECTOR_SIZE && data.index < data.databases.size(); data.index++, count++) {
+	for (; count < STANDARD_VECTOR_SIZE && data.index < data.databases.size(); data.index++, count++) {
 		output.data[0].SetValue(count, Value::INTEGER(data.index));
 		output.data[1].SetValue(count, Value(data.databases[data.index]->GetName()));
 		output.data[2].SetValue(count, Value(data.databases[data.index]->GetStorageManager().GetDBPath()));

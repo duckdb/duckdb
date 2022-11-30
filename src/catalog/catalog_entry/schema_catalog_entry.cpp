@@ -335,4 +335,18 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	}
 }
 
+void SchemaCatalogEntry::Verify(Catalog &catalog) {
+	CatalogEntry::Verify(catalog);
+
+	tables.Verify(catalog);
+	indexes.Verify(catalog);
+	table_functions.Verify(catalog);
+	copy_functions.Verify(catalog);
+	pragma_functions.Verify(catalog);
+	functions.Verify(catalog);
+	sequences.Verify(catalog);
+	collations.Verify(catalog);
+	types.Verify(catalog);
+}
+
 } // namespace duckdb

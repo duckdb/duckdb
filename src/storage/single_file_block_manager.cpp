@@ -83,7 +83,7 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Deserialize(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path_p, bool read_only, bool create_new,
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, bool read_only, bool create_new,
                                                bool use_direct_io)
     : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
@@ -106,7 +106,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	// open the RDBMS handle
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags, lock);
 	if (create_new) {
 		// if we create a new file, we fill the metadata of the file
@@ -402,7 +402,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	header.block_count = max_block;
 
-	auto &config = DBConfig::GetConfig(db);
+	auto &config = DBConfig::Get(db);
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}

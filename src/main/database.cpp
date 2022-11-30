@@ -53,27 +53,14 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		auto &storage = StorageManager::GetStorageManager(*this);
-		if (!storage.InMemory()) {
-			auto &config = storage.db.config;
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
-			}
-			storage.CreateCheckpoint(true);
-		}
-	} catch (...) {
-	}
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return db.GetBufferManager();
+}
+
+BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
+	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
@@ -100,8 +87,16 @@ Catalog &Catalog::GetCatalog(DatabaseInstance &db, const string &catalog_name) {
 	return entry->GetCatalog();
 }
 
+Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
+	return db.GetCatalog();
+}
+
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+FileSystem &FileSystem::Get(AttachedDatabase &db) {
+	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
@@ -112,6 +107,10 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+DBConfig &DBConfig::Get(AttachedDatabase &db) {
+	return DBConfig::GetConfig(db.GetDatabase());
+}
+
 const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
 	return db.config;
 }
@@ -120,11 +119,7 @@ const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
 	return context.config;
 }
 
-TransactionManager &TransactionManager::Get(ClientContext &context) {
-	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
-}
-
-TransactionManager &TransactionManager::Get(DatabaseInstance &db) {
+TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
 	return db.GetTransactionManager();
 }
 
@@ -184,7 +179,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
-	db_manager->AddDatabase(database_path, move(attached_database));
+	db_manager->AddDatabase(move(attached_database));
 
 	// initialize the system catalog
 	db_manager->GetSystemCatalog().Initialize(true);
@@ -225,14 +220,6 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 StorageManager &DatabaseInstance::GetStorageManager() {
 	return db_manager->GetDefaultDatabase().GetStorageManager();
 }
-//
-// Catalog &DatabaseInstance::GetSystemCatalog() {
-//	return db_manager->GetSystemCatalog();
-//}
-
-TransactionManager &DatabaseInstance::GetTransactionManager() {
-	return db_manager->GetDefaultDatabase().GetTransactionManager();
-}
 
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
 	return db.GetDatabaseManager();
@@ -268,6 +255,10 @@ Allocator &Allocator::Get(ClientContext &context) {
 
 Allocator &Allocator::Get(DatabaseInstance &db) {
 	return *db.config.allocator;
+}
+
+Allocator &Allocator::Get(AttachedDatabase &db) {
+	return Allocator::Get(db.GetDatabase());
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {

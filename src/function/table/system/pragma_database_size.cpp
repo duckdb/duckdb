@@ -53,7 +53,9 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 	if (data.finished) {
 		return;
 	}
-	auto &storage = StorageManager::GetStorageManager(context);
+	// FIXME: loop over all attached databases
+	auto &db = context.db->GetDatabaseManager().GetDefaultDatabase();
+	auto &storage = db.GetStorageManager();
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 
 	auto ds = storage.GetDatabaseSize();

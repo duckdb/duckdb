@@ -25,7 +25,7 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new, bool use_direct_io);
+	SingleFileBlockManager(AttachedDatabase &db, string path, bool read_only, bool create_new, bool use_direct_io);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
@@ -63,7 +63,7 @@ private:
 	vector<block_id_t> GetFreeListBlocks();
 
 private:
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
 	uint8_t active_header;
 	//! The path where the file is stored

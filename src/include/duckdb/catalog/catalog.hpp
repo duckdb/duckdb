@@ -30,6 +30,7 @@ struct CreateCollationInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 
+class AttachedDatabase;
 class ClientContext;
 class Transaction;
 
@@ -75,11 +76,10 @@ struct SimilarCatalogEntry {
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
+	explicit Catalog(AttachedDatabase &db);
 	explicit Catalog(DatabaseInstance &db);
 	~Catalog();
 
-	//! Reference to the database
-	DatabaseInstance &db;
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
 	//! The DependencyManager manages dependencies between different catalog objects
@@ -96,10 +96,14 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
+	//! Get the specific Catalog from the AttachedDatabase
+	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
 	DUCKDB_API DependencyManager &GetDependencyManager() {
 		return *dependency_manager;
 	}
+	DUCKDB_API AttachedDatabase &GetAttached();
+	DUCKDB_API DatabaseInstance &GetDatabase();
 
 	void Initialize(bool load_builtin);
 
@@ -218,7 +222,12 @@ public:
 
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context, const string &catalog_name);
 
+	DUCKDB_API void Verify();
+
 private:
+	//! Reference to the database
+	AttachedDatabase *attached_db;
+	DatabaseInstance *db;
 	//! The catalog version, incremented whenever anything changes in the catalog
 	atomic<idx_t> catalog_version;
 

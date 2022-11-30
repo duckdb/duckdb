@@ -35,6 +35,7 @@ void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, G
 		return;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
+	D_ASSERT(&catalog == schema->catalog);
 	catalog.CreateTable(context.client, schema, info.get());
 	state.finished = true;
 }

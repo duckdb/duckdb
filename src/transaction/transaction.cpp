@@ -15,6 +15,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include <cstring>
 
@@ -96,18 +97,18 @@ bool Transaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
 
-bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
-	auto &storage_manager = StorageManager::GetStorageManager(db);
+bool Transaction::AutomaticCheckpoint(AttachedDatabase &db) {
+	auto &storage_manager = db.GetStorageManager();
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
-string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {
+string Transaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
 	//    false: Then this function WILL write to the WAL and Flush/Persist it.
 	this->commit_id = commit_id;
-	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto &storage_manager = db.GetStorageManager();
 	auto log = storage_manager.GetWriteAheadLog();
 
 	UndoBuffer::IteratorState iterator_state;

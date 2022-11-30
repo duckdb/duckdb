@@ -43,6 +43,7 @@
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -60,8 +61,8 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
-      client_data(make_unique<ClientData>(*this)) {
+    : db(move(database)), transaction(db->GetDatabaseManager().GetDefaultDatabase().GetTransactionManager(), *this),
+      interrupted(false), client_data(make_unique<ClientData>(*this)) {
 }
 
 ClientContext::~ClientContext() {
@@ -147,7 +148,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 	query_progress = -1;
-	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
+	ActiveTransaction().active_query =
+	    db->GetDatabaseManager().GetDefaultDatabase().GetTransactionManager().GetQueryNumber();
 }
 
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {

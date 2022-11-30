@@ -17,12 +17,12 @@ class DatabaseInstance;
 class TableIOManager;
 
 struct DataTableInfo {
-	DataTableInfo(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table)
+	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table)
 	    : db(db), table_io_manager(move(table_io_manager_p)), cardinality(0), schema(move(schema)), table(move(table)) {
 	}
 
 	//! The database instance of the table
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the

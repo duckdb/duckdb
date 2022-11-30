@@ -88,6 +88,8 @@ public:
 	//! Creates an index with the given name in the schema
 	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
 
+	void Verify(Catalog &catalog) override;
+
 private:
 	//! Create a scalar or aggregate function within the given schema
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);

@@ -90,6 +90,8 @@ public:
 	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
+	void Verify(Catalog &catalog);
+
 private:
 	//! Adjusts table dependencies on the event of an UNDO
 	void AdjustTableDependencies(CatalogEntry *entry);

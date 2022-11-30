@@ -22,7 +22,7 @@
 
 namespace duckdb {
 
-DataTable::DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
+DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(db, move(table_io_manager_p), schema, table)),

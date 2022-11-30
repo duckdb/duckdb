@@ -62,6 +62,7 @@ public:
 
 	static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
+	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
 	idx_t GetUsedMemory() {
 		return current_memory;

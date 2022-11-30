@@ -38,7 +38,6 @@ public:
 	DUCKDB_API StorageManager &GetStorageManager();
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
-	DUCKDB_API TransactionManager &GetTransactionManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();

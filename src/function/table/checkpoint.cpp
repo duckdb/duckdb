@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,9 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &transaction_manager = TransactionManager::Get(context);
+	// FIXME: select database?
+	auto &db = DatabaseManager::Get(context).GetDefaultDatabase();
+	auto &transaction_manager = TransactionManager::Get(db);
 	transaction_manager.Checkpoint(context, FORCE);
 }
 

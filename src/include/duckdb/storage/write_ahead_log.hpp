@@ -22,6 +22,7 @@ namespace duckdb {
 
 struct AlterInfo;
 
+class AttachedDatabase;
 class BufferedSerializer;
 class Catalog;
 class DatabaseInstance;
@@ -36,12 +37,12 @@ class TransactionManager;
 
 class ReplayState {
 public:
-	ReplayState(DatabaseInstance &db, ClientContext &context, Deserializer &source)
+	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
 	    : db(db), context(context), catalog(Catalog::GetCatalog(context, INVALID_CATALOG)), source(source),
 	      current_table(nullptr), deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
 	}
 
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
 	Deserializer &source;
@@ -90,7 +91,7 @@ protected:
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(DatabaseInstance &database, const string &path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &path);
 	virtual ~WriteAheadLog();
 
 	//! Skip writing to the WAL
@@ -98,7 +99,7 @@ public:
 
 public:
 	//! Replay the WAL
-	static bool Replay(DatabaseInstance &database, string &path);
+	static bool Replay(AttachedDatabase &database, string &path);
 
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();
@@ -152,7 +153,7 @@ public:
 	void WriteCheckpoint(block_id_t meta_block);
 
 protected:
-	DatabaseInstance &database;
+	AttachedDatabase &database;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
 };

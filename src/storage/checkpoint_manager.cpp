@@ -30,12 +30,13 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(DatabaseInstance &db, BlockManager &block_manager)
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
     : CheckpointWriter(db), partial_block_manager(block_manager) {
 }
 
@@ -53,7 +54,7 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
-	auto &config = DBConfig::GetConfig(db);
+	auto &config = DBConfig::Get(db);
 	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
 	if (storage_manager.InMemory()) {
 		return;
@@ -122,7 +123,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
-	Connection con(storage.db);
+	Connection con(storage.GetDatabase());
 	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(block_manager, meta_block);
@@ -382,7 +383,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	case IndexType::ART: {
 		auto art =
 		    make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage), move(unbound_expressions),
-		                     info->constraint_type, *context.db, root_block_id, root_offset);
+		                     info->constraint_type, table_catalog->storage->db, root_block_id, root_offset);
 		index_catalog->index = art.get();
 		table_catalog->storage->info->indexes.AddIndex(move(art));
 		break;
