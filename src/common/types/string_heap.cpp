@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-StringHeap::StringHeap() : allocator(Allocator::DefaultAllocator()) {
+StringHeap::StringHeap(Allocator &allocator) : allocator(allocator) {
 }
 
 void StringHeap::Destroy() {
