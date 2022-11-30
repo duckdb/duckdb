@@ -16,7 +16,7 @@ namespace duckdb {
 //! Represents a cross product
 class BoundCrossProductRef : public BoundTableRef {
 public:
-	BoundCrossProductRef() : BoundTableRef(TableReferenceType::CROSS_PRODUCT) {
+	BoundCrossProductRef() : BoundTableRef(TableReferenceType::CROSS_PRODUCT), lateral(false) {
 	}
 
 	//! The binder used to bind the LHS of the cross product
@@ -27,5 +27,9 @@ public:
 	unique_ptr<BoundTableRef> left;
 	//! The right hand side of the cross product
 	unique_ptr<BoundTableRef> right;
+	//! Whether or not this is a lateral cross product
+	bool lateral;
+	//! The correlated columns of the right-side with the left-side
+	vector<CorrelatedColumnInfo> correlated_columns;
 };
 } // namespace duckdb

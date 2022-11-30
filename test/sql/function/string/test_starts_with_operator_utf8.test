@@ -1,0 +1,76 @@
+# name: test/sql/function/string/test_starts_with_operator_utf8.test
+# description: ^@ starts_with operator test with UTF8
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('átomo')
+
+statement ok
+INSERT INTO strings VALUES ('olá mundo')
+
+statement ok
+INSERT INTO strings VALUES ('你好世界')
+
+statement ok
+INSERT INTO strings VALUES ('two ñ three ₡ four 🦆 end')
+
+# Test one matching UTF8 letter
+query T
+SELECT s ^@ 'á' FROM strings
+----
+1
+0
+0
+0
+
+# Test a sentence with an UTF-8
+query T
+SELECT s ^@ 'olá mundo' FROM strings
+----
+0
+1
+0
+0
+
+# Test an entire UTF-8 word
+query T
+SELECT s ^@ '你好世界' FROM strings
+----
+0
+0
+1
+0
+
+# Test a substring of the haystack from the beginning
+query T
+SELECT s ^@ 'two ñ thr' FROM strings
+----
+0
+0
+0
+1
+
+# Test a single UTF8 substring of the haystack in the middle
+query T
+SELECT s ^@ 'ñ' FROM strings
+----
+0
+0
+0
+0
+
+# Test a multiple UTF8 substring of the haystack in the middle
+query T
+SELECT s ^@ '₡ four 🦆 e' FROM strings
+----
+0
+0
+0
+0
+

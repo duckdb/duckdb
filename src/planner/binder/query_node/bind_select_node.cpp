@@ -54,6 +54,9 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
 		return nullptr;
 	}
+	if (!new_binder->correlated_columns.empty()) {
+		throw BinderException("Correlated columns not supported in LIMIT/OFFSET");
+	}
 	// move any correlated columns to this binder
 	MoveCorrelatedExpressions(*new_binder);
 	return expr;
@@ -419,16 +422,22 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, info, alias_map);
+		HavingBinder having_binder(*this, context, *result, info, alias_map, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(*this, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 
 	// bind the QUALIFY clause, if any
 	if (statement.qualify) {
+		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
+		}
 		QualifyBinder qualify_binder(*this, context, *result, info, alias_map);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 		result->qualify = qualify_binder.Bind(statement.qualify);
+		if (qualify_binder.HasBoundColumns() && qualify_binder.BoundAggregates()) {
+			throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+		}
 	}
 
 	// after that, we bind to the SELECT list

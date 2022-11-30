@@ -65,6 +65,3 @@ SELECT COUNT(*) FROM (
 	FROM employees r, employees s
 	WHERE r.salary < s.salary AND r.tax > s.tax
 ) q1;
-
-result I
-99296

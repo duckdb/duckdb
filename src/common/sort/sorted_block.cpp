@@ -11,7 +11,7 @@ namespace duckdb {
 
 SortedData::SortedData(SortedDataType type, const RowLayout &layout, BufferManager &buffer_manager,
                        GlobalSortState &state)
-    : type(type), layout(layout), swizzled(false), buffer_manager(buffer_manager), state(state) {
+    : type(type), layout(layout), swizzled(state.external), buffer_manager(buffer_manager), state(state) {
 }
 
 idx_t SortedData::Count() {
@@ -322,23 +322,31 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
     : PayloadScanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state, flush_p) {
 }
 
-PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx) {
+PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx, bool flush_p) {
 	auto &sorted_data = *global_sort_state.sorted_blocks[0]->payload_data;
 	auto count = sorted_data.data_blocks[block_idx]->count;
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
 	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
-	rows->blocks.emplace_back(sorted_data.data_blocks[block_idx]->Copy());
+	if (flush_p) {
+		rows->blocks.emplace_back(move(sorted_data.data_blocks[block_idx]));
+	} else {
+		rows->blocks.emplace_back(sorted_data.data_blocks[block_idx]->Copy());
+	}
 	rows->count = count;
 
 	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
-		heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
+		if (flush_p) {
+			heap->blocks.emplace_back(move(sorted_data.heap_blocks[block_idx]));
+		} else {
+			heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
+		}
 		heap->count = count;
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, false);
+	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
 }
 
 void PayloadScanner::Scan(DataChunk &chunk) {

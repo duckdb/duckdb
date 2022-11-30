@@ -15,6 +15,7 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -216,6 +217,31 @@ void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression
 	}
 }
 
+static void ExtractExpressionDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
+	if (expr.type == ExpressionType::BOUND_FUNCTION) {
+		auto &function = (BoundFunctionExpression &)expr;
+		if (function.function.dependency) {
+			function.function.dependency(function, dependencies);
+		}
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
+}
+
+static void ExtractDependencies(BoundCreateTableInfo &info) {
+	for (auto &default_value : info.bound_defaults) {
+		if (default_value) {
+			ExtractExpressionDependencies(*default_value, info.dependencies);
+		}
+	}
+	for (auto &constraint : info.bound_constraints) {
+		if (constraint->type == ConstraintType::CHECK) {
+			auto &bound_check = (BoundCheckConstraint &)*constraint;
+			ExtractExpressionDependencies(*bound_check.expression, info.dependencies);
+		}
+	}
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 
@@ -246,6 +272,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
+	// extract dependencies from any default values or CHECK constraints
+	ExtractDependencies(*result);
 
 	if (base.columns.PhysicalColumnCount() == 0) {
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");

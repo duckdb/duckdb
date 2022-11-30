@@ -239,38 +239,6 @@ jobs:
         build/reldebug/test/unittest
         python3.7 tools/shell/shell-test.py build/reldebug/duckdb
 
- linux-arrow:
-      name: Linux Debug (Arrow Tests)
-      runs-on: ubuntu-20.04
-      needs: linux-debug
-      env:
-        CC: gcc-10
-        CXX: g++-10
-        TREAT_WARNINGS_AS_ERRORS: 1
-        GEN: ninja
-
-      steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-
-      - name: Build
-        shell: bash
-        run: BUILD_ARROW_ABI_TEST=1 make debug
-
-      - name: Test
-        shell: bash
-        run: make unittestarrow
-
  threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
@@ -491,7 +459,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 70fa016bde0b326d98803742aa570a1e5b3f6e89 && make debug)
+        (cd psqlodbc && git checkout 0a939c70ec405abde8a36dc4d88043561b64b78d && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

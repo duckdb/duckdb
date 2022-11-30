@@ -21,6 +21,10 @@ struct EnumLast {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EnumCode {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct EnumRange {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

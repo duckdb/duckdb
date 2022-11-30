@@ -88,13 +88,16 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"))
-	    .def("df", &DuckDBPyConnection::FromDF,
-	         "Create a relation object from the Data.Frame in df. This is an alias of from_df", py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
-	         py::arg("binary_as_string") = false)
+	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
+	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
+	    .def("from_parquet", &DuckDBPyConnection::FromParquets,
+	         "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
+	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
@@ -363,15 +366,42 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
+                                                             bool file_row_number, bool filename,
+                                                             bool hive_partitioning) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	string name = "parquet_" + GenerateRandomName();
 	vector<Value> params;
-	params.emplace_back(filename);
-	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	params.emplace_back(file_glob);
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
+                                                              bool file_row_number, bool filename,
+                                                              bool hive_partitioning) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	string name = "parquet_" + GenerateRandomName();
+	vector<Value> params;
+	auto file_globs_as_value = vector<Value>();
+	for (const auto &file : file_globs) {
+		file_globs_as_value.emplace_back(file);
+	}
+	params.emplace_back(Value::LIST(file_globs_as_value));
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {

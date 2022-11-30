@@ -41,5 +41,3 @@ SELECT COUNT(*) FROM (
 	  AND r.id <> s.id
 ) q2;
 
-result I
-3772
