@@ -1193,7 +1193,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				}
-
 			} else if (schema_p.__isset.converted_type) {
 				switch (schema_p.converted_type) {
 				case ConvertedType::TIMESTAMP_MICROS:
