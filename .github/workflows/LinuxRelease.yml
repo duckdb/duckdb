@@ -545,6 +545,40 @@ jobs:
       shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
+ linux-memory-leaks:
+    name: Linux Memory Leaks
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Test
+      shell: bash
+      run: |
+        python3 test/memoryleak/test_memory_leaks.py
+
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
