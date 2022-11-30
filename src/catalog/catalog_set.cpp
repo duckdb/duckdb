@@ -250,7 +250,9 @@ void CatalogSet::DropEntryDependencies(ClientContext &context, EntryIndex &entry
 	entry_index.GetEntry()->deleted = true;
 
 	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
+	if (entry.catalog->dependency_manager->dependents_map.count(&entry)) {
+		entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
+	}
 
 	// dropper destructor is called here
 	// the destructor makes sure to return the value to the previous state
@@ -302,6 +304,7 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
 			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+			catalog_entry->deleted = true;
 		}
 		auto parent = catalog_entry->parent;
 		parent->child = move(catalog_entry->child);
