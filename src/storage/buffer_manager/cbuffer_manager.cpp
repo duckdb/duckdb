@@ -2,6 +2,7 @@
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/external_file_buffer.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy = true,
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
-	auto buffer = make_shared<FileBuffer>(custom_allocator, FileBufferType::MANAGED_BUFFER);
+	auto buffer = make_shared<ExternalFileBuffer>(custom_allocator, config, alloc_size);
 	BufferPoolReservation reservation;
 	reservation.size = alloc_size;
 
@@ -39,14 +40,14 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 
 //! FIXME: Missing prototype for Destroy??
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
-	auto buffer = RetrieveBuffer(); // ????
-	config.pin_func(buffer);
+	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+	config.pin_func(buffer.ExternalBufferHandle());
 	return handle->Load(handle);
 }
 
 void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
-	auto buffer = RetrieveBuffer();
-	config.unpin_func(buffer);
+	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+	config.unpin_func(buffer.ExternalBufferHandle());
 }
 
 idx_t CBufferManager::GetUsedMemory() const {
@@ -64,25 +65,21 @@ data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *privat
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
 	duckdb_buffer buffer = config.allocate_func(config.data, size);
-	return config.get_buffer_allocation(buffer);
+	return (data_ptr_t)buffer;
 }
 
 void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	// TODO: Retrieve the buffer belonging to this allocation (from pointer -> duckdb_buffer)
-	auto buffer = RetrieveBuffer(pointer);
-	config.destroy_func(buffer);
+	config.destroy_func(pointer);
 }
 
 data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
                                                    idx_t old_size, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	// TODO: Retrieve the buffer belonging to this allocation (from pointer -> duckdb_buffer)
-	auto buffer = RetrieveBuffer(pointer);
-	buffer = config.reallocate_func(buffer, old_size, size);
-	return config.get_buffer_allocation(buffer);
+	auto buffer = config.reallocate_func(pointer, old_size, size);
+	return (data_ptr_t)buffer;
 }
 
 } // namespace duckdb

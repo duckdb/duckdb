@@ -14,7 +14,7 @@ namespace duckdb {
 class Allocator;
 struct FileHandle;
 
-enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3 };
+enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2, TINY_BUFFER = 3, EXTERNAL_BUFFER = 4 };
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.
 class FileBuffer {
@@ -31,8 +31,6 @@ public:
 	Allocator &allocator;
 	//! The type of the buffer
 	FileBufferType type;
-	//! The buffer that users can write to
-	data_ptr_t buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE
 	uint64_t size;
 
@@ -47,6 +45,8 @@ public:
 	//! Write the contents of the FileBuffer to the specified location. Automatically adds a checksum of the contents of
 	//! the filebuffer in front of the written data.
 	virtual void ChecksumAndWrite(FileHandle &handle, uint64_t location);
+
+	virtual data_ptr_t Buffer() const;
 
 	void Clear();
 
@@ -70,7 +70,10 @@ protected:
 	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
 	uint64_t internal_size;
+	//! The buffer that users can write to
+	data_ptr_t buffer;
 
+protected:
 	void ReallocBuffer(size_t malloc_size);
 
 private:

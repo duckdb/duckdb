@@ -30,12 +30,12 @@ bool BufferHandle::IsValid() const {
 
 data_ptr_t BufferHandle::Ptr() const {
 	D_ASSERT(IsValid());
-	return node->buffer;
+	return node->Buffer();
 }
 
 data_ptr_t BufferHandle::Ptr() {
 	D_ASSERT(IsValid());
-	return node->buffer;
+	return node->Buffer();
 }
 
 void BufferHandle::Destroy() {

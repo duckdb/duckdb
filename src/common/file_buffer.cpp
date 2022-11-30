@@ -118,6 +118,10 @@ void FileBuffer::ChecksumAndWrite(FileHandle &handle, uint64_t location) {
 	Write(handle, location);
 }
 
+data_ptr_t FileBuffer::Buffer() const {
+	return buffer;
+}
+
 void FileBuffer::Clear() {
 	memset(internal_buffer, 0, internal_size);
 }
