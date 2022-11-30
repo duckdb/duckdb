@@ -198,3 +198,10 @@ SELECT g, list_count(LIST(i)) FROM long_str GROUP BY g ORDER BY g
 1	3
 2	2
 3	2
+
+# fix issue 5523
+statement ok
+select list(i) over(partition by i%10 order by i) from range(10000) t(i);
+
+statement ok
+select list(i) over(partition by i%10 order by i) from range(1000) t(i);
