@@ -72,6 +72,42 @@ def generate_tree_recursive(json_graph):
 		children_html += "</ul>"
 	return node_prefix_html + node_body + children_html + node_suffix_html
 
+def gather_timing_information(json):
+	# add up all of the times
+	# measure each time as a percentage of the total time.
+	# then you can return a list of [phase, time, percentage]
+	pass
+
+
+def generate_timing_html(graph_json):
+	json_graph = json.loads(graph_json)
+	# gather all the timings and make a nice thing from it.
+	table_prefix = "<table class=\"styled-table\">"
+	table_head = """ 
+	<thead>
+		<tr>
+			<th>Phase</th>
+			<th>Time</th>
+			<th>Percentage</th>
+		</tr>
+	</thead>"""
+	for
+	return  """
+<table class="styled-table">
+   
+    <tbody>
+        <tr>
+            <td>Dom</td>
+            <td>6000</td>
+        </tr>
+        <tr class="active-row">
+            <td>Melissa</td>
+            <td>5150</td>
+        </tr>
+        <!-- and so on... -->
+    </tbody>
+</table>
+"""
 
 
 def generate_tree_html(graph_json):
@@ -111,11 +147,12 @@ def generate(input_file, output_file):
 		text = f.read()
 
 	html_output = generate_style_html(text, True)
+	timing_table = generate_timing_html(text)
 	tree_output = generate_tree_html(text)
-	# print(html_output['chart_script'])
+
 	# finally create and write the html
 	with open_utf8(output_file, "w+") as f:
-		f.write("""<!DOCTYPE html>
+		html = """<!DOCTYPE html>
 <html>
 	<head>
 	<meta charset="utf-8">
@@ -123,6 +160,35 @@ def generate(input_file, output_file):
 	<title>Query Profile Graph for Query</title>
 	${CSS}
 	<style>
+		.styled-table {
+			border-collapse: collapse;
+			margin: 25px 0;
+			font-size: 0.9em;
+			font-family: sans-serif;
+			min-width: 400px;
+			box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+		}
+		.styled-table thead tr {
+			background-color: #009879;
+			color: #ffffff;
+			text-align: left;
+		}
+		.styled-table th,
+		.styled-table td {
+			padding: 12px 15px;
+		}
+		.styled-table tbody tr {
+			border-bottom: 1px solid #dddddd;
+		}
+		
+		.styled-table tbody tr:nth-of-type(even) {
+			background-color: #f3f3f3;
+		}
+		
+		.styled-table tbody tr:last-of-type {
+			border-bottom: 2px solid #009879;
+		}
+
 		.node-body {
 			font-size:12px;
 		}
@@ -136,12 +202,20 @@ def generate(input_file, output_file):
 </head>
 <body>
 	<div id="meta-info"></div>
-	<div class="chart" id="query-profile"></div>
+	<div class="chart" id="query-profile">
+		${EXTRA_TIMING_INFO}
+	</div>
 
 	${TREE}
 </body>
 </html>
-""".replace("${CSS}", html_output['css']).replace('${TREE}', tree_output).replace('[INFOSEPARATOR]', '<br>'))
+"""
+		html = html.replace("${CSS}", html_output['css'])
+		html = html.replace("${EXTRA_TIMING_INFO}", timing_table)
+		html = html.replace('[INFOSEPARATOR]', '<br>')
+		html = html.replace('${TREE}', tree_output)
+		f.write(html)
+
 
 
 generate(input, output)
