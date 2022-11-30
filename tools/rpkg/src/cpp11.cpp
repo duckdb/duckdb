@@ -146,6 +146,13 @@ extern "C" SEXP _duckdb_rapi_rel_inner_join(SEXP left, SEXP right, SEXP conds) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_union_all(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b);
+extern "C" SEXP _duckdb_rapi_rel_union_all(SEXP rel_a, SEXP rel_b) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_union_all(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_a), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_b)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n);
 extern "C" SEXP _duckdb_rapi_rel_limit(SEXP rel, SEXP n) {
   BEGIN_CPP11
@@ -339,6 +346,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_to_altrep",      (DL_FUNC) &_duckdb_rapi_rel_to_altrep,      1},
     {"_duckdb_rapi_rel_to_df",          (DL_FUNC) &_duckdb_rapi_rel_to_df,          1},
     {"_duckdb_rapi_rel_tostring",       (DL_FUNC) &_duckdb_rapi_rel_tostring,       1},
+    {"_duckdb_rapi_rel_union_all",      (DL_FUNC) &_duckdb_rapi_rel_union_all,      2},
     {"_duckdb_rapi_release",            (DL_FUNC) &_duckdb_rapi_release,            1},
     {"_duckdb_rapi_shutdown",           (DL_FUNC) &_duckdb_rapi_shutdown,           1},
     {"_duckdb_rapi_startup",            (DL_FUNC) &_duckdb_rapi_startup,            3},
@@ -348,13 +356,11 @@ static const R_CallMethodDef CallEntries[] = {
 };
 }
 
-void AltrepString_Initialize(DllInfo* dll);
 void RelToAltrep_Initialize(DllInfo* dll);
 
 extern "C" attribute_visible void R_init_duckdb(DllInfo* dll){
   R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
   R_useDynamicSymbols(dll, FALSE);
-  AltrepString_Initialize(dll);
   RelToAltrep_Initialize(dll);
   R_forceSymbols(dll, TRUE);
 }

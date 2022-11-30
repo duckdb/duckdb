@@ -168,7 +168,7 @@ public:
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
-	vector<OperatorExtension> operator_extensions;
+	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
