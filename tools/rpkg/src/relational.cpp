@@ -26,7 +26,7 @@ using namespace duckdb;
 using namespace cpp11;
 
 template <typename T, typename... Args>
-external_pointer<T> make_external(const string &rclass, Args &&...args) {
+external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	auto extptr = external_pointer<T>(new T(std::forward<Args>(args)...));
 	((sexp)extptr).attr("class") = rclass;
 	return (extptr);
@@ -75,7 +75,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 // DuckDB Relations
 
-[[cpp11::register]] SEXP rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df) {
+[[cpp11::register]] SEXP rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df, bool experimental) {
 	if (!con || !con.get() || !con->conn) {
 		stop("rel_from_df: Invalid connection");
 	}
@@ -84,7 +84,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	named_parameter_map_t other_params;
-	// other_params["experimental"] = Value::BOOLEAN(true);
+	other_params["experimental"] = Value::BOOLEAN(experimental);
 	auto alias = StringUtil::Format("dataframe_%d_%d", (uintptr_t)(SEXP)df,
 	                                (int32_t)(NumericLimits<int32_t>::Maximum() * unif_rand()));
 	auto rel =
