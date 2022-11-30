@@ -86,6 +86,27 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		}
+		if (loption == "column_types" && options.auto_detect) {
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("read_csv_auto column_types requires a struct as input");
+			}
+			auto &struct_children = StructValue::GetChildren(kv.second);
+			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				auto &name = StructType::GetChildName(child_type, i);
+				auto &val = struct_children[i];
+				if (val.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("read_csv_auto requires a type specification as string");
+				}
+				auto def_type = TransformStringToLogicalType(StringValue::Get(val));
+				if (def_type.id() == LogicalTypeId::USER) {
+					throw BinderException("Unrecognized type for read_csv_auto column_types definition");
+				}
+				options.sql_types_per_column[name] = def_type;
+			}
+
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
 		} else if (loption == "normalize_names") {
@@ -724,6 +745,7 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
+	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
 	return read_csv_auto;
 }
 
