@@ -573,6 +573,13 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	// figure out how many/which rows to render
 	idx_t row_count = result.Count();
 	idx_t rows_to_render = MinValue<idx_t>(row_count, config.max_rows);
+	if (row_count <= config.max_rows + 3) {
+		// hiding rows adds 3 extra rows
+		// so hiding rows makes no sense if we are only slightly over the limit
+		// if we are 1 row over the limit hiding rows will actually increase the number of lines we display!
+		// in this case render all the rows
+		rows_to_render = row_count;
+	}
 	idx_t top_rows;
 	idx_t bottom_rows;
 	if (rows_to_render == row_count) {

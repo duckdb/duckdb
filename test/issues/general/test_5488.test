@@ -1,0 +1,24 @@
+# name: test/issues/general/test_5488.test
+# description: Issue 5488: Reproducible data corruption on simple insert
+# group: [general]
+
+# load the DB from disk
+load __TEST_DIR__/issue_5488.db
+
+statement ok
+pragma force_compression='dictionary'
+
+statement ok
+CREATE TABLE test ( col_a TEXT);
+
+# We need a dataset that will only write unique values as it flushes a segment, this will trigger the bug
+statement ok
+INSERT INTO test SELECT case when i<100 then concat(repeat('string',400), i::VARCHAR) else 'target_string_we_will_count' end from range(0,100000) tbl(i);
+
+statement ok
+checkpoint;
+
+query I
+SELECT count(*) from test where col_a = 'target_string_we_will_count';
+----
+99900
