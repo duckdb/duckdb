@@ -201,7 +201,4 @@ SELECT g, list_count(LIST(i)) FROM long_str GROUP BY g ORDER BY g
 
 # fix issue 5523
 statement ok
-select list(i) over(partition by i%10 order by i) from range(10000) t(i);
-
-statement ok
-select list(i) over(partition by i%10 order by i) from range(1000) t(i);
+SELECT LIST(i) OVER (PARTITION BY i % 10 ORDER BY i) FROM range(10000) t(i);
