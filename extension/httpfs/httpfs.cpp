@@ -407,7 +407,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
 			if (!(flags & FileFlags::FILE_FLAGS_FILE_CREATE) && !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW)) {
 				throw IOException("Unable to open URL \"" + path +
-				                  "\" for writing: file does not exists and CREATE flag is not set");
+				                  "\" for writing: file does not exist and CREATE flag is not set");
 			}
 			length = 0;
 			return res;

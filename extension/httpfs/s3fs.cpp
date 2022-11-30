@@ -275,7 +275,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 
 	auto etag_lookup = res->headers.find("ETag");
 	if (etag_lookup == res->headers.end()) {
-		throw IOException("Unexpected reponse when uploading part to S3");
+		throw IOException("Unexpected response when uploading part to S3");
 	}
 
 	// Insert etag
