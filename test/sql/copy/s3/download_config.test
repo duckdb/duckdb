@@ -87,3 +87,11 @@ SET s3_url_style='handwritten';
 
 statement error
 COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
+
+# 404
+statement error
+SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
+
+# Connection error
+statement error
+SELECT i FROM "http://test-bucket-public.duckdb-minio-non-existent-host.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3

@@ -102,8 +102,9 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			}
 		}
 
+		tries += 1;
+
 		if (should_retry && tries <= params.retries) {
-			tries += 1;
 			if (tries > 1) {
 				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries - 2));
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
