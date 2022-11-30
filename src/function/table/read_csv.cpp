@@ -86,8 +86,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		}
-		if (loption == "column_types" && options.auto_detect) {
+		} else if (loption == "column_types" && options.auto_detect) {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv_auto column_types requires a struct as input");
