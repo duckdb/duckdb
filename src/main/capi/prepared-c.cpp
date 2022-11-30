@@ -35,12 +35,12 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
                                                 duckdb_extracted_statements extracted_statements, idx_t index,
                                                 duckdb_prepared_statement *out_prepared_statement) {
-	if (!connection || !out_prepared_statement) {
-		return DuckDBError;
-	}
 	Connection *conn = (Connection *)connection;
 	auto source_wrapper = (ExtractStatementsWrapper *)extracted_statements;
 
+	if (!connection || !out_prepared_statement || index >= source_wrapper->statements.size()) {
+		return DuckDBError;
+	}
 	auto wrapper = new PreparedStatementWrapper();
 	wrapper->statement = conn->Prepare(move(source_wrapper->statements[index]));
 

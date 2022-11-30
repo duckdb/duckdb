@@ -9,6 +9,7 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	duckdb_extracted_statements stmts = nullptr;
 	duckdb_state status;
 	const char *error;
+	duckdb_prepared_statement prepared = nullptr;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 
@@ -21,7 +22,6 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	REQUIRE(stmts != nullptr);
 
 	for (idx_t i = 0; i + 1 < size; i++) {
-		duckdb_prepared_statement prepared = nullptr;
 		status = duckdb_prepare_extracted_statement(tester.connection, stmts, i, &prepared);
 		REQUIRE(status == DuckDBSuccess);
 		status = duckdb_execute_prepared(prepared, &res);
@@ -41,17 +41,24 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	duckdb_destroy_result(&res);
 	duckdb_destroy_extracted(&stmts);
 
-	// test empty statement is not an error
+	//	 test empty statement is not an error
 	size = duckdb_extract_statements(tester.connection, "", &stmts);
 	REQUIRE(size == 0);
 	error = duckdb_extract_statements_error(stmts);
 	REQUIRE(error == nullptr);
 	duckdb_destroy_extracted(&stmts);
 
-	// test incorrect statement cannot be extracted
+	//	 test incorrect statement cannot be extracted
 	size = duckdb_extract_statements(tester.connection, "This is not valid SQL", &stmts);
 	REQUIRE(size == 0);
 	error = duckdb_extract_statements_error(stmts);
 	REQUIRE(error != nullptr);
+	duckdb_destroy_extracted(&stmts);
+
+	// test out of bounds
+	size = duckdb_extract_statements(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmts);
+	REQUIRE(size == 1);
+	status = duckdb_prepare_extracted_statement(tester.connection, stmts, 2, &prepared);
+	REQUIRE(status == DuckDBError);
 	duckdb_destroy_extracted(&stmts);
 }
