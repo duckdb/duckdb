@@ -412,16 +412,11 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-	if (!InMemory() && cache_db.compare("") == 0) {
-		string path = "duckdb_benchmark_db.db";
-		DeleteDatabase(path);
-		return path;
-	} else if (cache_db.compare("") != 0) {
-		auto fs = FileSystem::CreateLocal();
+	auto fs = FileSystem::CreateLocal();
+	if (!cache_db.empty()) {
 		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
-	} else {
-		return string();
 	}
+	return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
 }
 
 string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result) {
