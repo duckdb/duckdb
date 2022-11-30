@@ -37,7 +37,7 @@ SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
-# example_r is with \r newlines
+# example_r is with \r newlines - works with read_json_objects
 query I
 SELECT * FROM read_json_objects('data/json/example_r.ndjson')
 ----
@@ -47,14 +47,11 @@ SELECT * FROM read_json_objects('data/json/example_r.ndjson')
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
+# \r newlines are NOT valid according to ndjson spec - this does not work, all a single line
 query I
-SELECT * FROM read_ndjson_objects('data/json/example_r.ndjson')
+SELECT count(*) FROM read_ndjson_objects('data/json/example_r.ndjson')
 ----
-{"id":1,"name":"O Brother, Where Art Thou?"}
-{"id":2,"name":"Home for the Holidays"}
-{"id":3,"name":"The Firm"}
-{"id":4,"name":"Broadcast News"}
-{"id":5,"name":"Raising Arizona"}
+1
 
 # example_rn is with \r\n newlines
 query I
@@ -82,9 +79,9 @@ SELECT count(*) from read_json_objects(['data/json/example_n.ndjson', 'data/json
 15
 
 query I
-SELECT count(*) from read_ndjson_objects(['data/json/example_n.ndjson', 'data/json/example_r.ndjson', 'data/json/example_rn.ndjson'])
+SELECT count(*) from read_ndjson_objects(['data/json/example_n.ndjson', 'data/json/example_rn.ndjson'])
 ----
-15
+10
 
 # globbing
 query I
@@ -93,6 +90,6 @@ SELECT count(*) from read_json_objects('data/json/example_*.ndjson')
 15
 
 query I
-SELECT count(*) from read_ndjson_objects('data/json/example_*.ndjson')
+SELECT count(*) from read_ndjson_objects('data/json/example_*n.ndjson')
 ----
-15
+10

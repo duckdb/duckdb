@@ -62,9 +62,11 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string);
+		yyjson_read_err err;
+		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, &err);
 		if (doc.IsNull()) {
-			throw InvalidInputException("malformed JSON structure");
+			throw InvalidInputException("JSON '%s' is malformed at byte %lld: %s", structure_string.GetString(),
+			                            err.pos, err.msg);
 		}
 		bound_function.return_type = StructureToType(doc->root, context);
 	}

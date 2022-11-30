@@ -169,8 +169,9 @@ public:
 	}
 
 	//! Read JSON document (returns nullptr if invalid JSON)
-	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(const string_t &input) {
-		return DocPointer<yyjson_doc>(yyjson_read(input.GetDataUnsafe(), input.GetSize(), READ_FLAG));
+	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(const string_t &input, yyjson_read_err *err = nullptr) {
+		return DocPointer<yyjson_doc>(
+		    yyjson_read_opts(input.GetDataWriteable(), input.GetSize(), READ_FLAG, nullptr, err));
 	}
 	//! Read JSON document from file (returns nullptr if invalid JSON)
 	static inline DocPointer<yyjson_doc> ReadDocumentFromFileUnsafe(char *data, idx_t length) {
@@ -178,9 +179,10 @@ public:
 	}
 	//! Read JSON document (throws error if malformed JSON)
 	static inline DocPointer<yyjson_doc> ReadDocument(const string_t &input) {
-		auto result = ReadDocumentUnsafe(input);
+		yyjson_read_err err;
+		auto result = ReadDocumentUnsafe(input, &err);
 		if (result.IsNull()) {
-			throw InvalidInputException("malformed JSON");
+			throw InvalidInputException("JSON '%s' is malformed at byte %lld: %s", input.GetString(), err.pos, err.msg);
 		}
 		return result;
 	}

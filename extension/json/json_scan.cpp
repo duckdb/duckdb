@@ -322,28 +322,13 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 }
 
 static inline const char *NextNewline(const char *ptr, idx_t size) {
-	auto first_n = (const char *)memchr(ptr, '\n', size);
-	auto first_r = (const char *)memchr(ptr, '\r', size);
-
-	// if either is nullptr we return the other
-	if (first_r == nullptr) {
-		return first_n;
-	} else if (first_n == nullptr) {
-		return first_r;
-	}
-
-	// if neither is nullptr we return the first
-	if (first_n - ptr < first_r - ptr) {
-		return first_n;
-	} else {
-		return first_r;
-	}
+	return (const char *)memchr(ptr, '\n', size);
 }
 
 static inline const char *PreviousNewline(const char *ptr) {
-	for (ptr--; true; ptr++) {
+	for (ptr--; true; ptr--) {
 		const auto &c = *ptr;
-		if (c == '\n' || c == '\r') {
+		if (c == '\n') {
 			break;
 		}
 	}
@@ -456,12 +441,15 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
+		if (remaining == 0) {
+			break;
+		}
 
 		// Search for newline
 		auto line_end = NextNewline(line_start, remaining);
 		if (line_end == nullptr) {
 			// We reached the end of the buffer
-			if (!is_last || remaining == 0) {
+			if (!is_last) {
 				// Last bit of data belongs to the next batch
 				buffer_offset = buffer_size;
 				break;
