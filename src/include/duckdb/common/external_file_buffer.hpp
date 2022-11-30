@@ -14,7 +14,7 @@ public:
 public:
 	data_ptr_t Buffer() const final override {
 		// Use a callback to retrieve the actual allocation from an external buffer handle
-		return config.get_allocation(buffer);
+		return (data_ptr_t)config.get_allocation_func(buffer);
 	}
 	data_ptr_t ExternalBufferHandle() const {
 		return buffer;

@@ -24,6 +24,7 @@ struct CBufferManagerConfig {
 	idx_t max_size; // Do we still need this??
 	void *data;     // Context provided to 'allocate_func'
 	duckdb_allocate_buffer_t allocate_func;
+	duckdb_get_buffer_allocation_t get_allocation_func;
 	duckdb_reallocate_buffer_t reallocate_func;
 	duckdb_destroy_buffer_t destroy_func;
 	duckdb_pin_buffer_t pin_func;
