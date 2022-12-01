@@ -214,7 +214,7 @@ jobs:
       - uses: ./.github/actions/build_extensions
         with:
           openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
-          deploy_as: linux_aarch64
+          deploy_as: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
