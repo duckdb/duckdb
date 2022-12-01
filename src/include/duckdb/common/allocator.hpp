@@ -139,6 +139,7 @@ void DestroyObject(T *ptr) {
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
 	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
+	DUCKDB_API static Allocator &Get(AttachedDatabase &db);
 };
 
 } // namespace duckdb
