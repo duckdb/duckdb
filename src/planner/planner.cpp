@@ -8,8 +8,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -103,7 +103,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->types = types;
 	prepared_data->value_map = move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
+	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 

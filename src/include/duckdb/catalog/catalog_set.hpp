@@ -103,8 +103,8 @@ public:
 		return result;
 	}
 
-	DUCKDB_API static bool HasConflict(ClientContext &context, transaction_t timestamp);
-	DUCKDB_API static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
+	DUCKDB_API bool HasConflict(ClientContext &context, transaction_t timestamp);
+	DUCKDB_API bool UseTimestamp(ClientContext &context, transaction_t timestamp);
 
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 

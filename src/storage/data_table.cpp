@@ -53,7 +53,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 
 	// also add this column to client local storage
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.AddColumn(&parent, this, new_column, default_value);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -98,7 +98,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.DropColumn(&parent, this, removed_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -118,7 +118,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 	VerifyNewConstraint(context, parent, constraint.get());
 
 	// Get the local data ownership from old dt
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.MoveStorage(&parent, this);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
@@ -150,7 +150,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	this->row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -203,7 +203,7 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	row_groups->InitializeParallelScan(state.scan_state);
 
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeParallelScan(this, state.local_state);
 }
 
@@ -212,7 +212,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		return true;
 	}
 	scan_state.table_state.batch_index = state.scan_state.batch_index;
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	if (local_storage.NextParallelScan(context, this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {
@@ -315,8 +315,8 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
-static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
-                                       bool is_append) {
+void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+                                           DataChunk &chunk, bool is_append) {
 	const vector<PhysicalIndex> *src_keys_ptr = &bfk.info.fk_keys;
 	const vector<PhysicalIndex> *dst_keys_ptr = &bfk.info.pk_keys;
 	if (!is_append) {
@@ -355,7 +355,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 
 	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, err_msgs);
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
@@ -394,13 +394,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	}
 }
 
-static void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
-                                             DataChunk &chunk) {
+void DataTable::VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+                                                 DataChunk &chunk) {
 	VerifyForeignKeyConstraint(bfk, context, chunk, true);
 }
 
-static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
-                                             DataChunk &chunk) {
+void DataTable::VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+                                                 DataChunk &chunk) {
 	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
@@ -410,7 +410,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	}
 
 	parent.row_groups->VerifyNewConstraint(parent, *constraint);
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
@@ -472,7 +472,7 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeAppend(state, this);
 }
 
@@ -500,12 +500,12 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 }
 
 OptimisticDataWriter *DataTable::CreateOptimisticWriter(ClientContext &context) {
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticWriter(this);
 }
 
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(this, collection);
 }
 
@@ -751,8 +751,8 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 		return 0;
 	}
 
-	auto &transaction = Transaction::GetTransaction(context);
-	auto &local_storage = LocalStorage::Get(context);
+	auto &transaction = Transaction::Get(context, db);
+	auto &local_storage = LocalStorage::Get(transaction);
 
 	row_identifiers.Flatten(count);
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -887,7 +887,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	VerifyUpdateConstraints(context, table, updates, column_ids);
 
 	// now perform the actual update
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::Get(context, db);
 
 	updates.Flatten();
 	row_ids.Flatten(count);
@@ -895,7 +895,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		// update is in transaction-local storage: push update into local storage
-		auto &local_storage = LocalStorage::Get(context);
+		auto &local_storage = LocalStorage::Get(context, db);
 		local_storage.Update(this, row_ids, column_ids, updates);
 		return;
 	}
@@ -921,7 +921,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 	}
 
 	// now perform the actual update
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::Get(context, db);
 
 	updates.Flatten();
 	row_ids.Flatten(updates.size());

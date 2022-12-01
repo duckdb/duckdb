@@ -98,9 +98,9 @@ unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                OperatorState &state_p) const {
-	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
+	auto &transaction = Transaction::Get(context.client, *bind_tbl.table->catalog);
 	auto &state = (IndexJoinOperatorState &)state_p;
 
 	auto tbl = bind_tbl.table->storage.get();

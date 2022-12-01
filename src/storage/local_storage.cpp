@@ -362,8 +362,12 @@ LocalStorage &LocalStorage::Get(Transaction &transaction) {
 	return transaction.GetLocalStorage();
 }
 
-LocalStorage &LocalStorage::Get(ClientContext &context) {
-	return Transaction::GetTransaction(context).GetLocalStorage();
+LocalStorage &LocalStorage::Get(ClientContext &context, AttachedDatabase &db) {
+	return Transaction::Get(context, db).GetLocalStorage();
+}
+
+LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
+	return LocalStorage::Get(context, catalog.GetAttached());
 }
 
 void LocalStorage::InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters) {

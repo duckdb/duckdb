@@ -188,7 +188,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		gstate.insert_count += append_count;
 		auto table = gstate.table;
 		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = Transaction::GetTransaction(context.client);
+		auto &transaction = Transaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;

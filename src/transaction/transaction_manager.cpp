@@ -11,6 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -47,8 +48,6 @@ TransactionManager::TransactionManager(AttachedDatabase &db) : db(db), thread_is
 	// if transaction_id < start_timestamp for any set of active transactions
 	// uncommited data could be read by
 	current_transaction_id = TRANSACTION_ID_START;
-	// the current active query id
-	current_query_number = 1;
 	lowest_active_id = TRANSACTION_ID_START;
 	lowest_active_start = MAX_TRANSACTION_ID;
 }
@@ -67,16 +66,13 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the start time and transaction ID of this transaction
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
-	timestamp_t start_timestamp = Timestamp::GetCurrentTimestamp();
 	if (active_transactions.empty()) {
 		lowest_active_start = start_time;
 		lowest_active_id = transaction_id;
 	}
 
 	// create the actual transaction
-	auto &catalog = db.GetCatalog();
-	auto transaction =
-	    make_unique<Transaction>(context, start_time, transaction_id, start_timestamp, catalog.GetCatalogVersion());
+	auto transaction = make_unique<Transaction>(*this, context, start_time, transaction_id);
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -128,7 +124,7 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	LockClients(client_locks, context);
 
 	lock = make_unique<lock_guard<mutex>>(transaction_lock);
-	auto current = &Transaction::GetTransaction(context);
+	auto current = &Transaction::Get(context, db);
 	if (current->ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}
@@ -264,6 +260,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	transaction_t lowest_stored_query = lowest_start_time;
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
+	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
 	if (transaction->commit_id != 0) {
 		// the transaction was committed, add it to the list of recently
 		// committed transactions
@@ -271,7 +268,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	} else {
 		// the transaction was aborted, but we might still need its information
 		// add it to the set of transactions awaiting GC
-		current_transaction->highest_active_query = current_query_number;
+		current_transaction->highest_active_query = current_query;
 		old_transactions.push_back(move(current_transaction));
 	}
 	// remove the transaction from the set of currently active transactions
@@ -296,7 +293,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 			// when all the currently active scans have finished running...)
 			recently_committed_transactions[i]->Cleanup();
 			// store the current highest active query
-			recently_committed_transactions[i]->highest_active_query = current_query_number;
+			recently_committed_transactions[i]->highest_active_query = current_query;
 			// move it to the list of transactions awaiting GC
 			old_transactions.push_back(move(recently_committed_transactions[i]));
 		} else {

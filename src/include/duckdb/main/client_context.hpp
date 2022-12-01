@@ -77,7 +77,7 @@ public:
 	unique_ptr<ClientData> client_data;
 
 public:
-	DUCKDB_API Transaction &ActiveTransaction() {
+	DUCKDB_API MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 

@@ -44,6 +44,7 @@
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -61,8 +62,7 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetDatabaseManager().GetDefaultDatabase().GetTransactionManager(), *this),
-      interrupted(false), client_data(make_unique<ClientData>(*this)) {
+    : db(move(database)), transaction(*this), interrupted(false), client_data(make_unique<ClientData>(*this)) {
 }
 
 ClientContext::~ClientContext() {
@@ -81,7 +81,7 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 void ClientContext::Destroy() {
 	auto lock = LockContext();
 	if (transaction.HasActiveTransaction()) {
-		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		}
@@ -148,8 +148,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 	query_progress = -1;
-	ActiveTransaction().active_query =
-	    db->GetDatabaseManager().GetDefaultDatabase().GetTransactionManager().GetQueryNumber();
+	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
@@ -161,7 +160,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 		if (transaction.HasActiveTransaction()) {
 			// Move the query profiler into the history
 			auto &prev_profilers = client_data->query_profiler_history->GetPrevProfilers();
-			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(client_data->profiler));
+			prev_profilers.emplace_back(transaction.GetActiveQuery(), move(client_data->profiler));
 			// Reinitialize the query profiler
 			client_data->profiler = make_shared<QueryProfiler>(*this);
 			// Propagate settings of the saved query into the new profiler.
@@ -170,7 +169,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 				prev_profilers.pop_front();
 			}
 
-			ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
 					transaction.Commit();
@@ -325,7 +324,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
-	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
+	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 
 	if (!planner.properties.bound_all_parameters) {
 		return result;

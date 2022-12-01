@@ -14,14 +14,14 @@
 
 namespace duckdb {
 class DatabaseInstance;
-class Transaction;
+class MetaTransaction;
 
 class ValidChecker {
 public:
 	ValidChecker();
 
 	DUCKDB_API static ValidChecker &Get(DatabaseInstance &db);
-	DUCKDB_API static ValidChecker &Get(Transaction &transaction);
+	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
 
 	DUCKDB_API void Invalidate(string error);
 	DUCKDB_API bool IsInvalidated();

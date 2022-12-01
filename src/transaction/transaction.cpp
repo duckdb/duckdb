@@ -28,19 +28,14 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
     : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
-Transaction::Transaction(ClientContext &context_p, transaction_t start_time, transaction_t transaction_id,
-                         timestamp_t start_timestamp, idx_t catalog_version)
-    : context(context_p.shared_from_this()), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
-      catalog_version(catalog_version), temporary_objects(context_p.client_data->temporary_objects),
-      undo_buffer(context.lock()), storage(make_unique<LocalStorage>(context_p, *this)) {
+Transaction::Transaction(TransactionManager &manager_p, ClientContext &context_p, transaction_t start_time,
+                         transaction_t transaction_id)
+    : manager(manager_p), context(context_p.shared_from_this()), start_time(start_time), transaction_id(transaction_id),
+      commit_id(0), temporary_objects(context_p.client_data->temporary_objects), active_query(MAXIMUM_QUERY_ID),
+      highest_active_query(0), undo_buffer(context_p), storage(make_unique<LocalStorage>(context_p, *this)) {
 }
 
 Transaction::~Transaction() {
-}
-
-Transaction &Transaction::GetTransaction(ClientContext &context) {
-	return context.ActiveTransaction();
 }
 
 LocalStorage &Transaction::GetLocalStorage() {
@@ -138,10 +133,6 @@ void Transaction::Rollback() noexcept {
 
 void Transaction::Cleanup() {
 	undo_buffer.Cleanup();
-}
-
-ValidChecker &ValidChecker::Get(Transaction &transaction) {
-	return transaction.transaction_validity;
 }
 
 } // namespace duckdb

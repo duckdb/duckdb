@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -44,7 +45,8 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &transaction = Transaction::GetTransaction(state.GetContext());
+	auto &context = state.GetContext();
+	auto &transaction = Transaction::Get(context, DatabaseManager::Get(context).GetDefaultDatabase());
 	auto val = Value::BIGINT(transaction.start_time);
 	result.Reference(val);
 }

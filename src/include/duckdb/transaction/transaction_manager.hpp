@@ -40,9 +40,6 @@ public:
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 
-	transaction_t GetQueryNumber() {
-		return current_query_number++;
-	}
 	transaction_t LowestActiveId() {
 		return lowest_active_id;
 	}
@@ -67,8 +64,6 @@ private:
 
 	//! The attached database
 	AttachedDatabase &db;
-	//! The current query number
-	atomic<transaction_t> current_query_number;
 	//! The current start timestamp used by transactions
 	transaction_t current_start_timestamp;
 	//! The current transaction ID used by transactions

@@ -74,15 +74,6 @@ struct NextSequenceValueOperator {
 	}
 };
 
-struct NextValData {
-	NextValData(NextvalBindData &bind_data_p, Transaction &transaction_p)
-	    : bind_data(bind_data_p), transaction(transaction_p) {
-	}
-
-	NextvalBindData &bind_data;
-	Transaction &transaction;
-};
-
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
@@ -90,8 +81,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &input = args.data[0];
 
 	auto &context = state.GetContext();
-	auto &transaction = Transaction::GetTransaction(context);
 	if (info.sequence) {
+		auto &transaction = Transaction::Get(context, *info.sequence->catalog);
 		// sequence to use is hard coded
 		// increment the sequence
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -101,13 +92,13 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			result_data[i] = OP::Operation(transaction, info.sequence);
 		}
 	} else {
-		NextValData next_val_input(info, transaction);
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
 			auto sequence = Catalog::GetEntry<SequenceCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 			// finally get the next value from the sequence
+			auto &transaction = Transaction::Get(context, *info.sequence->catalog);
 			return OP::Operation(transaction, sequence);
 		});
 	}

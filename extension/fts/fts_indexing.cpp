@@ -289,7 +289,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	// positional parameters
 	auto doc_id = StringValue::Get(parameters.values[1]);
 	// check all specified columns
-	auto table = catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
 		string col_name = StringValue::Get(parameters.values[i]);

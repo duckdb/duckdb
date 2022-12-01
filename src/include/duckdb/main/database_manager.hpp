@@ -29,6 +29,7 @@ public:
 public:
 	static DatabaseManager &Get(DatabaseInstance &db);
 	static DatabaseManager &Get(ClientContext &db);
+	static DatabaseManager &Get(AttachedDatabase &db);
 
 	//! Get an attached database with the given name
 	AttachedDatabase *GetDatabase(const string &name);
@@ -40,6 +41,13 @@ public:
 
 	vector<AttachedDatabase *> GetDatabases();
 
+	transaction_t GetNewQueryNumber() {
+		return current_query_number++;
+	}
+	transaction_t ActiveQueryNumber() const {
+		return current_query_number;
+	}
+
 private:
 	//! The lock controlling access to the databases
 	mutex manager_lock;
@@ -49,6 +57,8 @@ private:
 	unique_ptr<Catalog> system_catalog;
 	//! The global catalog version, incremented whenever anything changes in the catalog
 	atomic<idx_t> catalog_version;
+	//! The current query number
+	atomic<transaction_t> current_query_number;
 };
 
 } // namespace duckdb

@@ -146,7 +146,6 @@ static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **re
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
-	auto &transaction = Transaction::GetTransaction(context);
 	// check if one of the tables has an index on column
 	if (op.join_type == JoinType::INNER && op.conditions.size() == 1) {
 		// check if one of the children are table scans and if they have an index in the join attribute
@@ -154,6 +153,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
+			auto &transaction = Transaction::Get(context, *tbl->table->catalog);
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				CanUseIndexJoin(tbl, *op.conditions[0].left, left_index);
 			}
@@ -161,6 +161,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
+			auto &transaction = Transaction::Get(context, *tbl->table->catalog);
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				CanUseIndexJoin(tbl, *op.conditions[0].right, right_index);
 			}

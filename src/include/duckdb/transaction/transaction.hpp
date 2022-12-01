@@ -10,11 +10,9 @@
 
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
-#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -27,6 +25,8 @@ class CatalogEntry;
 class DataTable;
 class DatabaseInstance;
 class LocalStorage;
+class MetaTransaction;
+class TransactionManager;
 class WriteAheadLog;
 
 class ChunkVectorInfo;
@@ -38,10 +38,11 @@ struct UpdateInfo;
 //! transaction
 class Transaction {
 public:
-	Transaction(ClientContext &context, transaction_t start_time, transaction_t transaction_id,
-	            timestamp_t start_timestamp, idx_t catalog_version);
+	Transaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
+	            transaction_t transaction_id);
 	~Transaction();
 
+	TransactionManager &manager;
 	weak_ptr<ClientContext> context;
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -49,24 +50,19 @@ public:
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
-	//! Highest active query when the transaction finished, used for cleaning up
-	transaction_t highest_active_query;
+	//! Map of all sequences that were used during the transaction and the value they had in this transaction
+	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
+	//! A pointer to the temporary objects of the client context
+	shared_ptr<SchemaCatalogEntry> temporary_objects;
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
 	atomic<transaction_t> active_query;
-	//! The timestamp when the transaction started
-	timestamp_t start_timestamp;
-	//! The catalog version when the transaction was started
-	idx_t catalog_version;
-	//! Map of all sequences that were used during the transaction and the value they had in this transaction
-	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
-	//! The validity checker of the transaction
-	ValidChecker transaction_validity;
-	//! A pointer to the temporary objects of the client context
-	shared_ptr<SchemaCatalogEntry> temporary_objects;
+	//! Highest active query when the transaction finished, used for cleaning up
+	transaction_t highest_active_query;
 
 public:
-	static Transaction &GetTransaction(ClientContext &context);
+	static Transaction &Get(ClientContext &context, AttachedDatabase &db);
+	static Transaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
@@ -83,10 +79,6 @@ public:
 	void Cleanup();
 
 	bool ChangesMade();
-
-	timestamp_t GetCurrentTransactionStartTimestamp() {
-		return start_timestamp;
-	}
 
 	void PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
 	void PushAppend(DataTable *table, idx_t row_start, idx_t row_count);
