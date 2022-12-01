@@ -32,6 +32,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -45,12 +46,10 @@ string SimilarCatalogEntry::GetQualifiedName() const {
 Catalog::Catalog(AttachedDatabase &db)
     : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)), attached_db(&db), db(nullptr) {
-	catalog_version = 0;
 }
 Catalog::Catalog(DatabaseInstance &db)
     : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)), attached_db(nullptr), db(&db) {
-	catalog_version = 0;
 }
 Catalog::~Catalog() {
 }
@@ -464,11 +463,15 @@ void Catalog::Verify() {
 }
 
 idx_t Catalog::GetCatalogVersion() {
-	return catalog_version;
+	return GetDatabase().GetDatabaseManager().catalog_version;
 }
 
 idx_t Catalog::ModifyCatalog() {
-	return catalog_version++;
+	return GetDatabase().GetDatabaseManager().catalog_version++;
+}
+
+bool Catalog::IsSystemCatalog() {
+	return !attached_db;
 }
 
 } // namespace duckdb

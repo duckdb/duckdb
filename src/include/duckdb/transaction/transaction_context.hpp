@@ -35,7 +35,6 @@ public:
 		return !!current_transaction;
 	}
 
-	void RecordQuery(string query);
 	void BeginTransaction();
 	void Commit();
 	void Rollback();

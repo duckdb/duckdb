@@ -20,6 +20,8 @@ class DatabaseInstance;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
+	friend class Catalog;
+
 public:
 	explicit DatabaseManager(DatabaseInstance &db);
 	~DatabaseManager();
@@ -45,6 +47,8 @@ private:
 	case_insensitive_map_t<unique_ptr<AttachedDatabase>> databases;
 	//! The system catalog is a special catalog that holds system entries (e.g. functions)
 	unique_ptr<Catalog> system_catalog;
+	//! The global catalog version, incremented whenever anything changes in the catalog
+	atomic<idx_t> catalog_version;
 };
 
 } // namespace duckdb

@@ -112,6 +112,8 @@ public:
 	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
 	DUCKDB_API idx_t ModifyCatalog();
 
+	DUCKDB_API bool IsSystemCatalog();
+
 	//! Creates a schema in the catalog.
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
@@ -228,8 +230,6 @@ private:
 	//! Reference to the database
 	AttachedDatabase *attached_db;
 	DatabaseInstance *db;
-	//! The catalog version, incremented whenever anything changes in the catalog
-	atomic<idx_t> catalog_version;
 
 private:
 	//! A variation of GetEntry that returns an associated schema as well.

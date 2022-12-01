@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0) {
 	system_catalog = make_unique<Catalog>(db);
 }
 
