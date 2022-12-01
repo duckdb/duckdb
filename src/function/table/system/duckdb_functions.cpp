@@ -456,7 +456,6 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 	// function_oid, LogicalType::BIGINT
 	output.SetValue(11, output_offset, Value::BIGINT(entry->oid));
 
-
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
