@@ -5,6 +5,54 @@
 import sys
 import json
 import os
+from functools import reduce
+
+class NodeTiming:
+
+	def __init__(self, phase, time):
+		self.phase = phase
+		self.time = time
+		# percentage is determined later.
+		self.percentage = 0
+
+	def calculate_percentage(self, total_time):
+		self.percentage = self.time/total_time
+
+	def combine_timing(l, r):
+		# TODO: can only add timings for same-phase nodes
+		total_time = l.time + r.time
+		return NodeTiming(l.phase, total_time)
+
+class AllTimings:
+
+	def __init__(self):
+		self.phase_to_timings = {}
+
+	def add_node_timing(self, node_timing):
+		if node_timing.phase in self.phase_to_timings:
+			self.phase_to_timings[node_timing.phase].append(node_timing)
+			return
+		self.phase_to_timings[node_timing.phase] = [node_timing]
+
+	def get_phase_timings(self, phase):
+		return self.phase_to_timings[phase]
+
+	def get_summary_phase_timings(self, phase):
+		return reduce(NodeTiming.combine_timing, self.phase_to_timings[phase])
+
+	def get_phases_high_to_low(self):
+		phases = list(self.phase_to_timings.keys())
+		phases.sort(key=lambda x: (self.get_summary_phase_timings(x)).time)
+		phases.reverse()
+		return phases
+
+	def get_sum_of_all_timings(self):
+		total_timing_sum = 0
+		for phase in self.phase_to_timings.keys():
+			total_timing_sum += self.get_summary_phase_timings(phase).time
+		return total_timing_sum
+
+QUERY_TIMINGS = AllTimings()
 
 sys.path.insert(0, 'benchmark')
 
@@ -48,8 +96,8 @@ def get_node_body(name, result, cardinality, timing, extra_info):
 	if timing:
 		body += f"<p> {timing} </p>"
 	body += f"<p> cardinality = {cardinality} </p>"
-	if extra_info:
-		body += f"<p> {extra_info} </p>"
+	# if extra_info:
+	# 	body += f"<p> {extra_info} </p>"
 	body += "</div>"
 	body += "</span>"
 	return body
@@ -72,42 +120,73 @@ def generate_tree_recursive(json_graph):
 		children_html += "</ul>"
 	return node_prefix_html + node_body + children_html + node_suffix_html
 
+# if detailed profiling is enabled, then information on how long the optimizer/physical planner etc. is available
+# that is "top level timing information"
+def get_top_level_timings(json):
+	return []
+
+def get_child_timings(top_node):
+	global QUERY_TIMINGS
+	node_timing = NodeTiming(top_node['name'], float(top_node['timing']))
+	QUERY_TIMINGS.add_node_timing(node_timing)
+	for child in top_node['children']:
+		get_child_timings(child)
+
 def gather_timing_information(json):
 	# add up all of the times
 	# measure each time as a percentage of the total time.
 	# then you can return a list of [phase, time, percentage]
-	pass
+	top_level_timings = get_top_level_timings(json)
+	child_timings = get_child_timings(json['children'][0])
 
-
+# For generating the table in the top left.
 def generate_timing_html(graph_json):
+	global QUERY_TIMINGS
 	json_graph = json.loads(graph_json)
-	# gather all the timings and make a nice thing from it.
-	table_prefix = "<table class=\"styled-table\">"
-	table_head = """ 
-	<thead>
-		<tr>
-			<th>Phase</th>
-			<th>Time</th>
-			<th>Percentage</th>
-		</tr>
-	</thead>"""
-	for
-	return  """
-<table class="styled-table">
-   
-    <tbody>
-        <tr>
-            <td>Dom</td>
-            <td>6000</td>
-        </tr>
-        <tr class="active-row">
-            <td>Melissa</td>
-            <td>5150</td>
-        </tr>
-        <!-- and so on... -->
-    </tbody>
-</table>
+	gather_timing_information(json_graph)
+	total_time = float(json_graph['timing'])
+	table_head = """
+	<table class=\"styled-table\"> 
+		<thead>
+			<tr>
+				<th>Phase</th>
+				<th>Time</th>
+				<th>Percentage</th>
+			</tr>
+		</thead>"""
+
+	table_body = "<tbody>"
+	table_end = "</tbody></table>"
+# 	total_time_row = f"""
+# 	<tr>
+# 			<td><b>TOTAL TIME</b></td>
+#             <td><b>{total_time}</b></td>
+#             <td></td>
+#     </tr>
+# """
+	execution_time = QUERY_TIMINGS.get_sum_of_all_timings()
+# 	total_node_time_row = f"""
+# 	<tr>
+# 			<td><b>Execution</b></td>
+#             <td><b>{}</b></td>
+#             <td></td>
+#     </tr>
+# """
+
+	all_phases = QUERY_TIMINGS.get_phases_high_to_low()
+	all_phases = [NodeTiming("TOTAL TIME", total_time), NodeTiming("Execution Time", execution_time)] + all_phases
+	for phase in all_phases:
+		summarized_phase = QUERY_TIMINGS.get_summary_phase_timings(phase)
+		summarized_phase.calculate_percentage(total_time)
+		table_body += f"""
+	<tr>
+			<td>{phase}</td>
+            <td>{summarized_phase.time}</td>
+            <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
+    </tr>
 """
+	table_body += table_end
+	return table_head + table_body
 
 
 def generate_tree_html(graph_json):
@@ -203,7 +282,7 @@ def generate(input_file, output_file):
 <body>
 	<div id="meta-info"></div>
 	<div class="chart" id="query-profile">
-		${EXTRA_TIMING_INFO}
+		${TIMING_TABLE}
 	</div>
 
 	${TREE}
@@ -211,12 +290,10 @@ def generate(input_file, output_file):
 </html>
 """
 		html = html.replace("${CSS}", html_output['css'])
-		html = html.replace("${EXTRA_TIMING_INFO}", timing_table)
+		html = html.replace("${TIMING_TABLE}", timing_table)
 		html = html.replace('[INFOSEPARATOR]', '<br>')
 		html = html.replace('${TREE}', tree_output)
 		f.write(html)
-
-
 
 generate(input, output)
 
