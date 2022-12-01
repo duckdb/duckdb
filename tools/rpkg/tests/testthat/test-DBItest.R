@@ -1,5 +1,5 @@
 skip_on_cran()
-# debugonce(DBItest::test_all)
+
 DBItest::test_all(skip = c(
   "package_name", # wontfix
   "package_dependencies", # wontfix
