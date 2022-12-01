@@ -378,6 +378,7 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
 
 // optimized adaptive *scalar* compression method
 static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_t lenIn[], u8* strIn[], size_t size, u8* out, size_t lenOut[], u8* strOut[], bool noSuffixOpt, bool avoidBranch) {
+	// buf[512+8] is workaround, see https://github.com/cwida/fsst/issues/9
 	u8 buf[512+8], *cur = NULL, *end =  NULL, *lim = out + size;
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
