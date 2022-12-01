@@ -92,7 +92,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
-	string file_name;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
@@ -581,7 +580,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	bind_data->file_name = info.file_path;
 	return move(bind_data);
 }
 

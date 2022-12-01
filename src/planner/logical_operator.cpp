@@ -7,6 +7,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 namespace duckdb {
 
@@ -339,7 +340,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		throw SerializationException("Invalid type for operator deserialization");
+		result = LogicalExtensionOperator::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");
@@ -349,6 +351,10 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	result->children = move(children);
 
 	return result;
+}
+
+vector<idx_t> LogicalOperator::GetTableIndex() const {
+	return vector<idx_t> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {

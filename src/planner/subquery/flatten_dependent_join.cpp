@@ -79,12 +79,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
+		auto left_columns = plan->GetColumnBindings().size();
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
 		this->delim_offset = 0;
-		this->data_offset = 0;
+		this->data_offset = left_columns;
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
-		return LogicalCrossProduct::Create(move(delim_scan), move(plan));
+		return LogicalCrossProduct::Create(move(plan), move(delim_scan));
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
@@ -448,8 +449,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = (LogicalSetOperation &)*plan;
 		// set operator, push into both children
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+#endif
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+#ifdef DEBUG
+		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+#endif
 		// we have to refer to the setop index now
 		base_binding.table_index = setop.table_index;
 		base_binding.column_index = setop.column_count;

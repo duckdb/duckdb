@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
 #include <R_ext/Utils.h>
 
@@ -309,7 +308,6 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (!stmt || !stmt.get() || !stmt->stmt) {
 		cpp11::stop("rapi_execute: Invalid statement");
 	}
-
 	auto pending_query = stmt->stmt->PendingQuery(stmt->parameters, arrow);
 	duckdb::PendingExecutionResult execution_result;
 	do {

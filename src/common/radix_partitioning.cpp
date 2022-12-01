@@ -153,6 +153,9 @@ struct PartitionFunctor {
 		const auto row_width = layout.GetRowWidth();
 		const auto has_heap = !layout.AllConstant();
 
+		block_collection.VerifyBlockSizes();
+		string_heap.VerifyBlockSizes();
+
 		// Fixed-size data
 		RowDataBlock *partition_data_blocks[CONSTANTS::NUM_PARTITIONS];
 		vector<BufferHandle> partition_data_handles;
@@ -287,6 +290,10 @@ struct PartitionFunctor {
 #ifdef DEBUG
 		for (idx_t bin = 0; bin < CONSTANTS::NUM_PARTITIONS; bin++) {
 			auto &p_block_collection = *partition_block_collections[bin];
+			p_block_collection.VerifyBlockSizes();
+			if (!layout.AllConstant()) {
+				partition_string_heaps[bin]->VerifyBlockSizes();
+			}
 			idx_t p_count = 0;
 			for (idx_t b = 0; b < p_block_collection.blocks.size(); b++) {
 				auto &data_block = *p_block_collection.blocks[b];

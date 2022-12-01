@@ -206,6 +206,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 }
 
+void TableCatalogEntry::UndoAlter(ClientContext &context, AlterInfo *info) {
+	D_ASSERT(!internal);
+	D_ASSERT(info->type == AlterType::ALTER_TABLE);
+	auto table_info = (AlterTableInfo *)info;
+	switch (table_info->alter_table_type) {
+	case AlterTableType::RENAME_TABLE: {
+		storage->info->table = this->name;
+		break;
+	default:
+		break;
+	}
+	}
+}
+
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
@@ -304,6 +318,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		create_info->constraints.push_back(constraint->Copy());
 	}
 	Binder::BindLogicalType(context, info.new_column.TypeMutable(), schema->name);
+	info.new_column.SetOid(columns.LogicalColumnCount());
+	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
 
 	create_info->columns.AddColumn(move(col));

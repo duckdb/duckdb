@@ -21,6 +21,8 @@ struct LogicalExtensionOperator : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, move(expressions)) {
 	}
 
+	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
 };
 } // namespace duckdb
