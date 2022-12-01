@@ -80,3 +80,15 @@ query I
 select pg_typeof(1);
 ----
 integer
+
+statement ok
+SELECT pg_get_expr(relpartbound, oid) FROM pg_class
+
+statement ok
+SELECT pg_get_expr(relpartbound, oid, true) FROM pg_class
+
+statement ok
+SELECT pg_has_role('duckdb', 'MEMBER')
+
+statement ok
+SELECT pg_has_role('duckdb', 'duckdb', 'MEMBER')
