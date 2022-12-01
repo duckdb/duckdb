@@ -8,7 +8,7 @@ dbIsValid__duckdb_driver <- function(dbObj, ...) {
     {
       con <- dbConnect(dbObj)
       dbExecute(con, SQL("SELECT 1"))
-      dbDisconnect(con)
+      dbDisconnect(con, shutdown = FALSE)
       valid <- TRUE
     },
     error = function(c) {
