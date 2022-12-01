@@ -1,6 +1,6 @@
 skip_on_cran()
-
-DBItest::test_all(c(
+# debugonce(DBItest::test_all)
+DBItest::test_all(skip = c(
   "package_name", # wontfix
   "package_dependencies", # wontfix
   "reexport", # wontfix
@@ -43,4 +43,6 @@ DBItest::test_all(c(
   "bind_factor",
 
   NULL
-))
+  ),
+  ctx <- DBItest::make_context(new("DBIConnector", .drv = duckdb(), .conn_args = list(dbdir = ":memory:")))
+)

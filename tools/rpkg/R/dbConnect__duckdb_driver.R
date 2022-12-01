@@ -44,7 +44,7 @@ dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
                                      read_only = FALSE,
                                      timezone_out = "UTC",
                                      tz_out_convert = c("with", "force"), config = list(), bigint="numeric") {
-  check_flag(debug)
+  check_flag(debug);#browser()
   timezone_out <- check_tz(timezone_out)
   tz_out_convert <- match.arg(tz_out_convert)
 
@@ -58,7 +58,7 @@ dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
   }
 
   conn <- duckdb_connection(drv, debug = debug)
-  on.exit(dbDisconnect(conn))
+  on.exit(dbDisconnect(conn, shutdown = FALSE))
 
   conn@timezone_out <- timezone_out
   conn@tz_out_convert <- tz_out_convert

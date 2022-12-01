@@ -18,7 +18,7 @@ test_that("configuration key value pairs work as expected", {
   dbExecute(con, "create table a (i integer)")
   dbExecute(con, "insert into a values (44), (42)")
   res <- dbGetQuery(con, "select i from a order by i")
-  dbDisconnect(con)
+  dbDisconnect(con, shutdown = FALSE)
   expect_equal(res$i, c(44, 42))
   duckdb_shutdown(drv)
 

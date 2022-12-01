@@ -4,7 +4,7 @@
 dbGetInfo__duckdb_driver <- function(dbObj, ...) {
   con <- dbConnect(dbObj)
   version <- dbGetQuery(con, "select library_version from pragma_version()")[[1]][[1]]
-  dbDisconnect(con)
+  dbDisconnect(con, shutdown = FALSE)
   list(driver.version = version, client.version = version, dbname = dbObj@dbdir)
 }
 

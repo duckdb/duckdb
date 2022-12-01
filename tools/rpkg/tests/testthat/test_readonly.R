@@ -7,7 +7,7 @@ test_that("read_only flag and shutdown works as expected", {
     con <- DBI::dbConnect(duckdb::duckdb(), dbdir, read_only = FALSE) # FALSE is the default
     print(con)
     res <- DBI::dbWriteTable(con, "iris", iris)
-    DBI::dbDisconnect(con)
+    DBI::dbDisconnect(con, shutdown = FALSE)
     duckdb::duckdb_shutdown(con@driver)
   }, args = list(dbdir))
 
@@ -33,7 +33,7 @@ test_that("read_only flag and shutdown works as expected", {
   # shut down one of them again
   res <- dbReadTable(con, "iris")
 
-  dbDisconnect(con)
+  dbDisconnect(con, shutdown = FALSE)
   dbDisconnect(con2, shutdown = TRUE)
 
 
