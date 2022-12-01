@@ -378,10 +378,12 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
 
 // optimized adaptive *scalar* compression method
 static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_t lenIn[], u8* strIn[], size_t size, u8* out, size_t lenOut[], u8* strOut[], bool noSuffixOpt, bool avoidBranch) {
-	// buf[512+8] is workaround, see https://github.com/cwida/fsst/issues/9
-	u8 buf[512+8], *cur = NULL, *end =  NULL, *lim = out + size;
+	u8 *cur = NULL, *end =  NULL, *lim = out + size;
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
+
+	u8 buf[512+7]; /* +7 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
+	memset(buf+511, 0, 8); /* and initialize the sentinal bytes */
 
 	// three variants are possible. dead code falls away since the bool arguments are constants
 	auto compressVariant = [&](bool noSuffixOpt, bool avoidBranch) {
@@ -422,22 +424,20 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 		size_t chunk, curOff = 0;
 		strOut[curLine] = out;
 		do {
-			bool skipCopy = symbolTable.zeroTerminated;
 			cur = strIn[curLine] + curOff;
 			chunk = lenIn[curLine] - curOff;
 			if (chunk > 511) {
 				chunk = 511; // we need to compress in chunks of 511 in order to be byte-compatible with simd-compressed FSST
-				skipCopy = false; // need to put terminator, so no in place mem usage possible
 			}
 			if ((2*chunk+7) > (size_t) (lim-out)) {
 				return curLine; // out of memory
 			}
-			if (!skipCopy) { // only in case of short zero-terminated strings, we can avoid copying
-				memcpy(buf, cur, chunk);
-				cur = buf;
-				buf[chunk] = (u8) symbolTable.terminator;
-			}
+			// copy the string to the 511-byte buffer
+			memcpy(buf, cur, chunk);
+			buf[chunk] = (u8) symbolTable.terminator;
+			cur = buf;
 			end = cur + chunk;
+
 			// based on symboltable stats, choose a variant that is nice to the branch predictor
 			if (noSuffixOpt) {
 				compressVariant(true,false);
