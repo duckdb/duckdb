@@ -2,8 +2,6 @@
 # This script takes a json file as input that is the result of the QueryProfiler of duckdb
 # and converts it into a Query Graph.
 
-import sys
-import json
 import os
 from functools import reduce
 
@@ -55,6 +53,8 @@ class AllTimings:
 QUERY_TIMINGS = AllTimings()
 
 sys.path.insert(0, 'benchmark')
+
+import duckdb_query_graph
 
 arguments = sys.argv
 if len(arguments) <= 1:
