@@ -53,8 +53,8 @@ private:
 	mutex manager_lock;
 	//! The set of attached databases
 	case_insensitive_map_t<unique_ptr<AttachedDatabase>> databases;
-	//! The system catalog is a special catalog that holds system entries (e.g. functions)
-	unique_ptr<Catalog> system_catalog;
+	//! The system database is a special database that holds system entries (e.g. functions)
+	unique_ptr<AttachedDatabase> system;
 	//! The global catalog version, incremented whenever anything changes in the catalog
 	atomic<idx_t> catalog_version;
 	//! The current query number

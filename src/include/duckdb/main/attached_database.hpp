@@ -21,7 +21,7 @@ class TransactionManager;
 //! The AttachedDatabase represents an attached database instance
 class AttachedDatabase {
 public:
-	explicit AttachedDatabase(DatabaseInstance &db);
+	explicit AttachedDatabase(DatabaseInstance &db, bool system = false);
 	~AttachedDatabase();
 
 	void Initialize();
@@ -35,6 +35,7 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	bool IsSystem() const;
 
 private:
 	static string ExtractDatabaseName(const string &dbpath);

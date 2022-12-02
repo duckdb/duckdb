@@ -5,17 +5,22 @@
 
 namespace duckdb {
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db) : db(db) {
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, bool system) : db(db) {
 	auto &config = DBConfig::GetConfig(db);
 	this->name = ExtractDatabaseName(config.options.database_path);
-	storage = make_unique<SingleFileStorageManager>(*this, config.options.database_path,
-	                                                config.options.access_mode == AccessMode::READ_ONLY);
+	if (!system) {
+		storage = make_unique<SingleFileStorageManager>(*this, config.options.database_path,
+		                                                config.options.access_mode == AccessMode::READ_ONLY);
+	}
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 }
 
 AttachedDatabase::~AttachedDatabase() {
 	if (Exception::UncaughtException()) {
+		return;
+	}
+	if (IsSystem()) {
 		return;
 	}
 
@@ -33,6 +38,10 @@ AttachedDatabase::~AttachedDatabase() {
 	}
 }
 
+bool AttachedDatabase::IsSystem() const {
+	return !storage;
+}
+
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {
 	if (dbpath.empty() || dbpath == ":memory:") {
 		return "memory";
@@ -41,11 +50,18 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {
 }
 
 void AttachedDatabase::Initialize() {
-	catalog->Initialize(false);
-	storage->Initialize();
+	if (IsSystem()) {
+		catalog->Initialize(true);
+	} else {
+		catalog->Initialize(false);
+		storage->Initialize();
+	}
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
+	if (IsSystem()) {
+		throw InternalException("Internal system catalog does not have storage");
+	}
 	return *storage;
 }
 

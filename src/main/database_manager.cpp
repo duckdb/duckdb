@@ -5,7 +5,7 @@
 namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
-	system_catalog = make_unique<Catalog>(db);
+	system = make_unique<AttachedDatabase>(db);
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -52,7 +52,8 @@ vector<AttachedDatabase *> DatabaseManager::GetDatabases() {
 }
 
 Catalog &DatabaseManager::GetSystemCatalog() {
-	return *system_catalog;
+	D_ASSERT(system);
+	return system->GetCatalog();
 }
 
 } // namespace duckdb

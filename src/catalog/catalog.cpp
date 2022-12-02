@@ -45,11 +45,7 @@ string SimilarCatalogEntry::GetQualifiedName() const {
 
 Catalog::Catalog(AttachedDatabase &db)
     : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
-      dependency_manager(make_unique<DependencyManager>(*this)), attached_db(&db), db(nullptr) {
-}
-Catalog::Catalog(DatabaseInstance &db)
-    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
-      dependency_manager(make_unique<DependencyManager>(*this)), attached_db(nullptr), db(&db) {
+      dependency_manager(make_unique<DependencyManager>(*this)), db(db) {
 }
 Catalog::~Catalog() {
 }
@@ -78,19 +74,11 @@ void Catalog::Initialize(bool load_builtin) {
 }
 
 DatabaseInstance &Catalog::GetDatabase() {
-	if (db) {
-		return *db;
-	} else {
-		D_ASSERT(attached_db);
-		return attached_db->GetDatabase();
-	}
+	return db.GetDatabase();
 }
 
 AttachedDatabase &Catalog::GetAttached() {
-	if (!attached_db) {
-		throw InternalException("Catalog does not have an attached database");
-	}
-	return *attached_db;
+	return db;
 }
 
 Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
@@ -470,8 +458,8 @@ idx_t Catalog::ModifyCatalog() {
 	return GetDatabase().GetDatabaseManager().catalog_version++;
 }
 
-bool Catalog::IsSystemCatalog() {
-	return !attached_db;
+bool Catalog::IsSystemCatalog() const {
+	return db.IsSystem();
 }
 
 } // namespace duckdb

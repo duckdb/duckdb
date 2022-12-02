@@ -77,7 +77,6 @@ struct SimilarCatalogEntry {
 class Catalog {
 public:
 	explicit Catalog(AttachedDatabase &db);
-	explicit Catalog(DatabaseInstance &db);
 	~Catalog();
 
 	//! The catalog set holding the schemas
@@ -107,12 +106,12 @@ public:
 
 	void Initialize(bool load_builtin);
 
+	bool IsSystemCatalog() const;
+
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion();
 	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
 	DUCKDB_API idx_t ModifyCatalog();
-
-	DUCKDB_API bool IsSystemCatalog();
 
 	//! Creates a schema in the catalog.
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
@@ -228,8 +227,7 @@ public:
 
 private:
 	//! Reference to the database
-	AttachedDatabase *attached_db;
-	DatabaseInstance *db;
+	AttachedDatabase &db;
 
 private:
 	//! A variation of GetEntry that returns an associated schema as well.
