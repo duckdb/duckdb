@@ -8,17 +8,14 @@ namespace duckdb {
 
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &map = args.data[0];
-	UnifiedVectorFormat list_data;
 	UnifiedVectorFormat map_data;
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<uint64_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
 	map.ToUnifiedFormat(args.size(), map_data);
-	auto &children = StructVector::GetEntries(map);
-	children[0]->ToUnifiedFormat(args.size(), list_data);
 	for (idx_t row = 0; row < args.size(); row++) {
-		auto list_entry = ((list_entry_t *)list_data.data)[list_data.sel->get_index(row)];
+		auto list_entry = ((list_entry_t *)map_data.data)[map_data.sel->get_index(row)];
 		result_data[row] = list_entry.length;
 		result_validity.Set(row, map_data.validity.RowIsValid(map_data.sel->get_index(row)));
 	}

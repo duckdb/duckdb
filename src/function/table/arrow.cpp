@@ -135,6 +135,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		// 	child_types.push_back({struct_schema.children[type_idx]->name, list_type});
 		// }
 		// return LogicalType::MAP(move(child_types));
+        arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);

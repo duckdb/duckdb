@@ -83,6 +83,10 @@ public:
 	}
 };
 
+struct ListCast {
+	static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+};
+
 struct StructBoundCastData : public BoundCastData {
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
 	    : child_cast_info(move(child_casts)), target(move(target_p)) {

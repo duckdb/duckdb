@@ -619,23 +619,26 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		// TODO fix for map restructure
-		//! Since this is a map we skip first child, because its a struct
-		auto &struct_arrow = *array.children[0];
-		auto &child_entries = StructVector::GetEntries(vector);
-		D_ASSERT(child_entries.size() == 2);
-		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
-		if (nested_offset != -1) {
-			offsets = (uint32_t *)array.buffers[1] + nested_offset;
-		}
-		auto &struct_validity_mask = FlatVector::Validity(vector);
-		//! Fill the children
-		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
-			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
-			                     arrow_convert_data, col_idx, arrow_convert_idx, offsets, &struct_validity_mask);
-		}
-		ArrowToDuckDBMapVerify(vector, size);
-		break;
+        ArrowToDuckDBList(vector, array, scan_state, size, arrow_convert_data, col_idx, arrow_convert_idx,
+                          nested_offset, parent_mask);
+        break;
+//		// TODO fix for map restructure
+//		//! Since this is a map we skip first child, because its a struct
+//		auto &struct_arrow = *array.children[0];
+//		auto &child_entries = StructVector::GetEntries(vector);
+//		D_ASSERT(child_entries.size() == 2);
+//		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
+//		if (nested_offset != -1) {
+//			offsets = (uint32_t *)array.buffers[1] + nested_offset;
+//		}
+//		auto &struct_validity_mask = FlatVector::Validity(vector);
+//		//! Fill the children
+//		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
+//			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
+//			                     arrow_convert_data, col_idx, arrow_convert_idx, offsets, &struct_validity_mask);
+//		}
+//		ArrowToDuckDBMapVerify(vector, size);
+//		break;
 	}
 	case LogicalTypeId::STRUCT: {
 		//! Fill the children

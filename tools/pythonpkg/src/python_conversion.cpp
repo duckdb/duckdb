@@ -84,7 +84,7 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	// return Value::MAP(move(keys), move(values));
 
     auto size = py::len(dict.keys);
-	D_ASSERT(size == py::len(dict.values))
+	D_ASSERT(size == py::len(dict.values));
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;

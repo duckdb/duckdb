@@ -17,85 +17,40 @@ public:
 	}
 };
 
-unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	vector<BoundCastInfo> child_cast_info;
-	auto source_key = MapType::KeyType(source);
-	auto target_key = MapType::KeyType(target);
-	auto source_val = MapType::ValueType(source);
-	auto target_val = MapType::ValueType(target);
-	auto key_cast = input.GetCastFunction(source_key, target_key);
-	auto value_cast = input.GetCastFunction(source_val, target_val);
-	return make_unique<MapBoundCastData>(move(key_cast), move(value_cast));
-}
-
-static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-    auto src_size = ListVector::GetListSize(source); // size of child vector
-    ListVector::Reserve(result, src_size);
-    ListVector::SetListSize(result, src_size);
-
-    if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-        result.SetVectorType(VectorType::CONSTANT_VECTOR);
-        ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-        auto ldata = ConstantVector::GetData<list_entry_t>(source);
-        auto tdata = ConstantVector::GetData<list_entry_t>(result);
-        *tdata = *ldata;
-    } else {
-        source.Flatten(count);
-        FlatVector::Validity(result) = FlatVector::Validity(source);
-        auto source_data = ListVector::GetData(source);
-        auto result_data = ListVector::GetData(result);
-        for (idx_t i = 0; i < count; i++) {
-            result_data[i] = source_data[i];
-        }
-    }
-
-	auto &cast_data = (MapBoundCastData &)*parameters.cast_data;
-	CastParameters key_params(parameters, cast_data.key_cast.cast_data.get());
-	if (!cast_data.key_cast.function(MapVector::GetKeys(source), MapVector::GetKeys(result), src_size, key_params)) {
-		return false;
-	}
-	CastParameters val_params(parameters, cast_data.value_cast.cast_data.get());
-	if (!cast_data.value_cast.function(MapVector::GetValues(source), MapVector::GetValues(result), src_size, val_params)) {
-		return false;
-	}
-
-	return true;
-}
+//unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+//	vector<BoundCastInfo> child_cast_info;
+//	auto source_key = MapType::KeyType(source);
+//	auto target_key = MapType::KeyType(target);
+//	auto source_val = MapType::ValueType(source);
+//	auto target_val = MapType::ValueType(target);
+//	auto key_cast = input.GetCastFunction(source_key, target_key);
+//	auto value_cast = input.GetCastFunction(source_val, target_val);
+//	return make_unique<MapBoundCastData>(move(key_cast), move(value_cast));
+//
+//}
 
 static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
     auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	// first cast the child elements to varchar
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	Vector varchar_map(varchar_type, count);
 
+    //since map's physical type is a list, the ListCast can be utilized
+	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
-//    auto struct_vec = ListVector::GetEntry(source);
-//    for (idx_t i = 0; i < ListVector::GetListSize(source); i++ ) {
-//        auto &children = StructVector::GetEntries(struct_vec);
-//
-//        printf("%d: Key: %s, Value: %s\n", i, children[0]->GetValue(i).ToString().c_str(), children[1]->GetValue(i).ToString().c_str());
-//    }
-
-	MapToMapCast(source, varchar_map, count, parameters);
-
-	// now construct the actual varchar vector
 	varchar_map.Flatten(count);
-
 	auto &validity = FlatVector::Validity(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
-//	auto &key_str = ListVector::GetEntry(key_lists);
-//	auto &val_str = ListVector::GetEntry(val_lists);
 
-//	key_str.Flatten(ListVector::GetListSize(key_lists));
-//	val_str.Flatten(ListVector::GetListSize(val_lists));
+    key_str.Flatten(ListVector::GetListSize(source));
+    val_str.Flatten(ListVector::GetListSize(source));
 
 	auto list_data = ListVector::GetData(varchar_map);
-
     auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
 	auto &key_validity = FlatVector::Validity(key_str);
 	auto &val_validity = FlatVector::Validity(val_str);
+    auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -110,6 +65,11 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				ret += ", ";
 			}
 			auto idx = list.offset + list_idx;
+
+            if (!struct_validity.RowIsValid(idx)) {
+                ret += "NULL";
+                continue;
+            }
 			if (!key_validity.RowIsValid(idx)) {
 				//throw InternalException("Error in map: key validity invalid?!");
                 ret += "invalid";
@@ -132,12 +92,11 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::MAP:
-		return BoundCastInfo(MapToMapCast, BindMapToMapCast(input, source, target));
+		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
-		// bind a cast in which we convert the key/value to VARCHAR entries
 		auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-		return BoundCastInfo(MapToVarcharCast, BindMapToMapCast(input, source, varchar_type));
+		return BoundCastInfo(MapToVarcharCast, ListBoundCastData::BindListToListCast(input, source, varchar_type));
 	}
 	default:
 		return TryVectorNullCast;
