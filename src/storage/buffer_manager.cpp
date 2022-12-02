@@ -74,6 +74,7 @@ BlockHandle::~BlockHandle() {
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
+	buffer_manager.PurgeQueue();
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
@@ -100,7 +101,7 @@ unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_
                                                              FileBufferType type) {
 	if (source) {
 		auto tmp = move(source);
-		D_ASSERT(tmp->size == size);
+		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
 		return make_unique<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
@@ -311,6 +312,7 @@ TempBufferPoolReservation BufferManager::EvictBlocksOrThrow(idx_t memory_delta, 
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
+	D_ASSERT(block_size < Storage::BLOCK_SIZE);
 	auto res = EvictBlocksOrThrow(block_size, maximum_memory, nullptr,
 	                              "could not allocate block of %lld bytes (%lld/%lld used) %s", block_size,
 	                              GetUsedMemory(), GetMaxMemory());
@@ -323,7 +325,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
-	auto alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
+	auto alloc_size = GetAllocSize(block_size);
 	// first evict blocks until we have enough memory to store this buffer
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(alloc_size, maximum_memory, &reusable_buffer,
@@ -337,9 +339,11 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	                                move(res));
 }
 
-BufferHandle BufferManager::Allocate(idx_t block_size) {
-	auto block = RegisterMemory(block_size, true);
-	return Pin(block);
+BufferHandle BufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
+	shared_ptr<BlockHandle> local_block;
+	auto block_ptr = block ? block : &local_block;
+	*block_ptr = RegisterMemory(block_size, can_destroy);
+	return Pin(*block_ptr);
 }
 
 void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
@@ -369,6 +373,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	// resize and adjust current memory
 	handle->buffer->Resize(block_size);
 	handle->memory_usage += memory_delta;
+	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 }
 
 BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -409,6 +414,7 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		handle->memory_usage += delta;
 		handle->memory_charge.Resize(current_memory, handle->memory_usage);
 	}
+	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	return buf;
 }
 
@@ -977,6 +983,9 @@ void BufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data
 
 data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                                  idx_t size) {
+	if (old_size == size) {
+		return pointer;
+	}
 	auto &data = (BufferAllocatorData &)*private_data;
 	BufferPoolReservation r;
 	r.size = old_size;
@@ -988,6 +997,10 @@ data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_d
 Allocator &BufferAllocator::Get(ClientContext &context) {
 	auto &manager = BufferManager::GetBufferManager(context);
 	return manager.GetBufferAllocator();
+}
+
+Allocator &BufferAllocator::Get(DatabaseInstance &db) {
+	return BufferManager::GetBufferManager(db).GetBufferAllocator();
 }
 
 Allocator &BufferManager::GetBufferAllocator() {

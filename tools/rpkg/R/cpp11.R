@@ -76,6 +76,10 @@ rapi_rel_inner_join <- function(left, right, conds) {
   .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
 }
 
+rapi_rel_union_all <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_union_all`, rel_a, rel_b)
+}
+
 rapi_rel_limit <- function(rel, n) {
   .Call(`_duckdb_rapi_rel_limit`, rel, n)
 }

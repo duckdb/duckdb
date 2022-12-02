@@ -18,7 +18,7 @@ namespace duckdb {
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
 public:
-	StringHeap();
+	StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
 	void Destroy();
 	void Move(StringHeap &other);

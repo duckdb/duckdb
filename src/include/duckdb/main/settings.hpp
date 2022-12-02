@@ -229,6 +229,14 @@ struct MaximumMemorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PasswordSetting {
+	static constexpr const char *Name = "password";
+	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PerfectHashThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table (default: 12)";
@@ -320,6 +328,14 @@ struct ThreadsSetting {
 	static constexpr const char *Name = "threads";
 	static constexpr const char *Description = "The number of total threads used by the system.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct UsernameSetting {
+	static constexpr const char *Name = "username";
+	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
