@@ -103,12 +103,18 @@ string Transaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool c
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
 	//    false: Then this function WILL write to the WAL and Flush/Persist it.
 	this->commit_id = commit_id;
-	auto &storage_manager = db.GetStorageManager();
-	auto log = storage_manager.GetWriteAheadLog();
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
-	auto storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
+	unique_ptr<StorageCommitState> storage_commit_state;
+	WriteAheadLog *log;
+	if (!db.IsSystem()) {
+		auto &storage_manager = db.GetStorageManager();
+		log = storage_manager.GetWriteAheadLog();
+		storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
+	} else {
+		log = nullptr;
+	}
 	try {
 		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
@@ -118,7 +124,9 @@ string Transaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool c
 				log->WriteSequenceValue(entry.first, entry.second);
 			}
 		}
-		storage_commit_state->FlushCommit();
+		if (storage_commit_state) {
+			storage_commit_state->FlushCommit();
+		}
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);

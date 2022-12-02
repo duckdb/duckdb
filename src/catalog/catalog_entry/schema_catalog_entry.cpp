@@ -96,7 +96,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
-			(void)set.DropEntry(context, entry_name, false);
+			(void)set.DropEntry(context, entry_name, false, entry->internal);
 		}
 	}
 	// now try to add the entry

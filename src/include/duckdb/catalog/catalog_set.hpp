@@ -74,7 +74,8 @@ public:
 
 	DUCKDB_API bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
-	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade);
+	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
+	                          bool allow_drop_internal = false);
 
 	bool AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info);
 

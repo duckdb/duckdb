@@ -5,7 +5,7 @@
 namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
-	system = make_unique<AttachedDatabase>(db);
+	system = make_unique<AttachedDatabase>(db, true);
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -13,6 +13,10 @@ DatabaseManager::~DatabaseManager() {
 
 DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 	return DatabaseManager::Get(db.GetDatabase());
+}
+
+void DatabaseManager::InitializeSystemCatalog() {
+	system->Initialize();
 }
 
 AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {

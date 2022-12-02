@@ -182,7 +182,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	db_manager->AddDatabase(move(attached_database));
 
 	// initialize the system catalog
-	db_manager->GetSystemCatalog().Initialize(true);
+	db_manager->InitializeSystemCatalog();
 	// initialize the database
 	initial_database->Initialize();
 

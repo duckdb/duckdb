@@ -7,6 +7,7 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunction function)
     : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(function.name) {
 	name = function.name;
 	functions.AddFunction(move(function));
+	internal = true;
 }
 CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
     : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set)) {
@@ -14,6 +15,7 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
 	for (auto &func : functions.functions) {
 		func.name = functions.name;
 	}
+	internal = true;
 }
 
 unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {

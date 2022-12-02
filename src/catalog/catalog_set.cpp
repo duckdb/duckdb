@@ -65,6 +65,16 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
                              unordered_set<CatalogEntry *> &dependencies) {
+	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA && name != TEMP_SCHEMA) {
+		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
+		                        "can only be created in the system catalog",
+		                        name);
+	}
+	if (!value->internal && catalog.IsSystemCatalog()) {
+		throw InternalException("Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
+		                        "can only contain internal entries",
+		                        name);
+	}
 	auto &transaction = Transaction::Get(context, catalog);
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
@@ -276,7 +286,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, EntryIndex entry_inde
 	transaction.PushCatalogEntry(value_ptr->child.get());
 }
 
-bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade) {
+bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade, bool allow_drop_internal) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	// we can only delete an entry that exists
@@ -285,7 +295,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	if (!GetEntryInternal(context, name, &entry_index, entry)) {
 		return false;
 	}
-	if (entry->internal) {
+	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 

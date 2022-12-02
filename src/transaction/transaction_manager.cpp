@@ -156,6 +156,9 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 }
 
 bool TransactionManager::CanCheckpoint(Transaction *current) {
+	if (db.IsSystem()) {
+		return false;
+	}
 	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
 		return false;

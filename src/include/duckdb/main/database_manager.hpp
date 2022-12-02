@@ -31,6 +31,7 @@ public:
 	static DatabaseManager &Get(ClientContext &db);
 	static DatabaseManager &Get(AttachedDatabase &db);
 
+	void InitializeSystemCatalog();
 	//! Get an attached database with the given name
 	AttachedDatabase *GetDatabase(const string &name);
 	//! Add a new attached database to the database manager
