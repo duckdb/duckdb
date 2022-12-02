@@ -134,10 +134,12 @@ statement ok
 INSERT INTO my_window VALUES ([1], 1, 1), ([1, NULL, 2], 1, 2), ([], 2, 3), (NULL, NULL, NULL), ([1, 2], 2, 4)
 
 query I
-SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) FROM my_window
+SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) 
+FROM my_window
+ORDER BY ALL
 ----
-[NULL]
-[[2]]
-[[2], [2, NULL, 3]]
 [[]]
 [[], [2, 3]]
+[[2]]
+[[2], [2, NULL, 3]]
+[NULL]

@@ -21,11 +21,7 @@ if len(sys.argv) > 2:
 
 
 test_cases = []
-first_line = True
 for line in sys.stdin:
-	if first_line:
-		first_line = False
-		continue
 	if len(line.strip()) == 0:
 		continue
 	splits = line.rsplit('\t', 1)

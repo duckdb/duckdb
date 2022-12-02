@@ -173,7 +173,14 @@ SELECT unique1 FROM tenk1 qualify lead(ten * 2, 1, -1) OVER (PARTITION BY four O
 
 # using in subquery
 query I
-SELECT * FROM (SELECT b FROM test as t GROUP BY b QUALIFY rank() OVER (PARTITION BY t.b) = 1) QUALIFY row_number() OVER (PARTITION BY b) = 1
+SELECT * 
+FROM (
+	SELECT b FROM test as t 
+	GROUP BY b 
+	QUALIFY rank() OVER (PARTITION BY t.b) = 1
+) 
+QUALIFY row_number() OVER (PARTITION BY b) = 1
+ORDER BY 1
 ----
 21
 22
