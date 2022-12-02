@@ -118,7 +118,7 @@ void DeleteArray(T *ptr, idx_t size) {
 }
 
 template <typename T, typename... ARGS>
-T *AllocateObject(ARGS &&... args) {
+T *AllocateObject(ARGS &&...args) {
 	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
 	return new (data) T(std::forward<ARGS>(args)...);
 }

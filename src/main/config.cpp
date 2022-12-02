@@ -50,6 +50,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+                                                 DUCKDB_GLOBAL(PasswordSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
@@ -62,6 +63,8 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(SearchPathSetting),
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
+                                                 DUCKDB_GLOBAL(UsernameSetting),
+                                                 DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
                                                  DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
                                                  FINAL_SETTING};
