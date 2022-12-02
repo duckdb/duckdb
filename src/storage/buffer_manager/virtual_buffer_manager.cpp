@@ -30,8 +30,7 @@ void VirtualBufferManager::SetLimit(idx_t limit) {
 }
 
 const string &VirtualBufferManager::GetTemporaryDirectory() {
-	// FIXME: does this cause a problem because it's expecting a reference?
-	return "";
+	throw InternalException("CBufferManager does not allow a temporary directory");
 }
 
 void VirtualBufferManager::SetTemporaryDirectory(string new_dir) {
