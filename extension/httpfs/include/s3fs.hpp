@@ -123,8 +123,6 @@ public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
-	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
-
 	// Global limits to write buffers
 	mutex buffers_available_lock;
 	std::condition_variable buffers_available_cv;
