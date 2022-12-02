@@ -535,8 +535,11 @@ static void CopyDataFromStructSegment(CopyDataFromSegment &copy_data_from_segmen
 
 	for (idx_t i = 0; i < copy_data_from_segment.child_functions.size(); i++) {
 		auto child_function = copy_data_from_segment.child_functions[i];
-		child_function.segment_function(child_function, source_child_segments[i], target_child_segments[i], allocator,
+		auto source_child_segment = Load<ListSegment *>((data_ptr_t)(source_child_segments + i));
+		auto target_child_segment = Load<ListSegment *>((data_ptr_t)(target_child_segments + i));
+		child_function.segment_function(child_function, source_child_segment, target_child_segment, allocator,
 		                                owning_vector);
+		Store<ListSegment *>(target_child_segment, (data_ptr_t)(target_child_segments + i));
 	}
 }
 
