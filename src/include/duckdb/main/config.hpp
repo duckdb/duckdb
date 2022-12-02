@@ -72,62 +72,94 @@ struct ExtensionOption {
 	set_option_callback_t set_function;
 };
 
+template <class T>
+struct DBConfigOption {
+	//! Overloaded cast to T, for easy conversion
+	operator T() const {
+		return Get();
+	}
+
+	//! Overloaded assignation operator, for easy assignment
+	void operator=(T setting) {
+		Set(setting);
+	}
+
+	DBConfigOption(T setting) : set(true), value(setting) {
+	}
+
+	bool IsSet() const {
+		return set;
+	}
+	void Set(T setting) {
+		set = true;
+		this->value = value;
+	}
+	T Get() const {
+		D_ASSERT(set);
+		return value;
+	}
+
+private:
+	bool set = false;
+	T value;
+};
+
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
-	string database_path;
+	DBConfigOption<string> database_path;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
-	AccessMode access_mode = AccessMode::AUTOMATIC;
+	DBConfigOption<AccessMode> access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MB)
-	idx_t checkpoint_wal_size = 1 << 24;
+	DBConfigOption<idx_t> checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
-	bool use_direct_io = false;
+	DBConfigOption<bool> use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
-	bool load_extensions = true;
+	DBConfigOption<bool> load_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
-	idx_t maximum_memory = (idx_t)-1;
+	DBConfigOption<idx_t> maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
-	idx_t maximum_threads = (idx_t)-1;
+	DBConfigOption<idx_t> maximum_threads = (idx_t)-1;
 	//! The number of external threads that work on DuckDB tasks. Default: none.
-	idx_t external_threads = 0;
+	DBConfigOption<idx_t> external_threads = 0;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
-	bool use_temporary_directory = true;
+	DBConfigOption<bool> use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
-	string temporary_directory;
+	DBConfigOption<string> temporary_directory;
 	//! The collation type of the database
-	string collation = string();
+	DBConfigOption<string> collation = string();
 	//! The order type used when none is specified (default: ASC)
-	OrderType default_order_type = OrderType::ASCENDING;
+	DBConfigOption<OrderType> default_order_type = OrderType::ASCENDING;
 	//! Null ordering used when none is specified (default: NULLS FIRST)
-	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
+	DBConfigOption<OrderByNullType> default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
-	bool enable_external_access = true;
+	DBConfigOption<bool> enable_external_access = true;
 	//! Whether or not object cache is used
-	bool object_cache_enable = false;
+	DBConfigOption<bool> object_cache_enable = false;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
-	bool force_checkpoint = false;
+	DBConfigOption<bool> force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
-	bool checkpoint_on_shutdown = true;
+	DBConfigOption<bool> checkpoint_on_shutdown = true;
 	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
-	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
+	DBConfigOption<CheckpointAbort> checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
-	bool initialize_default_database = true;
+	DBConfigOption<bool> initialize_default_database = true;
 	//! The set of disabled optimizers (default empty)
-	set<OptimizerType> disabled_optimizers;
+	DBConfigOption<set<OptimizerType>> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
-	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
+	DBConfigOption<CompressionType> force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
-	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
+	DBConfigOption<WindowAggregationMode> window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
-	bool preserve_insertion_order = true;
+	DBConfigOption<bool> preserve_insertion_order = true;
 	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
+	DBConfigOption<case_insensitive_map_t<Value>> set_variables;
 	//! Whether unsigned extensions should be loaded
-	bool allow_unsigned_extensions = false;
+	DBConfigOption<bool> allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
-	bool enable_fsst_vectors = false;
+	DBConfigOption<bool> enable_fsst_vectors = false;
 	//! Experimental parallel CSV reader
-	bool experimental_parallel_csv_reader = false;
+	DBConfigOption<bool> experimental_parallel_csv_reader = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

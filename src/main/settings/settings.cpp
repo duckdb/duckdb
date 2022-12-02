@@ -19,12 +19,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
+	auto &access_mode = config.options.access_mode;
 	if (parameter == "automatic") {
-		config.options.access_mode = AccessMode::AUTOMATIC;
+		access_mode = AccessMode::AUTOMATIC;
 	} else if (parameter == "read_only") {
-		config.options.access_mode = AccessMode::READ_ONLY;
+		access_mode = AccessMode::READ_ONLY;
 	} else if (parameter == "read_write") {
-		config.options.access_mode = AccessMode::READ_WRITE;
+		access_mode = AccessMode::READ_WRITE;
 	} else {
 		throw InvalidInputException(
 		    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
