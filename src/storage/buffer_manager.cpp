@@ -74,6 +74,7 @@ BlockHandle::~BlockHandle() {
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
+	buffer_manager.PurgeQueue();
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
