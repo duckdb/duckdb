@@ -20,6 +20,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <random>
 
@@ -117,11 +118,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	DuckDBPyConnection::ImportCache();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(string query, py::object params) {
 	if (params.is_none()) {
 		params = py::list();
 	}
-	Execute(query, std::move(params), true);
+	Execute(move(query), std::move(params), true);
 	return this;
 }
 
@@ -142,12 +143,37 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	return pending_query.Execute();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+py::list TransformNamedParameters(string &query, py::dict params) {
+	py::list new_params(params.size());
+
+	idx_t param_idx = 1;
+	for (auto &item : params) {
+		const std::string &item_name = item.first.cast<std::string>();
+		auto param_name = StringUtil::Format("$%s", item_name);
+		if (query.find(param_name) == std::string::npos) {
+			throw InvalidInputException(
+			    "Named parameters could not be transformed, because query string is missing named parameter '%s'",
+			    param_name);
+		}
+		// Replace all occurences of $name with $<index>
+		query = StringUtil::Replace(query, param_name, StringUtil::Format("$%d", param_idx));
+		// Add the value of the named parameter to the list
+		new_params[param_idx - 1] = item.second;
+		param_idx++;
+	}
+	return new_params;
+}
+
+DuckDBPyConnection *DuckDBPyConnection::Execute(string query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	if (params.is_none()) {
 		params = py::list();
+	}
+	if (py::isinstance<py::dict>(params)) {
+		// Transform named parameters to regular positional parameters
+		params = TransformNamedParameters(query, (py::dict)params);
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;

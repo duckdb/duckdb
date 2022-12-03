@@ -56,9 +56,9 @@ public:
 	static DuckDBPyConnection *DefaultConnection();
 	static PythonImportCache *ImportCache();
 
-	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
+	DuckDBPyConnection *ExecuteMany(string query, py::object params = py::list());
 
-	DuckDBPyConnection *Execute(const string &query, py::object params = py::list(), bool many = false);
+	DuckDBPyConnection *Execute(string query, py::object params = py::list(), bool many = false);
 
 	DuckDBPyConnection *Append(const string &name, DataFrame value);
 
