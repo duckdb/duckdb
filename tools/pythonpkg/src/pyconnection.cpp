@@ -143,7 +143,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	return pending_query.Execute();
 }
 
-py::list TransformNamedParameters(string &query, py::dict params) {
+py::list TransformNamedParameters(string &query, const py::dict &params) {
 	py::list new_params(params.size());
 
 	idx_t param_idx = 1;
@@ -173,7 +173,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(string query, py::object params,
 	}
 	if (py::isinstance<py::dict>(params)) {
 		// Transform named parameters to regular positional parameters
-		params = TransformNamedParameters(query, (py::dict)params);
+		params = TransformNamedParameters(query, params);
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
