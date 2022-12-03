@@ -25,3 +25,35 @@ class TestDuckDBQuery(object):
         # ... or multiple select statements
         with pytest.raises(duckdb.ParserException, match='duckdb.from_query cannot be used to run arbitrary SQL queries'):
             duckdb.from_query('select 42; select 84;')
+
+    def test_named_param(self):
+        con = duckdb.connect()
+
+        original_res = con.execute(
+        """
+            select
+                count(*) FILTER (WHERE i >= $1),
+                sum(i) FILTER (WHERE i < $2),
+                avg(i) FILTER (WHERE i < $1)
+            from
+                range(100) tbl(i)
+        """,
+        [5, 10]
+        ).fetchall()
+
+        res = con.execute(
+        """
+            select
+                count(*) FILTER (WHERE i >= $param),
+                sum(i) FILTER (WHERE i < $other_param),
+                avg(i) FILTER (WHERE i < $param)
+            from
+                range(100) tbl(i)
+        """,
+        {
+            'param': 5,
+            'other_param': 10
+        }
+        ).fetchall()
+
+        assert(res == original_res)
