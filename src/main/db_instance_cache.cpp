@@ -11,9 +11,9 @@ string GetDBAbsolutePath(const string &database) {
 		return database;
 	}
 	if (FileSystem::IsPathAbsolute(database)) {
-		return database;
+		return FileSystem::NormalizeAbsolutePath(database);
 	}
-	return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database);
+	return FileSystem::ConvertSeparators(FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database));
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config) {

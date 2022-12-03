@@ -87,27 +87,37 @@ string FileSystem::GetWorkingDirectory() {
 	}
 	return string(buffer.get());
 }
+
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	return path;
+}
+
 #else
 
 bool FileSystem::IsPathAbsolute(const string &path) {
-	// 1) A single backslash
-	auto sub_path = FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
+	// 1) A single backslash or forward-slash
+	if (PathMatched(path, "\\") || PathMatched(path, "/")) {
 		return true;
 	}
-	// 2) check if starts with a double-backslash (i.e., \\)
-	sub_path += FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
-		return true;
-	}
-	// 3) A disk designator with a backslash (e.g., C:\)
+	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
-	sub_path = ":" + FileSystem::PathSeparator();
-	if (PathMatched(path_aux, sub_path)) {
+	if (PathMatched(path_aux, ":\\") || PathMatched(path_aux, ":/")) {
 		return true;
 	}
 	return false;
+}
+
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	auto result = FileSystem::ConvertSeparators(path);
+	if (PathMatched(result, "\\")) {
+		// Path starts with a single backslash or forward slash
+		// prepend drive letter
+		return GetWorkingDirectory().substr(0, 2) + result;
+	}
+	return result;
 }
 
 string FileSystem::PathSeparator() {
