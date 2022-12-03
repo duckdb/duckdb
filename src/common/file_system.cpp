@@ -173,13 +173,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 		return path;
 	}
 	// on windows-based systems we accept both
-	string result = path;
-	for (idx_t i = 0; i < result.size(); i++) {
-		if (result[i] == '/') {
-			result[i] = separator;
-		}
-	}
-	return result;
+	return StringUtil::Replace(path, "/", separator_str);
 }
 
 string FileSystem::ExtractBaseName(const string &path) {
