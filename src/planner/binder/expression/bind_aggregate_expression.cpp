@@ -67,7 +67,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			auto &config = DBConfig::GetConfig(context);
 			const auto &order = aggr.order_bys->orders[0];
 			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type.Get() : order.type;
 			invert_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
@@ -176,9 +176,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
 			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type.Get() : order.type;
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
-			                            ? config.options.default_null_order
+			                            ? config.options.default_null_order.Get()
 			                            : order.null_order;
 			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, move(order_expr.expr)));
 		}

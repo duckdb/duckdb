@@ -269,8 +269,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 
 	// set default values
 	auto &config = DBConfig::GetConfig(context);
-	auto order = config.options.default_order_type;
-	auto null_order = config.options.default_null_order;
+	auto order = config.options.default_order_type.Get();
+	auto null_order = config.options.default_null_order.Get();
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
@@ -308,7 +308,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	auto &config = DBConfig::GetConfig(context);
 	auto order =
 	    (config.options.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
-	auto null_order = config.options.default_null_order;
+	auto null_order = config.options.default_null_order.Get();
 
 	// get the null sorting order
 	if (arguments.size() == 2) {

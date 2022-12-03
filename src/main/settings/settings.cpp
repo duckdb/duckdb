@@ -222,7 +222,7 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 Value DisabledOptimizersSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_optimizers) {
+	for (auto &optimizer : config.options.disabled_optimizers.Get()) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -635,7 +635,7 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.temporary_directory = input.ToString();
-	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
+	config.options.use_temporary_directory = !config.options.temporary_directory.Get().empty();
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);

@@ -129,7 +129,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr = user_config;
 	}
 
-	if (config_ptr->options.temporary_directory.empty() && database_path) {
+	if (config_ptr->options.temporary_directory.Get().empty() && database_path) {
 		// no directory specified: use default temp path
 		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
 
@@ -142,7 +142,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	if (database_path) {
 		config_ptr->options.database_path = database_path;
 	} else {
-		config_ptr->options.database_path.clear();
+		config_ptr->options.database_path.Set("");
 	}
 
 	for (auto &open : config_ptr->replacement_opens) {

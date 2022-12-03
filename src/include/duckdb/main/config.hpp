@@ -84,24 +84,35 @@ struct DBConfigOption {
 		Set(setting);
 	}
 
-	DBConfigOption(T setting) : set(true), value(setting) {
+	DBConfigOption() : default_value(), current_value(default_value) {
+	}
+	DBConfigOption(T setting) : default_value(setting), current_value(default_value) {
 	}
 
-	bool IsSet() const {
-		return set;
-	}
 	void Set(T setting) {
-		set = true;
-		this->value = value;
+		current_value = setting;
 	}
-	T Get() const {
-		D_ASSERT(set);
-		return value;
+	const T &Get() const {
+		return current_value;
+	}
+
+	void Unset() {
+		current_value = default_value;
+	}
+
+	void OverrideDefault(T new_default) {
+		if (current_value == default_value) {
+			// Also update the current value if it was set to the default
+			current_value = new_default;
+		}
+		default_value = new_default;
 	}
 
 private:
-	bool set = false;
-	T value;
+	// TODO: keep track of 'unset' to differentiate between a default value
+	// and a user-set value that is EQUAL to the default value
+	T default_value;
+	T current_value;
 };
 
 struct DBConfigOptions {
@@ -124,7 +135,7 @@ struct DBConfigOptions {
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	DBConfigOption<bool> use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
-	DBConfigOption<string> temporary_directory;
+	DBConfigOption<string> temporary_directory = string();
 	//! The collation type of the database
 	DBConfigOption<string> collation = string();
 	//! The order type used when none is specified (default: ASC)
@@ -152,14 +163,16 @@ struct DBConfigOptions {
 	DBConfigOption<WindowAggregationMode> window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	DBConfigOption<bool> preserve_insertion_order = true;
-	//! Database configuration variables as controlled by SET
-	DBConfigOption<case_insensitive_map_t<Value>> set_variables;
 	//! Whether unsigned extensions should be loaded
 	DBConfigOption<bool> allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
 	DBConfigOption<bool> enable_fsst_vectors = false;
 	//! Experimental parallel CSV reader
 	DBConfigOption<bool> experimental_parallel_csv_reader = false;
+
+public:
+	//! Database configuration variables as controlled by SET
+	case_insensitive_map_t<Value> set_variables;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

@@ -15,7 +15,7 @@ struct ExtensionPrefixOpenData : public ReplacementOpenData {
 };
 
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
-	auto path = config.options.database_path;
+	auto path = config.options.database_path.Get();
 	auto first_colon = path.find(':');
 	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
 		return nullptr;
