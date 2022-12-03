@@ -23,11 +23,11 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze ? true : ClientConfig::GetConfig(context).enable_profiler;
+	return is_explain_analyze ? true : ClientConfig::GetConfig(context).enable_profiler.Get();
 }
 
 bool QueryProfiler::IsDetailedEnabled() const {
-	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling;
+	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling.Get();
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
@@ -39,7 +39,7 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 }
 
 string QueryProfiler::GetSaveLocation() const {
-	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location;
+	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location.Get();
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {

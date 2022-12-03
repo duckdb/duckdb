@@ -389,7 +389,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		unique_ptr<PhysicalResultCollector> collector;
 		auto &config = ClientConfig::GetConfig(*this);
 		auto get_method =
-		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
+		    config.result_collector.Get() ? config.result_collector.Get() : PhysicalResultCollector::GetResultCollector;
 		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(move(collector));
