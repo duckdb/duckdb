@@ -44,6 +44,9 @@ static void LoadInternal(DatabaseInstance &instance) {
 	                          LogicalType::UBIGINT);
 	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 50)",
 	                          LogicalType::UBIGINT);
+
+	auto provider = make_unique<AWSEnvironmentCredentialsProvider>(config);
+	provider->SetAll();
 }
 
 void HTTPFsExtension::Load(DuckDB &db) {
