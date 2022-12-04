@@ -4,6 +4,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
 
@@ -14,6 +15,20 @@
 #include <iostream>
 
 namespace duckdb {
+
+struct AWSEnvironmentCredentialsProvider {
+	static constexpr const char *REGION_ENV_VAR = "AWS_DEFAULT_REGION";
+	static constexpr const char *ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY_ID";
+	static constexpr const char *SECRET_KEY_ENV_VAR = "AWS_SECRET_ACCESS_KEY";
+	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
+
+	explicit AWSEnvironmentCredentialsProvider(DBConfig &config) : config(config) {};
+
+	DBConfig &config;
+
+	void SetExtensionOptionValue(string key, const char *env_var);
+	void SetAll();
+};
 
 struct S3AuthParams {
 	string region;
@@ -122,8 +137,6 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
-
-	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
 
 	// Global limits to write buffers
 	mutex buffers_available_lock;

@@ -53,24 +53,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 	return conn->FromCsvAuto(filename);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
+                                                           bool file_row_number, bool filename, bool hive_partitioning,
                                                            DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromParquet(filename, binary_as_string);
+	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &filename, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string> &file_globs, bool binary_as_string,
+                                                            bool file_row_number, bool filename, bool hive_partitioning,
+                                                            DuckDBPyConnection *conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	bool binary_as_string = false;
-	Value result;
-	if (conn->connection->context->TryGetCurrentSetting("binary_as_string", result)) {
-		binary_as_string = result.GetValue<bool>();
-	}
-	return conn->FromParquet(filename, binary_as_string);
+	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, DuckDBPyConnection *conn) {
@@ -515,8 +513,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		auto query = PragmaShow(*rel->context.GetContext(), parameters);
 		return Query(view_name, query);
 	}
-	throw InvalidInputException("'DuckDBPyRelation.query' does not accept statements of type %s",
-	                            StatementTypeToString(statement.type));
+	{
+		py::gil_scoped_release release;
+		auto query_result = rel->context.GetContext()->Query(move(parser.statements[0]), false);
+		// Execute it anyways, for creation/altering statements
+		// We only care that it succeeds, we can't store the result
+		D_ASSERT(query_result);
+		if (query_result->HasError()) {
+			query_result->ThrowError();
+		}
+	}
+	return nullptr;
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {

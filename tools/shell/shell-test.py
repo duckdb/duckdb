@@ -849,6 +849,22 @@ test('''
 select 42 limit 0;
 ''', out='0 rows')
 
+# #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
+test('''
+.maxrows 2
+select * from range(4);
+''', out='1')
+
+outfile = tf()
+test('''
+.maxrows 2
+.output %s
+SELECT * FROM range(100);
+''' % outfile)
+outstr = open(outfile,'rb').read().decode('utf8')
+if '50' not in outstr:
+     raise Exception('.output test failed')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 

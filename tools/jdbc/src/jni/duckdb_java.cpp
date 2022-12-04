@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -949,4 +950,50 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 
 	auto wrapper = new ResultArrowArrayStreamWrapper(move(res_ref->res), batch_size);
 	return (jlong)&wrapper->stream;
+}
+
+class JavaArrowTabularStreamFactory {
+public:
+	JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
+
+	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+
+		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
+		if (!factory->stream_ptr->release) {
+			throw InvalidInputException("This stream has been released");
+		}
+		auto res = make_unique<ArrowArrayStreamWrapper>();
+		res->arrow_array_stream = *factory->stream_ptr;
+		factory->stream_ptr->release = nullptr;
+		return res;
+	}
+
+	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
+		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
+		if (!factory->stream_ptr->release) {
+			throw InvalidInputException("This stream has been released");
+		}
+		factory->stream_ptr->get_schema(factory->stream_ptr, &schema.arrow_schema);
+		return;
+	}
+
+	ArrowArrayStream *stream_ptr;
+};
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1register(JNIEnv *env, jclass,
+                                                                                  jobject conn_ref_buf,
+                                                                                  jlong arrow_array_stream_pointer,
+                                                                                  jbyteArray name_j) {
+
+	auto conn = get_connection(env, conn_ref_buf);
+	auto name = byte_array_to_string(env, name_j);
+
+	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
+
+	auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
+	vector<Value> parameters;
+	parameters.push_back(Value::POINTER((uintptr_t)factory));
+	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
+	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
+	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
 }

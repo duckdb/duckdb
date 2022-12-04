@@ -496,6 +496,17 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Password Setting
+//===--------------------------------------------------------------------===//
+void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	// nop
+}
+
+Value PasswordSetting::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
 // Perfect Hash Threshold
 //===--------------------------------------------------------------------===//
 void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -659,6 +670,17 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 Value ThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(config.options.maximum_threads);
+}
+
+//===--------------------------------------------------------------------===//
+// Username Setting
+//===--------------------------------------------------------------------===//
+void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	// nop
+}
+
+Value UsernameSetting::GetSetting(ClientContext &context) {
+	return Value();
 }
 
 } // namespace duckdb
