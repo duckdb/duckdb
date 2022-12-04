@@ -68,12 +68,11 @@ public:
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
 	                                                DuckDBPyConnection *conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	FromParquets(const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	             bool hive_partitioning, DuckDBPyConnection *conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                                 bool file_row_number, bool filename, bool hive_partitioning,
+	                                                 DuckDBPyConnection *conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, DuckDBPyConnection *conn = nullptr);
 
