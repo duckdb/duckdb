@@ -12,15 +12,9 @@ def test_multiple_writes():
     con3 = duckdb.connect("test.db")
     tbls = con3.execute("select * from information_schema.tables").fetchall()
     assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)] or tbls == [(None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
-
-    con4 = duckdb.connect(os.path.join(os.getcwd(), "test.db"))
-    tbls = con4.execute("select * from information_schema.tables").fetchall()
-    assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)] or tbls == [(None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
     del con1
     del con2
     del con3
-    del con4
-
     os.remove('test.db')
 
 def test_multiple_writes_memory():
