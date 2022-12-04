@@ -714,6 +714,16 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test fail");
 	}
 
+	// bug #5502
+	S3AuthParams auth_params5 = {"us-east-1", "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+	                             "",          "s3.amazonaws.com",     "vhost",
+	                             true};
+	auto parsed_url = S3UrlParse("s3://example-bucket/:RDMS+OLAP+embed+feature=duckdb:", auth_params5);
+	string full_url = get_full_s3_url(auth_params, parsed_url);
+	if (full_url != "https://example-bucket.s3.amazonaws.com/%3ARDMS%2BOLAP%2Bembed%2Bfeature%3Dduckdb%3A") {
+		throw std::runtime_error("test fail");
+	}
+
 	// TODO add a test that checks the signing for path-style
 }
 
