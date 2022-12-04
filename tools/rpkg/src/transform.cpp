@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 using namespace duckdb;
@@ -18,6 +17,11 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 
 SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
 	SEXP varvalue = NULL;
+
+	if (type.GetAlias() == R_STRING_TYPE_NAME) {
+		return NEW_STRING(nrows);
+	}
+
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
@@ -70,16 +74,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		break;
 	}
 	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR: {
-		auto wrapper = new DuckDBAltrepStringWrapper();
-		wrapper->length = nrows;
-		wrapper->string_data = std::unique_ptr<string_t[]>(new string_t[nrows]);
-		wrapper->mask_data = std::unique_ptr<bool[]>(new bool[nrows]);
-
-		cpp11::external_pointer<DuckDBAltrepStringWrapper> ptr(wrapper);
-		varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
-		break;
-	}
+	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
 		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
 		break;
@@ -87,12 +82,8 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
 	case LogicalTypeId::ENUM: {
-		auto physical_type = type.InternalType();
-		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
-			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
-		} else {
-			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
-		}
+		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+
 		break;
 	}
 	default:
@@ -147,9 +138,12 @@ void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t 
 std::once_flag nanosecond_coercion_warning;
 
 void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
+	if (type.GetAlias() == R_STRING_TYPE_NAME) {
+		return;
+	}
+
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -217,7 +211,36 @@ void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
 	}
 }
 
+SEXP ToRString(const string_t &input) {
+	auto data = input.GetDataUnsafe();
+	auto len = input.GetSize();
+	idx_t has_null_byte = 0;
+	for (idx_t c = 0; c < len; c++) {
+		has_null_byte += data[c] == 0;
+	}
+	if (has_null_byte) {
+		cpp11::stop("String contains null byte");
+	}
+	return Rf_mkCharLenCE(data, len, CE_UTF8);
+}
+
 void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
+	if (src_vec.GetType().GetAlias() == R_STRING_TYPE_NAME) {
+		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(R_BlankString) - (data_ptr_t)R_BlankString;
+
+		auto child_ptr = FlatVector::GetData<uintptr_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		/* we have to use SET_STRING_ELT here because otherwise those SEXPs dont get referenced */
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+			} else {
+				SET_STRING_ELT(dest, dest_offset + row_idx, (SEXP)((data_ptr_t)child_ptr[row_idx] - sexp_header_size));
+			}
+		}
+		return;
+	}
+
 	switch (src_vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		VectorToR<int8_t, uint32_t>(src_vec, n, LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
@@ -362,16 +385,13 @@ void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n,
 		break;
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
-		auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
-		auto src_data = FlatVector::GetData<string_t>(src_vec);
+		auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);
 		for (size_t row_idx = 0; row_idx < n; row_idx++) {
-			auto valid = mask.RowIsValid(row_idx);
-			auto dest_idx = dest_offset + row_idx;
-			wrapper->mask_data[dest_idx] = valid;
-			if (valid) {
-				wrapper->string_data[dest_idx] =
-				    src_data[row_idx].IsInlined() ? src_data[row_idx] : wrapper->heap.AddString(src_data[row_idx]);
+			if (!mask.RowIsValid(row_idx)) {
+				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+			} else {
+				SET_STRING_ELT(dest, dest_offset + row_idx, ToRString(src_ptr[row_idx]));
 			}
 		}
 		break;
@@ -432,22 +452,6 @@ void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n,
 	}
 	case LogicalTypeId::ENUM: {
 		auto physical_type = src_vec.GetType().InternalType();
-		auto dummy = NEW_STRING(1);
-		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(dummy) - (data_ptr_t)dummy; // don't tell anyone
-		if (physical_type == PhysicalType::UINT64) {                                 // DEDUP_POINTER_ENUM
-			auto src_ptr = FlatVector::GetData<uint64_t>(src_vec);
-			auto &mask = FlatVector::Validity(src_vec);
-			/* we have to use SET_STRING_ELT here because otherwise those SEXPs dont get referenced */
-			for (size_t row_idx = 0; row_idx < n; row_idx++) {
-				if (!mask.RowIsValid(row_idx)) {
-					SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
-				} else {
-					SET_STRING_ELT(dest, dest_offset + row_idx,
-					               (SEXP)((data_ptr_t)src_ptr[row_idx] - sexp_header_size));
-				}
-			}
-			break;
-		}
 
 		switch (physical_type) {
 		case PhysicalType::UINT8:

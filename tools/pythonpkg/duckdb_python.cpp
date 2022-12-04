@@ -112,12 +112,14 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
 	      py::arg("query"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
-	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
-	      py::arg("binary_as_string"), py::arg("connection") = py::none());
-	m.def("from_parquet", &DuckDBPyRelation::FromParquetDefault,
-	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
-	      py::arg("connection") = py::none());
-	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the DataFrame df", py::arg("df"),
+	      "Creates a relation object from the Parquet files in file_glob", py::arg("file_glob"),
+	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("connection") = py::none());
+	m.def("from_parquet", &DuckDBPyRelation::FromParquets,
+	      "Creates a relation object from the Parquet files in file_globs", py::arg("file_globs"),
+	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("connection") = py::none());
+	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
 	      py::arg("connection") = py::none());
 	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the DataFrame df", py::arg("df"),
 	      py::arg("connection") = py::none());

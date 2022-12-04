@@ -85,6 +85,10 @@ public:
 		can_destroy = can_destroy_p;
 	}
 
+	inline const idx_t &GetMemoryUsage() const {
+		return memory_usage;
+	}
+
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
