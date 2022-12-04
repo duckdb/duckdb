@@ -111,7 +111,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 
 string FileSystem::NormalizeAbsolutePath(const string &path) {
 	D_ASSERT(IsPathAbsolute(path));
-	auto result = FileSystem::ConvertSeparators(path);
+	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
 	if (PathMatched(result, "\\")) {
 		// Path starts with a single backslash or forward slash
 		// prepend drive letter
