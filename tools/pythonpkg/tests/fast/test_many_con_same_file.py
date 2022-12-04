@@ -10,7 +10,7 @@ def test_multiple_writes():
     con2.close()
     con1.close()
     con3 = duckdb.connect("test.db")
-    tbls = con3.execute("select * from information_schema.tables").fetchall()
+    tbls = con3.execute("select * from information_schema.tables order by table_name desc").fetchall()
     assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)] or tbls == [(None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
     del con1
     del con2
@@ -39,7 +39,7 @@ def test_multiple_writes_named_memory():
     con1.execute("CREATE TABLE foo1 as SELECT 1 as a, 2 as b")
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
     con3 = duckdb.connect(":memory:1")
-    tbls = con3.execute("select * from information_schema.tables").fetchall()
+    tbls = con3.execute("select * from information_schema.tables order by table_name desc").fetchall()
     assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)] or tbls == [(None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
     del con1
     del con2
