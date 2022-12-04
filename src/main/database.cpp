@@ -169,9 +169,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	// TODO: Support an extension here, to generate different storage managers
-	// depending on the DB path structure/prefix.
-	auto attached_database = make_unique<AttachedDatabase>(*this);
+	auto &config = DBConfig::GetConfig(*this);
+	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	auto attached_database = make_unique<AttachedDatabase>(*this, database_name, config.options.database_path, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	db_manager = make_unique<DatabaseManager>(*this);
 	buffer_manager =

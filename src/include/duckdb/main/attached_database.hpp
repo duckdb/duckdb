@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -21,7 +22,10 @@ class TransactionManager;
 //! The AttachedDatabase represents an attached database instance
 class AttachedDatabase {
 public:
-	explicit AttachedDatabase(DatabaseInstance &db, bool system = false);
+	//! Create the built-in system attached database (without storage)
+	explicit AttachedDatabase(DatabaseInstance &db);
+	//! Create an attached database instance with the specified name and storage
+	AttachedDatabase(DatabaseInstance &db, string name, string file_path, AccessMode access_mode);
 	~AttachedDatabase();
 
 	void Initialize();
@@ -37,7 +41,6 @@ public:
 	}
 	bool IsSystem() const;
 
-private:
 	static string ExtractDatabaseName(const string &dbpath);
 
 private:

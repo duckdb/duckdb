@@ -5,7 +5,7 @@
 namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
-	system = make_unique<AttachedDatabase>(db, true);
+	system = make_unique<AttachedDatabase>(db);
 }
 
 DatabaseManager::~DatabaseManager() {

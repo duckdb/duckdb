@@ -139,6 +139,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCreateType(stmt);
 	case duckdb_libpgquery::T_PGAlterSeqStmt:
 		return TransformAlterSequence(stmt);
+	case duckdb_libpgquery::T_PGAttachStmt:
+		return TransformAttach(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

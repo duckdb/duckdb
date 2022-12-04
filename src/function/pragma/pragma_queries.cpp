@@ -2,6 +2,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -89,6 +91,17 @@ string PragmaStorageInfo(ClientContext &context, const FunctionParameters &param
 	return StringUtil::Format("SELECT * FROM pragma_storage_info('%s');", parameters.values[0].ToString());
 }
 
+void PragmaAttachDatabase(ClientContext &context, const FunctionParameters &parameters) {
+	auto name = parameters.values[0].ToString();
+	auto path = parameters.values[1].ToString();
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto new_db = make_unique<AttachedDatabase>(db, name, path, AccessMode::READ_WRITE);
+	new_db->Initialize();
+
+	auto &db_manager = DatabaseManager::Get(context);
+	db_manager.AddDatabase(move(new_db));
+}
+
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", PragmaTableInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
@@ -102,6 +115,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
+	set.AddFunction(PragmaFunction::PragmaCall("attach_database", PragmaAttachDatabase, {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 }
 
 } // namespace duckdb

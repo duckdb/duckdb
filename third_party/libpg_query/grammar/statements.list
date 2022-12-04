@@ -2,6 +2,7 @@ AlterObjectSchemaStmt
 AlterSeqStmt
 AlterTableStmt
 AnalyzeStmt
+AttachStmt
 CallStmt
 CheckPointStmt
 CopyStmt

@@ -118,6 +118,7 @@ private:
 	unique_ptr<SQLStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SQLStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ShowStatement> TransformShowSelect(duckdb_libpgquery::PGNode *node);
+	unique_ptr<PragmaStatement> TransformAttach(duckdb_libpgquery::PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);

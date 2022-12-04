@@ -2051,6 +2051,19 @@ typedef struct PGCreateTypeStmt
     PGNode *query;
 } PGCreateTypeStmt;
 
+/* ----------------------
+ *		Attach Statement
+ * ----------------------
+ */
+
+typedef struct PGAttachStmt
+{
+	PGNodeTag		type;
+	char *path;			/* The file path of the to-be-attached database */
+	char *name;			/* The name of the attached database */
+    PGNode *query;
+} PGAttachStmt;
+
 
 
 

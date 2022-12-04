@@ -5,16 +5,18 @@
 
 namespace duckdb {
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, bool system) : db(db) {
-	auto &config = DBConfig::GetConfig(db);
-	this->name = ExtractDatabaseName(config.options.database_path);
-	if (!system) {
-		storage = make_unique<SingleFileStorageManager>(*this, config.options.database_path,
-		                                                config.options.access_mode == AccessMode::READ_ONLY);
-	}
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db) : db(db), name("system") {
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 }
+
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, string name_p, string file_path, AccessMode access_mode) :
+    db(db), name(move(name_p)) {
+	storage = make_unique<SingleFileStorageManager>(*this, file_path, access_mode == AccessMode::READ_ONLY);
+	catalog = make_unique<Catalog>(*this);
+	transaction_manager = make_unique<TransactionManager>(*this);
+}
+
 
 AttachedDatabase::~AttachedDatabase() {
 	if (Exception::UncaughtException()) {

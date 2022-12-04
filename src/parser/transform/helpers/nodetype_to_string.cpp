@@ -812,6 +812,8 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_TsmRoutine";
 	case duckdb_libpgquery::T_PGForeignKeyCacheInfo:
 		return "T_ForeignKeyCacheInfo";
+	case duckdb_libpgquery::T_PGAttachStmt:
+		return "T_PGAttachStmt";
 	default:
 		return "(UNKNOWN)";
 	}
