@@ -1,0 +1,16 @@
+statement ok
+pragma disable_optimizer;
+
+# Target table
+
+concurrentloop threadid 0 4000
+
+# Create the view
+statement ok
+CREATE OR REPLACE TABLE df${threadid} as select i,i,i from range(100) tbl(i)
+
+# Drop the view
+statement ok
+DROP TABLE df${threadid};
+
+endloop

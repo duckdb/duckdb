@@ -217,6 +217,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->parent);
+		lock_guard<mutex> write_lock(catalog_entry->catalog->write_lock);
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);
