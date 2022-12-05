@@ -138,6 +138,20 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 	return result;
 }
 
+void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
+	static char *evar;
+
+	if ((evar = std::getenv(env_var_name)) != NULL)
+		this->config.SetOption(key, Value(evar));
+}
+
+void AWSEnvironmentCredentialsProvider::SetAll() {
+	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
+}
+
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	string region;
 	string access_key_id;
