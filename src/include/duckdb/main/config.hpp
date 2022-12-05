@@ -49,6 +49,8 @@ enum class CheckpointAbort : uint8_t {
 
 typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
+typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
+typedef void (*reset_local_function_t)(ClientContext &context);
 typedef Value (*get_setting_function_t)(ClientContext &context);
 
 struct ConfigurationOption {
@@ -57,6 +59,8 @@ struct ConfigurationOption {
 	LogicalTypeId parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
+	reset_global_function_t reset_global;
+	reset_local_function_t reset_local;
 	get_setting_function_t get_setting;
 };
 
@@ -70,6 +74,7 @@ struct ExtensionOption {
 	string description;
 	LogicalType type;
 	set_option_callback_t set_function;
+	Value default_value;
 };
 
 struct DBConfigOptions {
@@ -122,6 +127,8 @@ struct DBConfigOptions {
 	bool preserve_insertion_order = true;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
+	//! Database configuration variable default values;
+	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
@@ -186,6 +193,7 @@ public:
 
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);

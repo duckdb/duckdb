@@ -22,15 +22,21 @@ SetScope ToSetScope(duckdb_libpgquery::VariableSetScope pg_scope) {
 	}
 }
 
+SetType ToSetType(duckdb_libpgquery::VariableSetKind pg_kind) {
+	switch (pg_kind) {
+	case duckdb_libpgquery::VariableSetKind::VAR_SET_VALUE:
+		return SetType::SET;
+	case duckdb_libpgquery::VariableSetKind::VAR_RESET:
+		return SetType::RESET;
+	default:
+		throw NotImplementedException("Can only SET or RESET a variable");
+	}
+}
+
 } // namespace
 
-unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *node) {
-	D_ASSERT(node->type == duckdb_libpgquery::T_PGVariableSetStmt);
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableSetStmt *>(node);
-
-	if (stmt->kind != duckdb_libpgquery::VariableSetKind::VAR_SET_VALUE) {
-		throw ParserException("Can only SET a variable to a value");
-	}
+unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt *stmt) {
+	D_ASSERT(stmt->kind == duckdb_libpgquery::VariableSetKind::VAR_SET_VALUE);
 
 	if (stmt->scope == duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_LOCAL) {
 		throw NotImplementedException("SET LOCAL is not implemented.");
@@ -46,7 +52,34 @@ unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *no
 
 	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
 
-	return make_unique<SetStatement>(name, value, ToSetScope(stmt->scope));
+	return make_unique<SetVariableStatement>(name, value, ToSetScope(stmt->scope));
+}
+
+unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt *stmt) {
+	D_ASSERT(stmt->kind == duckdb_libpgquery::VariableSetKind::VAR_RESET);
+
+	if (stmt->scope == duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_LOCAL) {
+		throw NotImplementedException("RESET LOCAL is not implemented.");
+	}
+
+	auto name = std::string(stmt->name);
+	D_ASSERT(!name.empty()); // parser protect us!
+
+	return make_unique<ResetVariableStatement>(name, ToSetScope(stmt->scope));
+}
+
+unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *node) {
+	D_ASSERT(node->type == duckdb_libpgquery::T_PGVariableSetStmt);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableSetStmt *>(node);
+
+	SetType set_type = ToSetType(stmt->kind);
+
+	switch (set_type) {
+	case SetType::SET:
+		return TransformSetVariable(stmt);
+	case SetType::RESET:
+		return TransformResetVariable(stmt);
+	}
 }
 
 } // namespace duckdb

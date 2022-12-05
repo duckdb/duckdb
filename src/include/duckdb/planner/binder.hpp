@@ -222,6 +222,8 @@ private:
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
+	BoundStatement Bind(SetVariableStatement &stmt);
+	BoundStatement Bind(ResetVariableStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 

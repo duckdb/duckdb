@@ -97,6 +97,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_VACUUM = 178,
 	LOGICAL_SET = 179,
 	LOGICAL_LOAD = 180,
+	LOGICAL_RESET = 181,
 
 	LOGICAL_EXTENSION_OPERATOR = 255
 };
