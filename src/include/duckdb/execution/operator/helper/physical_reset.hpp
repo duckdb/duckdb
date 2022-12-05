@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_set.hpp
+// duckdb/execution/operator/helper/physical_reset.hpp
 //
 //
 //===----------------------------------------------------------------------===//
