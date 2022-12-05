@@ -2475,11 +2475,18 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_readonly_remains_bug5593() throws Exception {
+		Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
+		database_file.toFile().delete();
+		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		
 		Properties p = new Properties();
 		p.setProperty("duckdb.read_only", "true");
-		Connection conn = DriverManager.getConnection("jdbc:duckdb:", p);
+		try {
+		Connection conn = DriverManager.getConnection(jdbc_url, p);
 		conn.close();
-
+		} catch (Exception e) {
+			// nop
+		}
 		assertTrue(p.containsKey("duckdb.read_only"));
 	}
 
