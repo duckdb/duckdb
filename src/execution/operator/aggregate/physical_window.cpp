@@ -1616,8 +1616,8 @@ public:
 	using WindowExecutorPtr = unique_ptr<WindowExecutor>;
 	using WindowExecutors = vector<WindowExecutorPtr>;
 
-	WindowLocalSourceState(Allocator &allocator_p, const PhysicalWindow &op, ExecutionContext &context)
-	    : context(context.client), allocator(allocator_p) {
+	WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context, WindowGlobalSourceState &gstate)
+	    : context(context.client), allocator(Allocator::Get(context.client)) {
 		vector<LogicalType> output_types;
 		for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 			D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -1706,7 +1706,6 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 
 	//	Get rid of any stale data
 	hash_bin = hash_bin_p;
-	hash_group.reset();
 
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
@@ -1789,13 +1788,12 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	scanner->ReSwizzle();
 
 	//	Second pass can flush
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, external, true);
+	scanner->Reset(true);
 }
 
 void WindowLocalSourceState::Scan(DataChunk &result) {
 	D_ASSERT(scanner);
 	if (!scanner->Remaining()) {
-		scanner.reset();
 		return;
 	}
 
@@ -1823,8 +1821,9 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
-                                                                 GlobalSourceState &gstate) const {
-	return make_unique<WindowLocalSourceState>(Allocator::Get(context.client), *this, context);
+                                                                 GlobalSourceState &gstate_p) const {
+	auto &gstate = (WindowGlobalSourceState &)gstate_p;
+	return make_unique<WindowLocalSourceState>(*this, context, gstate);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
@@ -1839,25 +1838,28 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 	const auto bin_count = gstate.hash_groups.empty() ? 1 : gstate.hash_groups.size();
 
-	//	Move to the next bin if we are done.
-	while (!state.scanner || !state.scanner->Remaining()) {
-		state.scanner.reset();
-		state.rows.reset();
-		state.heap.reset();
-		auto hash_bin = global_source.next_bin++;
-		if (hash_bin >= bin_count) {
-			return;
-		}
-
-		for (; hash_bin < gstate.hash_groups.size(); hash_bin = global_source.next_bin++) {
-			if (gstate.hash_groups[hash_bin]) {
-				break;
+	while (chunk.size() == 0) {
+		//	Move to the next bin if we are done.
+		while (!state.scanner || !state.scanner->Remaining()) {
+			state.scanner.reset();
+			state.rows.reset();
+			state.heap.reset();
+			state.hash_group.reset();
+			auto hash_bin = global_source.next_bin++;
+			if (hash_bin >= bin_count) {
+				return;
 			}
-		}
-		state.GeneratePartition(gstate, hash_bin);
-	}
 
-	state.Scan(chunk);
+			for (; hash_bin < gstate.hash_groups.size(); hash_bin = global_source.next_bin++) {
+				if (gstate.hash_groups[hash_bin]) {
+					break;
+				}
+			}
+			state.GeneratePartition(gstate, hash_bin);
+		}
+
+		state.Scan(chunk);
+	}
 }
 
 string PhysicalWindow::ParamsToString() const {
