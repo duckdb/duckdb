@@ -17,11 +17,11 @@
 #include "duckdb_python/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 namespace duckdb {
 
 struct DuckDBPyRelation;
-struct DuckDBPyResult;
 
 class RegisteredArrow : public RegisteredObject {
 
@@ -132,7 +132,7 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
-	static vector<Value> TransformPythonParamList(py::handle params);
+	static vector<Value> TransformPythonParamList(const py::handle &params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
