@@ -163,9 +163,28 @@ void DBConfig::SetOption(const string &name, Value value) {
 	options.set_variables[name] = move(value);
 }
 
-void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
+void DBConfig::ResetOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	auto extension_option = extension_parameters.find(name);
+	D_ASSERT(extension_option != extension_parameters.end());
+	auto &default_value = extension_option->second.default_value;
+	if (!default_value.IsNull()) {
+		// Default is not NULL, override the setting
+		options.set_variables[name] = default_value;
+	} else {
+		// Otherwise just remove it from the 'set_variables' map
+		options.set_variables.erase(name);
+	}
+}
+
+void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter, Value default_value,
                                   set_option_callback_t function) {
-	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
+	extension_parameters.insert(
+	    make_pair(name, ExtensionOption(move(description), move(parameter), function, default_value)));
+	if (!default_value.IsNull()) {
+		// Default value is set, insert it into the 'set_variables' list
+		options.set_variables[name] = default_value;
+	}
 }
 
 CastFunctionSet &DBConfig::GetCastFunctions() {

@@ -67,8 +67,10 @@ struct ConfigurationOption {
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
-	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p)
-	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p) {
+	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
+	                Value default_value_p)
+	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p),
+	      default_value(move(default_value_p)) {
 	}
 
 	string description;
@@ -185,7 +187,7 @@ public:
 	DUCKDB_API static vector<string> GetOptionNames();
 
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
-	                                   set_option_callback_t function = nullptr);
+	                                   Value default_value = Value(), set_option_callback_t function = nullptr);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
@@ -195,6 +197,7 @@ public:
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void ResetOption(const string &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 

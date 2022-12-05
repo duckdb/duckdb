@@ -12,7 +12,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		extension_option.set_function(context.client, scope, extension_option.default_value);
 	}
 	if (scope == SetScope::GLOBAL) {
-		config.SetOption(name, extension_option.default_value);
+		config.ResetOption(name);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		client_config.set_variables[name] = extension_option.default_value;
