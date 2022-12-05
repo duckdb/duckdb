@@ -659,7 +659,7 @@ void PreserveInsertionOrder::SetGlobal(DatabaseInstance *db, DBConfig &config, c
 	config.options.preserve_insertion_order = input.GetValue<bool>();
 }
 
-void PasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void PreserveInsertionOrder::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.preserve_insertion_order = DBConfig().options.preserve_insertion_order;
 }
 

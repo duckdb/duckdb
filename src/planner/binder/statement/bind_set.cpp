@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_set.hpp"
+#include "duckdb/planner/operator/logical_reset.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -20,7 +21,7 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	result.plan = make_unique<LogicalSet>(stmt.name, stmt.scope);
+	result.plan = make_unique<LogicalReset>(stmt.name, stmt.scope);
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

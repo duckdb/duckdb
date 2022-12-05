@@ -23,7 +23,7 @@ unique_ptr<SQLStatement> SetVariableStatement::Copy() const {
 // Reset Variable
 
 ResetVariableStatement::ResetVariableStatement(std::string name_p, SetScope scope_p)
-    : SetStatement(move(name_p), scope_p, SetType::RESET), value(move(value_p)) {
+    : SetStatement(move(name_p), scope_p, SetType::RESET) {
 }
 
 } // namespace duckdb
