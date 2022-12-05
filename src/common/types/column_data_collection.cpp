@@ -95,6 +95,10 @@ void ColumnDataCollection::CreateSegment() {
 	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(allocator, types));
 }
 
+Allocator &ColumnDataCollection::GetAllocator() const {
+	return allocator->GetAllocator();
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
