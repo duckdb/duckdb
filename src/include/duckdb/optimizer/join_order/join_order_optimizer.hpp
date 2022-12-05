@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_order_optimizer.hpp
+// duckdb/optimizer/join_order/join_order_optimizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//

@@ -1,7 +1,8 @@
+#include "duckdb/optimizer/join_order/join_node.hpp"
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/optimizer/join_node.hpp"
 
 namespace duckdb {
 

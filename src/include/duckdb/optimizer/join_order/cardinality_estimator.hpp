@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/cardinality_estimator.hpp
+// duckdb/optimizer/join_order/cardinality_estimator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/optimizer/join_node.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
