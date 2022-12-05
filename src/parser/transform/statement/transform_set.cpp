@@ -79,6 +79,8 @@ unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *no
 		return TransformSetVariable(stmt);
 	case SetType::RESET:
 		return TransformResetVariable(stmt);
+	default:
+		throw NotImplementedException("Type not implemented for SetType");
 	}
 }
 
