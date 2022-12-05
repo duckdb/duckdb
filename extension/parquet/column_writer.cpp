@@ -1268,7 +1268,7 @@ public:
 				// If the value did not yet exist in the dictionary we add it to the StringHeap
 				auto found = !value.IsInlined() && state.dictionary.find(value) == state.dictionary.end()
 				                 ? state.dictionary.insert(string_map_t<uint32_t>::value_type(
-				                       state.dictionary_heap.AddString(value), new_value_index))
+				                       state.dictionary_heap.AddBlob(value), new_value_index))
 				                 : state.dictionary.insert(string_map_t<uint32_t>::value_type(value, new_value_index));
 				state.estimated_plain_size += value.GetSize() + STRING_LENGTH_SIZE;
 				if (found.second) {
