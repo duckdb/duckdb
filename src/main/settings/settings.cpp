@@ -835,7 +835,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 }
 
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.maximum_threads = DBConfig().options.maximum_threads;
+	config.SetDefaultMaxThreads();
 }
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {

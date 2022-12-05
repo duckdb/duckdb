@@ -258,11 +258,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		}
 	}
 	if (new_config.options.maximum_threads == (idx_t)-1) {
-#ifndef DUCKDB_NO_THREADS
-		config.options.maximum_threads = std::thread::hardware_concurrency();
-#else
-		config.options.maximum_threads = 1;
-#endif
+		config.SetDefaultMaxThreads();
 	}
 	config.allocator = move(new_config.allocator);
 	if (!config.allocator) {

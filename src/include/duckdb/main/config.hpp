@@ -207,6 +207,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	void SetDefaultMaxThreads();
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

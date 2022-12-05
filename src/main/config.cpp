@@ -4,6 +4,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
+
 namespace duckdb {
 
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
@@ -166,6 +170,14 @@ void DBConfig::AddExtensionOption(string name, string description, LogicalType p
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
+}
+
+void DBConfig::SetDefaultMaxThreads() {
+#ifndef DUCKDB_NO_THREADS
+	options.maximum_threads = std::thread::hardware_concurrency();
+#else
+	options.maximum_threads = 1;
+#endif
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
