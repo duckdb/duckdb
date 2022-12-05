@@ -42,7 +42,6 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
-	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
 
 public:
 	static void Initialize(py::handle &m);
@@ -62,8 +61,13 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string,
+	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
+	                                                bool file_row_number, bool filename, bool hive_partitioning,
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	static unique_ptr<DuckDBPyRelation>
+	FromParquets(const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
+	             bool hive_partitioning, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
 	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
@@ -73,11 +77,6 @@ public:
 
 	static unique_ptr<DuckDBPyRelation>
 	GetSubstraitJSON(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	void InstallExtension(const string &query, bool force_install,
-	                      DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
@@ -214,7 +213,7 @@ public:
 
 	void InsertInto(const string &table);
 
-	void Insert(py::object params = py::list());
+	void Insert(const py::object &params = py::list());
 
 	void Create(const string &table);
 
@@ -228,6 +227,9 @@ public:
 
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+	                              const string &groups = "", const string &function_parameter = "",
+	                              const string &projected_columns = "", const string &window_function = "");
+	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
 };
