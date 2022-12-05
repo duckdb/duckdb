@@ -105,3 +105,24 @@ pytest tests/stubs
 ```
 
 All the above should be done in a virtualenv.
+
+## Clang-tidy and CMakeLists
+
+The pythonpkg does not use the CMakeLists for compilation, for that it uses `setup.py` and `package_build.py` mostly.
+But we still have CMakeLists in the pythonpkg, for tidy-check and intellisense purposes.
+For this reason it might not be instantly apparent that the CMakeLists are incorrectly set up, and will only result in a very confusing CI failure of TidyCheck.
+
+To prevent this, or to help you when you encounter said CI failure, here are a couple of things to note about the CMakeLists in here.
+When running clang-tidy, cmake is called with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`, this will cause cmake to output a `compile_commands.json` file containing all the commands for every file it registered.
+
+The pythonpkg depends on `PythonLibs`, and `pybind11`, for some reason `PythonLibs` can not be found by clang-tidy when generating the `compile_commands.json` file
+So the reason for clang-tidy failing is likely that there is no entry for a file in the `compile_commands.json`, check the CMakeLists to see why cmake did not register it.
+
+Helpful information:
+`clang-tidy` is not a standard binary on MacOS, and can not be installed with brew directly (doing so will try to install clang-format, and they are not the same thing)
+Instead clang-tidy is part of `llvm`, so you'll need to install that (`brew install llvm`), after installing llvm you'll likely have to add the llvm binaries folder to your PATH variable to use clang-tidy
+For example:
+```bash
+export PATH="$PATH:/opt/homebrew/Cellar/llvm/15.0.2/bin"
+```
+
