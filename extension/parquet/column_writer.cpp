@@ -1265,7 +1265,7 @@ public:
 				run_length++;
 				const auto &value = strings[vector_index];
 				// If the value did not yet exist in the dictionary we add it to the StringHeap
-				auto found = state.dictionary.find(value) == state.dictionary.end()
+				auto found = !value.IsInlined() && state.dictionary.find(value) == state.dictionary.end()
 				                 ? state.dictionary.insert(string_map_t<uint32_t>::value_type(
 				                       state.dictionary_heap.AddString(value), new_value_index))
 				                 : state.dictionary.insert(string_map_t<uint32_t>::value_type(value, new_value_index));
