@@ -96,6 +96,11 @@ Value DebugCheckpointAbort::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Debug Force External
 //===--------------------------------------------------------------------===//
+
+void DebugForceExternal::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
+}
+
 void DebugForceExternal::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).force_external = input.GetValue<bool>();
 }
@@ -107,6 +112,11 @@ Value DebugForceExternal::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Debug Force NoCrossProduct
 //===--------------------------------------------------------------------===//
+
+void DebugForceNoCrossProduct::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
+}
+
 void DebugForceNoCrossProduct::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).force_no_cross_product = input.GetValue<bool>();
 }
@@ -148,6 +158,11 @@ void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 }
 
 void DefaultCollationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.collation = DBConfig().options.collation;
+}
+
+void DefaultCollationSetting::ResetLocal(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
 	config.options.collation = DBConfig().options.collation;
 }
 
@@ -337,6 +352,11 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
+
+void EnableProfilingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profiler_print_format = ClientConfig().profiler_print_format;
+}
+
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 
@@ -375,6 +395,11 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
+
+void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
+}
+
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).enable_progress_bar = input.GetValue<bool>();
 }
@@ -402,6 +427,11 @@ Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Explain Output
 //===--------------------------------------------------------------------===//
+
+void ExplainOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
+}
+
 void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "all") {
@@ -448,6 +478,12 @@ Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // File Search Path
 //===--------------------------------------------------------------------===//
+
+void FileSearchPathSetting::ResetLocal(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	client_data.file_search_path.clear();
+}
+
 void FileSearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
@@ -487,6 +523,11 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Home Directory
 //===--------------------------------------------------------------------===//
+
+void HomeDirectorySetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
+}
+
 void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.home_directory = input.IsNull() ? string() : input.ToString();
@@ -500,6 +541,13 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
+
+void LogQueryPathSetting::ResetLocal(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	// TODO: verify that this does the right thing
+	client_data.log_query_writer = move(ClientData(context).log_query_writer);
+}
+
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &client_data = ClientData::Get(context);
 	auto path = input.ToString();
@@ -521,6 +569,11 @@ Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Maximum Expression Depth
 //===--------------------------------------------------------------------===//
+
+void MaximumExpressionDepthSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).max_expression_depth = ClientConfig().max_expression_depth;
+}
+
 void MaximumExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).max_expression_depth = input.GetValue<uint64_t>();
 }
@@ -566,6 +619,11 @@ Value PasswordSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Perfect Hash Threshold
 //===--------------------------------------------------------------------===//
+
+void PerfectHashThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
+}
+
 void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto bits = input.GetValue<int32_t>();
 	if (bits < 0 || bits > 32) {
@@ -581,6 +639,11 @@ Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // PreserveIdentifierCase
 //===--------------------------------------------------------------------===//
+
+void PreserveIdentifierCase::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).preserve_identifier_case = ClientConfig().preserve_identifier_case;
+}
+
 void PreserveIdentifierCase::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).preserve_identifier_case = input.GetValue<bool>();
 }
@@ -608,6 +671,12 @@ Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
+
+void ProfilerHistorySize::ResetLocal(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	client_data.query_profiler_history->ResetProfilerHistorySize();
+}
+
 void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
 	auto size = input.GetValue<int64_t>();
 	if (size <= 0) {
@@ -624,6 +693,11 @@ Value ProfilerHistorySize::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
+
+void ProfileOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
+}
+
 void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
@@ -638,6 +712,13 @@ Value ProfileOutputSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profiling Mode
 //===--------------------------------------------------------------------===//
+
+void ProfilingModeSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_profiler = ClientConfig().enable_profiler;
+	ClientConfig::GetConfig(context).enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
+	ClientConfig::GetConfig(context).emit_profiler_output = ClientConfig().emit_profiler_output;
+}
+
 void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	auto &config = ClientConfig::GetConfig(context);
@@ -665,6 +746,12 @@ Value ProfilingModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Progress Bar Time
 //===--------------------------------------------------------------------===//
+
+void ProgressBarTimeSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).wait_time = ClientConfig().wait_time;
+	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
+}
+
 void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).wait_time = input.GetValue<int32_t>();
 	ClientConfig::GetConfig(context).enable_progress_bar = true;
@@ -677,6 +764,13 @@ Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
+
+void SchemaSetting::ResetLocal(ClientContext &context) {
+	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
+	auto &client_data = ClientData::Get(context);
+	client_data.catalog_search_path->Reset();
+}
+
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
@@ -690,6 +784,13 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Search Path
 //===--------------------------------------------------------------------===//
+
+void SearchPathSetting::ResetLocal(ClientContext &context) {
+	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
+	auto &client_data = ClientData::Get(context);
+	client_data.catalog_search_path->Reset();
+}
+
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);

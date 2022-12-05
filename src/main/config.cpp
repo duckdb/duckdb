@@ -7,21 +7,39 @@
 namespace duckdb {
 
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
-	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
+		    nullptr, _PARAM::GetSetting                                                                                \
+	}
 #define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM)                                                                            \
-	{ _ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal, nullptr,      \
+		    _PARAM::GetSetting                                                                                         \
+	}
 
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
-	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
+		    _PARAM::GetSetting                                                                                         \
+	}
 #define DUCKDB_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                             \
-	{ _ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,        \
+		    _PARAM::GetSetting                                                                                         \
+	}
 
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
-	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
+		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting                                                \
+	}
 #define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                      \
-	{ _ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::GetSetting }
+	{                                                                                                                  \
+		_ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::ResetGlobal,      \
+		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
+	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
