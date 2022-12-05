@@ -2474,6 +2474,15 @@ public class TestDuckDBJDBC {
 		conn2.close();
 	}
 
+	public static void test_readonly_remains_bug5593() throws Exception {
+		Properties p = new Properties();
+		p.setProperty("duckdb.read_only", "true");
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:", p);
+		conn.close();
+
+		assertTrue(p.containsKey("duckdb.read_only"));
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
