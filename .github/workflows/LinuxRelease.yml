@@ -306,14 +306,10 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-linux
+        name: duckdb-binaries-linux-32bit
         path: |
           libduckdb-linux-i386.zip
           duckdb_cli-linux-i386.zip
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-linux-32bit
-        path: |
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 
