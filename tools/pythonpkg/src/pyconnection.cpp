@@ -660,7 +660,6 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	catalog.CreateTableFunction(context, &map_info);
 	context.transaction.Commit();
 	auto &db_config = res.database->instance->config;
-	// TODO: replace all of these default value assignations
 	db_config.AddExtensionOption("pandas_analyze_sample",
 	                             "The maximum number of rows to sample when analyzing a pandas object column.",
 	                             LogicalType::UBIGINT, Value::UBIGINT(1000));
