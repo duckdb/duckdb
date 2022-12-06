@@ -57,3 +57,39 @@ class TestDuckDBQuery(object):
         ).fetchall()
 
         assert(res == original_res)
+
+    def test_named_param_not_dict(self):
+        con = duckdb.connect()
+
+        with pytest.raises(duckdb.InvalidInputException, match="Named parameters found, but param is not of type 'dict'"):
+            con.execute("select $name1, $name2, $name3", ['name1', 'name2', 'name3'])
+
+    def test_named_param_basic(self):
+        con = duckdb.connect()
+
+        res = con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3, 'name3': 'a'}).fetchall()
+        assert res == [(5,3,'a'),]
+
+    def test_named_param_not_exhaustive(self):
+        con = duckdb.connect()
+
+        with pytest.raises(duckdb.InvalidInputException, match="Not all named parameters have been located, missing: name3"):
+            con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3})
+
+    def test_named_param_excessive(self):
+        con = duckdb.connect()
+
+        with pytest.raises(duckdb.InvalidInputException, match="Named parameters could not be transformed, because query string is missing named parameter 'not_a_named_param'"):
+            con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3, 'not_a_named_param': 5})
+
+    def test_named_param_not_named(self):
+        con = duckdb.connect()
+
+        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: Param is of type 'dict', but no named parameters were found in the query"):
+            con.execute("select $1, $1, $2", {'name1': 5, 'name2': 3})
+
+    def test_named_param_mixed(self):
+        con = duckdb.connect()
+
+        with pytest.raises(duckdb.NotImplementedException, match="Mixing positional and named parameters is not supported yet"):
+            con.execute("select $name1, $1, $2", {'name1': 5, 'name2': 3})
