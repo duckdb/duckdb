@@ -186,8 +186,8 @@ public:
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 
-	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
-	                                   Value default_value = Value(), set_option_callback_t function = nullptr);
+	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
+	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.

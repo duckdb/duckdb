@@ -177,7 +177,7 @@ void DBConfig::ResetOption(const string &name) {
 	}
 }
 
-void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter, Value default_value,
+void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter, const Value &default_value,
                                   set_option_callback_t function) {
 	extension_parameters.insert(
 	    make_pair(name, ExtensionOption(move(description), move(parameter), function, default_value)));
