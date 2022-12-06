@@ -416,7 +416,9 @@ string InterpretedBenchmark::GetDatabasePath() {
 	if (!cache_db.empty()) {
 		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	}
-	return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
+	auto db_path = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
+	DeleteDatabase(db_path);
+	return db_path;
 }
 
 string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result) {
