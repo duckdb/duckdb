@@ -20,7 +20,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
-#include "duckdb_python/jupyter_progress_bar.hpp"
+#include "duckdb_python/jupyter_progress_bar_display.hpp"
 
 #include <random>
 
@@ -164,11 +164,6 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
-	unique_ptr<JupyterProgressBar> progress_bar;
-	if (DuckDBPyConnection::IsJupyter()) {
-		py::gil_scoped_acquire gil;
-		progress_bar = make_unique<JupyterProgressBar>();
-	}
 	do {
 		execution_result = pending_query.ExecuteTask();
 		{
@@ -176,23 +171,10 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 			if (PyErr_CheckSignals() != 0) {
 				throw std::runtime_error("Query interrupted");
 			}
-
-			if (progress_bar) {
-				// FIXME: might need to grab a lock here?
-				auto &context = *connection->context;
-
-				// Assuming enable_progress is on
-				auto progress = context.GetProgress();
-				progress_bar->Update(progress);
-			}
 		}
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
-	}
-	if (progress_bar) {
-		py::gil_scoped_acquire gil;
-		progress_bar->Finish();
 	}
 	return pending_query.Execute();
 }
@@ -769,13 +751,13 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	D_ASSERT(progress_bar_print_opt);
 
 	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
+	// FIXME: nasty hardcoded default value check
 	if (progress_bar_time_opt->get_setting(context) == 2000) {
-		// nasty hardcoded default value check
 		progress_bar_time_opt->set_local(context, Value(0));
 	}
 	if (DuckDBPyConnection::IsJupyter()) {
-		// Don't render the regular progress bar on Jupyter Notebooks
-		progress_bar_print_opt->set_local(context, Value(false));
+		// Set the function used to create the display for the progress bar
+		context.config.display_create_func = JupyterProgressBarDisplay::Create;
 	}
 }
 

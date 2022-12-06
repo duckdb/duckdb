@@ -1,9 +1,14 @@
-#include "duckdb_python/jupyter_progress_bar.hpp"
+#include "duckdb_python/jupyter_progress_bar_display.hpp"
 #include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
 
-JupyterProgressBar::JupyterProgressBar() {
+unique_ptr<ProgressBarDisplay> JupyterProgressBarDisplay::Create() {
+	return make_unique<JupyterProgressBarDisplay>();
+}
+
+void JupyterProgressBarDisplay::Initialize() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto float_progress_attr = import_cache.ipywidgets.FloatProgress();
 	D_ASSERT(float_progress_attr.ptr() != nullptr);
@@ -20,11 +25,20 @@ JupyterProgressBar::JupyterProgressBar() {
 	display_attr(progress_bar);
 }
 
-void JupyterProgressBar::Update(double progress) {
+JupyterProgressBarDisplay::JupyterProgressBarDisplay() : ProgressBarDisplay() {
+	// Empty, we need the GIL to initialize, which we don't have here
+}
+
+void JupyterProgressBarDisplay::Update(double progress) {
+	py::gil_scoped_acquire gil;
+	if (progress_bar.ptr() == nullptr) {
+		// First print, we first need to initialize the display
+		Initialize();
+	}
 	progress_bar.attr("value") = py::cast(progress);
 }
 
-void JupyterProgressBar::Finish() {
+void JupyterProgressBarDisplay::Finish() {
 	Update(100);
 }
 
