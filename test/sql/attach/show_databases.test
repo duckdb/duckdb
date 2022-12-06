@@ -1,0 +1,26 @@
+# name: test/sql/attach/show_databases.test
+# description: Test SHOW DATABASES
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+query I
+SHOW DATABASES
+----
+memory
+new_database
+
+query I
+SELECT name FROM pragma_database_list() ORDER BY name
+----
+memory
+new_database
+
+#
+#statement ok
+#USE new_database
+#
