@@ -61,7 +61,7 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
 	auto result = TransformStatementInternal(stmt);
 	result->n_param = ParamCount();
-	if (named_param_map.size()) {
+	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = move(named_param_map);
 	}

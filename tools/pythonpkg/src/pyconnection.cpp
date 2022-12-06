@@ -213,7 +213,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		}
 		// Transform named parameters to regular positional parameters
 		params = TransformNamedParameters(named_param_map, params);
-	} else if (named_param_map.size()) {
+	} else if (!named_param_map.empty()) {
 		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
 	}
 
