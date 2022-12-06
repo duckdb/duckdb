@@ -56,9 +56,9 @@ export class Database {
 
   connect(): Connection;
 
-  all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  all(sql: string, ...args: [...any, Callback<TableData>] | []): this;
   arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
-  each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
+  each(sql: string, ...args: [...any, Callback<RowData>] | []): this;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
@@ -73,17 +73,20 @@ export class Database {
 
   stream(sql: any, ...args: any[]): QueryResult;
   arrowIPCStream(sql: any, ...args: any[]): QueryResult;
+
+  serialize(done?: Callback<void>): void;
+  parallelize(done?: Callback<void>): void;
 }
 
 export class Statement {
   sql: string;
   constructor();
 
-  all(...args: [...any, Callback<TableData>] | []): void;
+  all(...args: [...any, Callback<TableData>] | []): this;
 
   arrowIPCAll(...args: [...any, Callback<TableData>] | []): void;
 
-  each(...args: [...any, Callback<RowData>] | []): void;
+  each(...args: [...any, Callback<RowData>] | []): this;
 
   finalize(callback?: Callback<void>): void;
 
