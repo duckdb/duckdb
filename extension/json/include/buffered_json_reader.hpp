@@ -51,6 +51,7 @@ public:
 	idx_t FileSize() const;
 	idx_t Remaining() const;
 	bool CanSeek() const;
+	bool PlainFileSource() const;
 
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
 	void ReadAtPosition(const char *pointer, idx_t size, idx_t position);

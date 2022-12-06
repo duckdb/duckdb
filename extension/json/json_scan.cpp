@@ -268,7 +268,6 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 
 void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index,
                                               idx_t &next_batch_index, idx_t &readers) {
-	auto &file_handle = gstate.json_reader->GetFileHandle(file_index);
 	auto &options = gstate.json_reader->options;
 	auto &format = options.format;
 
@@ -280,6 +279,8 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 		}
 
 		file_index = gstate.json_reader->GetFileIndex();
+		auto &file_handle = gstate.json_reader->GetFileHandle(file_index);
+
 		next_batch_index = gstate.batch_index++;
 		first_read = file_handle.Remaining() == file_handle.FileSize();
 

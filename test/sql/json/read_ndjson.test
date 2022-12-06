@@ -2,7 +2,7 @@
 # description: Read ndjson files
 # group: [json]
 
-# this was the previous implementation, doesn't work without JSON extension
+# this was the previous implementation, doesn't work without JSON extension (no JSON type in catalog)
 statement error
 SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
 
@@ -72,6 +72,25 @@ SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson')
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
+# same but gzipped
+query I
+SELECT * FROM read_json_objects('data/json/example_rn.ndjson.gz')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson.gz')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
 # multi-file scan
 query I
 SELECT count(*) from read_json_objects(['data/json/example_n.ndjson', 'data/json/example_r.ndjson', 'data/json/example_rn.ndjson'])
@@ -93,3 +112,24 @@ query I
 SELECT count(*) from read_ndjson_objects('data/json/example_*n.ndjson')
 ----
 10
+
+require httpfs
+
+# same file but hosted on github
+query I
+select * from read_json_objects('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+select * from read_ndjson_objects('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}

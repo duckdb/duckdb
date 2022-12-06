@@ -2,6 +2,7 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -41,6 +42,10 @@ bool JSONFileHandle::CanSeek() const {
 	return can_seek;
 }
 
+bool JSONFileHandle::PlainFileSource() const {
+	return plain_file_source;
+}
+
 idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
 	position = read_position;
 	auto actual_size = MinValue<idx_t>(requested_size, Remaining());
@@ -77,7 +82,7 @@ idx_t BufferedJSONReader::GetFileIndex() {
 }
 
 JSONFileHandle &BufferedJSONReader::GetFileHandle(idx_t file_idx) const {
-	return *file_handles[file_idx];
+	return *file_handles[file_idx].get();
 }
 
 double BufferedJSONReader::GetProgress() const {
