@@ -1,0 +1,92 @@
+# name: test/sql/attach/attach_table_ddl.test
+# description: Test various DDL statements on an attached database
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement ok
+CREATE SCHEMA new_database.s1;
+
+#statement ok
+#SET SCHEMA = 's1'
+
+foreach table new_database.s1.integers new_database.integers
+
+statement ok
+CREATE TABLE ${table}(i INTEGER)
+
+# insert
+statement ok
+INSERT INTO ${table} VALUES (42);
+
+query I
+SELECT * FROM ${table}
+----
+42
+
+# update
+query I
+UPDATE ${table} SET i=i+1
+----
+1
+
+query I
+SELECT * FROM ${table}
+----
+43
+
+# delete
+query I
+DELETE FROM ${table} WHERE i=43
+----
+1
+
+query I
+SELECT COUNT(*) FROM ${table}
+----
+0
+
+# alter table statements
+statement ok
+ALTER TABLE ${table} ADD COLUMN j VARCHAR
+
+statement ok
+INSERT INTO ${table} VALUES (1, 'T100');
+
+query II
+SELECT * FROM ${table}
+----
+1	T100
+
+statement ok
+ALTER TABLE ${table} ALTER j TYPE INT USING REPLACE(j, 'T', '')::INT
+
+query II
+SELECT * FROM ${table}
+----
+1	100
+
+statement ok
+ALTER TABLE ${table} DROP COLUMN j
+
+query I
+SELECT * FROM ${table}
+----
+1
+
+statement ok
+ALTER TABLE ${table} RENAME COLUMN i TO k
+
+query I
+SELECT k FROM ${table}
+----
+1
+
+statement ok
+DROP TABLE ${table}
+
+endloop

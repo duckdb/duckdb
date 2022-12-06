@@ -24,7 +24,7 @@ void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, 
 	if (state.finished) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.CreateSchema(context.client, info.get());
 	state.finished = true;
 }

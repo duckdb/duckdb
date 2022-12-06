@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-AlterInfo::AlterInfo(AlterType type, string schema_p, string name_p, bool if_exists)
-    : type(type), if_exists(if_exists), schema(move(schema_p)), name(move(name_p)), allow_internal(false) {
+AlterInfo::AlterInfo(AlterType type, string catalog_p, string schema_p, string name_p, bool if_exists)
+    : type(type), if_exists(if_exists), catalog(move(catalog_p)), schema(move(schema_p)), name(move(name_p)),
+      allow_internal(false) {
 }
 
 AlterInfo::~AlterInfo() {
@@ -41,6 +42,15 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	reader.Finalize();
 
 	return result;
+}
+
+AlterEntryData AlterInfo::GetAlterEntryData() const {
+	AlterEntryData data;
+	data.catalog = catalog;
+	data.schema = schema;
+	data.name = name;
+	data.if_exists = if_exists;
+	return data;
 }
 
 } // namespace duckdb

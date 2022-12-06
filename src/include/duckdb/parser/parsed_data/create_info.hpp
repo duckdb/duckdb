@@ -28,8 +28,8 @@ enum class OnCreateConflict : uint8_t {
 };
 
 struct CreateInfo : public ParseInfo {
-	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog = INVALID_CATALOG)
-	    : type(type), catalog(INVALID_CATALOG), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT),
+	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
+	    : type(type), catalog(move(catalog_p)), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT),
 	      temporary(false), internal(false) {
 	}
 	~CreateInfo() override {

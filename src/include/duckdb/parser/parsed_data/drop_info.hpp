@@ -14,11 +14,13 @@
 namespace duckdb {
 
 struct DropInfo : public ParseInfo {
-	DropInfo() : schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
+	DropInfo() : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
 	}
 
 	//! The catalog type to drop
 	CatalogType type;
+	//! Catalog name to drop from, if any
+	string catalog;
 	//! Schema name to drop from, if any
 	string schema;
 	//! Element name to drop
@@ -33,6 +35,7 @@ public:
 	unique_ptr<DropInfo> Copy() const {
 		auto result = make_unique<DropInfo>();
 		result->type = type;
+		result->catalog = catalog;
 		result->schema = schema;
 		result->name = name;
 		result->if_exists = if_exists;

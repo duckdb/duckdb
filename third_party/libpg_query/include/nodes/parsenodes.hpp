@@ -1325,6 +1325,7 @@ typedef enum PGObjectType {
  */
 typedef struct PGCreateSchemaStmt {
 	PGNodeTag type;
+	char *catalogname;                    /* the name of the catalog in which to create the schema */
 	char *schemaname;                     /* the name of the schema to create */
 	PGList *schemaElts;                   /* schema components (list of parsenodes) */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */

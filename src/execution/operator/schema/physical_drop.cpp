@@ -34,7 +34,7 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 		break;
 	}
 	default: {
-		auto &catalog = Catalog::GetCatalog(context.client, INVALID_CATALOG);
+		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, info.get());
 		break;
 	}

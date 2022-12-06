@@ -236,7 +236,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
@@ -308,7 +308,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		return nullptr;
 	}
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	for (auto &col : columns.Logical()) {
@@ -341,7 +341,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		return nullptr;
 	}
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	logical_index_set_t removed_columns;
@@ -451,7 +451,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	auto default_idx = GetColumnIndex(info.column_name);
 	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET DEFAULT for rowid column");
@@ -482,7 +482,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	auto not_null_idx = GetColumnIndex(info.column_name);
@@ -520,7 +520,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	auto not_null_idx = GetColumnIndex(info.column_name);
@@ -546,7 +546,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		info.target_type = catalog->GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
 	auto change_idx = GetColumnIndex(info.column_name);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	for (auto &col : columns.Logical()) {
@@ -634,7 +634,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	create_info->columns = columns.Copy();
@@ -659,7 +659,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContex
 unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientContext &context,
                                                                      AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_DELETE);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	create_info->columns = columns.Copy();
@@ -808,7 +808,7 @@ string TableCatalogEntry::ToSQL() {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
