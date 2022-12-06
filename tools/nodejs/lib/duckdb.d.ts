@@ -75,6 +75,7 @@ export class Database {
 }
 
 export class Statement {
+  sql: string;
   constructor();
 
   all(...args: [...any, Callback<TableData>] | []): void;
