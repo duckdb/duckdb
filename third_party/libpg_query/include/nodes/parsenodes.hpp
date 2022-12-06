@@ -203,6 +203,7 @@ typedef struct PGParamRef {
 	PGNodeTag type;
 	int number;   /* the number of the parameter */
 	int location; /* token location, or -1 if unknown */
+	char *name; /* optional name of the parameter */
 } PGParamRef;
 
 /*

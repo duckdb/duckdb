@@ -20,6 +20,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 
 #include <random>
 
@@ -137,6 +138,39 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	return pending_query.Execute();
 }
 
+py::list TransformNamedParameters(case_insensitive_map_t<int32_t> &named_param_map, const py::dict &params) {
+	py::list new_params(params.size());
+
+	for (auto &item : params) {
+		const std::string &item_name = item.first.cast<std::string>();
+		auto entry = named_param_map.find(item_name);
+		if (entry == named_param_map.end()) {
+			throw InvalidInputException(
+			    "Named parameters could not be transformed, because query string is missing named parameter '%s'",
+			    item_name);
+		}
+		auto param_idx = entry->second;
+		// Add the value of the named parameter to the list
+		new_params[param_idx - 1] = item.second;
+	}
+
+	if (named_param_map.size() != params.size()) {
+		// One or more named parameters were expected, but not found
+		vector<string> missing_params;
+		missing_params.reserve(named_param_map.size());
+		for (auto &entry : named_param_map) {
+			auto &name = entry.first;
+			if (!params.contains(name)) {
+				missing_params.push_back(name);
+			}
+		}
+		auto message = StringUtil::Join(missing_params, ", ");
+		throw InvalidInputException("Not all named parameters have been located, missing: %s", message);
+	}
+
+	return new_params;
+}
+
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
@@ -170,6 +204,17 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		if (prep->HasError()) {
 			prep->error.Throw();
 		}
+	}
+
+	auto &named_param_map = prep->named_param_map;
+	if (py::isinstance<py::dict>(params)) {
+		if (named_param_map.empty()) {
+			throw InvalidInputException("Param is of type 'dict', but no named parameters were found in the query");
+		}
+		// Transform named parameters to regular positional parameters
+		params = TransformNamedParameters(named_param_map, params);
+	} else if (named_param_map.size()) {
+		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
 	}
 
 	// this is a list of a list of parameters in executemany

@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,8 @@ public:
 	idx_t stmt_length = 0;
 	//! The number of prepared statement parameters (if any)
 	idx_t n_param = 0;
+	//! The map of named parameter to param index (if n_param and any named)
+	case_insensitive_map_t<int32_t> named_param_map;
 	//! The query text that corresponds to this SQL statement
 	string query;
 

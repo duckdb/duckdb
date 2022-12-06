@@ -12,6 +12,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -22,7 +23,7 @@ class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, idx_t n_param);
+	                             string query, idx_t n_param, case_insensitive_map_t<int32_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(PreservedError error);
 
@@ -41,6 +42,8 @@ public:
 	PreservedError error;
 	//! The amount of bound parameters
 	idx_t n_param;
+	//! The (optional) named parameters
+	case_insensitive_map_t<int32_t> named_param_map;
 
 public:
 	//! Returns the stored error message
