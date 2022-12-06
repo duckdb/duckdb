@@ -466,7 +466,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			heap_size += entry.GetSize();
 		}
 
-		if (append_count == 0) {
+		if (vector_remaining != 0 && append_count == 0) {
 			// single string is longer than Storage::BLOCK_SIZE
 			// we allocate one block at a time for long strings
 			auto source_idx = source_data.sel->get_index(offset + append_count);

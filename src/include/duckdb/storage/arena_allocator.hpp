@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
-	ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	DUCKDB_API ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
 	~ArenaAllocator();
 
 	data_ptr_t Allocate(idx_t size);
