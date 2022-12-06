@@ -12,13 +12,12 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class SchemaCatalogEntry;
 
 struct CreateViewInfo : public CreateInfo {
-	CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA) {
-	}
-	CreateViewInfo(string schema, string view_name)
-	    : CreateInfo(CatalogType::VIEW_ENTRY, schema), view_name(view_name) {
-	}
+	CreateViewInfo();
+	CreateViewInfo(SchemaCatalogEntry *schema, string view_name);
+	CreateViewInfo(string catalog_p, string schema_p, string view_name);
 
 	//! Table name to insert to
 	string view_name;
@@ -30,38 +29,12 @@ struct CreateViewInfo : public CreateInfo {
 	unique_ptr<SelectStatement> query;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateViewInfo>(schema, view_name);
-		CopyProperties(*result);
-		result->aliases = aliases;
-		result->types = types;
-		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
-		return move(result);
-	}
+	unique_ptr<CreateInfo> Copy() const override;
 
-	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer) {
-		auto result = make_unique<CreateViewInfo>();
-		result->DeserializeBase(deserializer);
-
-		FieldReader reader(deserializer);
-		result->view_name = reader.ReadRequired<string>();
-		result->aliases = reader.ReadRequiredList<string>();
-		result->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		result->query = reader.ReadOptional<SelectStatement>(nullptr);
-		reader.Finalize();
-
-		return result;
-	}
+	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer);
 
 protected:
-	void SerializeInternal(Serializer &serializer) const override {
-		FieldWriter writer(serializer);
-		writer.WriteString(view_name);
-		writer.WriteList<string>(aliases);
-		writer.WriteRegularSerializableList(types);
-		writer.WriteOptional(query);
-		writer.Finalize();
-	}
+	void SerializeInternal(Serializer &serializer) const override;
 };
 
 } // namespace duckdb

@@ -13,6 +13,7 @@ add_library_unity(
   create_scalar_function_info.cpp
   create_table_function_info.cpp
   create_table_info.cpp
+  create_view_info.cpp
   sample_options.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parsed_data>
