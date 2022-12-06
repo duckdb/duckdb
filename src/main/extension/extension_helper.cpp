@@ -6,6 +6,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+/* cpp macro definition stringification. */
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define ICU_STATICALLY_LOADED true
 #include "icu-extension.hpp"
@@ -78,6 +82,10 @@
 #include "inet-extension.hpp"
 #endif
 
+#ifdef DUCKDB_OUT_OF_TREE
+#include DUCKDB_EXTENSION_HEADER
+#endif
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -118,6 +126,11 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
+
+
+#ifdef DUCKDB_OUT_OF_TREE
+    LoadExtensionInternal(db, STRINGIFY(DUCKDB_EXTENSION_NAME), true);
+#endif
 }
 
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
@@ -227,6 +240,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #endif
 	} else {
 		// unknown extension
+#ifdef DUCKDB_OUT_OF_TREE
+        // This may be an out-of-tree extension that is linked into duckdb
+        if (extension == STRINGIFY(DUCKDB_EXTENSION_NAME)) {
+            db.LoadExtension<DUCKDB_EXTENSION_CLASS>();
+            return ExtensionLoadResult::LOADED_EXTENSION;
+        }
+#endif
 		return ExtensionLoadResult::EXTENSION_UNKNOWN;
 	}
 	return ExtensionLoadResult::LOADED_EXTENSION;
