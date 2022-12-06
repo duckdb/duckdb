@@ -55,7 +55,6 @@ std::ostream& operator<<(std::ostream& out, const Symbol& s) {
 		out << s.val.str[i];
 	return out;
 }
-static u64 iter = 0;
 
 SymbolTable *buildSymbolTable(Counters& counters, vector<u8*> line, size_t len[], bool zeroTerminated=false) {
 	SymbolTable *st = new SymbolTable(), *bestTable = new SymbolTable();
