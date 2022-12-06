@@ -67,7 +67,7 @@ static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_
 	}
 	case LogicalTypeId::UNION: {
 		child_list_t<LogicalType> member_types;
-		for(idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
+		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
 			auto &member_name = UnionType::GetMemberName(type, member_idx);
 			auto &member_type = UnionType::GetMemberType(type, member_idx);
 
@@ -312,7 +312,7 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 }
 
 static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
-                               Vector &value_v, idx_t count) {
+                              Vector &value_v, idx_t count) {
 	// Structs become objects, therefore we initialize vals to JSON objects
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
@@ -327,11 +327,11 @@ static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc
 	tag_v.ToUnifiedFormat(count, tag_data);
 
 	// Add the key/value pairs to the objects
-	for(idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
+	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
 		auto &member_key_v = *info.const_struct_names.at(UnionType::GetMemberName(value_v.GetType(), member_idx));
 
-		// This implementation is not optimal since we convert the entire member vector, 
+		// This implementation is not optimal since we convert the entire member vector,
 		// and then skip the rows not matching the tag afterwards.
 
 		CreateValues(info, doc, nested_vals, member_val_v, count);
