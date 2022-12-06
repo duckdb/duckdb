@@ -2459,6 +2459,21 @@ public class TestDuckDBJDBC {
 		conn2.close();
 	}
 
+	public static void test_user_password() throws Exception {
+		String jdbc_url = "jdbc:duckdb:";
+		Properties p = new Properties();
+		p.setProperty("user", "wilbur");
+		p.setProperty("password", "quack");
+		Connection conn = DriverManager.getConnection(jdbc_url, p);
+		conn.close();
+
+		Properties p2 = new Properties();
+		p2.setProperty("User", "wilbur");
+		p2.setProperty("PASSWORD", "quack");
+		Connection conn2 = DriverManager.getConnection(jdbc_url, p2);
+		conn2.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

@@ -17,11 +17,11 @@
 #include "duckdb_python/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 namespace duckdb {
 
 struct DuckDBPyRelation;
-struct DuckDBPyResult;
 
 class RegisteredArrow : public RegisteredObject {
 
@@ -83,7 +83,11 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
+	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
+	                                         bool filename, bool hive_partitioning);
+
+	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                          bool file_row_number, bool filename, bool hive_partitioning);
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
@@ -128,7 +132,7 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
-	static vector<Value> TransformPythonParamList(py::handle params);
+	static vector<Value> TransformPythonParamList(const py::handle &params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

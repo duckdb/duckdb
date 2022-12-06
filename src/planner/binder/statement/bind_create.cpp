@@ -70,6 +70,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
 	// fill up the aliases with the remaining names of the bound query
+	base.aliases.reserve(query_node.names.size());
 	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
 		base.aliases.push_back(query_node.names[i]);
 	}
