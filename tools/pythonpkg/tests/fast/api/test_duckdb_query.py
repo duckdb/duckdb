@@ -93,3 +93,9 @@ class TestDuckDBQuery(object):
 
         with pytest.raises(duckdb.NotImplementedException, match="Mixing positional and named parameters is not supported yet"):
             con.execute("select $name1, $1, $2", {'name1': 5, 'name2': 3})
+
+    def test_named_param_strings_with_dollarsign(self):
+        con = duckdb.connect()
+
+        res = con.execute("select '$name1', $name1, $name1, '$name1'", {'name1': 5}).fetchall()
+        assert res == [('$name1', 5, 5, '$name1')]
