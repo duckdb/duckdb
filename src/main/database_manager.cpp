@@ -43,10 +43,20 @@ void DatabaseManager::AddDatabase(unique_ptr<AttachedDatabase> db_instance) {
 }
 
 AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
+	lock_guard<mutex> l(manager_lock);
 	if (!default_database) {
 		throw InternalException("GetDefaultDatabase called but there are no databases");
 	}
 	return *default_database;
+}
+
+void DatabaseManager::SetDefaultDatabase(const string &name) {
+	lock_guard<mutex> l(manager_lock);
+	auto entry = databases.find(name);
+	if (entry == databases.end()) {
+		throw CatalogException("Database with name \"%s\" does not exist", name);
+	}
+	default_database = entry->second.get();
 }
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases() {

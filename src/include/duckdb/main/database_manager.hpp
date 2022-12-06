@@ -38,7 +38,9 @@ public:
 	void AddDatabase(unique_ptr<AttachedDatabase> db);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
+	// FIXME: default database should be client-specific and not live here
 	AttachedDatabase &GetDefaultDatabase();
+	void SetDefaultDatabase(const string &name);
 
 	vector<AttachedDatabase *> GetDatabases();
 

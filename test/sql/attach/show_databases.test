@@ -1,5 +1,5 @@
 # name: test/sql/attach/show_databases.test
-# description: Test SHOW DATABASES
+# description: Test SHOW DATABASES and USE
 # group: [attach]
 
 statement ok
@@ -20,7 +20,19 @@ SELECT name FROM pragma_database_list() ORDER BY name
 memory
 new_database
 
-#
-#statement ok
-#USE new_database
-#
+# check changing the default database
+statement ok
+USE new_database
+
+statement ok
+CREATE TABLE tbl AS SELECT 42 i
+
+query I
+SELECT * FROM new_database.tbl
+----
+42
+
+statement error
+USE blablabla
+----
+does not exist

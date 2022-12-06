@@ -2066,6 +2066,15 @@ typedef struct PGAttachStmt
 } PGAttachStmt;
 
 
+/* ----------------------
+ *		Use Statement
+ * ----------------------
+ */
+
+typedef struct PGUseStmt {
+	PGNodeTag type;
+	char *name;    /* variable to be set */
+} PGUseStmt;
 
 
 

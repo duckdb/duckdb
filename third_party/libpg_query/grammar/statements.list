@@ -28,6 +28,7 @@ RenameStmt
 SelectStmt
 TransactionStmt
 UpdateStmt
+UseStmt
 VacuumStmt
 VariableResetStmt
 VariableSetStmt

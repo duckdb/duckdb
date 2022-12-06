@@ -11,6 +11,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -56,6 +58,19 @@ void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Force NoCrossProduct
+//===--------------------------------------------------------------------===//
+void DatabaseSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &manager = DatabaseManager::Get(context);
+	manager.SetDefaultDatabase(input.ToString());
+}
+
+Value DatabaseSetting::GetSetting(ClientContext &context) {
+	auto &manager = DatabaseManager::Get(context);
+	return manager.GetDefaultDatabase().GetName();
 }
 
 //===--------------------------------------------------------------------===//
