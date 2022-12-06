@@ -347,7 +347,7 @@ static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc
 			if (!tag_data.validity.RowIsValid(tag_idx)) {
 				continue;
 			}
-			auto tag = ((int8_t *)tag_data.data)[tag_idx];
+			auto tag = ((uint8_t *)tag_data.data)[tag_idx];
 			if (tag != member_idx) {
 				continue;
 			}
