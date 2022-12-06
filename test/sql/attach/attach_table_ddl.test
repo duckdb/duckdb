@@ -11,82 +11,98 @@ ATTACH DATABASE ':memory:' AS new_database;
 statement ok
 CREATE SCHEMA new_database.s1;
 
-#statement ok
-#SET SCHEMA = 's1'
-
-foreach table new_database.s1.integers new_database.integers
+foreach prefix new_database.s1 new_database
 
 statement ok
-CREATE TABLE ${table}(i INTEGER)
+CREATE TABLE ${prefix}.integers(i INTEGER)
 
 # insert
 statement ok
-INSERT INTO ${table} VALUES (42);
+INSERT INTO ${prefix}.integers VALUES (42);
 
 query I
-SELECT * FROM ${table}
+SELECT * FROM ${prefix}.integers
 ----
 42
 
 # update
 query I
-UPDATE ${table} SET i=i+1
+UPDATE ${prefix}.integers SET i=i+1
 ----
 1
 
 query I
-SELECT * FROM ${table}
+SELECT * FROM ${prefix}.integers
 ----
 43
 
 # delete
 query I
-DELETE FROM ${table} WHERE i=43
+DELETE FROM ${prefix}.integers WHERE i=43
 ----
 1
 
 query I
-SELECT COUNT(*) FROM ${table}
+SELECT COUNT(*) FROM ${prefix}.integers
 ----
 0
 
 # alter table statements
+
+# add column
 statement ok
-ALTER TABLE ${table} ADD COLUMN j VARCHAR
+ALTER TABLE ${prefix}.integers ADD COLUMN j VARCHAR
 
 statement ok
-INSERT INTO ${table} VALUES (1, 'T100');
+INSERT INTO ${prefix}.integers VALUES (1, 'T100');
 
 query II
-SELECT * FROM ${table}
+SELECT * FROM ${prefix}.integers
 ----
 1	T100
 
+# alter type
 statement ok
-ALTER TABLE ${table} ALTER j TYPE INT USING REPLACE(j, 'T', '')::INT
+ALTER TABLE ${prefix}.integers ALTER j TYPE INT USING REPLACE(j, 'T', '')::INT
 
 query II
-SELECT * FROM ${table}
+SELECT * FROM ${prefix}.integers
 ----
 1	100
 
+# drop column
 statement ok
-ALTER TABLE ${table} DROP COLUMN j
+ALTER TABLE ${prefix}.integers DROP COLUMN j
 
 query I
-SELECT * FROM ${table}
+SELECT * FROM ${prefix}.integers
 ----
 1
 
+# rename column
 statement ok
-ALTER TABLE ${table} RENAME COLUMN i TO k
+ALTER TABLE ${prefix}.integers RENAME COLUMN i TO k
 
 query I
-SELECT k FROM ${table}
+SELECT k FROM ${prefix}.integers
 ----
 1
 
+# drop table
 statement ok
-DROP TABLE ${table}
+DROP TABLE ${prefix}.integers
+
+# rename table
+statement ok
+CREATE TABLE ${prefix}.t1(i INTEGER)
+
+statement ok
+ALTER TABLE ${prefix}.t1 RENAME TO t2
+
+statement ok
+SELECT * FROM ${prefix}.t2
+
+statement ok
+DROP TABLE ${prefix}.t2
 
 endloop
