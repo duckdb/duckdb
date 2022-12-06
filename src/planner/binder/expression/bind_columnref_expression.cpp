@@ -206,22 +206,38 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		}
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
+		// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
+		// struct fields
+		// -> part1 is a catalog, part2 is a table, part3 is a column name, part4 and beyond are struct fields
 		// -> part1 is a schema, part2 is a table, part3 is a column name, part4 and beyond are struct fields
 		// -> part1 is a table, part2 is a column name, part3 and beyond are struct fields
 		// -> part1 is a column, part2 and beyond are struct fields
 
 		// we always prefer the most top-level view
 		// i.e. in case of multiple resolution options, we resolve in order:
-		// -> 1. resolve "part1" as a schema
-		// -> 2. resolve "part1" as a table
-		// -> 3. resolve "part1" as a column
+		// -> 1. resolve "part1" as a catalog
+		// -> 2. resolve "part1" as a schema
+		// -> 3. resolve "part1" as a table
+		// -> 4. resolve "part1" as a column
 
 		unique_ptr<ParsedExpression> result_expr;
 		idx_t struct_extract_start;
-		// first check if part1 is a schema
+		// first check if part1 is a catalog
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2],
-		                              error_message)) {
-			// it is! the column reference is "schema.table.column"
+		                              colref.column_names[3], error_message)) {
+			// part1 is a catalog - the column reference is "catalog.schema.table.column"
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1],
+			                                                        colref.column_names[2], colref.column_names[3]);
+			struct_extract_start = 4;
+		} else if (binder.HasMatchingBinding(colref.column_names[0], INVALID_SCHEMA, colref.column_names[1],
+		                                     colref.column_names[2], error_message)) {
+			// part1 is a catalog - the column reference is "catalog.table.column"
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], INVALID_SCHEMA,
+			                                                        colref.column_names[1], colref.column_names[2]);
+			struct_extract_start = 3;
+		} else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2],
+		                                     error_message)) {
+			// part1 is a schema - the column reference is "schema.table.column"
 			// any additional fields are turned into struct_extract calls
 			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1],
 			                                                        colref.column_names[2]);

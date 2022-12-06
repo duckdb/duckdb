@@ -28,15 +28,17 @@ enum class OnCreateConflict : uint8_t {
 };
 
 struct CreateInfo : public ParseInfo {
-	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
-	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
-	      internal(false) {
+	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog = INVALID_CATALOG)
+	    : type(type), catalog(INVALID_CATALOG), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT),
+	      temporary(false), internal(false) {
 	}
 	~CreateInfo() override {
 	}
 
 	//! The to-be-created catalog type
 	CatalogType type;
+	//! The catalog name of the entry
+	string catalog;
 	//! The schema name of the entry
 	string schema;
 	//! What to do on create conflict

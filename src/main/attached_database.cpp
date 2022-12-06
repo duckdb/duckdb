@@ -10,13 +10,12 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db) : db(db), name("system"
 	transaction_manager = make_unique<TransactionManager>(*this);
 }
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, string name_p, string file_path, AccessMode access_mode) :
-    db(db), name(move(name_p)) {
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, string name_p, string file_path, AccessMode access_mode)
+    : db(db), name(move(name_p)) {
 	storage = make_unique<SingleFileStorageManager>(*this, file_path, access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 }
-
 
 AttachedDatabase::~AttachedDatabase() {
 	if (Exception::UncaughtException()) {

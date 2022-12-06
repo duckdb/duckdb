@@ -158,6 +158,8 @@ public:
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
 	                        string &error_message);
+	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
+	                        const string &column_name, string &error_message);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -311,6 +313,9 @@ private:
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	bool FindStarExpression(ParsedExpression &expr, StarExpression **star);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
+
+	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
+	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

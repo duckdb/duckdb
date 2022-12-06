@@ -31,14 +31,38 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
+void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+	if (catalog.empty() && !schema.empty()) {
+		// schema is specified - but catalog is not
+		// try searching for the catalog instead
+		auto &db_manager = DatabaseManager::Get(context);
+		auto database = db_manager.GetDatabase(schema);
+		if (database) {
+			// we have a database with this name
+			// check if there is a schema
+			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, true);
+			if (schema_obj) {
+				auto &attached = schema_obj->catalog->GetAttached();
+				throw BinderException(
+				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+				    schema, attached.GetName(), schema);
+			}
+			catalog = schema;
+			schema = string();
+		}
+	}
+}
+
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
+	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (info.schema.empty()) {
 		info.schema = info.temporary ? TEMP_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
 	}
-
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.schema == TEMP_SCHEMA) {
@@ -51,7 +75,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 		}
 	}
 	// fetch the schema in which we want to create the object
-	auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, info.schema);
+	auto schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
 	D_ASSERT(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
 	return schema_obj;

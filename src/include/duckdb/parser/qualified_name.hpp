@@ -16,12 +16,14 @@
 namespace duckdb {
 
 struct QualifiedName {
+	string catalog;
 	string schema;
 	string name;
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input) {
+		string catalog;
 		string schema;
 		string name;
 		idx_t idx = 0;
@@ -57,15 +59,21 @@ struct QualifiedName {
 		throw ParserException("Unterminated quote in qualified name!");
 	end:
 		if (entries.empty()) {
+			catalog = INVALID_CATALOG;
 			schema = INVALID_SCHEMA;
 			name = entry;
 		} else if (entries.size() == 1) {
+			catalog = INVALID_CATALOG;
 			schema = entries[0];
 			name = entry;
+		} else if (entries.size() == 2) {
+			catalog = entries[0];
+			schema = entries[1];
+			name = entry;
 		} else {
-			throw ParserException("Expected schema.entry or entry: too many entries found");
+			throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found");
 		}
-		return QualifiedName {schema, name};
+		return QualifiedName {catalog, schema, name};
 	}
 };
 

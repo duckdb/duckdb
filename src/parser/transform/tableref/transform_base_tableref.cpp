@@ -10,6 +10,9 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 	if (root->relname) {
 		result->table_name = root->relname;
 	}
+	if (root->catalogname) {
+		result->catalog_name = root->catalogname;
+	}
 	if (root->schemaname) {
 		result->schema_name = root->schemaname;
 	}
@@ -22,15 +25,20 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 
 QualifiedName Transformer::TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root) {
 	QualifiedName qname;
-	if (root->relname) {
-		qname.name = root->relname;
+	if (root->catalogname) {
+		qname.catalog = root->catalogname;
 	} else {
-		qname.name = string();
+		qname.catalog = INVALID_CATALOG;
 	}
 	if (root->schemaname) {
 		qname.schema = root->schemaname;
 	} else {
 		qname.schema = INVALID_SCHEMA;
+	}
+	if (root->relname) {
+		qname.name = root->relname;
+	} else {
+		qname.name = string();
 	}
 	return qname;
 }

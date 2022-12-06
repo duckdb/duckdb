@@ -63,6 +63,8 @@ public:
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &table_name, const string &column_name);
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &schema_name, const string &table_name,
 	                                                   const string &column_name);
+	unique_ptr<ParsedExpression> CreateColumnReference(const string &catalog_name, const string &schema_name,
+	                                                   const string &table_name, const string &column_name);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a

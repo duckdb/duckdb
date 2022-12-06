@@ -3,7 +3,7 @@
 namespace duckdb {
 
 CreateCopyFunctionInfo::CreateCopyFunctionInfo(CopyFunction function)
-	: CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(function) {
+    : CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(function) {
 	this->name = function.name;
 	internal = true;
 }
@@ -18,4 +18,4 @@ unique_ptr<CreateInfo> CreateCopyFunctionInfo::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb

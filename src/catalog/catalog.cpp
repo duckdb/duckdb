@@ -81,6 +81,10 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
+const string &Catalog::GetName() {
+	return GetAttached().GetName();
+}
+
 Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 	return Catalog::GetSystemCatalog(*context.db);
 }

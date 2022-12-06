@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db)
+    : catalog_version(0), current_query_number(1), default_database(nullptr) {
 	system = make_unique<AttachedDatabase>(db);
 }
 
@@ -31,6 +32,9 @@ AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {
 void DatabaseManager::AddDatabase(unique_ptr<AttachedDatabase> db_instance) {
 	lock_guard<mutex> l(manager_lock);
 	auto &name = db_instance->GetName();
+	if (!default_database) {
+		default_database = db_instance.get();
+	}
 	auto entry = databases.find(name);
 	if (entry != databases.end()) {
 		throw CatalogException("Catalog with name \"%s\" already exists", name);
@@ -39,11 +43,10 @@ void DatabaseManager::AddDatabase(unique_ptr<AttachedDatabase> db_instance) {
 }
 
 AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
-	lock_guard<mutex> l(manager_lock);
-	for (auto &db : databases) {
-		return *db.second;
+	if (!default_database) {
+		throw InternalException("GetDefaultDatabase called but there are no databases");
 	}
-	throw InternalException("GetDefaultDatabase called but there are no databases");
+	return *default_database;
 }
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases() {

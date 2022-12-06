@@ -113,6 +113,9 @@ public:
 	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
 	DUCKDB_API idx_t ModifyCatalog();
 
+	//! Returns the catalog name - based on how the catalog was attached
+	DUCKDB_API const string &GetName();
+
 	//! Creates a schema in the catalog.
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.

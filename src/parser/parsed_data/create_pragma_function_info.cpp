@@ -3,13 +3,13 @@
 namespace duckdb {
 
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
-	: CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name) {
+    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(function.name) {
 	name = function.name;
 	functions.AddFunction(move(function));
 	internal = true;
 }
 CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_)
-	: CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(functions_) {
+    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(functions_) {
 	this->name = name;
 	internal = true;
 }
@@ -20,4 +20,4 @@ unique_ptr<CreateInfo> CreatePragmaFunctionInfo::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb

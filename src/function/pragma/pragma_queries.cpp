@@ -115,7 +115,8 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
-	set.AddFunction(PragmaFunction::PragmaCall("attach_database", PragmaAttachDatabase, {LogicalType::VARCHAR, LogicalType::VARCHAR}));
+	set.AddFunction(PragmaFunction::PragmaCall("attach_database", PragmaAttachDatabase,
+	                                           {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 }
 
 } // namespace duckdb

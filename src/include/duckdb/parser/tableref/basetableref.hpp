@@ -15,9 +15,12 @@ namespace duckdb {
 //! Represents a TableReference to a base table in the schema
 class BaseTableRef : public TableRef {
 public:
-	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE), schema_name(INVALID_SCHEMA) {
+	BaseTableRef()
+	    : TableRef(TableReferenceType::BASE_TABLE), catalog_name(INVALID_CATALOG), schema_name(INVALID_SCHEMA) {
 	}
 
+	//! The catalog name
+	string catalog_name;
 	//! Schema name
 	string schema_name;
 	//! Table name

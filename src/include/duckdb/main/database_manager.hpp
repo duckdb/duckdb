@@ -60,6 +60,8 @@ private:
 	atomic<idx_t> catalog_version;
 	//! The current query number
 	atomic<transaction_t> current_query_number;
+	//! The current default database
+	AttachedDatabase *default_database;
 };
 
 } // namespace duckdb

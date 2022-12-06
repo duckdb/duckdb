@@ -62,10 +62,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, INVALID_CATALOG, ref.schema_name,
+	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
+	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
 	                                       ref.table_name, true, error_context);
 	if (!table_or_view) {
-		auto table_name = ref.schema_name.empty() ? ref.table_name : (ref.schema_name + "." + ref.table_name);
+		string table_name = ref.catalog_name;
+		if (!ref.schema_name.empty()) {
+			table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
+		}
+		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
 		// table could not be found: try to bind a replacement scan
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &scan : config.replacement_scans) {
