@@ -15,6 +15,7 @@
 namespace duckdb {
 
 struct DBConfig;
+struct ExtensionOption;
 
 //! PhysicalReset represents a RESET operation (e.g. RESET a = 42)
 class PhysicalReset : public PhysicalOperator {

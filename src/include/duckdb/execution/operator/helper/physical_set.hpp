@@ -15,6 +15,7 @@
 namespace duckdb {
 
 struct DBConfig;
+struct ExtensionOption;
 
 //! PhysicalSet represents a SET operation (e.g. SET a = 42)
 class PhysicalSet : public PhysicalOperator {
