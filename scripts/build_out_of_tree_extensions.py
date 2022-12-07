@@ -63,7 +63,7 @@ clonedirs = []
 for task in tasks:
     print(task)
     if build_extension(task):
-        clonedir = task['name'] + "_clone"
+        clonedir = "extension/" + task['name'] + "_clone"
         if not os.path.isdir(clonedir):
             exec('git clone %s %s' % (task['url'], clonedir))
         os.chdir(clonedir)

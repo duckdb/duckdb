@@ -23,12 +23,12 @@ SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='mini
 query II
 EXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 0.*PUT\: 0.*\#POST\: 3.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 0.*PUT\: 1.*\#POST\: 2.*
 
 query II
 EXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';
 ----
-analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 0.*PUT\: 0.*\#POST\: 3.*
+analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1.*GET\: 0.*PUT\: 1.*\#POST\: 2.*
 
 # Now we query the file metadata without the global metadata cache: There should be 1 HEAD request for the file size,
 # then a GET for the pointer to the parquet metadata, then a GET for the metadata.
