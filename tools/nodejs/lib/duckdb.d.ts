@@ -57,7 +57,7 @@ export class Database {
   connect(): Connection;
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): this;
-  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<QueryResult>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): this;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
@@ -72,7 +72,7 @@ export class Database {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
-  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): Promise<QueryResult>;
 
   serialize(done?: Callback<void>): void;
   parallelize(done?: Callback<void>): void;
@@ -82,6 +82,10 @@ export class Database {
   get(columnName: string, num: number, cb: Callback<RowData>): void;
 
   interrupt(): void;
+
+  register_buffer(name: string, array: ArrayLike<any>, force: boolean, callback?: Callback<void>): void;
+
+  unregister_buffer(name: string, callback?: Callback<void>): void;
 }
 
 export class Statement {
