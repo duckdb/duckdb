@@ -7,7 +7,7 @@ group string
 
 require tpch
 
-cache tpch_sf1
+cache tpch_sf1.duckdb
 
 load
 CALL dbgen(sf=1);
