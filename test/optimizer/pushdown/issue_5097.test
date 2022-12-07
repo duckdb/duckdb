@@ -146,7 +146,7 @@ CREATE TABLE t8(c1 INTEGER NOT NULL, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 INTE
 statement ok
 CREATE TABLE t9(c1 INTEGER NOT NULL, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 INTEGER, c6 INTEGER, c7 INTEGER, c8 INTEGER, c9 INTEGER, info VARCHAR);
 
-# Multiple column in the root OR node, don't push down
+# If operators are unnecessarily re-optimized, this query will take forever and most likely timeout the test-runner
 statement ok
 select t1.c2 from t1
 inner join t2 on (t1.c2=t2.c1)
