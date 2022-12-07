@@ -39,12 +39,17 @@ explanation of this crazy process:
 * https://docs.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function?view=msvc-160
 */
 FARPROC WINAPI duckdb_dllimport_delay_hook(unsigned dliNotify, PDelayLoadInfo pdli) {
+	HMODULE module;
 	switch (dliNotify) {
 	case dliNotePreLoadLibrary:
 		if (strcmp(pdli->szDll, "duckdb.dll") != 0) {
 			return NULL;
 		}
-		return (FARPROC)GetModuleHandle(NULL);
+		module = GetModuleHandle(pdli->szDll);
+		if (!module) {
+			module = GetModuleHandle(NULL);
+		}
+		return (FARPROC)module;
 	default:
 		return NULL;
 	}
