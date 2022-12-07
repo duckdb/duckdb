@@ -55,36 +55,6 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 	}
 }
 
-void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
-	InitializeBenchmarkDirectory();
-
-	auto &fs = db.GetFileSystem();
-	Connection con(db);
-	auto result = con.Query(
-	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT PARQUET)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
-	if (result->HasError()) {
-		result->ThrowError("Failed to save database: ");
-	}
-}
-
-bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
-	auto &fs = db.GetFileSystem();
-	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
-		return false;
-	}
-	string base_dir = fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name);
-	// check if the [name]/schema.sql file exists
-	if (!fs.FileExists(fs.JoinPath(base_dir, "schema.sql"))) {
-		return false;
-	}
-	Connection con(db);
-	auto result = con.Query(StringUtil::Format("IMPORT DATABASE '%s'", base_dir));
-	if (result->HasError()) {
-		result->ThrowError("Failed to load database: ");
-	}
-	return true;
-}
-
 atomic<bool> is_active;
 atomic<bool> timeout;
 
