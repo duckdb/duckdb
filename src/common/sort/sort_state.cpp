@@ -12,7 +12,7 @@ namespace duckdb {
 
 idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 	auto physical_type = type.InternalType();
-
+	if (TypeIsConstantSize(physical_type)) {
 		col_size += GetTypeIdSize(physical_type);
 		return 0;
 	} else {
