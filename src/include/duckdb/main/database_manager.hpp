@@ -15,6 +15,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
+class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
 
@@ -33,16 +34,16 @@ public:
 
 	void InitializeSystemCatalog();
 	//! Get an attached database with the given name
-	AttachedDatabase *GetDatabase(const string &name);
+	AttachedDatabase *GetDatabase(ClientContext &context, const string &name);
 	//! Add a new attached database to the database manager
-	void AddDatabase(unique_ptr<AttachedDatabase> db);
+	void AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	// FIXME: default database should be client-specific and not live here
 	AttachedDatabase &GetDefaultDatabase();
-	void SetDefaultDatabase(const string &name);
+	void SetDefaultDatabase(ClientContext &context, const string &name);
 
-	vector<AttachedDatabase *> GetDatabases();
+	vector<AttachedDatabase *> GetDatabases(ClientContext &context);
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;
@@ -52,12 +53,10 @@ public:
 	}
 
 private:
-	//! The lock controlling access to the databases
-	mutex manager_lock;
-	//! The set of attached databases
-	case_insensitive_map_t<unique_ptr<AttachedDatabase>> databases;
 	//! The system database is a special database that holds system entries (e.g. functions)
 	unique_ptr<AttachedDatabase> system;
+	//! The set of attached databases
+	unique_ptr<CatalogSet> databases;
 	//! The global catalog version, incremented whenever anything changes in the catalog
 	atomic<idx_t> catalog_version;
 	//! The current query number

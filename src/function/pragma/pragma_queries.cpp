@@ -102,11 +102,12 @@ void PragmaAttachDatabase(ClientContext &context, const FunctionParameters &para
 	if (name.empty()) {
 		name = AttachedDatabase::ExtractDatabaseName(name);
 	}
-	auto new_db = make_unique<AttachedDatabase>(db, name, path, AccessMode::READ_WRITE);
+	auto new_db =
+	    make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(context), name, path, AccessMode::READ_WRITE);
 	new_db->Initialize();
 
 	auto &db_manager = DatabaseManager::Get(context);
-	db_manager.AddDatabase(move(new_db));
+	db_manager.AddDatabase(context, move(new_db));
 }
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {

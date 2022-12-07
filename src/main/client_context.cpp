@@ -225,10 +225,6 @@ FileOpener *FileOpener::Get(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
 }
 
-SchemaCatalogEntry *SchemaCatalogEntry::GetTemporaryObjects(ClientContext &context) {
-	return context.client_data->temporary_objects.get();
-}
-
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;

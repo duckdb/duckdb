@@ -33,6 +33,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -90,7 +91,18 @@ Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 }
 
 Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name) {
-	return Catalog::GetCatalog(*context.db, catalog_name);
+	auto &db_manager = DatabaseManager::Get(context);
+	if (catalog_name == TEMP_CATALOG) {
+		return ClientData::Get(context).temporary_objects->GetCatalog();
+	}
+	if (catalog_name == INVALID_CATALOG) {
+		return db_manager.GetDefaultDatabase().GetCatalog();
+	}
+	auto entry = db_manager.GetDatabase(context, catalog_name);
+	if (!entry) {
+		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
+	}
+	return entry->GetCatalog();
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
@@ -185,10 +197,6 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntr
 
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
 	D_ASSERT(!info->schema.empty());
-	if (info->schema == TEMP_SCHEMA) {
-		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
-	}
-
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
@@ -237,9 +245,6 @@ CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *i
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
-	if (schema_name == TEMP_SCHEMA) {
-		return SchemaCatalogEntry::GetTemporaryObjects(context);
-	}
 	auto entry = schemas->GetEntry(context, schema_name);
 	if (!entry && !if_exists) {
 		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
@@ -464,6 +469,10 @@ idx_t Catalog::ModifyCatalog() {
 
 bool Catalog::IsSystemCatalog() const {
 	return db.IsSystem();
+}
+
+bool Catalog::IsTemporaryCatalog() const {
+	return db.IsTemporary();
 }
 
 } // namespace duckdb

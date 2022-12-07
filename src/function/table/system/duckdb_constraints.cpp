@@ -103,8 +103,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	sort(schemas.begin(), schemas.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
 
 	// check the temp schema as well
-	auto temp_schema = SchemaCatalogEntry::GetTemporaryObjects(context);
-	schemas.push_back(temp_schema);
+	//	auto temp_schema = SchemaCatalogEntry::GetTemporaryObjects(context);
+	//	schemas.push_back(temp_schema);
 
 	for (auto &schema : schemas) {
 		vector<CatalogEntry *> entries;

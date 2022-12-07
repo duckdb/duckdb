@@ -5,16 +5,27 @@
 
 namespace duckdb {
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db) : db(db), name("system") {
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, BuiltInDatabaseType type)
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, nullptr,
+                   type == BuiltInDatabaseType::SYSTEM_DATABASE ? "system" : "temp"),
+      db(db), type(type) {
+	D_ASSERT(type == BuiltInDatabaseType::TEMP_DATABASE || type == BuiltInDatabaseType::SYSTEM_DATABASE);
+	if (type == BuiltInDatabaseType::TEMP_DATABASE) {
+		storage = make_unique<SingleFileStorageManager>(*this, ":memory:", false);
+	}
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
+	internal = true;
 }
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, string name_p, string file_path, AccessMode access_mode)
-    : db(db), name(move(name_p)) {
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path,
+                                   AccessMode access_mode)
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, move(name_p)), db(db),
+      type(BuiltInDatabaseType::NOT_BUILT_IN) {
 	storage = make_unique<SingleFileStorageManager>(*this, file_path, access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
+	internal = true;
 }
 
 AttachedDatabase::~AttachedDatabase() {
@@ -40,7 +51,12 @@ AttachedDatabase::~AttachedDatabase() {
 }
 
 bool AttachedDatabase::IsSystem() const {
-	return !storage;
+	D_ASSERT(!storage || type != BuiltInDatabaseType::SYSTEM_DATABASE);
+	return type == BuiltInDatabaseType::SYSTEM_DATABASE;
+}
+
+bool AttachedDatabase::IsTemporary() const {
+	return type == BuiltInDatabaseType::TEMP_DATABASE;
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {

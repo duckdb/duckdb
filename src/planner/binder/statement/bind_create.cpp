@@ -41,7 +41,7 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
 		auto &db_manager = DatabaseManager::Get(context);
-		auto database = db_manager.GetDatabase(schema);
+		auto database = db_manager.GetDatabase(context, schema);
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
@@ -60,18 +60,21 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
-	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
+	if (info.catalog == INVALID_CATALOG && info.temporary) {
+		info.catalog = TEMP_CATALOG;
+	}
+	if (info.schema == INVALID_SCHEMA) {
+		info.schema = info.temporary ? DEFAULT_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
-		if (info.schema == TEMP_SCHEMA) {
-			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
+		if (info.catalog == TEMP_CATALOG) {
+			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
 		properties.read_only = false;
 	} else {
-		if (info.schema != TEMP_SCHEMA) {
-			throw ParserException("TEMPORARY table names can *only* use the \"%s\" schema", TEMP_SCHEMA);
+		if (info.catalog != TEMP_CATALOG) {
+			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
 	// fetch the schema in which we want to create the object

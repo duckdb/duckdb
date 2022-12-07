@@ -20,8 +20,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	info->schema = qname.schema;
 	info->view_name = qname.name;
 	info->temporary = !stmt->view->relpersistence;
-	if (info->temporary) {
-		info->schema = TEMP_SCHEMA;
+	if (info->temporary && info->catalog == INVALID_CATALOG) {
+		info->catalog = TEMP_CATALOG;
 	}
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 

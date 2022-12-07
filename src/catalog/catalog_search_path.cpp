@@ -41,14 +41,13 @@ const string &CatalogSearchPath::GetOrDefault(const string &name) {
 const string &CatalogSearchPath::GetDefault() {
 	const auto &paths = Get();
 	D_ASSERT(paths.size() >= 2);
-	D_ASSERT(paths[0] == TEMP_SCHEMA);
 	return paths[1];
 }
 
 void CatalogSearchPath::SetPaths(vector<string> new_paths) {
 	paths.clear();
 	paths.reserve(new_paths.size() + 3);
-	paths.emplace_back(TEMP_SCHEMA);
+	paths.emplace_back("temp");
 	for (auto &path : new_paths) {
 		paths.push_back(move(path));
 	}

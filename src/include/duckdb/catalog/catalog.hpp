@@ -107,6 +107,7 @@ public:
 	void Initialize(bool load_builtin);
 
 	bool IsSystemCatalog() const;
+	bool IsTemporaryCatalog() const;
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion();

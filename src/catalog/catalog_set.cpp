@@ -65,15 +65,21 @@ void CatalogSet::PutEntry(EntryIndex index, unique_ptr<CatalogEntry> catalog_ent
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
                              unordered_set<CatalogEntry *> &dependencies) {
-	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA && name != TEMP_SCHEMA) {
+	if (value->internal && !catalog.IsSystemCatalog() && name != DEFAULT_SCHEMA) {
 		throw InternalException("Attempting to create internal entry \"%s\" in non-system catalog - internal entries "
 		                        "can only be created in the system catalog",
 		                        name);
 	}
-	if (!value->internal && catalog.IsSystemCatalog()) {
+	if (!value->internal && !value->temporary && catalog.IsSystemCatalog()) {
 		throw InternalException("Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
 		                        "can only contain internal entries",
 		                        name);
+	}
+	if (value->temporary && !catalog.IsTemporaryCatalog()) {
+		throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
+	}
+	if (!value->temporary && catalog.IsTemporaryCatalog()) {
+		throw InternalException("Attempting to create non-temporary entry \"%s\" in temporary catalog", name);
 	}
 	auto &transaction = Transaction::Get(context, catalog);
 	// lock the catalog for writing

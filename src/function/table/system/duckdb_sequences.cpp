@@ -69,8 +69,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 	};
 
 	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	//	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
+	//	    context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

@@ -7,6 +7,7 @@ namespace duckdb {
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
     : catalog_version(0), current_query_number(1), default_database(nullptr) {
 	system = make_unique<AttachedDatabase>(db);
+	databases = make_unique<CatalogSet>(system->GetCatalog());
 }
 
 DatabaseManager::~DatabaseManager() {
@@ -20,51 +21,39 @@ void DatabaseManager::InitializeSystemCatalog() {
 	system->Initialize();
 }
 
-AttachedDatabase *DatabaseManager::GetDatabase(const string &name) {
-	lock_guard<mutex> l(manager_lock);
-	auto entry = databases.find(name);
-	if (entry != databases.end()) {
-		return entry->second.get();
-	}
-	return nullptr;
+AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
+	return (AttachedDatabase *)databases->GetEntry(context, name);
 }
 
-void DatabaseManager::AddDatabase(unique_ptr<AttachedDatabase> db_instance) {
-	lock_guard<mutex> l(manager_lock);
-	auto &name = db_instance->GetName();
+void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
+	auto name = db_instance->GetName();
+	unordered_set<CatalogEntry *> dependencies;
 	if (!default_database) {
 		default_database = db_instance.get();
 	}
-	auto entry = databases.find(name);
-	if (entry != databases.end()) {
-		throw CatalogException("Catalog with name \"%s\" already exists", name);
+	if (!databases->CreateEntry(context, name, move(db_instance), dependencies)) {
+		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
-	databases[name] = move(db_instance);
 }
 
 AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
-	lock_guard<mutex> l(manager_lock);
 	if (!default_database) {
 		throw InternalException("GetDefaultDatabase called but there are no databases");
 	}
 	return *default_database;
 }
 
-void DatabaseManager::SetDefaultDatabase(const string &name) {
-	lock_guard<mutex> l(manager_lock);
-	auto entry = databases.find(name);
-	if (entry == databases.end()) {
+void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &name) {
+	auto entry = (AttachedDatabase *)databases->GetEntry(context, name);
+	if (!entry) {
 		throw CatalogException("Database with name \"%s\" does not exist", name);
 	}
-	default_database = entry->second.get();
+	default_database = entry;
 }
 
-vector<AttachedDatabase *> DatabaseManager::GetDatabases() {
-	lock_guard<mutex> l(manager_lock);
+vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<AttachedDatabase *> result;
-	for (auto &entry : databases) {
-		result.push_back(entry.second.get());
-	}
+	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
 	return result;
 }
 

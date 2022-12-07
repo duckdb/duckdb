@@ -22,6 +22,15 @@
 
 namespace duckdb {
 
+DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
+                             string table)
+    : db(db), table_io_manager(move(table_io_manager_p)), cardinality(0), schema(move(schema)), table(move(table)) {
+}
+
+bool DataTableInfo::IsTemporary() const {
+	return db.IsTemporary();
+}
+
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)

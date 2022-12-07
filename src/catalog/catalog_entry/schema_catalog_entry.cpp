@@ -83,12 +83,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-
-	if (name != TEMP_SCHEMA) {
-		dependencies.insert(this);
-	} else {
-		entry->temporary = true;
-	}
+	dependencies.insert(this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(context, entry_name);

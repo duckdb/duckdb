@@ -80,9 +80,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	}
 
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	//	// check the temp schema as well
+	//	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
+	//	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 

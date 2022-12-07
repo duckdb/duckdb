@@ -109,13 +109,13 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	}
 
 	// first check if no other thread is checkpointing right now
-	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	auto lock = unique_lock<mutex>(transaction_lock);
 	if (thread_is_checkpointing) {
 		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
 	}
 	CheckpointLock checkpoint_lock(*this);
 	checkpoint_lock.Lock();
-	lock.reset();
+	lock.unlock();
 
 	// lock all the clients AND the connection manager now
 	// this ensures no new queries can be started, and no new connections to the database can be made
@@ -123,8 +123,8 @@ void TransactionManager::Checkpoint(ClientContext &context, bool force) {
 	vector<ClientLockWrapper> client_locks;
 	LockClients(client_locks, context);
 
-	lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	auto current = &Transaction::Get(context, db);
+	lock.lock();
 	if (current->ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}

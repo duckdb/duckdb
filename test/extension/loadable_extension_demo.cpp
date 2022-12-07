@@ -236,6 +236,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	child_types.push_back(make_pair("x", LogicalType::INTEGER));
 	child_types.push_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_unique<CreateTypeInfo>();
+	alias_info->internal = true;
 	alias_info->name = alias_name;
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);

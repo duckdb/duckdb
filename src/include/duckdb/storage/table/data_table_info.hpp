@@ -17,9 +17,7 @@ class DatabaseInstance;
 class TableIOManager;
 
 struct DataTableInfo {
-	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table)
-	    : db(db), table_io_manager(move(table_io_manager_p)), cardinality(0), schema(move(schema)), table(move(table)) {
-	}
+	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table);
 
 	//! The database instance of the table
 	AttachedDatabase &db;
@@ -35,9 +33,7 @@ struct DataTableInfo {
 
 	TableIndexList indexes;
 
-	bool IsTemporary() {
-		return schema == TEMP_SCHEMA;
-	}
+	bool IsTemporary() const;
 };
 
 } // namespace duckdb

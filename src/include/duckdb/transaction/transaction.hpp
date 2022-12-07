@@ -53,7 +53,7 @@ public:
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! A pointer to the temporary objects of the client context
-	shared_ptr<SchemaCatalogEntry> temporary_objects;
+	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
 	atomic<transaction_t> active_query;

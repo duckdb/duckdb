@@ -71,8 +71,6 @@ private:
 	CatalogSet types;
 
 public:
-	static SchemaCatalogEntry *GetTemporaryObjects(ClientContext &context);
-
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry

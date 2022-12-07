@@ -68,23 +68,14 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 }
 
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
+	if (!db_manager) {
+		throw InternalException("Missing DB manager");
+	}
 	return *db_manager;
 }
 
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
 	return db.GetDatabaseManager().GetSystemCatalog();
-}
-
-Catalog &Catalog::GetCatalog(DatabaseInstance &db, const string &catalog_name) {
-	auto &db_manager = db.GetDatabaseManager();
-	if (catalog_name == INVALID_CATALOG) {
-		return db_manager.GetDefaultDatabase().GetCatalog();
-	}
-	auto entry = db_manager.GetDatabase(catalog_name);
-	if (!entry) {
-		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
-	}
-	return entry->GetCatalog();
 }
 
 Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
@@ -170,17 +161,23 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	auto &config = DBConfig::GetConfig(*this);
-	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-	auto attached_database =
-	    make_unique<AttachedDatabase>(*this, database_name, config.options.database_path, config.options.access_mode);
-	auto initial_database = attached_database.get();
 	db_manager = make_unique<DatabaseManager>(*this);
 	buffer_manager =
 	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
-	db_manager->AddDatabase(move(attached_database));
+
+	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	auto attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
+	                                                       config.options.database_path, config.options.access_mode);
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, move(attached_database));
+		con.Commit();
+	}
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();

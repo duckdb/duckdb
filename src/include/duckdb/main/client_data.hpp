@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
@@ -34,7 +35,7 @@ struct ClientData {
 	unique_ptr<QueryProfilerHistory> query_profiler_history;
 
 	//! The set of temporary objects that belong to this client
-	shared_ptr<SchemaCatalogEntry> temporary_objects;
+	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The set of bound prepared statements that belong to this client
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 

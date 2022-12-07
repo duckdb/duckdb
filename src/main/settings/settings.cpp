@@ -65,7 +65,7 @@ Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void DatabaseSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &manager = DatabaseManager::Get(context);
-	manager.SetDefaultDatabase(input.ToString());
+	manager.SetDefaultDatabase(context, input.ToString());
 }
 
 Value DatabaseSetting::GetSetting(ClientContext &context) {

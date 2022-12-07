@@ -44,9 +44,9 @@ using std::make_shared;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA  "main"
-#define TEMP_SCHEMA     "temp"
 #define INVALID_SCHEMA  ""
 #define INVALID_CATALOG ""
+#define TEMP_CATALOG    "temp"
 
 //! a saner size_t for loop indices etc
 typedef uint64_t idx_t;
