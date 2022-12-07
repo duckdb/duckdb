@@ -12,9 +12,13 @@ CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS
 statement ok
 CREATE TEMPORARY TABLE integersx(i INTEGER)
 
-# we can't prefix temp tables with a schema that is not "temp"
-statement error
-CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)
+# we don't support temporary schemas (yet?)
+#statement error
+#CREATE TEMPORARY SCHEMA asdf
+
+# we can prefix temp tables with a schema that is not "temp"
+statement ok
+CREATE TEMPORARY TABLE main.integersy(i INTEGER)
 
 statement ok
 CREATE TEMPORARY TABLE s1 AS SELECT 42
@@ -31,6 +35,8 @@ SELECT * FROM s1
 
 statement error
 CREATE TABLE temp.integersy(i INTEGER)
+----
+Schema with name temp does not exist
 
 statement error
 CREATE SCHEMA temp

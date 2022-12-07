@@ -17,6 +17,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_unique
 	temporary_objects = make_shared<AttachedDatabase>(db, BuiltInDatabaseType::TEMP_DATABASE);
 	random_engine = make_unique<RandomEngine>();
 	file_opener = make_unique<ClientContextFileOpener>(context);
+	temporary_objects->Initialize();
 }
 ClientData::~ClientData() {
 }

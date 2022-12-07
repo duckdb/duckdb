@@ -95,7 +95,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return make_unique_base<BoundTableRef, BoundEmptyTableRef>(table_index);
 		}
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, INVALID_CATALOG, ref.schema_name,
+		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
 		                                  ref.table_name, false, error_context);
 	}
 	switch (table_or_view->type) {

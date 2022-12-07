@@ -11,6 +11,7 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 

@@ -41,8 +41,8 @@ struct CheckpointLock {
 };
 
 TransactionManager::TransactionManager(AttachedDatabase &db) : db(db), thread_is_checkpointing(false) {
-	// start timestamp starts at zero
-	current_start_timestamp = 0;
+	// start timestamp starts at two
+	current_start_timestamp = 2;
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
 	// if transaction_id < start_timestamp for any set of active transactions

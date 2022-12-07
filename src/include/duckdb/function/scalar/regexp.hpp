@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "re2/re2.h"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 

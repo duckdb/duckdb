@@ -10,6 +10,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;

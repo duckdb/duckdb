@@ -15,6 +15,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
