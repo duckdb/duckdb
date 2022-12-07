@@ -7,7 +7,7 @@ unique_ptr<PragmaStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNo
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAttachStmt *>(node);
 	auto result = make_unique<PragmaStatement>();
 	result->info->name = "attach_database";
-	result->info->parameters.emplace_back(stmt->name);
+	result->info->parameters.emplace_back(stmt->name ? stmt->name : string());
 	result->info->parameters.emplace_back(stmt->path);
 	return result;
 }

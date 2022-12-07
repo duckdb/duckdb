@@ -99,6 +99,9 @@ void PragmaAttachDatabase(ClientContext &context, const FunctionParameters &para
 	auto name = parameters.values[0].ToString();
 	auto path = parameters.values[1].ToString();
 	auto &db = DatabaseInstance::GetDatabase(context);
+	if (name.empty()) {
+		name = AttachedDatabase::ExtractDatabaseName(name);
+	}
 	auto new_db = make_unique<AttachedDatabase>(db, name, path, AccessMode::READ_WRITE);
 	new_db->Initialize();
 
