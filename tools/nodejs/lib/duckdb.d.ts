@@ -79,6 +79,7 @@ export class Database {
   wait(done: Callback<void>): void;
 
   get(columnName: string, cb: Callback<RowData>): void;
+  get(columnName: string, num: number, cb: Callback<RowData>): void;
 
   interrupt(): void;
 }
