@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_uncompressible.test
+# name: test/sql/storage/compression/bitpacking/bitpacking_delta.test
 # description: Test some large incompressible data
 # group: [bitpacking]
 
