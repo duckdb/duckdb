@@ -1,8 +1,9 @@
-var sqlite3 = require('..');
-var assert = require('assert');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
+import {RowData} from "..";
 
 describe('each', function() {
-    var db;
+    var db: sqlite3.Database;
     before(function(done) {
         db = new sqlite3.Database('test/support/big.db', done);
     });
@@ -12,7 +13,7 @@ describe('each', function() {
         var retrieved = 0;
         
 
-        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err, row) {
+        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err: null | Error, row: RowData) {
             if (err) throw err;
             retrieved++;
 
@@ -22,18 +23,18 @@ describe('each', function() {
             }
         });
     });
-/*
-    it('Statement#each with complete callback', function(done) {
+
+    it.skip('Statement#each with complete callback', function(done) {
         var total = 10000;
         var retrieved = 0;
 
-        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err, row) {
+        db.each('SELECT id, txt FROM foo WHERE ROWID < ?', total, function(err: null | Error, row: RowData) {
             if (err) throw err;
             retrieved++;
-        }, function(err, num) {
+        }, function(err: null | Error, num: RowData) {
             assert.equal(retrieved, num);
             assert.equal(retrieved, total, "Only retrieved " + retrieved + " out of " + total + " rows.");
             done();
         });
-    });*/
+    });
 });
