@@ -1904,8 +1904,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
 	schema_element.repetition_type = null_type;
-	schema_element.num_children = 0;
-	schema_element.__isset.num_children = true;
+	schema_element.__isset.num_children = false;
 	schema_element.__isset.type = true;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;

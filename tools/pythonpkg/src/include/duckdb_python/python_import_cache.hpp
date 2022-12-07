@@ -74,12 +74,14 @@ public:
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		DataFrame.LoadAttribute("DataFrame", cache, *this);
 		libs.LoadModule("pandas._libs.missing", cache);
+		isnull.LoadAttribute("isnull", cache, *this);
 	}
 
 public:
 	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
 	PandasLibsCacheItem libs;
+	PythonImportCacheItem isnull;
 
 protected:
 	bool IsRequired() const override final {

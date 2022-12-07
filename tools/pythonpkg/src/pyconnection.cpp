@@ -527,6 +527,9 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
 	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_unique<Connection>(*res->database);

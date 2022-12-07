@@ -1,4 +1,5 @@
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
@@ -151,6 +152,9 @@ SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
 }
 
 LocalSortState::LocalSortState() : initialized(false) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("Sorting is not supported on big endian architectures");
+	}
 }
 
 void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {

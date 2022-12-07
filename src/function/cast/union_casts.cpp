@@ -174,18 +174,9 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 		for (idx_t target_idx = 0; target_idx < UnionType::GetMemberCount(target); target_idx++) {
 			auto &target_member_name = UnionType::GetMemberName(target, target_idx);
 
-			// found a matching member, check if the types are castable
+			// found a matching member
 			if (source_member_name == target_member_name) {
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
-
-				if (input.function_set.ImplicitCastCost(source_member_type, target_member_type) < 0) {
-					auto message = StringUtil::Format(
-					    "Type %s can't be cast as %s. The member '%s' can't be implicitly cast from %s to %s",
-					    source.ToString(), target.ToString(), source_member_name, source_member_type.ToString(),
-					    target_member_type.ToString());
-					throw CastException(message);
-				}
-
 				tag_map[source_idx] = target_idx;
 				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
 				found = true;
@@ -259,6 +250,14 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 		}
 	} else {
 		// Otherwise, use the unified vector format to access the source vector.
+
+		// Ensure that all the result members are flat vectors
+		// This is not always the case, e.g. when a member is cast using the default TryNullCast function
+		// the resulting member vector will be a constant null vector.
+		for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
+			UnionVector::GetMember(result, target_member_idx).Flatten(count);
+		}
+
 		// We assume that a union tag vector validity matches the union vector validity.
 		UnifiedVectorFormat source_tag_format;
 		source_tag_vector.ToUnifiedFormat(count, source_tag_format);
@@ -271,6 +270,9 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 				auto target_tag = cast_data.tag_map[source_tag];
 				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] = target_tag;
 			} else {
+
+				// Issue: The members of the result is not always flatvectors
+				// In the case of TryNullCast, the result member is constant.
 				FlatVector::SetNull(result, row_idx, true);
 			}
 		}
