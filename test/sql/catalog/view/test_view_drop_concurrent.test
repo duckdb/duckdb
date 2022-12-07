@@ -1,8 +1,10 @@
 # name: test/sql/catalog/view/test_view_drop_concurrent.test
 # group: [view]
 
+require 64bit
+
 # Create 4000 threads that all run the contents of this loop
-concurrentloop threadid 0 4000
+concurrentloop threadid 0 3000
 
 # Create the view
 statement ok

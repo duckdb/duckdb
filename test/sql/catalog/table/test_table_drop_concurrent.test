@@ -1,8 +1,10 @@
 # name: test/sql/catalog/table/test_table_drop_concurrent.test
 # group: [table]
 
+require 64bit
+
 # Create 4000 threads that all run the contents of this loop
-concurrentloop threadid 0 4000
+concurrentloop threadid 0 3000
 
 # Create a table
 statement ok
