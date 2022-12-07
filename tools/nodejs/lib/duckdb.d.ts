@@ -90,7 +90,8 @@ export class Database {
 
 export class Statement {
   sql: string;
-  constructor();
+
+  constructor(connection: Connection, sql: string);
 
   all(...args: [...any, Callback<TableData>] | any[]): this;
 
