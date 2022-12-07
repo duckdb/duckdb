@@ -119,8 +119,8 @@ private:
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
-	void ReadUnstructured(idx_t &count, const bool return_strings, const idx_t maximum_object_size);
-	void ReadNewlineDelimited(idx_t &count);
+	void ReadUnstructured(idx_t &count, const BufferedJSONReaderOptions &options);
+	void ReadNewlineDelimited(idx_t &count, const BufferedJSONReaderOptions &options);
 };
 
 struct JSONScan {

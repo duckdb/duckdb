@@ -124,7 +124,8 @@ public:
 private:
 	//! Read/Write flag that make sense for us
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto READ_FROM_FILE_FLAG = READ_FLAG | YYJSON_READ_INSITU | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_FROM_FILE_STOP_FLAG = READ_FLAG | YYJSON_READ_INSITU | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_FROM_FILE_NOSTOP_FLAG = READ_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 public:
@@ -174,17 +175,32 @@ public:
 		    yyjson_read_opts(input.GetDataWriteable(), input.GetSize(), READ_FLAG, nullptr, err));
 	}
 	//! Read JSON document from file (returns nullptr if invalid JSON)
-	static inline DocPointer<yyjson_doc> ReadDocumentFromFileUnsafe(char *data, idx_t length) {
-		return DocPointer<yyjson_doc>(yyjson_read_opts(data, length, READ_FROM_FILE_FLAG, nullptr, nullptr));
+	static inline DocPointer<yyjson_doc> ReadDocumentFromFileStop(char *data, idx_t length,
+	                                                              yyjson_read_err *err = nullptr) {
+		return DocPointer<yyjson_doc>(yyjson_read_opts(data, length, READ_FROM_FILE_STOP_FLAG, nullptr, err));
+	}
+	//! Read JSON document from file (returns nullptr if invalid JSON)
+	static inline DocPointer<yyjson_doc> ReadDocumentFromFileNoStop(char *data, idx_t length,
+	                                                                yyjson_read_err *err = nullptr) {
+		return DocPointer<yyjson_doc>(yyjson_read_opts(data, length, READ_FROM_FILE_NOSTOP_FLAG, nullptr, err));
 	}
 	//! Read JSON document (throws error if malformed JSON)
 	static inline DocPointer<yyjson_doc> ReadDocument(const string_t &input) {
-		yyjson_read_err err;
-		auto result = ReadDocumentUnsafe(input, &err);
-		if (result.IsNull()) {
-			throw InvalidInputException("JSON '%s' is malformed at byte %lld: %s", input.GetString(), err.pos, err.msg);
+		yyjson_read_err error;
+		auto result = ReadDocumentUnsafe(input, &error);
+		if (error.code != YYJSON_READ_SUCCESS) {
+			ThrowParseError(input.GetDataUnsafe(), input.GetSize(), error);
 		}
 		return result;
+	}
+	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
+		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
+		// Truncate, so we don't print megabytes worth of JSON
+		string input = length > 50 ? string(data, 47) + "..." : string(data, length);
+		// Have to replace \r, otherwise output is unreadable
+		input = StringUtil::Replace(input, "\r", "\\r");
+		throw InvalidInputException("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg,
+		                            extra, input);
 	}
 	//! Some wrappers around writes so we don't have to free the malloc'ed char[]
 	static inline unique_ptr<char, void (*)(void *)> WriteVal(yyjson_val *val, idx_t &len) {

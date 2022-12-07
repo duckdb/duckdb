@@ -64,9 +64,8 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		yyjson_read_err err;
 		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, &err);
-		if (doc.IsNull()) {
-			throw InvalidInputException("JSON '%s' is malformed at byte %lld: %s", structure_string.GetString(),
-			                            err.pos, err.msg);
+		if (err.code != YYJSON_READ_SUCCESS) {
+			JSONCommon::ThrowParseError(structure_string.GetDataUnsafe(), structure_string.GetSize(), err);
 		}
 		bound_function.return_type = StructureToType(doc->root, context);
 	}

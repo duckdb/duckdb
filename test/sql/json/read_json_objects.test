@@ -1,4 +1,4 @@
-# name: test/sql/json/read_ndjson.test
+# name: test/sql/json/read_json_objects.test
 # description: Read ndjson files
 # group: [json]
 
@@ -48,10 +48,10 @@ SELECT * FROM read_json_objects('data/json/example_r.ndjson')
 {"id":5,"name":"Raising Arizona"}
 
 # \r newlines are NOT valid according to ndjson spec - this does not work, all a single line
-query I
-SELECT count(*) FROM read_ndjson_objects('data/json/example_r.ndjson')
+statement error
+SELECT * FROM read_ndjson_objects('data/json/example_r.ndjson')
 ----
-1
+Invalid Input Error: Malformed JSON at byte 45 of input
 
 # example_rn is with \r\n newlines
 query I
@@ -133,3 +133,62 @@ select * from read_ndjson_objects('https://github.com/duckdb/duckdb-data/release
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
+
+# empty file
+query I
+select * from read_json_objects('data/json/empty.ndjson')
+---
+
+query I
+select * from read_ndjson_objects('data/json/empty.ndjson')
+---
+
+# invalid json stuff
+statement error
+select * from read_json_objects('data/json/unterminated_quotes.ndjson')
+----
+Invalid Input Error: Malformed JSON at byte 25 of input
+
+statement error
+select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson')
+----
+Invalid Input Error: Malformed JSON at byte 25 of input
+
+# multiple objects per line (works for read_json_objects)
+query I
+select * from read_json_objects('data/json/multiple_objects_per_line.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# does not work for read_ndjson_objects
+statement error
+select * from read_ndjson_objects('data/json/multiple_objects_per_line.ndjson')
+----
+Invalid Input Error: Malformed JSON at byte 44 of input
+
+# what if we try to read a CSV?
+statement error
+select * from read_json_objects('data/csv/tpcds_14.csv')
+----
+Invalid Input Error: Malformed JSON at byte 0 of input
+
+# error occurs at different byte
+statement error
+select * from read_ndjson_objects('data/csv/tpcds_14.csv')
+----
+Invalid Input Error: Malformed JSON at byte 0 of input
+
+# how about parquet?
+statement error
+select * from read_json_objects('data/parquet-testing/blob.parquet')
+----
+Invalid Input Error: Malformed JSON at byte 0 of input
+
+statement error
+select * from read_ndjson_objects('data/parquet-testing/blob.parquet')
+----
+Invalid Input Error: Malformed JSON at byte 0 of input
