@@ -140,6 +140,10 @@ rapi_prepare_substrait <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare_substrait`, conn, query)
 }
 
+rapi_prepare_substrait_json <- function(conn, json) {
+  .Call(`_duckdb_rapi_prepare_substrait_json`, conn, json)
+}
+
 rapi_prepare <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare`, conn, query)
 }
