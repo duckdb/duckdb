@@ -30,6 +30,7 @@ static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"from_substrait", "substrait"},
     {"get_substrait", "substrait"},
     {"get_substrait_json", "substrait"},
+    {"from_substrait_json", "substrait"},
     {"icu_calendar_names", "icu"},
     {"icu_sort_key", "icu"},
     {"json", "json"},
