@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/progress_bar/progress_bar_display.hpp"
 
 namespace duckdb {
