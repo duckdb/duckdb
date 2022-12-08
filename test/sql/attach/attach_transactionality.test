@@ -1,0 +1,110 @@
+# name: test/sql/attach/attach_transactionality.test
+# description: Test transactionality of attach
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+# straightforward attach and rollback
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement ok
+ROLLBACK
+
+# attach and insert data, then rollback
+# the data should never make it into the attached database
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement ok
+CREATE TABLE persistent_attach.integers(i INTEGER)
+
+statement ok
+INSERT INTO persistent_attach.integers VALUES (42)
+
+statement ok
+ROLLBACK
+
+# now commit
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement ok
+CREATE TABLE persistent_attach.integers(i INTEGER)
+
+statement ok
+INSERT INTO persistent_attach.integers VALUES (42)
+
+statement ok
+COMMIT
+
+# rollback detach
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DETACH persistent_attach
+
+statement ok
+ROLLBACK
+
+statement ok
+DETACH persistent_attach
+
+# what if we attach, push entries, then detach, and then rollback!?
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement ok
+INSERT INTO persistent_attach.integers VALUES (84)
+
+statement ok
+DETACH persistent_attach
+
+statement ok
+ROLLBACK
+
+# now do the same but commit
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+# verify the previous data was not written
+query I
+SELECT * FROM persistent_attach.integers
+----
+42
+
+statement ok
+INSERT INTO persistent_attach.integers VALUES (84)
+
+statement ok
+DETACH persistent_attach
+
+statement ok
+COMMIT
+
+# now if we attach we should see [42, 84]
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+query I
+SELECT * FROM persistent_attach.integers ORDER BY 1
+----
+42
+84
