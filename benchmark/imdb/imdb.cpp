@@ -6,8 +6,12 @@
 using namespace duckdb;
 
 #define IMDB_QUERY_BODY(QNR)                                                                                           \
-	virtual void Load(DuckDBBenchmarkState *state) { imdb::dbgen(state->db); }                                         \
-	virtual string GetQuery() { return imdb::get_query(QNR); }                                                         \
+	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
+		imdb::dbgen(state->db);                                                                                        \
+	}                                                                                                                  \
+	virtual string GetQuery() {                                                                                        \
+		return imdb::get_query(QNR);                                                                                   \
+	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
 		if (result->HasError()) {                                                                                      \
 			return result->GetError();                                                                                 \
