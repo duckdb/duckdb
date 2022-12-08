@@ -47,7 +47,9 @@ using namespace duckdb;
 		}                                                                                                              \
 		return string();                                                                                               \
 	}                                                                                                                  \
-	virtual string BenchmarkInfo() { return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\""); }
+	virtual string BenchmarkInfo() {                                                                                   \
+		return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\"");                                 \
+	}
 
 DUCKDB_BENCHMARK(InList0001Entry, "[in]")
 IN_QUERY_BODY(1, false)
