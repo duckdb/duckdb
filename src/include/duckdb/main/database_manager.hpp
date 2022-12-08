@@ -40,8 +40,7 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	// FIXME: default database should be client-specific and not live here
-	AttachedDatabase &GetDefaultDatabase();
-	void SetDefaultDatabase(ClientContext &context, const string &name);
+	const string &GetDefaultDatabase();
 
 	vector<AttachedDatabase *> GetDatabases(ClientContext &context);
 
@@ -62,7 +61,7 @@ private:
 	//! The current query number
 	atomic<transaction_t> current_query_number;
 	//! The current default database
-	AttachedDatabase *default_database;
+	string default_database;
 };
 
 } // namespace duckdb

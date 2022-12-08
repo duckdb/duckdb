@@ -16,8 +16,9 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	// FIXME: select database?
-	auto &db = DatabaseManager::Get(context).GetDefaultDatabase();
-	auto &transaction_manager = TransactionManager::Get(db);
+	auto &db_manager = DatabaseManager::Get(context);
+	auto db = db_manager.GetDatabase(context, db_manager.GetDefaultDatabase());
+	auto &transaction_manager = TransactionManager::Get(*db);
 	transaction_manager.Checkpoint(context, FORCE);
 }
 

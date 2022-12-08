@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : catalog_version(0), current_query_number(1), default_database(nullptr) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
 	system = make_unique<AttachedDatabase>(db);
 	databases = make_unique<CatalogSet>(system->GetCatalog());
 }
@@ -31,27 +30,19 @@ AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const str
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
 	auto name = db_instance->GetName();
 	unordered_set<CatalogEntry *> dependencies;
-	if (!default_database) {
-		default_database = db_instance.get();
+	if (default_database.empty()) {
+		default_database = name;
 	}
 	if (!databases->CreateEntry(context, name, move(db_instance), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 }
 
-AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
-	if (!default_database) {
+const string &DatabaseManager::GetDefaultDatabase() {
+	if (default_database.empty()) {
 		throw InternalException("GetDefaultDatabase called but there are no databases");
 	}
-	return *default_database;
-}
-
-void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &name) {
-	auto entry = (AttachedDatabase *)databases->GetEntry(context, name);
-	if (!entry) {
-		throw CatalogException("Database with name \"%s\" does not exist", name);
-	}
-	default_database = entry;
+	return default_database;
 }
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {

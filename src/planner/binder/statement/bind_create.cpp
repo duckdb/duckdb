@@ -74,7 +74,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 		info.catalog = search_path->GetDefaultCatalog(info.schema);
 	}
 	if (info.catalog == INVALID_CATALOG) {
-		info.catalog = DatabaseManager::Get(context).GetDefaultDatabase().GetName();
+		info.catalog = DatabaseManager::Get(context).GetDefaultDatabase();
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
@@ -427,6 +427,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
+		}
+		if (table->temporary) {
+			stmt.info->temporary = true;
 		}
 
 		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info));

@@ -215,10 +215,6 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
-StorageManager &DatabaseInstance::GetStorageManager() {
-	return db_manager->GetDefaultDatabase().GetStorageManager();
-}
-
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
 	return db.GetDatabaseManager();
 }

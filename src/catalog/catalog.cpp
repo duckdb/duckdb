@@ -91,10 +91,8 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 	if (catalog_name == SYSTEM_CATALOG) {
 		return GetSystemCatalog(context);
 	}
-	if (catalog_name == INVALID_CATALOG) {
-		return db_manager.GetDefaultDatabase().GetCatalog();
-	}
-	auto entry = db_manager.GetDatabase(context, catalog_name);
+	auto entry = db_manager.GetDatabase(context, catalog_name == INVALID_CATALOG ? db_manager.GetDefaultDatabase()
+	                                                                             : catalog_name);
 	if (!entry) {
 		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
 	}
@@ -466,7 +464,11 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	unordered_set<SchemaCatalogEntry *> schemas;
 	if (schema == INVALID_SCHEMA) {
 		// try all schemas for this catalog
-		const auto schema_names = ClientData::Get(context).catalog_search_path->GetSchemasForCatalog(GetName());
+		auto catalog_name = GetName();
+		if (catalog_name == DatabaseManager::Get(context).GetDefaultDatabase()) {
+			catalog_name = INVALID_CATALOG;
+		}
+		const auto schema_names = ClientData::Get(context).catalog_search_path->GetSchemasForCatalog(catalog_name);
 		for (auto &candidate_schema : schema_names) {
 			auto transaction = GetCatalogTransaction(context);
 			auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
@@ -541,7 +543,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-		entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase().GetName(), schema);
+		entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
 	} else if (schema == INVALID_SCHEMA) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
