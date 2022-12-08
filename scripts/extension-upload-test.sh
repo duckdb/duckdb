@@ -12,7 +12,12 @@ else
   FORCE_32_BIT_FLAG=""
 fi
 
-FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
+if [ "$2" = "oote" ]; then
+  FILES="${EXT_BASE_PATH}/duckdb/extension/*/*.duckdb_extension"
+else
+  FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
+fi
+
 EXTENSION_LIST=""
 for f in $FILES
 do
@@ -21,15 +26,24 @@ do
 done
 mkdir -p testext
 cd testext
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" -DDISABLE_BUILTIN_EXTENSIONS=TRUE ..
 cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 
-duckdb_path="testext/duckdb"
-unittest_path="testext/test/unittest"
-if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="testext/${CMAKE_CONFIG}/duckdb.exe"
-	unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
+if [ "$2" = "oote" ]; then
+  duckdb_path="testext/duckdb/duckdb"
+  unittest_path="testext/duckdb/test/unittest"
+  if [ ! -f "${duckdb_path}" ]; then
+  	duckdb_path="testext/duckdb/${CMAKE_CONFIG}/duckdb.exe"
+    unittest_path="testext/duckdb/test/${CMAKE_CONFIG}/unittest.exe"
+  fi
+else
+  duckdb_path="testext/duckdb"
+  unittest_path="testext/test/unittest"
+  if [ ! -f "${duckdb_path}" ]; then
+  	duckdb_path="testext/${CMAKE_CONFIG}/duckdb.exe"
+  	unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
+  fi
 fi
 
 for f in $FILES
