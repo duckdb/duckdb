@@ -812,12 +812,14 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     if (NOT EXTENSION_STATIC_BUILD)
       target_link_libraries(${TARGET_NAME} delayimp)
     endif()
-    set_target_properties(
-            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
-            "${PROJECT_BINARY_DIR}/${OUTPUT_DIRECTORY}")
-    set_target_properties(
-            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
-            "${PROJECT_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+
+    # TODO: I dont see the point of this?
+#    set_target_properties(
+#            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+#            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+#    set_target_properties(
+#            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
+#            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
   if(WIN32 AND NOT EXTENSION_STATIC_BUILD)

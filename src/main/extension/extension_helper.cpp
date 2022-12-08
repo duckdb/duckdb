@@ -6,10 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
-/* cpp macro definition stringification. */
-#define STRINGIFY_HELPER(x) #x
-#define STRINGIFY(x) STRINGIFY_HELPER(x)
-
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define ICU_STATICALLY_LOADED true
 #include "icu-extension.hpp"
@@ -83,8 +79,10 @@
 #endif
 
 // Load the generated header file containing our list of extension headers
+#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
 #include "extension_oote_headers.hpp"
 #include "extension_oote_loader.hpp"
+#endif
 
 namespace duckdb {
 
@@ -238,10 +236,12 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {
+
+#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
         if (TryLoadLinkedExtension(db, extension)) {
             return ExtensionLoadResult::LOADED_EXTENSION;
         }
-
+#endif
 		return ExtensionLoadResult::EXTENSION_UNKNOWN;
 	}
 	return ExtensionLoadResult::LOADED_EXTENSION;

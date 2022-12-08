@@ -43,6 +43,8 @@ endif()
 
 configure_file(extension_oote_loader.hpp.in "${PROJECT_BINARY_DIR}/include/extension_oote_loader.hpp")
 
+add_definitions(-DOOTE_HEADERS_AVAILABLE=1)
+
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/include/")
 
