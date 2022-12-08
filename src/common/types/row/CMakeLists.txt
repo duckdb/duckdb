@@ -8,7 +8,8 @@ add_library_unity(
   OBJECT
   row_data_collection.cpp
   row_data_collection_scanner.cpp
-  row_layout.cpp)
+  row_layout.cpp
+  tuple_data_collection.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types_row>
     PARENT_SCOPE)

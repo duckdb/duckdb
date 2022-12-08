@@ -78,6 +78,8 @@ struct RowOperations {
 	//! Compute the entry sizes of vector data with variable size type (used before building heap buffer space).
 	static void ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t vcount,
 	                              idx_t ser_count, const SelectionVector &sel, idx_t offset = 0);
+	static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[], const SelectionVector &sel,
+	                                    const idx_t count, const idx_t offset = 0);
 	//! Scatter vector with variable size type to the heap.
 	static void HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset = 0);
