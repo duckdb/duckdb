@@ -607,6 +607,16 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
+
+  # Include paths for any registered out-of-tree extensions
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
+    if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH)
+      include_directories("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH}/src/include")
+    else()
+      # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
+      include_directories("${PROJECT_SOURCE_DIR}/extension/${OOTE_NAME}_clone/src/include")
+    endif()
+  endforeach()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -714,6 +724,12 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_INET_EXTENSION})
     target_link_libraries(${LIBRARY} inet_extension)
   endif()
+
+  # Now link against any registered out-of-tree extensions
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
+    target_link_libraries(${LIBRARY} ${OOTE_NAME}_extension)
+  endforeach()
+
 endfunction()
 
 function(link_threads LIBRARY)
@@ -839,7 +855,18 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
 endif()
 
+# Add In-tree extensions
 add_subdirectory(extension)
+
+# Add Out-of-tree extensions
+foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
+  if (DEFINED ${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH})
+    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH})
+  else()
+    # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
+    add_subdirectory("extension/${OOTE_NAME}_clone")
+  endif()
+endforeach()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
@@ -891,6 +918,7 @@ endif()
 
 endif()
 
+# TODO: This is the old way of Loading OOTEs can be removed after all OOTES in extensions.csv play ball with the new way
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
   separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
@@ -900,12 +928,5 @@ if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
     # the build path seems to get ignored on windows in just the right way. no idea why.
     get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
     add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
-  endforeach()
-endif()
-
-
-if(NOT "${DUCKDB_OOTE_EXTENSION_NAMES}" STREQUAL "")
-  foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
-    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH} "extension/${OOTE_NAME}")
   endforeach()
 endif()
