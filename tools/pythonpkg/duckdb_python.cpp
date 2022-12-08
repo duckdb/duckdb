@@ -114,6 +114,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("connection") = py::none());
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
 	      py::arg("query"), py::arg("connection") = py::none());
+	m.def("from_substrait_json", &DuckDBPyRelation::FromSubstraitJSON, "Serialize a query object to protobuf",
+	      py::arg("json"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
