@@ -79,6 +79,8 @@ public:
 
 	DUCKDB_API bool DropEntry(CatalogTransaction transaction, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
+	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
+	                          bool allow_drop_internal = false);
 
 	DUCKDB_API Catalog &GetCatalog();
 

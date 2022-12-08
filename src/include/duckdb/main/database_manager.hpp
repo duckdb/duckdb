@@ -37,6 +37,7 @@ public:
 	AttachedDatabase *GetDatabase(ClientContext &context, const string &name);
 	//! Add a new attached database to the database manager
 	void AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db);
+	void DetachDatabase(ClientContext &context, const string &name, bool if_exists);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	// FIXME: default database should be client-specific and not live here

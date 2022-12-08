@@ -38,6 +38,14 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	}
 }
 
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, bool if_exists) {
+	if (!databases->DropEntry(context, name, false, true)) {
+		if (!if_exists) {
+			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+		}
+	}
+}
+
 const string &DatabaseManager::GetDefaultDatabase() {
 	if (default_database.empty()) {
 		throw InternalException("GetDefaultDatabase called but there are no databases");

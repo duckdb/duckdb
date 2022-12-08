@@ -327,6 +327,10 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	return true;
 }
 
+bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool cascade, bool allow_drop_internal) {
+	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
+}
+
 Catalog &CatalogSet::GetCatalog() {
 	return catalog;
 }

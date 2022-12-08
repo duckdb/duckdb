@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,11 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 		if (statements.find(info->name) != statements.end()) {
 			statements.erase(info->name);
 		}
+		break;
+	}
+	case CatalogType::DATABASE_ENTRY: {
+		auto &db_manager = DatabaseManager::Get(context.client);
+		db_manager.DetachDatabase(context.client, info->name, info->if_exists);
 		break;
 	}
 	default: {

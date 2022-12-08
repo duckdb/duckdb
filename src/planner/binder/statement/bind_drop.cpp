@@ -41,6 +41,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		stmt.info->schema = entry->schema->name;
 		break;
 	}
+	case CatalogType::DATABASE_ENTRY:
+		// attaching and detaching is read-only
+		stmt.info->catalog = SYSTEM_CATALOG;
+		properties.read_only = true;
+		break;
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
 	}
