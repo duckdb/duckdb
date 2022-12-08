@@ -36,10 +36,18 @@ SELECT * FROM s1
 statement error
 CREATE TABLE temp.integersy(i INTEGER)
 ----
-Schema with name temp does not exist
+Only TEMPORARY table names can use the "temp" catalog
+
+statement ok
+CREATE SCHEMA temp
 
 statement error
-CREATE SCHEMA temp
+CREATE TABLE temp.integersy(i INTEGER)
+----
+Ambiguous
+
+statement ok
+CREATE TABLE memory.temp.integersy(i INTEGER)
 
 statement error
 DROP TABLE main.integersx

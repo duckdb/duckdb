@@ -7,7 +7,7 @@ namespace duckdb {
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, BuiltInDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, nullptr,
-                   type == BuiltInDatabaseType::SYSTEM_DATABASE ? "system" : "temp"),
+                   type == BuiltInDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG),
       db(db), type(type) {
 	D_ASSERT(type == BuiltInDatabaseType::TEMP_DATABASE || type == BuiltInDatabaseType::SYSTEM_DATABASE);
 	if (type == BuiltInDatabaseType::TEMP_DATABASE) {

@@ -72,6 +72,8 @@ public:
 	//! successful.
 	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
 	                            unordered_set<CatalogEntry *> &dependencies);
+	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
+	                            unordered_set<CatalogEntry *> &dependencies);
 
 	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo *alter_info);
 
@@ -86,6 +88,7 @@ public:
 
 	//! Returns the entry with the specified name
 	DUCKDB_API CatalogEntry *GetEntry(CatalogTransaction transaction, const string &name);
+	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
@@ -99,6 +102,7 @@ public:
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry *)> &callback);
+	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
 
 	template <class T>
 	vector<T *> GetEntries(CatalogTransaction transaction) {

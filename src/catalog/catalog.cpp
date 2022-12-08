@@ -419,8 +419,8 @@ CatalogEntryLookup Catalog::LookupEntry(CatalogTransaction transaction, CatalogT
 		return {schema, entry};
 	}
 
-	const auto &paths = ClientData::Get(transaction.GetContext()).catalog_search_path->Get();
-	for (const auto &path : paths) {
+	const auto schema_names = ClientData::Get(transaction.GetContext()).catalog_search_path->GetSchemasForCatalog(GetName());
+	for (const auto &path : schema_names) {
 		auto lookup = LookupEntry(transaction, type, path, name, true, error_context);
 		if (lookup.Found()) {
 			return lookup;
@@ -429,7 +429,7 @@ CatalogEntryLookup Catalog::LookupEntry(CatalogTransaction transaction, CatalogT
 
 	if (!if_exists) {
 		vector<SchemaCatalogEntry *> schemas;
-		for (const auto &path : paths) {
+		for (const auto &path : schema_names) {
 			auto schema = GetSchema(transaction, path, true);
 			if (schema) {
 				schemas.emplace_back(schema);
@@ -464,6 +464,7 @@ vector<Catalog *> GetCatalogs(ClientContext &context, const string &catalog) {
 	vector<Catalog *> catalogs;
 	catalogs.push_back(&Catalog::GetCatalog(context, catalog));
 	if (catalog == INVALID_CATALOG) {
+		catalogs.push_back(&context.client_data->temporary_objects->GetCatalog());
 		catalogs.push_back(&Catalog::GetSystemCatalog(context));
 	}
 	return catalogs;
@@ -546,6 +547,9 @@ void Catalog::Verify() {
 #endif
 }
 
+//===--------------------------------------------------------------------===//
+// Catalog Version
+//===--------------------------------------------------------------------===//
 idx_t Catalog::GetCatalogVersion() {
 	return GetDatabase().GetDatabaseManager().catalog_version;
 }

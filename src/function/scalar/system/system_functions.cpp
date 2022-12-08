@@ -18,7 +18,7 @@ static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vecto
 
 // current_schema
 static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault());
+	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
 	result.Reference(val);
 }
 
@@ -35,9 +35,9 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 	auto implicit_schemas = *ConstantVector::GetData<bool>(input.data[0]);
 	vector<Value> schema_list;
 	auto &catalog_search_path = ClientData::Get(state.GetContext()).catalog_search_path;
-	vector<string> search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
+	auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 	std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-	               [](const string &s) -> Value { return Value(s); });
+	               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
 
 	auto val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	result.Reference(val);

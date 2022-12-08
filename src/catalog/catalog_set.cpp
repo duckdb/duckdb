@@ -143,6 +143,11 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	return true;
 }
 
+bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
+							unordered_set<CatalogEntry *> &dependencies) {
+	return CreateEntry(catalog.GetCatalogTransaction(context), name, move(value), dependencies);
+}
+
 bool CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index,
                                   CatalogEntry *&catalog_entry) {
 	catalog_entry = entry_index.GetEntry().get();
@@ -518,6 +523,10 @@ CatalogEntry *CatalogSet::GetEntry(CatalogTransaction transaction, const string 
 	return CreateDefaultEntry(transaction, name, lock);
 }
 
+CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
+	return GetEntry(catalog.GetCatalogTransaction(context), name);
+}
+
 void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	entry->timestamp = timestamp;
 	mapping[entry->name]->timestamp = timestamp;
@@ -671,6 +680,10 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 			callback(entry);
 		}
 	}
+}
+
+void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback)  {
+	Scan(catalog.GetCatalogTransaction(context), callback);
 }
 
 void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {

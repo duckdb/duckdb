@@ -623,7 +623,7 @@ Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(parameter, true);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), true);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -636,12 +636,13 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(parameter, false);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), false);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	return Value(StringUtil::Join(client_data.catalog_search_path->GetSetPaths(), ","));
+	auto &set_paths = client_data.catalog_search_path->GetSetPaths();
+	return Value(CatalogSearchEntry::ListToString(set_paths));
 }
 
 //===--------------------------------------------------------------------===//

@@ -25,7 +25,7 @@ AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const str
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
-	return (AttachedDatabase *)databases->GetEntry(databases->GetCatalog().GetCatalogTransaction(context), name);
+	return (AttachedDatabase *)databases->GetEntry(context, name);
 }
 
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
@@ -34,7 +34,7 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	if (!default_database) {
 		default_database = db_instance.get();
 	}
-	if (!databases->CreateEntry(databases->GetCatalog().GetCatalogTransaction(context), name, move(db_instance),
+	if (!databases->CreateEntry(context, name, move(db_instance),
 	                            dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
@@ -48,7 +48,7 @@ AttachedDatabase &DatabaseManager::GetDefaultDatabase() {
 }
 
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &name) {
-	auto entry = (AttachedDatabase *)databases->GetEntry(databases->GetCatalog().GetCatalogTransaction(context), name);
+	auto entry = (AttachedDatabase *)databases->GetEntry(context, name);
 	if (!entry) {
 		throw CatalogException("Database with name \"%s\" does not exist", name);
 	}
@@ -57,7 +57,7 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<AttachedDatabase *> result;
-	databases->Scan(databases->GetCatalog().GetCatalogTransaction(context),
+	databases->Scan(context,
 	                [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
 	return result;
 }

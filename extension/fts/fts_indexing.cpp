@@ -16,7 +16,9 @@ static string fts_schema_name(const string &schema, const string &table) {
 
 string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
+	if (qname.schema == INVALID_SCHEMA) {
+		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+	}
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
@@ -237,7 +239,9 @@ void check_exists(ClientContext &context, QualifiedName &qname) {
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
+	if (qname.schema == INVALID_SCHEMA) {
+		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+	}
 	check_exists(context, qname);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
@@ -254,7 +258,9 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		stopwords = StringValue::Get(stopword_entry->second);
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
-			stopwords_qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(stopwords_qname.schema);
+			if (qname.schema == INVALID_SCHEMA) {
+				qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+			}
 			check_exists(context, stopwords_qname);
 		}
 	}
@@ -280,7 +286,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// throw error if an index already exists on this table
-	if (Catalog::GetEntry<SchemaCatalogEntry>(context, INVALID_CATALOG, fts_schema) && !overwrite) {
+	if (Catalog::GetSchema(context, INVALID_CATALOG, fts_schema) && !overwrite) {
 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);

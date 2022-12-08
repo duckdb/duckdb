@@ -63,8 +63,15 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.catalog == INVALID_CATALOG && info.temporary) {
 		info.catalog = TEMP_CATALOG;
 	}
-	if (info.schema == INVALID_SCHEMA) {
-		info.schema = info.temporary ? DEFAULT_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
+	auto &search_path = ClientData::Get(context).catalog_search_path;
+	if (info.catalog == INVALID_CATALOG && info.schema == INVALID_SCHEMA) {
+		auto &default_entry = search_path->GetDefault();
+		info.catalog = default_entry.catalog;
+		info.schema = default_entry.schema;
+	} else if (info.schema == INVALID_SCHEMA) {
+		info.schema = search_path->GetDefaultSchema(info.catalog);
+	} else if (info.catalog == INVALID_CATALOG) {
+		info.catalog = search_path->GetDefaultCatalog(info.schema);
 	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
