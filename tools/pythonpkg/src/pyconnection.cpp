@@ -140,7 +140,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	return pending_query.Execute();
 }
 
-py::list TransformNamedParameters(case_insensitive_map_t<idx_t> &named_param_map, const py::dict &params) {
+py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_param_map, const py::dict &params) {
 	py::list new_params(params.size());
 
 	for (auto &item : params) {
