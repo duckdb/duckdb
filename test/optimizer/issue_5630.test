@@ -2,6 +2,8 @@
 # description: Test Optimizer uses on multiple inner joins
 # group: [optimizer]
 
+# These test will take a noticeably long time if the optimizer tries to over optimize or
+# run unnecessary optimizations.
 
 statement ok
 CREATE TABLE MainTable (Id INT,
@@ -13,7 +15,14 @@ Value16_Id INT, Value17_Id INT, Value18_Id INT, Value19_Id INT, Value20_Id INT);
 statement ok
 CREATE or REPLACE TABLE ValueTable (Id INT, Value TEXT);
 
-mode skip
+statement ok
+SELECT * FROM MainTable T
+INNER JOIN ValueTable T1 ON T.Value1_Id = T1.Id
+INNER JOIN ValueTable T2 ON T.Value2_Id = T2.Id
+INNER JOIN ValueTable T3 ON T.Value3_Id = T3.Id
+INNER JOIN ValueTable T4 ON T.Value4_Id = T4.Id
+INNER JOIN ValueTable T5 ON T.Value5_Id = T5.Id;
+
 
 statement ok
 SELECT * FROM MainTable T
@@ -22,6 +31,11 @@ INNER JOIN ValueTable T2 ON T.Value2_Id = T2.Id
 INNER JOIN ValueTable T3 ON T.Value3_Id = T3.Id
 INNER JOIN ValueTable T4 ON T.Value4_Id = T4.Id
 INNER JOIN ValueTable T5 ON T.Value5_Id = T5.Id
+INNER JOIN ValueTable T6 ON T.Value6_Id = T6.Id
+INNER JOIN ValueTable T7 ON T.Value7_Id = T7.Id
+INNER JOIN ValueTable T8 ON T.Value8_Id = T8.Id
+INNER JOIN ValueTable T9 ON T.Value9_Id = T9.Id
+INNER JOIN ValueTable T10 ON T.Value10_Id = T10.Id;
 
 statement ok
 SELECT * FROM MainTable T
@@ -35,6 +49,11 @@ INNER JOIN ValueTable T7 ON T.Value7_Id = T7.Id
 INNER JOIN ValueTable T8 ON T.Value8_Id = T8.Id
 INNER JOIN ValueTable T9 ON T.Value9_Id = T9.Id
 INNER JOIN ValueTable T10 ON T.Value10_Id = T10.Id
+INNER JOIN ValueTable T11 ON T.Value11_Id = T11.Id
+INNER JOIN ValueTable T12 ON T.Value12_Id = T12.Id
+INNER JOIN ValueTable T13 ON T.Value13_Id = T13.Id
+INNER JOIN ValueTable T14 ON T.Value14_Id = T14.Id
+INNER JOIN ValueTable T15 ON T.Value15_Id = T15.Id;
 
 statement ok
 SELECT * FROM MainTable T
@@ -53,25 +72,9 @@ INNER JOIN ValueTable T12 ON T.Value12_Id = T12.Id
 INNER JOIN ValueTable T13 ON T.Value13_Id = T13.Id
 INNER JOIN ValueTable T14 ON T.Value14_Id = T14.Id
 INNER JOIN ValueTable T15 ON T.Value15_Id = T15.Id
+INNER JOIN ValueTable T16 ON T.Value16_Id = T16.Id;
 
-statement ok
-SELECT * FROM MainTable T
-INNER JOIN ValueTable T1 ON T.Value1_Id = T1.Id
-INNER JOIN ValueTable T2 ON T.Value2_Id = T2.Id
-INNER JOIN ValueTable T3 ON T.Value3_Id = T3.Id
-INNER JOIN ValueTable T4 ON T.Value4_Id = T4.Id
-INNER JOIN ValueTable T5 ON T.Value5_Id = T5.Id
-INNER JOIN ValueTable T6 ON T.Value6_Id = T6.Id
-INNER JOIN ValueTable T7 ON T.Value7_Id = T7.Id
-INNER JOIN ValueTable T8 ON T.Value8_Id = T8.Id
-INNER JOIN ValueTable T9 ON T.Value9_Id = T9.Id
-INNER JOIN ValueTable T10 ON T.Value10_Id = T10.Id
-INNER JOIN ValueTable T11 ON T.Value11_Id = T11.Id
-INNER JOIN ValueTable T12 ON T.Value12_Id = T12.Id
-INNER JOIN ValueTable T13 ON T.Value13_Id = T13.Id
-INNER JOIN ValueTable T14 ON T.Value14_Id = T14.Id
-INNER JOIN ValueTable T15 ON T.Value15_Id = T15.Id
-INNER JOIN ValueTable T16 ON T.Value16_Id = T16.Id
+mode unskip
 
 statement ok
 SELECT * FROM MainTable T
@@ -94,8 +97,4 @@ INNER JOIN ValueTable T16 ON T.Value16_Id = T16.Id
 INNER JOIN ValueTable T17 ON T.Value17_Id = T17.Id
 INNER JOIN ValueTable T18 ON T.Value18_Id = T18.Id
 INNER JOIN ValueTable T19 ON T.Value16_Id = T19.Id
-INNER JOIN ValueTable T20 ON T.Value20_Id = T20.Id
---540000ms
-
-
-mode unskip
+INNER JOIN ValueTable T20 ON T.Value20_Id = T20.Id;
