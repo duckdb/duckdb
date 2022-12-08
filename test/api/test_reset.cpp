@@ -14,47 +14,47 @@ struct OptionValuePair {
 	Value output;
 };
 
-void RequireValuDiff(ConfigurationOption* op, const Value& left, const Value& right, int line);
+void RequireValuDiff(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_DIFF(op, lhs, rhs) RequireValueDiff(op, lhs, rhs, __LINE__)
 
-void RequireValueEqual(ConfigurationOption* op, const Value& left, const Value& right, int line);
+void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
-OptionValuePair& GetValueForOption(const string& name) {
+OptionValuePair &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValuePair> value_map = {
-		{"access_mode", {Value("READ_ONLY"), Value("read_only")} },
-		{"threads", {Value::BIGINT(42), Value::BIGINT(42)} },
-		{"checkpoint_threshold", {"4.2GB", "4.2GB"}},
-		{"debug_checkpoint_abort", {"before_header", "before_header"}},
-		{"default_collation", {"nocase", "nocase"} },
-		{"default_order", {"desc", "desc"} },
-		{"default_null_order", {"nulls_last", "nulls_last"} },
-		{"disabled_optimizers", {"extension", "extension"} },
-		{"enable_fsst_vectors", {true, true} },
-		{"enable_object_cache", {true, true} },
-		{"enable_profiling", {"json", "json"} },
-		{"enable_progress_bar", {true, true} },
-		{"experimental_parallel_csv", {true, true} },
-		{"explain_output", {true, true} },
-		{"external_threads", {8, 8} },
-		{"file_search_path", {"test", "test"} },
-		{"force_compression", {"uncompressed", "Uncompressed"} },
-		{"home_directory", {"test", "test"} },
-		{"log_query_path", {"test", "test"} },
-		{"max_expression_depth", {50, 50} },
-		{"max_memory", {"4.2GB", "4.2GB"} },
-		{"memory_limit", {"4.2GB", "4.2GB"} },
-		{"null_order", {"nulls_last", "nulls_last"} },
-		{"perfect_ht_threshold", {0, 0} },
-		{"preserve_identifier_case", {false, false} },
-		{"preserve_insertion_order", {false, false} },
-		{"profiler_history_size", {0, 0} },
-		{"profile_output", {"test", "test"} },
-		{"profiling_mode", {"detailed", "detailed"} },
-		{"progress_bar_time", {0, 0} },
-		{"temp_directory", {"tmp", "tmp"} },
-		{"wal_autocheckpoint", {"4.2GB", "4.2GB"} },
-		{"worker_threads", {42, 42} },
+	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
+	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
+	    {"checkpoint_threshold", {"4.2GB", "4.2GB"}},
+	    {"debug_checkpoint_abort", {"before_header", "before_header"}},
+	    {"default_collation", {"nocase", "nocase"}},
+	    {"default_order", {"desc", "desc"}},
+	    {"default_null_order", {"nulls_last", "nulls_last"}},
+	    {"disabled_optimizers", {"extension", "extension"}},
+	    {"enable_fsst_vectors", {true, true}},
+	    {"enable_object_cache", {true, true}},
+	    {"enable_profiling", {"json", "json"}},
+	    {"enable_progress_bar", {true, true}},
+	    {"experimental_parallel_csv", {true, true}},
+	    {"explain_output", {true, true}},
+	    {"external_threads", {8, 8}},
+	    {"file_search_path", {"test", "test"}},
+	    {"force_compression", {"uncompressed", "Uncompressed"}},
+	    {"home_directory", {"test", "test"}},
+	    {"log_query_path", {"test", "test"}},
+	    {"max_expression_depth", {50, 50}},
+	    {"max_memory", {"4.2GB", "4.2GB"}},
+	    {"memory_limit", {"4.2GB", "4.2GB"}},
+	    {"null_order", {"nulls_last", "nulls_last"}},
+	    {"perfect_ht_threshold", {0, 0}},
+	    {"preserve_identifier_case", {false, false}},
+	    {"preserve_insertion_order", {false, false}},
+	    {"profiler_history_size", {0, 0}},
+	    {"profile_output", {"test", "test"}},
+	    {"profiling_mode", {"detailed", "detailed"}},
+	    {"progress_bar_time", {0, 0}},
+	    {"temp_directory", {"tmp", "tmp"}},
+	    {"wal_autocheckpoint", {"4.2GB", "4.2GB"}},
+	    {"worker_threads", {42, 42}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
@@ -63,19 +63,19 @@ OptionValuePair& GetValueForOption(const string& name) {
 	return value_map[name];
 }
 
-bool OptionIsExcludedFromTest(const string& name) {
+bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
-		"schema",
-		"search_path",
-		"debug_force_external",
-		"debug_force_no_cross_product",
-		"debug_window_mode",
-		"enable_external_access", //cant change this while db is running
-		"allow_unsigned_extensions", //cant change this while db is running
-		"password",
-		"username",
-		"user",
-		"profiling_output", //just an alias
+	    "schema",
+	    "search_path",
+	    "debug_force_external",
+	    "debug_force_no_cross_product",
+	    "debug_window_mode",
+	    "enable_external_access",    // cant change this while db is running
+	    "allow_unsigned_extensions", // cant change this while db is running
+	    "password",
+	    "username",
+	    "user",
+	    "profiling_output", // just an alias
 	};
 	return excluded_options.count(name) == 1;
 }
@@ -93,20 +93,22 @@ bool ValueEqual(const Value &left, const Value &right) {
 	return true;
 }
 
-void RequireValueDiff(ConfigurationOption* op, const Value& left, const Value& right, int line) {
+void RequireValueDiff(ConfigurationOption *op, const Value &left, const Value &right, int line) {
 	if (!ValueEqual(left, right)) {
 		return;
 	}
-	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be different", line, op->name, left.ToString(), right.ToString());
+	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be different", line,
+	                                op->name, left.ToString(), right.ToString());
 	cerr << error << endl;
 	REQUIRE(false);
 }
 
-void RequireValueEqual(ConfigurationOption* op, const Value& left, const Value& right, int line) {
+void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line) {
 	if (ValueEqual(left, right)) {
 		return;
 	}
-	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line, op->name, left.ToString(), right.ToString());
+	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
+	                                op->name, left.ToString(), right.ToString());
 	cerr << error << endl;
 	REQUIRE(false);
 }
@@ -119,7 +121,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto& config = DBConfig::GetConfig(*db.instance);
+	auto &config = DBConfig::GetConfig(*db.instance);
 	// Get all configuration options
 	auto options = config.GetOptions();
 
@@ -135,13 +137,13 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		// Get the current value of the option
 		auto original_value = op->get_setting(*con.context);
 		// Get the new value for the option
-		auto& value_pair = GetValueForOption(option.name);
+		auto &value_pair = GetValueForOption(option.name);
 
 		// Verify that the new value is different, so we can test RESET
 		REQUIRE_VALUE_DIFF(op, original_value, value_pair.output);
 
 		if (!op->set_global) {
-			//TODO: add testing for local (client-config) settings
+			// TODO: add testing for local (client-config) settings
 			continue;
 		}
 		// Set the new option
