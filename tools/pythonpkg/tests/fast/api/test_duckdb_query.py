@@ -99,3 +99,17 @@ class TestDuckDBQuery(object):
 
         res = con.execute("select '$name1', $name1, $name1, '$name1'", {'name1': 5}).fetchall()
         assert res == [('$name1', 5, 5, '$name1')]
+
+    def test_named_param_case_insensivity(self):
+        con = duckdb.connect()
+
+        res = con.execute(
+            """
+                select $NaMe1, $NAME2, $name3
+            """,
+            {
+                'name1': 5,
+                'nAmE2': 3,
+                'NAME3': 'a'
+            }).fetchall()
+        assert res == [(5,3,'a'),]
