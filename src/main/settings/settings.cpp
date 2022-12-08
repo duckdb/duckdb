@@ -90,7 +90,20 @@ void DebugCheckpointAbort::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 Value DebugCheckpointAbort::GetSetting(ClientContext &context) {
-	return Value();
+	auto &config = DBConfig::GetConfig(*context.db);
+	auto setting = config.options.checkpoint_abort;
+	switch (setting) {
+	case CheckpointAbort::NO_ABORT:
+		return "none";
+	case CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE:
+		return "before_truncate";
+	case CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER:
+		return "before_header";
+	case CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE:
+		return "after_free_list_write";
+	default:
+		throw InternalException("Type not implemented for CheckpointAbort");
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -289,6 +302,9 @@ void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &conf
 }
 
 void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+	}
 	config.options.enable_external_access = DBConfig().options.enable_external_access;
 }
 
@@ -325,6 +341,9 @@ void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 }
 
 void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
+	}
 	config.options.allow_unsigned_extensions = DBConfig().options.allow_unsigned_extensions;
 }
 
@@ -354,7 +373,10 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).profiler_print_format = ClientConfig().profiler_print_format;
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiler_print_format = ClientConfig().profiler_print_format;
+	config.enable_profiler = ClientConfig().enable_profiler;
+	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -500,13 +522,13 @@ Value FileSearchPathSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
-	if (compression == "none") {
+	if (compression == "none" || compression == "auto") {
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
-			                      "dictionary, pfor, bitpacking or fsst");
+			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected %s", compression_types);
 		}
 		config.options.force_compression = compression_type;
 	}
@@ -517,7 +539,8 @@ void ForceCompressionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 Value ForceCompressionSetting::GetSetting(ClientContext &context) {
-	return Value();
+	auto &config = DBConfig::GetConfig(*context.db);
+	return CompressionTypeToString(config.options.force_compression);
 }
 
 //===--------------------------------------------------------------------===//
@@ -593,7 +616,7 @@ void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void MaximumMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.maximum_memory = DBConfig().options.maximum_memory;
+	config.SetDefaultMaxMemory();
 }
 
 Value MaximumMemorySetting::GetSetting(ClientContext &context) {
@@ -817,6 +840,10 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.temporary_directory = DBConfig().options.temporary_directory;
 	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
+	}
 }
 
 Value TempDirectorySetting::GetSetting(ClientContext &context) {

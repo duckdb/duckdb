@@ -191,6 +191,13 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
 
+void DBConfig::SetDefaultMaxMemory() {
+	auto memory = FileSystem::GetAvailableMemory();
+	if (memory != DConstants::INVALID_INDEX) {
+		options.maximum_memory = memory * 8 / 10;
+	}
+}
+
 void DBConfig::SetDefaultMaxThreads() {
 #ifndef DUCKDB_NO_THREADS
 	options.maximum_threads = std::thread::hardware_concurrency();

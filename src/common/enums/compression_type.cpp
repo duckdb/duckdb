@@ -5,6 +5,17 @@
 namespace duckdb {
 
 // LCOV_EXCL_START
+
+vector<string> ListCompressionTypes() {
+	vector<string> compression_types;
+	auto size = sizeof(compression_options) / sizeof(CompressionType);
+	compression_types.reserve(size);
+	for (idx_t i = 0; i < size; i++) {
+		compression_types.push_back(CompressionTypeToString(compression_options[i]));
+	}
+	return compression_types;
+}
+
 CompressionType CompressionTypeFromString(const string &str) {
 	auto compression = StringUtil::Lower(str);
 	if (compression == "uncompressed") {
@@ -30,6 +41,8 @@ CompressionType CompressionTypeFromString(const string &str) {
 
 string CompressionTypeToString(CompressionType type) {
 	switch (type) {
+	case CompressionType::COMPRESSION_AUTO:
+		return "Auto";
 	case CompressionType::COMPRESSION_UNCOMPRESSED:
 		return "Uncompressed";
 	case CompressionType::COMPRESSION_CONSTANT:

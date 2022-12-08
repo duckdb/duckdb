@@ -211,6 +211,7 @@ public:
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
 	void SetDefaultMaxThreads();
+	void SetDefaultMaxMemory();
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

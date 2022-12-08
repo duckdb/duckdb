@@ -252,10 +252,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
-		auto memory = FileSystem::GetAvailableMemory();
-		if (memory != DConstants::INVALID_INDEX) {
-			config.options.maximum_memory = memory * 8 / 10;
-		}
+		config.SetDefaultMaxMemory();
 	}
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.SetDefaultMaxThreads();

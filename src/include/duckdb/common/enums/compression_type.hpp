@@ -25,6 +25,14 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_PATAS = 9
 };
 
+static CompressionType compression_options[] = {
+    CompressionType::COMPRESSION_AUTO,       CompressionType::COMPRESSION_UNCOMPRESSED,
+    CompressionType::COMPRESSION_CONSTANT,   CompressionType::COMPRESSION_RLE,
+    CompressionType::COMPRESSION_DICTIONARY, CompressionType::COMPRESSION_PFOR_DELTA,
+    CompressionType::COMPRESSION_BITPACKING, CompressionType::COMPRESSION_FSST,
+    CompressionType::COMPRESSION_CHIMP,      CompressionType::COMPRESSION_PATAS};
+
+vector<string> ListCompressionTypes();
 CompressionType CompressionTypeFromString(const string &str);
 string CompressionTypeToString(CompressionType type);
 
