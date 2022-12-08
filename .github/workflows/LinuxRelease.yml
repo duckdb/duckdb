@@ -363,6 +363,47 @@ jobs:
           duckdb_cli-linux-rpi.zip
 
 
+ linux-clang:
+    name: Clang 12
+    runs-on: ubuntu-18.04
+    needs: linux-release-64
+
+    env:
+      CC: /home/runner/work/llvm/bin/clang
+      CPP: /home/runner/work/llvm/bin/clang-cpp
+      CXX: /home/runner/work/llvm/bin/clang++
+      LD: /home/runner/work/llvm/bin/ld.lld
+      EXTENSION_STATIC_BUILD: 1
+      BUILD_JSON: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "12.0"
+        directory: '/home/runner/work/llvm'
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: make allunit
+
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-18.04
