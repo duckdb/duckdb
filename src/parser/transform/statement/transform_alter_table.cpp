@@ -21,7 +21,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != nullptr; c = c->next) {
 		auto command = reinterpret_cast<duckdb_libpgquery::PGAlterTableCmd *>(lfirst(c));
-		AlterEntryData data(qname.catalog, qname.schema, qname.name, command->missing_ok);
+		AlterEntryData data(qname.catalog, qname.schema, qname.name, stmt->missing_ok);
 		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
