@@ -235,46 +235,46 @@ typedef struct {
 
 typedef struct _duckdb_database {
 	void *__db;
-} * duckdb_database;
+} *duckdb_database;
 typedef struct _duckdb_connection {
 	void *__conn;
-} * duckdb_connection;
+} *duckdb_connection;
 typedef struct _duckdb_prepared_statement {
 	void *__prep;
-} * duckdb_prepared_statement;
+} *duckdb_prepared_statement;
 typedef struct _duckdb_extracted_statements {
 	void *__extrac;
-} * duckdb_extracted_statements;
+} *duckdb_extracted_statements;
 typedef struct _duckdb_pending_result {
 	void *__pend;
-} * duckdb_pending_result;
+} *duckdb_pending_result;
 typedef struct _duckdb_appender {
 	void *__appn;
-} * duckdb_appender;
+} *duckdb_appender;
 typedef struct _duckdb_arrow {
 	void *__arrw;
-} * duckdb_arrow;
+} *duckdb_arrow;
 typedef struct _duckdb_config {
 	void *__cnfg;
-} * duckdb_config;
+} *duckdb_config;
 typedef struct _duckdb_arrow_schema {
 	void *__arrs;
-} * duckdb_arrow_schema;
+} *duckdb_arrow_schema;
 typedef struct _duckdb_arrow_array {
 	void *__arra;
-} * duckdb_arrow_array;
+} *duckdb_arrow_array;
 typedef struct _duckdb_logical_type {
 	void *__lglt;
-} * duckdb_logical_type;
+} *duckdb_logical_type;
 typedef struct _duckdb_data_chunk {
 	void *__dtck;
-} * duckdb_data_chunk;
+} *duckdb_data_chunk;
 typedef struct _duckdb_vector {
 	void *__vctr;
-} * duckdb_vector;
+} *duckdb_vector;
 typedef struct _duckdb_value {
 	void *__val;
-} * duckdb_value;
+} *duckdb_value;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {

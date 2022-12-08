@@ -1,6 +1,6 @@
-#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 

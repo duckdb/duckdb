@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {

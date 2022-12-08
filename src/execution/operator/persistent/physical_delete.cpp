@@ -1,11 +1,10 @@
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 

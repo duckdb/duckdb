@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/join/physical_join.hpp"
 

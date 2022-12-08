@@ -9,8 +9,8 @@
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/comparators.hpp"
-#include "duckdb/common/types/row_data_collection_scanner.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection_scanner.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {

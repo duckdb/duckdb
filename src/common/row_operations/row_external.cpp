@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 
 namespace duckdb {
 

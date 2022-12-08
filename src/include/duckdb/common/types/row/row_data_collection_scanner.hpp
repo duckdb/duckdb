@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/row_data_collection_scanner.hpp
+// duckdb/common/types/row/row_data_collection_scanner.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "row_layout.hpp"
 
 namespace duckdb {
 

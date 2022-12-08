@@ -1,15 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/partitioned_column_data.hpp
+// duckdb/common/types/column/partitioned_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_allocator.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "column_data_allocator.hpp"
+#include "column_data_collection.hpp"
 
 namespace duckdb {
 

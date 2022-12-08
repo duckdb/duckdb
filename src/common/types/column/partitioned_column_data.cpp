@@ -1,4 +1,4 @@
-#include "duckdb/common/types/partitioned_column_data.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/storage/buffer_manager.hpp"

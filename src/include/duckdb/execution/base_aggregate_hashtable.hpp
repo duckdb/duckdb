@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 

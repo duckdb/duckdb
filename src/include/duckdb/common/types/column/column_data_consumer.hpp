@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_consumer.hpp
+// duckdb/common/types/column/column_data_consumer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/common/types/column_data_collection_segment.hpp"
-#include "duckdb/common/types/column_data_scan_states.hpp"
+#include "column_data_collection.hpp"
+#include "column_data_collection_segment.hpp"
+#include "column_data_scan_states.hpp"
 
 namespace duckdb {
 

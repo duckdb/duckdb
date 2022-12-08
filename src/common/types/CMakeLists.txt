@@ -1,3 +1,6 @@
+add_subdirectory(column)
+add_subdirectory(row)
+
 if(${EXIT_TIME_DESTRUCTORS_WARNING})
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
@@ -10,10 +13,6 @@ add_library_unity(
   blob.cpp
   cast_helpers.cpp
   chunk_collection.cpp
-  column_data_allocator.cpp
-  column_data_collection.cpp
-  column_data_collection_segment.cpp
-  column_data_consumer.cpp
   data_chunk.cpp
   date.cpp
   decimal.cpp
@@ -22,10 +21,6 @@ add_library_unity(
   uuid.cpp
   hyperloglog.cpp
   interval.cpp
-  partitioned_column_data.cpp
-  row_data_collection.cpp
-  row_data_collection_scanner.cpp
-  row_layout.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

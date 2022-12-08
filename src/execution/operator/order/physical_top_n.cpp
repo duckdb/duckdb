@@ -1,12 +1,12 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/row_layout.hpp"
 
 namespace duckdb {
 

@@ -1,9 +1,9 @@
 #include "duckdb/common/radix_partitioning.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types/partitioned_column_data.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"

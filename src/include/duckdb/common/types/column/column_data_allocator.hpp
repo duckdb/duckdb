@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_allocator.hpp
+// duckdb/common/types/column/column_data_allocator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "column_data_collection.hpp"
 
 namespace duckdb {
 

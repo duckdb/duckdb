@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_scan_states.hpp
+// duckdb/common/types/column/column_data_scan_states.hpp
 //
 //
 //===----------------------------------------------------------------------===//

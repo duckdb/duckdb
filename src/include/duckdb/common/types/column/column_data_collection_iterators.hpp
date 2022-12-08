@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_collection_iterators.hpp
+// duckdb/common/types/column/column_data_collection_iterators.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_scan_states.hpp"
+#include "column_data_scan_states.hpp"
 
 namespace duckdb {
 class ColumnDataCollection;
