@@ -543,11 +543,16 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-		entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
+		if (entries.empty()) {
+			entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
+		}
 	} else if (schema == INVALID_SCHEMA) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
 			entries.emplace_back(catalog, schema_name);
+		}
+		if (entries.empty()) {
+			entries.emplace_back(catalog, DEFAULT_SCHEMA);
 		}
 	} else {
 		// specific catalog and schema provided
