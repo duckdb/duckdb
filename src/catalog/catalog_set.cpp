@@ -70,16 +70,19 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		                        "can only be created in the system catalog",
 		                        name);
 	}
-	if (!value->internal && !value->temporary && catalog.IsSystemCatalog()) {
-		throw InternalException("Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
-		                        "can only contain internal entries",
-		                        name);
-	}
-	if (value->temporary && !catalog.IsTemporaryCatalog()) {
-		throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
-	}
-	if (!value->temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
-		throw InternalException("Attempting to create non-temporary entry \"%s\" in temporary catalog", name);
+	if (!value->internal) {
+		if (!value->temporary && catalog.IsSystemCatalog()) {
+			throw InternalException(
+			    "Attempting to create non-internal entry \"%s\" in system catalog - the system catalog "
+			    "can only contain internal entries",
+			    name);
+		}
+		if (value->temporary && !catalog.IsTemporaryCatalog()) {
+			throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
+		}
+		if (!value->temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
+			throw InternalException("Attempting to create non-temporary entry \"%s\" in temporary catalog", name);
+		}
 	}
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);

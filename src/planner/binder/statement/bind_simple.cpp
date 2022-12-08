@@ -18,9 +18,13 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 	                               stmt.info->name, stmt.info->if_exists);
-	if (entry && !entry->temporary) {
-		// we can only alter temporary tables/views in read-only mode
-		properties.read_only = false;
+	if (entry) {
+		if (!entry->temporary) {
+			// we can only alter temporary tables/views in read-only mode
+			properties.read_only = false;
+		}
+		stmt.info->catalog = entry->catalog->GetName();
+		stmt.info->schema = ((StandardEntry *)entry)->schema->name;
 	}
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;

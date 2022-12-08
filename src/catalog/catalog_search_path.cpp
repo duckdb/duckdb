@@ -142,6 +142,9 @@ const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {
 
 string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 	for (auto &path : paths) {
+		if (path.catalog == TEMP_CATALOG) {
+			continue;
+		}
 		if (path.catalog == catalog) {
 			return path.schema;
 		}
@@ -151,6 +154,9 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 	for (auto &path : paths) {
+		if (path.catalog == TEMP_CATALOG) {
+			continue;
+		}
 		if (path.schema == schema) {
 			return path.catalog;
 		}
