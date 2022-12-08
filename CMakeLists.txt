@@ -864,7 +864,7 @@ foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
     add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH} extension/${OOTE_NAME})
   else()
     # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
-    add_subdirectory("extension/${OOTE_NAME}_clone")
+    add_subdirectory("extension/${OOTE_NAME}_clone/src" extension/${OOTE_NAME})
   endif()
 endforeach()
 
