@@ -31,7 +31,7 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
-struct DuckDBPyConnection {
+struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
 public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
@@ -48,21 +48,21 @@ public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
-	DuckDBPyConnection *Enter();
+	shared_ptr<DuckDBPyConnection> Enter();
 
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
-	static DuckDBPyConnection *DefaultConnection();
+	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static PythonImportCache *ImportCache();
 
-	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
+	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
-	DuckDBPyConnection *Execute(const string &query, py::object params = py::list(), bool many = false);
+	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	DuckDBPyConnection *Append(const string &name, DataFrame value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
 
-	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -99,13 +99,13 @@ public:
 
 	unordered_set<string> GetTableNames(const string &query);
 
-	DuckDBPyConnection *UnregisterPythonObject(const string &name);
+	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);
 
-	DuckDBPyConnection *Begin();
+	shared_ptr<DuckDBPyConnection> Begin();
 
-	DuckDBPyConnection *Commit();
+	shared_ptr<DuckDBPyConnection> Commit();
 
-	DuckDBPyConnection *Rollback();
+	shared_ptr<DuckDBPyConnection> Rollback();
 
 	void Close();
 
