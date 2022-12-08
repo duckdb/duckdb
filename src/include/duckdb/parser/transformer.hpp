@@ -54,7 +54,7 @@ private:
 	//! The current prepared statement parameter index
 	idx_t prepared_statement_parameter_index = 0;
 	//! Map from named parameter to parameter index;
-	case_insensitive_map_t<int32_t> named_param_map;
+	case_insensitive_map_t<idx_t> named_param_map;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
 	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
 

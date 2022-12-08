@@ -32,7 +32,7 @@ public:
 	//! The number of prepared statement parameters (if any)
 	idx_t n_param = 0;
 	//! The map of named parameter to param index (if n_param and any named)
-	case_insensitive_map_t<int32_t> named_param_map;
+	case_insensitive_map_t<idx_t> named_param_map;
 	//! The query text that corresponds to this SQL statement
 	string query;
 

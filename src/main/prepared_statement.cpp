@@ -6,7 +6,7 @@
 namespace duckdb {
 
 PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data_p,
-                                     string query, idx_t n_param, case_insensitive_map_t<int32_t> named_param_pam_p)
+                                     string query, idx_t n_param, case_insensitive_map_t<idx_t> named_param_pam_p)
     : context(move(context)), data(move(data_p)), query(move(query)), success(true), n_param(n_param),
       named_param_map(move(named_param_pam_p)) {
 	D_ASSERT(data || !success);
