@@ -117,6 +117,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+
+	InitializeConnectionMethods(connection_module);
 	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
