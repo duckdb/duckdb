@@ -611,7 +611,7 @@ function(add_extension_definitions)
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
     if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH)
-      include_directories("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH}/src/include")
+      include_directories("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH}/include")
     else()
       # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
       include_directories("${PROJECT_SOURCE_DIR}/extension/${OOTE_NAME}_clone/src/include")
@@ -860,8 +860,8 @@ add_subdirectory(extension)
 
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
-  if (DEFINED ${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH})
-    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH})
+  if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH)
+    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH} extension/${OOTE_NAME})
   else()
     # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
     add_subdirectory("extension/${OOTE_NAME}_clone")
