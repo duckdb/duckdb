@@ -1,12 +1,12 @@
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/optimizer/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_node.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 

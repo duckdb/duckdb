@@ -130,6 +130,9 @@ public:
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
+
+	//! Reads Parquet file
+	DUCKDB_API shared_ptr<Relation> ReadParquet(const string &parquet_file, bool binary_as_string);
 	//! Returns a relation from a query
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
 	                                                  const string &error = "Expected a single SELECT statement");

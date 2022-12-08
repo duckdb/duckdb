@@ -122,6 +122,21 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 	hive_partitioning = reader.ReadRequired<bool>();
 }
 
+BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
+	auto bind_info = BindInfo(ScanType::PARQUET);
+	auto parquet_bind = (ParquetReadBindData *)bind_data;
+	vector<Value> file_path;
+	for (auto &path : parquet_bind->files) {
+		file_path.emplace_back(path);
+	}
+	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
+	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind->parquet_options.binary_as_string));
+	bind_info.InsertOption("filename", Value::BOOLEAN(parquet_bind->parquet_options.filename));
+	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind->parquet_options.file_row_number));
+	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(parquet_bind->parquet_options.hive_partitioning));
+	return bind_info;
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -138,6 +153,7 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
+		table_function.get_batch_info = ParquetGetBatchInfo;
 
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
