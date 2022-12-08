@@ -33,14 +33,6 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct DatabaseSetting {
-	static constexpr const char *Name = "database";
-	static constexpr const char *Description = "Sets the default database.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static Value GetSetting(ClientContext &context);
-};
-
 struct DebugCheckpointAbort {
 	static constexpr const char *Name = "debug_checkpoint_abort";
 	static constexpr const char *Description =

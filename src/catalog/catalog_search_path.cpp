@@ -8,8 +8,9 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p) :
-	catalog(move(catalog_p)), schema(move(schema_p)) {}
+CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
+    : catalog(move(catalog_p)), schema(move(schema_p)) {
+}
 
 string CatalogSearchEntry::ToString() const {
 	if (catalog.empty()) {
@@ -20,7 +21,7 @@ string CatalogSearchEntry::ToString() const {
 }
 
 string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
-	for(idx_t i = 0; i < input.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		if (input[i] == '.' || input[i] == ',') {
 			return "\"" + input + "\"";
 		}
@@ -30,7 +31,7 @@ string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
 
 string CatalogSearchEntry::ListToString(const vector<CatalogSearchEntry> &input) {
 	string result;
-	for(auto &entry : input) {
+	for (auto &entry : input) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -38,7 +39,6 @@ string CatalogSearchEntry::ListToString(const vector<CatalogSearchEntry> &input)
 	}
 	return result;
 }
-
 
 CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t &idx) {
 	string catalog;
@@ -105,13 +105,12 @@ CatalogSearchEntry CatalogSearchEntry::Parse(const string &input) {
 vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 	idx_t pos = 0;
 	vector<CatalogSearchEntry> result;
-	while(pos < input.size()) {
+	while (pos < input.size()) {
 		auto entry = ParseInternal(input, pos);
 		result.push_back(entry);
 	}
 	return result;
 }
-
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context_p) {
 	vector<CatalogSearchEntry> empty;
@@ -124,7 +123,8 @@ void CatalogSearchPath::Set(const vector<CatalogSearchEntry> &new_paths, bool is
 	}
 	for (const auto &path : new_paths) {
 		if (!Catalog::GetSchema(context, path.catalog, path.schema, true)) {
-			throw CatalogException("SET %s: No catalog + schema named %s found.", is_set_schema ? "schema" : "search_path", path.ToString());
+			throw CatalogException("SET %s: No catalog + schema named %s found.",
+			                       is_set_schema ? "schema" : "search_path", path.ToString());
 		}
 	}
 	this->set_paths = move(new_paths);
@@ -132,7 +132,7 @@ void CatalogSearchPath::Set(const vector<CatalogSearchEntry> &new_paths, bool is
 }
 
 void CatalogSearchPath::Set(const CatalogSearchEntry &new_value, bool is_set_schema) {
-	vector<CatalogSearchEntry> new_paths { new_value };
+	vector<CatalogSearchEntry> new_paths {new_value};
 	Set(new_paths, is_set_schema);
 }
 
@@ -141,7 +141,7 @@ const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {
 }
 
 string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
-	for(auto &path : paths) {
+	for (auto &path : paths) {
 		if (path.catalog == catalog) {
 			return path.schema;
 		}
@@ -150,7 +150,7 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 }
 
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
-	for(auto &path : paths) {
+	for (auto &path : paths) {
 		if (path.schema == schema) {
 			return path.catalog;
 		}
@@ -158,9 +158,19 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 	return INVALID_CATALOG;
 }
 
+vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
+	vector<string> schemas;
+	for (auto &path : paths) {
+		if (path.schema == schema) {
+			schemas.push_back(path.catalog);
+		}
+	}
+	return schemas;
+}
+
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {
 	vector<string> schemas;
-	for(auto &path : paths) {
+	for (auto &path : paths) {
 		if (path.catalog == catalog) {
 			schemas.push_back(path.schema);
 		}

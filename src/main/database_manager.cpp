@@ -34,8 +34,7 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	if (!default_database) {
 		default_database = db_instance.get();
 	}
-	if (!databases->CreateEntry(context, name, move(db_instance),
-	                            dependencies)) {
+	if (!databases->CreateEntry(context, name, move(db_instance), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 }
@@ -57,8 +56,7 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<AttachedDatabase *> result;
-	databases->Scan(context,
-	                [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
+	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
 	return result;
 }
 

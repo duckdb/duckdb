@@ -39,12 +39,6 @@
 
 namespace duckdb {
 
-string SimilarCatalogEntry::GetQualifiedName() const {
-	D_ASSERT(Found());
-
-	return schema->name + "." + name;
-}
-
 Catalog::Catalog(AttachedDatabase &db)
     : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)), db(db) {
@@ -93,6 +87,9 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 	auto &db_manager = DatabaseManager::Get(context);
 	if (catalog_name == TEMP_CATALOG) {
 		return ClientData::Get(context).temporary_objects->GetCatalog();
+	}
+	if (catalog_name == SYSTEM_CATALOG) {
+		return GetSystemCatalog(context);
 	}
 	if (catalog_name == INVALID_CATALOG) {
 		return db_manager.GetDefaultDatabase().GetCatalog();
@@ -304,6 +301,49 @@ CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCat
 }
 
 //===--------------------------------------------------------------------===//
+// Lookup Structures
+//===--------------------------------------------------------------------===//
+struct CatalogLookup {
+	CatalogLookup(Catalog &catalog, string schema_p) : catalog(catalog), schema(move(schema_p)) {
+	}
+
+	Catalog &catalog;
+	string schema;
+};
+
+//! Return value of Catalog::LookupEntry
+struct CatalogEntryLookup {
+	SchemaCatalogEntry *schema;
+	CatalogEntry *entry;
+
+	DUCKDB_API bool Found() const {
+		return entry;
+	}
+};
+
+//! Return value of SimilarEntryInSchemas
+struct SimilarCatalogEntry {
+	//! The entry name. Empty if absent
+	string name;
+	//! The distance to the given name.
+	idx_t distance;
+	//! The schema of the entry.
+	SchemaCatalogEntry *schema;
+
+	DUCKDB_API bool Found() const {
+		return !name.empty();
+	}
+
+	DUCKDB_API string GetQualifiedName() const;
+};
+
+string SimilarCatalogEntry::GetQualifiedName() const {
+	D_ASSERT(Found());
+
+	return schema->name + "." + name;
+}
+
+//===--------------------------------------------------------------------===//
 // Generic
 //===--------------------------------------------------------------------===//
 void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
@@ -314,8 +354,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		return;
 	}
 
-	auto transaction = GetCatalogTransaction(context);
-	auto lookup = LookupEntry(transaction, info->type, info->schema, info->name, info->if_exists);
+	auto lookup = LookupEntry(context, info->type, info->schema, info->name, info->if_exists);
 	if (!lookup.Found()) {
 		return;
 	}
@@ -343,8 +382,11 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry *entry) { callback(entry); });
 }
 
-SimilarCatalogEntry Catalog::SimilarEntryInSchemas(CatalogTransaction transaction, const string &entry_name,
-                                                   CatalogType type, const vector<SchemaCatalogEntry *> &schemas) {
+//===--------------------------------------------------------------------===//
+// Lookup
+//===--------------------------------------------------------------------===//
+SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
+                                                   const unordered_set<SchemaCatalogEntry *> &schemas) {
 
 	vector<CatalogSet *> sets;
 	std::transform(schemas.begin(), schemas.end(), std::back_inserter(sets),
@@ -352,6 +394,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(CatalogTransaction transactio
 	pair<string, idx_t> most_similar {"", (idx_t)-1};
 	SchemaCatalogEntry *schema_of_most_similar = nullptr;
 	for (auto schema : schemas) {
+		auto transaction = schema->catalog->GetCatalogTransaction(context);
 		auto entry = schema->GetCatalogSet(type).SimilarEntry(transaction, entry_name);
 		if (!entry.first.empty() && (most_similar.first.empty() || most_similar.second > entry.second)) {
 			most_similar = entry;
@@ -372,19 +415,20 @@ string FindExtension(const string &function_name) {
 	}
 	return "";
 }
-CatalogException Catalog::CreateMissingEntryException(CatalogTransaction transaction, const string &entry_name,
-                                                      CatalogType type, const vector<SchemaCatalogEntry *> &schemas,
+CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
+                                                      CatalogType type,
+                                                      const unordered_set<SchemaCatalogEntry *> &schemas,
                                                       QueryErrorContext error_context) {
-	auto entry = SimilarEntryInSchemas(transaction, entry_name, type, schemas);
-
-	vector<SchemaCatalogEntry *> unseen_schemas;
-	this->schemas->Scan([&schemas, &unseen_schemas](CatalogEntry *entry) {
-		auto schema_entry = (SchemaCatalogEntry *)entry;
-		if (std::find(schemas.begin(), schemas.end(), schema_entry) == schemas.end()) {
-			unseen_schemas.emplace_back(schema_entry);
-		}
-	});
-	auto unseen_entry = SimilarEntryInSchemas(transaction, entry_name, type, unseen_schemas);
+	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
+	//
+	//	vector<SchemaCatalogEntry *> unseen_schemas;
+	//	this->schemas->Scan([&schemas, &unseen_schemas](CatalogEntry *entry) {
+	//		auto schema_entry = (SchemaCatalogEntry *)entry;
+	//		if (std::find(schemas.begin(), schemas.end(), schema_entry) == schemas.end()) {
+	//			unseen_schemas.emplace_back(schema_entry);
+	//		}
+	//	});
+	//	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	auto extension_name = FindExtension(entry_name);
 	if (!extension_name.empty()) {
 		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
@@ -392,9 +436,10 @@ CatalogException Catalog::CreateMissingEntryException(CatalogTransaction transac
 		                        entry_name, extension_name, extension_name, extension_name);
 	}
 	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
-		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
-	} else if (entry.Found()) {
+	//	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+	//		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
+	//	} else
+	if (entry.Found()) {
 		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
 	}
 
@@ -402,44 +447,69 @@ CatalogException Catalog::CreateMissingEntryException(CatalogTransaction transac
 	                                                  entry_name, did_you_mean));
 }
 
-CatalogEntryLookup Catalog::LookupEntry(CatalogTransaction transaction, CatalogType type, const string &schema_name,
+CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
+                                                const string &name) {
+
+	auto schema_entry = (SchemaCatalogEntry *)GetSchema(transaction, schema, true);
+	if (!schema_entry) {
+		return {nullptr, nullptr};
+	}
+	auto entry = schema_entry->GetCatalogSet(type).GetEntry(transaction, name);
+	if (!entry) {
+		return {schema_entry, nullptr};
+	}
+	return {schema_entry, entry};
+}
+
+CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
-	if (!schema_name.empty()) {
-		auto schema = GetSchema(transaction, schema_name, if_exists, error_context);
-		if (!schema) {
-			D_ASSERT(if_exists);
-			return {nullptr, nullptr};
-		}
-
-		auto entry = schema->GetCatalogSet(type).GetEntry(transaction, name);
-		if (!entry && !if_exists) {
-			throw CreateMissingEntryException(transaction, name, type, {schema}, error_context);
-		}
-
-		return {schema, entry};
-	}
-
-	const auto schema_names = ClientData::Get(transaction.GetContext()).catalog_search_path->GetSchemasForCatalog(GetName());
-	for (const auto &path : schema_names) {
-		auto lookup = LookupEntry(transaction, type, path, name, true, error_context);
-		if (lookup.Found()) {
-			return lookup;
-		}
-	}
-
-	if (!if_exists) {
-		vector<SchemaCatalogEntry *> schemas;
-		for (const auto &path : schema_names) {
-			auto schema = GetSchema(transaction, path, true);
-			if (schema) {
-				schemas.emplace_back(schema);
+	unordered_set<SchemaCatalogEntry *> schemas;
+	if (schema == INVALID_SCHEMA) {
+		// try all schemas for this catalog
+		const auto schema_names = ClientData::Get(context).catalog_search_path->GetSchemasForCatalog(GetName());
+		for (auto &candidate_schema : schema_names) {
+			auto transaction = GetCatalogTransaction(context);
+			auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
+			if (result.Found()) {
+				return result;
+			}
+			if (result.schema) {
+				schemas.insert(result.schema);
 			}
 		}
-
-		throw CreateMissingEntryException(transaction, name, type, schemas, error_context);
+	} else {
+		auto transaction = GetCatalogTransaction(context);
+		auto result = LookupEntryInternal(transaction, type, schema, name);
+		if (result.Found()) {
+			return result;
+		}
+		if (result.schema) {
+			schemas.insert(result.schema);
+		}
 	}
+	if (if_exists) {
+		return {nullptr, nullptr};
+	}
+	throw CreateMissingEntryException(context, name, type, schemas, error_context);
+}
 
-	return {nullptr, nullptr};
+CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
+                                        const string &name, bool if_exists, QueryErrorContext error_context) {
+	unordered_set<SchemaCatalogEntry *> schemas;
+	for (auto &lookup : lookups) {
+		auto transaction = lookup.catalog.GetCatalogTransaction(context);
+		auto result = lookup.catalog.LookupEntryInternal(transaction, type, lookup.schema, name);
+		if (result.Found()) {
+			return result;
+		}
+		if (result.schema) {
+			schemas.insert(result.schema);
+		}
+	}
+	if (if_exists) {
+		return {nullptr, nullptr};
+	}
+	throw CreateMissingEntryException(context, name, type, schemas, error_context);
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
@@ -457,42 +527,56 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, co
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	return LookupEntry(GetCatalogTransaction(context), type, schema_name, name, if_exists, error_context).entry;
+	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry;
 }
 
-vector<Catalog *> GetCatalogs(ClientContext &context, const string &catalog) {
-	vector<Catalog *> catalogs;
-	catalogs.push_back(&Catalog::GetCatalog(context, catalog));
-	if (catalog == INVALID_CATALOG) {
-		catalogs.push_back(&context.client_data->temporary_objects->GetCatalog());
-		catalogs.push_back(&Catalog::GetSystemCatalog(context));
+vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
+	vector<CatalogSearchEntry> entries;
+	auto &search_path = *context.client_data->catalog_search_path;
+	if (catalog == INVALID_CATALOG && schema == INVALID_SCHEMA) {
+		// no catalog or schema provided - scan the entire search path
+		entries = search_path.Get();
+	} else if (catalog == INVALID_CATALOG) {
+		auto catalogs = search_path.GetCatalogsForSchema(schema);
+		for (auto &catalog_name : catalogs) {
+			entries.emplace_back(catalog_name, schema);
+		}
+		entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase().GetName(), schema);
+	} else if (schema == INVALID_SCHEMA) {
+		auto schemas = search_path.GetSchemasForCatalog(catalog);
+		for (auto &schema_name : schemas) {
+			entries.emplace_back(catalog, schema_name);
+		}
+	} else {
+		// specific catalog and schema provided
+		entries.emplace_back(catalog, schema);
 	}
-	return catalogs;
+	return entries;
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
                                 const string &name, bool if_exists_p, QueryErrorContext error_context) {
-	auto catalogs = GetCatalogs(context, catalog);
-	D_ASSERT(!catalogs.empty());
-	CatalogEntry *result = nullptr;
-	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
-		result = catalogs[i]->GetEntry(context, type, schema, name, if_exists, error_context);
-		if (result) {
-			return result;
-		}
+	auto entries = GetCatalogEntries(context, catalog, schema);
+	vector<CatalogLookup> lookups;
+	for (auto &entry : entries) {
+		lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
 	}
-	return result;
+	auto result = LookupEntry(context, lookups, type, name, if_exists_p, error_context);
+	if (!result.Found()) {
+		D_ASSERT(if_exists_p);
+		return nullptr;
+	}
+	return result.entry;
 }
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &catalog_name, const string &schema_name,
                                        bool if_exists_p, QueryErrorContext error_context) {
-	auto catalogs = GetCatalogs(context, catalog_name);
-	D_ASSERT(!catalogs.empty());
+	auto entries = GetCatalogEntries(context, catalog_name, schema_name);
 	SchemaCatalogEntry *result = nullptr;
-	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? if_exists_p : true;
-		result = catalogs[i]->GetSchema(context, schema_name, if_exists, error_context);
+	for (idx_t i = 0; i < entries.size(); i++) {
+		auto if_exists = i + 1 == entries.size() ? if_exists_p : true;
+		auto &catalog = Catalog::GetCatalog(context, entries[i].catalog);
+		auto result = catalog.GetSchema(context, schema_name, if_exists, error_context);
 		if (result) {
 			return result;
 		}
@@ -502,20 +586,27 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
-	auto catalogs = GetCatalogs(context, catalog_name);
-	D_ASSERT(!catalogs.empty());
-	for (idx_t i = 0; i < catalogs.size(); i++) {
-		auto if_exists = i + 1 == catalogs.size() ? false : true;
-		auto entry = catalogs[i]->GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
-		if (entry) {
-			return catalogs[i]->GetType(context, schema, name);
-		}
-	}
-	throw InternalException("Catalog::GetType failed to find type or throw!?");
+	auto entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, false);
+	auto type_entry = (TypeCatalogEntry *)entry;
+	return type_entry->catalog->GetType(context, schema, name);
 }
 
 vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
-	auto catalogs = GetCatalogs(context, catalog_name);
+	vector<Catalog *> catalogs;
+	if (catalog_name == INVALID_CATALOG) {
+		unordered_set<string> name;
+
+		auto &search_path = *context.client_data->catalog_search_path;
+		for (auto &entry : search_path.Get()) {
+			if (name.find(entry.catalog) != name.end()) {
+				continue;
+			}
+			name.insert(entry.catalog);
+			catalogs.push_back(&Catalog::GetCatalog(context, entry.catalog));
+		}
+	} else {
+		catalogs.push_back(&Catalog::GetCatalog(context, catalog_name));
+	}
 	vector<SchemaCatalogEntry *> result;
 	for (auto catalog : catalogs) {
 		auto schemas = catalog->schemas->GetEntries<SchemaCatalogEntry>(catalog->GetCatalogTransaction(context));
@@ -533,8 +624,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
-	auto lookup =
-	    LookupEntry(GetCatalogTransaction(context), info->GetCatalogType(), info->schema, info->name, info->if_exists);
+	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name, info->if_exists);
 	if (!lookup.Found()) {
 		return;
 	}

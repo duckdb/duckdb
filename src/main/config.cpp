@@ -25,7 +25,6 @@ namespace duckdb {
 
 static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
-                                                 DUCKDB_LOCAL(DatabaseSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
                                                  DUCKDB_LOCAL(DebugForceNoCrossProduct),

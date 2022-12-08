@@ -37,6 +37,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			// we can only drop temporary tables in read-only mode
 			properties.read_only = false;
 		}
+		stmt.info->catalog = entry->catalog->GetName();
 		stmt.info->schema = entry->schema->name;
 		break;
 	}

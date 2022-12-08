@@ -73,6 +73,9 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	} else if (info.catalog == INVALID_CATALOG) {
 		info.catalog = search_path->GetDefaultCatalog(info.schema);
 	}
+	if (info.catalog == INVALID_CATALOG) {
+		info.catalog = DatabaseManager::Get(context).GetDefaultDatabase().GetName();
+	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.catalog == TEMP_CATALOG) {

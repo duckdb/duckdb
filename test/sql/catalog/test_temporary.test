@@ -49,8 +49,11 @@ Ambiguous
 statement ok
 CREATE TABLE memory.temp.integersy(i INTEGER)
 
+statement ok
+DROP SCHEMA temp CASCADE
+
 statement error
-DROP TABLE main.integersx
+DROP TABLE memory.main.integersx
 
 statement ok
 DROP TABLE integersx
@@ -61,7 +64,7 @@ CREATE TEMPORARY TABLE temp.integersx(i INTEGER)
 statement ok
 DROP TABLE temp.integersx
 
-# unsupported because stupid
+# unsupported
 statement error
 CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
 

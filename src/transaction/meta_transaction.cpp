@@ -20,14 +20,19 @@ ValidChecker &ValidChecker::Get(MetaTransaction &transaction) {
 
 Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	auto &meta_transaction = MetaTransaction::Get(context);
-	auto entry = meta_transaction.transactions.find(&db);
-	if (entry == meta_transaction.transactions.end()) {
-		auto new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction->active_query = meta_transaction.active_query;
-		meta_transaction.transactions[&db] = new_transaction;
+	return meta_transaction.GetTransaction(&db);
+}
+
+Transaction &MetaTransaction::GetTransaction(AttachedDatabase *db) {
+	auto entry = transactions.find(db);
+	if (entry == transactions.end()) {
+		auto new_transaction = db->GetTransactionManager().StartTransaction(context);
+		new_transaction->active_query = active_query;
+		all_transactions.push_back(db);
+		transactions[db] = new_transaction;
 		return *new_transaction;
 	} else {
-		D_ASSERT(entry->second->active_query == meta_transaction.active_query);
+		D_ASSERT(entry->second->active_query == active_query);
 		return *entry->second;
 	}
 }
@@ -52,11 +57,15 @@ string MetaTransaction::Commit() {
 	}
 	return error;
 }
+
 void MetaTransaction::Rollback() {
-	for (auto &entry : transactions) {
-		auto db = entry.first;
+	// rollback transactions in reverse order
+	for (idx_t i = all_transactions.size(); i > 0; i--) {
+		auto db = all_transactions[i - 1];
 		auto &transaction_manager = db->GetTransactionManager();
-		auto transaction = entry.second;
+		auto entry = transactions.find(db);
+		D_ASSERT(entry != transactions.end());
+		auto transaction = entry->second;
 		transaction_manager.RollbackTransaction(transaction);
 	}
 }

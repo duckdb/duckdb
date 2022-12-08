@@ -10,10 +10,12 @@
 
 namespace duckdb {
 
-BuiltinFunctions::BuiltinFunctions(CatalogTransaction transaction, Catalog &catalog) : transaction(transaction), catalog(catalog) {
+BuiltinFunctions::BuiltinFunctions(CatalogTransaction transaction, Catalog &catalog)
+    : transaction(transaction), catalog(catalog) {
 }
 
-BuiltinFunctions::~BuiltinFunctions() {}
+BuiltinFunctions::~BuiltinFunctions() {
+}
 
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
@@ -83,4 +85,4 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	catalog.CreateCopyFunction(transaction, &info);
 }
 
-}
+} // namespace duckdb

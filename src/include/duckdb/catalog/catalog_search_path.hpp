@@ -29,6 +29,7 @@ public:
 	static string ListToString(const vector<CatalogSearchEntry> &input);
 	static CatalogSearchEntry Parse(const string &input);
 	static vector<CatalogSearchEntry> ParseList(const string &input);
+
 private:
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
 	static string WriteOptionallyQuoted(const string &input);
@@ -52,6 +53,7 @@ public:
 	DUCKDB_API string GetDefaultCatalog(const string &schema);
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog);
+	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema);
 
 private:
 	void SetPaths(vector<CatalogSearchEntry> new_paths);

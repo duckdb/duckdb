@@ -12,9 +12,10 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/atomic.hpp"
 
 #include <functional>
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -48,31 +49,9 @@ class CatalogSet;
 class DatabaseInstance;
 class DependencyManager;
 
-//! Return value of Catalog::LookupEntry
-struct CatalogEntryLookup {
-	SchemaCatalogEntry *schema;
-	CatalogEntry *entry;
-
-	DUCKDB_API bool Found() const {
-		return entry;
-	}
-};
-
-//! Return value of SimilarEntryInSchemas
-struct SimilarCatalogEntry {
-	//! The entry name. Empty if absent
-	string name;
-	//! The distance to the given name.
-	idx_t distance;
-	//! The schema of the entry.
-	SchemaCatalogEntry *schema;
-
-	DUCKDB_API bool Found() const {
-		return !name.empty();
-	}
-
-	DUCKDB_API string GetQualifiedName() const;
-};
+struct CatalogLookup;
+struct CatalogEntryLookup;
+struct SimilarCatalogEntry;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -252,19 +231,23 @@ private:
 	AttachedDatabase &db;
 
 private:
-	//! A variation of GetEntry that returns an associated schema as well.
-	CatalogEntryLookup LookupEntry(CatalogTransaction transaction, CatalogType type, const string &schema,
-	                               const string &name, bool if_exists = false,
-	                               QueryErrorContext error_context = QueryErrorContext());
+	CatalogEntryLookup LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
+	                                       const string &name);
+	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
+	                               bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
+	static CatalogEntryLookup LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
+	                                      const string &name, bool if_exists = false,
+	                                      QueryErrorContext error_context = QueryErrorContext());
 
 	//! Return an exception with did-you-mean suggestion.
-	CatalogException CreateMissingEntryException(CatalogTransaction transaction, const string &entry_name,
-	                                             CatalogType type, const vector<SchemaCatalogEntry *> &schemas,
-	                                             QueryErrorContext error_context);
+	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,
+	                                                    CatalogType type,
+	                                                    const unordered_set<SchemaCatalogEntry *> &schemas,
+	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
-	SimilarCatalogEntry SimilarEntryInSchemas(CatalogTransaction transaction, const string &entry_name,
-	                                          CatalogType type, const vector<SchemaCatalogEntry *> &schemas);
+	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
+	                                                 const unordered_set<SchemaCatalogEntry *> &schemas);
 
 	void DropSchema(ClientContext &context, DropInfo *info);
 };

@@ -144,7 +144,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 }
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-							unordered_set<CatalogEntry *> &dependencies) {
+                             unordered_set<CatalogEntry *> &dependencies) {
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, move(value), dependencies);
 }
 
@@ -682,7 +682,7 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	}
 }
 
-void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback)  {
+void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback) {
 	Scan(catalog.GetCatalogTransaction(context), callback);
 }
 

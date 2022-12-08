@@ -61,19 +61,6 @@ Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Debug Force NoCrossProduct
-//===--------------------------------------------------------------------===//
-void DatabaseSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &manager = DatabaseManager::Get(context);
-	manager.SetDefaultDatabase(context, input.ToString());
-}
-
-Value DatabaseSetting::GetSetting(ClientContext &context) {
-	auto &manager = DatabaseManager::Get(context);
-	return manager.GetDefaultDatabase().GetName();
-}
-
-//===--------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===--------------------------------------------------------------------===//
 void DebugCheckpointAbort::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

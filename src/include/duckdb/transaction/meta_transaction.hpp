@@ -31,8 +31,6 @@ public:
 	idx_t catalog_version;
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
-	//! The set of active transactions for each database
-	unordered_map<AttachedDatabase *, Transaction *> transactions;
 	//! Whether or not any transaction have made modifications
 	bool read_only;
 	//! The active query number
@@ -44,11 +42,19 @@ public:
 		return start_timestamp;
 	}
 
+	Transaction &GetTransaction(AttachedDatabase *db);
+
 	string Commit();
 	void Rollback();
 
 	idx_t GetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
+
+private:
+	//! The set of active transactions for each database
+	unordered_map<AttachedDatabase *, Transaction *> transactions;
+	//! The set of transactions in order of when they were started
+	vector<AttachedDatabase *> all_transactions;
 };
 
 } // namespace duckdb

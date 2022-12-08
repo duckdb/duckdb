@@ -13,8 +13,8 @@ CatalogTransaction::CatalogTransaction(Catalog &catalog, ClientContext &context)
 	this->context = &context;
 }
 
-CatalogTransaction::CatalogTransaction(DatabaseInstance &db, transaction_t transaction_id_p, transaction_t start_time_p) :
-	db(&db), context(nullptr), transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
+CatalogTransaction::CatalogTransaction(DatabaseInstance &db, transaction_t transaction_id_p, transaction_t start_time_p)
+    : db(&db), context(nullptr), transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
 ClientContext &CatalogTransaction::GetContext() {
@@ -24,4 +24,4 @@ ClientContext &CatalogTransaction::GetContext() {
 	return *context;
 }
 
-}
+} // namespace duckdb
