@@ -2,7 +2,6 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
