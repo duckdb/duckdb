@@ -287,6 +287,18 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable HTTP Metadata Cache
+//===--------------------------------------------------------------------===//
+void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_metadata_cache_enable = input.GetValue<bool>();
+}
+
+Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
