@@ -80,7 +80,6 @@
 
 // Load the generated header file containing our list of extension headers
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-#include "extension_oote_headers.hpp"
 #include "extension_oote_loader.hpp"
 #endif
 
