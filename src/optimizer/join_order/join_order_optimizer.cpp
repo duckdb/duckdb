@@ -275,7 +275,6 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	return result;
 }
 
-
 bool JoinOrderOptimizer::NodeInFullPlan(JoinNode *node) {
 	return join_nodes_in_full_plan.find(node->set->ToString()) != join_nodes_in_full_plan.end();
 }
