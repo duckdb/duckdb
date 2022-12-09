@@ -150,7 +150,7 @@ jobs:
           path: |
             build/release/tools/jdbc/duckdb_jdbc.jar
   
-   java-windows-amd64:
+  java-windows-amd64:
     name: Java Windows (arm64)
     runs-on: windows-latest
     # needs: java-linux-amd64
@@ -218,7 +218,7 @@ jobs:
           path: |
             tools/jdbc/duckdb_jdbc.jar
 
-  java-osx:
+   java-osx:
     name: Java OSX
     runs-on: macos-latest
     # needs: java-linux-amd64
