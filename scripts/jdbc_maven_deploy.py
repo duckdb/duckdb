@@ -24,13 +24,15 @@ import re
 
 version_regex = re.compile(r'^v(\d+\.\d+\.\d+)$')
 
-if len(sys.argv) < 2 or not version_regex.match(sys.argv[1]):
-	print("Usage: [release_tag, format: v1.2.3]")
-	exit(1)
+if len(sys.argv) < 3 or not version_regex.match(sys.argv[1]) or not os.path.isdir(sys.argv[2]):
+  print("Usage: [release_tag, format: v1.2.3] [artifact_dir]")
+  exit(1)
 
 def exec(cmd):
   print(cmd)
   return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
+
+jdbc_artifact_dir = sys.argv[2]
 
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
 
@@ -109,19 +111,18 @@ pom_path = pathlib.Path(pom)
 pom_path.write_text(pom_template.replace("${VERSION}", release_version))
 
 for build in combine_builds:
-	file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
-	# print(file_url)
-	urllib.request.urlretrieve(file_url, '%s/duckdb_jdbc-%s.jar' % (staging_dir, build))
-
+# file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
+# urllib.request.urlretrieve(file_url, '%s/java-%s/duckdb_jdbc.jar' % (jdbc_artifact_dir, build))
+  shutil.copyfile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), '%s/duckdb_jdbc-%s.jar' % (staging_dir, build))
 # fatten up jar to add other binaries, start with first one
 shutil.copyfile('%s/duckdb_jdbc-%s.jar' % (staging_dir, combine_builds[0]), binary_jar)
 
 for build in combine_builds[1:]:
-	old_jar = zipfile.ZipFile('%s/duckdb_jdbc-%s.jar' % (staging_dir, build), 'r')
-	for zip_entry in old_jar.namelist():
-		if zip_entry.startswith('libduckdb_java.so'):
-			old_jar.extract(zip_entry, staging_dir)
-			exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
+  old_jar = zipfile.ZipFile('%s/duckdb_jdbc-%s.jar' % (staging_dir, build), 'r')
+  for zip_entry in old_jar.namelist():
+    if zip_entry.startswith('libduckdb_java.so'):
+      old_jar.extract(zip_entry, staging_dir)
+      exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
 
 # download sources to create separate sources and javadoc JARs, this is required by maven central
 source_zip_url = 'https://github.com/duckdb/duckdb/archive/%s.zip' % release_tag 
@@ -133,31 +134,31 @@ zipfile.ZipFile(source_zip_file, 'r').extractall(source_zip_dir)
 jdbc_root_path = glob.glob('%s/*/tools/jdbc' % source_zip_dir)[0]
 javadoc_stage_dir = tempfile.mkdtemp()
 
-exec("javadoc -d %s -sourcepath %s/src/main/java org.duckdb" % (javadoc_stage_dir, jdbc_root_path))
+exec("javadoc -Xdoclint:-reference -d %s -sourcepath %s/src/main/java org.duckdb" % (javadoc_stage_dir, jdbc_root_path))
 exec("jar -cvf %s -C %s ." % (javadoc_jar, javadoc_stage_dir))
 exec("jar -cvf %s -C %s/src/main/java org" % (sources_jar, jdbc_root_path))
 
 # make sure all files exist before continuing
 if not os.path.exists(javadoc_jar) or not os.path.exists(sources_jar) or not os.path.exists(pom) or not os.path.exists(binary_jar):
-	raise ValueError('could not create all required files') 
+  raise ValueError('could not create all required files') 
 
 # run basic tests, it should now work on whatever platform this is
-exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
+# exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
 
 # now sign and upload everything
 # for this to work, you must have entry in ~/.m2/settings.xml:
 
 # <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-# 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-# 	xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-# 	https://maven.apache.org/xsd/settings-1.0.0.xsd">
-# 	<servers>
-# 		<server>
-# 			<id>ossrh</id>
-# 			<username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
-# 			<password>[...]</password>
-# 		</server>
-# 	</servers>
+#   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+#   xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+#   https://maven.apache.org/xsd/settings-1.0.0.xsd">
+#   <servers>
+#     <server>
+#       <id>ossrh</id>
+#       <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+#       <password>[...]</password>
+#     </server>
+#   </servers>
 # </settings>
 
 #exit(0)
@@ -169,17 +170,17 @@ exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom,
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
 
 
-print("Close/Release steps")
+# print("Close/Release steps")
 
-# beautiful
-os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
+# # beautiful
+# os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
 
-# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
-repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
-exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
-exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
+# # this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
+# repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
+# exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
+# exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
 
-print("Done?")
+# print("Done?")
 
 
 # TODO upload the asset to gh releases, too!
