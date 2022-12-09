@@ -102,6 +102,24 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	return construct_retlist(move(stmt), "", 0);
 }
 
+[[cpp11::register]] cpp11::list rapi_prepare_substrait_json(duckdb::conn_eptr_t conn, std::string json) {
+	if (!conn || !conn.get() || !conn->conn) {
+		cpp11::stop("rapi_prepare_substrait_json: Invalid connection");
+	}
+
+	auto rel = conn->conn->TableFunction("from_substrait_json", {Value(json)});
+	auto relation_stmt = make_unique<RelationStatement>(rel);
+	relation_stmt->n_param = 0;
+	relation_stmt->query = "";
+	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	if (stmt->HasError()) {
+		cpp11::stop("rapi_prepare_substrait_json: Failed to prepare query %s\nError: %s",
+		            stmt->error.Message().c_str());
+	}
+
+	return construct_retlist(move(stmt), "", 0);
+}
+
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_prepare: Invalid connection");

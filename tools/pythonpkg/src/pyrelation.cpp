@@ -19,14 +19,14 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(move(result)) {
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->FromDF(df);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -34,7 +34,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBP
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
-                                                         DuckDBPyConnection *conn) {
+                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -42,14 +42,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, co
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, const string &alias,
-                                                        DuckDBPyConnection *conn) {
+                                                        shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename,
+                                                           shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -58,7 +59,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
                                                            bool file_row_number, bool filename, bool hive_partitioning,
-                                                           DuckDBPyConnection *conn) {
+                                                           shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -67,35 +68,45 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_gl
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                             bool file_row_number, bool filename, bool hive_partitioning,
-                                                            DuckDBPyConnection *conn) {
+                                                            shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->GetSubstrait(query);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstraitJSON(const string &query, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstraitJSON(const string &query,
+                                                                shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->GetSubstraitJSON(query);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstraitJSON(const string &json,
+                                                                 shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FromSubstraitJSON(json);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->FromSubstrait(proto);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object,
+                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -109,7 +120,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, const string &expr,
-                                                         DuckDBPyConnection *conn) {
+                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -125,7 +136,7 @@ py::str DuckDBPyRelation::GetAlias() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const DataFrame &df, const string &expr,
-                                                       DuckDBPyConnection *conn) {
+                                                       shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -137,7 +148,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const DataFrame &df, const string &expr,
-                                                        DuckDBPyConnection *conn) {
+                                                        shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -148,7 +159,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) 
 	return make_unique<DuckDBPyRelation>(rel->Limit(n, offset));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const DataFrame &df, int64_t n, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const DataFrame &df, int64_t n,
+                                                       shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -160,7 +172,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const DataFrame &df, const string &expr,
-                                                       DuckDBPyConnection *conn) {
+                                                       shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -357,7 +369,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const DataFrame &df, const string &expr,
-                                                           const string &groups, DuckDBPyConnection *conn) {
+                                                           const string &groups, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -368,7 +380,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_unique<DuckDBPyRelation>(rel->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -513,7 +525,7 @@ void DuckDBPyRelation::WriteCsv(const string &file) {
 	rel->WriteCSV(file);
 }
 
-void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, DuckDBPyConnection *conn) {
+void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -584,7 +596,7 @@ DuckDBPyRelation &DuckDBPyRelation::Execute() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
-                                                       const string &sql_query, DuckDBPyConnection *conn) {
+                                                     const string &sql_query, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
