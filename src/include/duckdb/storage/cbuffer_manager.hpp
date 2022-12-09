@@ -21,8 +21,7 @@ typedef idx_t (*duckdb_used_memory_t)();
 
 // Contains the information that makes up the virtual buffer manager
 struct CBufferManagerConfig {
-	idx_t max_size; // Do we still need this??
-	void *data;     // Context provided to 'allocate_func'
+	void *data; // Context provided to 'allocate_func'
 	duckdb_allocate_buffer_t allocate_func;
 	duckdb_get_buffer_allocation_t get_allocation_func;
 	duckdb_reallocate_buffer_t reallocate_func;
