@@ -6,14 +6,10 @@
 # run unnecessary optimizations.
 
 statement ok
-CREATE TABLE MainTable (Id INT,
-Value1_Id INT, Value2_Id INT, Value3_Id INT, Value4_Id INT, Value5_Id INT,
-Value6_Id INT, Value7_Id INT, Value8_Id INT, Value9_Id INT, Value10_Id INT,
-Value11_Id INT, Value12_Id INT, Value13_Id INT, Value14_Id INT, Value15_Id INT,
-Value16_Id INT, Value17_Id INT, Value18_Id INT, Value19_Id INT, Value20_Id INT);
+
 
 statement ok
-CREATE or REPLACE TABLE ValueTable (Id INT, Value TEXT);
+
 
 statement ok
 SELECT * FROM MainTable T
