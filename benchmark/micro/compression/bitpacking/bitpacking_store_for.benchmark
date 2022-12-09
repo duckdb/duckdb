@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_store_for.benchmark
+# description: Storing 1GB of ints compressed mostly with the FOR bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Insert For Mode
+group bitpacking
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='for';
+DROP TABLE IF EXISTS integers;
+
+run
+CREATE TABLE integers AS SELECT (i%250000000)::INT32 AS i FROM range(0, 250000000) tbl(i);
+checkpoint;
