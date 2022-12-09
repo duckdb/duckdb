@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/estimated_properties.hpp
+// duckdb/optimizer/join_order/estimated_properties.hpp
 //
 //
 //===----------------------------------------------------------------------===//
