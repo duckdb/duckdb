@@ -102,6 +102,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
 
+	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
+
 	unordered_set<string> GetTableNames(const string &query);
 
 	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);
