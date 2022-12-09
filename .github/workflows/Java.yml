@@ -188,7 +188,7 @@ jobs:
       - java-linux-aarch64
       - java-linux-amd64
       - java-windows-amd64
-      - java-osx
+      - java-osx-universal
 
     steps:
       - uses: actions/checkout@v3
