@@ -1,0 +1,311 @@
+name: LinuxRelease
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**'
+      - '!src/include/**'
+      - '!tools/jdbc/**'
+      - '!.github/workflows/Java.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+
+jobs:
+  java-linux-amd64:
+    name: Java Linux (AMD64)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    env:
+      GEN: ninja
+      BUILD_JDBC: 1
+      BUILD_JEMALLOC: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+      STATIC_LIBCPP: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/ubuntu_16_setup
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Java Tests
+        shell: bash
+        run: |
+          java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+      - name: Java Example
+        shell: bash
+        run: |
+          (cd examples/jdbc; make; make maven)
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python3.7 scripts/asset-upload-gha.py duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-linux-amd64
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+  
+
+  java-linux-i386:
+    name: Java Linux (I386)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+   # needs: java-linux-amd64
+    env:
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/ubuntu_16_setup
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p build/release
+          (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python3.7 scripts/asset-upload-gha.py duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-linux-i386
+          path: |
+            libduckdb-linux-i386.zip
+            duckdb_cli-linux-i386.zip
+            build/release/tools/jdbc/duckdb_jdbc.jar
+  
+
+  java-linux-aarch64:
+    name: Java Linux (AARCH64)
+    runs-on: ubuntu-latest
+   # needs: java-linux-amd64
+    container: ubuntu:18.04 # cross compiler not available in 16
+    env:
+      GEN: ninja
+      BUILD_JDBC: 1
+      OVERRIDE_JDBC_OS_ARCH: arm64
+      JAVA_HOME: ../../jdk8u345-b01
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/ubuntu_16_setup
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Install Stuff
+        shell: bash
+        run: |
+          apt-get update -y -qq
+          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+          curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+
+      - name: Build
+        shell: bash
+        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python3.7 scripts/asset-upload-gha.py duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-linux-aarch64
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+  
+   java-windows-amd64:
+    name: Java Windows (arm64)
+    runs-on: windows-latest
+    # needs: java-linux-amd64
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Build
+        shell: bash
+        run: |
+          python scripts/windows_ci.py
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
+          cmake --build . --config Release
+
+      - name: Java Test
+        shell: bash
+        run: |
+          java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python scripts/asset-upload-gha.py duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-windows-amd64
+          path: |
+            tools/jdbc/duckdb_jdbc.jar
+
+  java-windows-i386:
+    name: Java Windows (i386)
+    runs-on: windows-latest
+    # needs: java-linux-amd64
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DJDBC_DRIVER=1
+          cmake --build . --config Release
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python scripts/asset-upload-gha.py duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-windows-i386
+          path: |
+            tools/jdbc/duckdb_jdbc.jar
+
+  java-osx:
+    name: Java OSX
+    runs-on: macos-latest
+    # needs: java-linux-amd64
+    env:
+      BUILD_JDBC: 1
+      OSX_BUILD_UNIVERSAL: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Java Tests
+        shell: bash
+        run: |
+          java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+      - name: Java Example
+        shell: bash
+        run: |
+          (cd examples/jdbc; make; make maven)
+
+      - name: Deploy
+        shell: bash
+        run: |
+          python scripts/asset-upload-gha.py duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: java-osx
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+
+  java-combine:
+    name: Java Combine
+    runs-on: ubuntu-latest
+    needs: [java-linux-aarch64, java-linux-i386, java-linux-amd64, java-windows-i386, java-windows-amd64, java-osx]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-linux-aarch64
+          path: java-linux-aarch64
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-linux-i386
+          path: java-linux-i386
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-linux-amd64
+          path: java-linux-amd64
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-windows-i386
+          path: java-windows-i386
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-windows-amd64
+          path: java-windows-amd64
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: java-osx
+          path: java-osx
+
+      - name: Display structure of downloaded files
+        shell: bash
+        run: |
+          ls -R
