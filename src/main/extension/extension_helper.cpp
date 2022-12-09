@@ -124,9 +124,12 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 		LoadExtensionInternal(db, ext, true);
 	}
 
+
+#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
     for (auto &ext : OOTE_EXTENSIONS) {
         LoadExtensionInternal(db, ext, true);
     }
+#endif
 }
 
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {

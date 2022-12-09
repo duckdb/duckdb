@@ -668,6 +668,10 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} inet_extension)
   endif()
 
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
+    add_dependencies(${LIBRARY} ${OOTE_NAME}_extension)
+  endforeach()
+
 endfunction()
 
 function(link_extension_libraries LIBRARY)
@@ -813,13 +817,12 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       target_link_libraries(${TARGET_NAME} delayimp)
     endif()
 
-    # TODO: I dont see the point of this?
-#    set_target_properties(
-#            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
-#            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
-#    set_target_properties(
-#            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
-#            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+    set_target_properties(
+            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+    set_target_properties(
+            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
   if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
