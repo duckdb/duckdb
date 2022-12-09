@@ -78,7 +78,7 @@ public:
 
 	void InstallExtension(const string &query, bool force_install, DuckDBPyConnection *conn = nullptr);
 
-	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	void LoadExtension(const string &query, DuckDBPyConnection *conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
