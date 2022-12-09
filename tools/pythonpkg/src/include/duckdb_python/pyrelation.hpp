@@ -73,12 +73,8 @@ public:
 	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
 	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, DuckDBPyConnection *conn = nullptr);
-	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json, DuckDBPyConnection *conn = nullptr);
-
-	void InstallExtension(const string &query, bool force_install, DuckDBPyConnection *conn = nullptr);
-
-	void LoadExtension(const string &query, DuckDBPyConnection *conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
