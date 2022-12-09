@@ -154,12 +154,12 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	DuckDBPyConnection::ImportCache();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
 	if (params.is_none()) {
 		params = py::list();
 	}
 	Execute(query, std::move(params), true);
-	return this;
+	return shared_from_this();
 }
 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
@@ -179,7 +179,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 	return pending_query.Execute();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -195,7 +195,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
-			return this;
+			return shared_from_this();
 		}
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
@@ -246,15 +246,15 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			result = move(res);
 		}
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -294,7 +294,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
-	return this;
+	return shared_from_this();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
@@ -510,32 +510,32 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	return connection->GetTableNames(query);
 }
 
-DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
 	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Begin() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Begin() {
 	Execute("BEGIN TRANSACTION");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Commit() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
 	if (connection->context->transaction.IsAutoCommit()) {
-		return this;
+		return shared_from_this();
 	}
 	Execute("COMMIT");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Rollback() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	Execute("ROLLBACK");
-	return this;
+	return shared_from_this();
 }
 
 py::object DuckDBPyConnection::GetDescription() {
@@ -565,6 +565,9 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
 	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_unique<Connection>(*res->database);
@@ -801,12 +804,12 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 	return args;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
-	return default_connection.get();
+	return default_connection;
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -820,8 +823,8 @@ bool DuckDBPyConnection::IsInteractive() {
 	return DuckDBPyConnection::environment != PythonEnvironmentType::NORMAL;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Enter() {
-	return this;
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
+	return shared_from_this();
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
