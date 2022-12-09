@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -28,7 +27,7 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_COUNT // This has to stay the last entry of the type!
 };
 
-vector<string> ListCompressionTypes();
+vector<string> ListCompressionTypes(void);
 CompressionType CompressionTypeFromString(const string &str);
 string CompressionTypeToString(CompressionType type);
 

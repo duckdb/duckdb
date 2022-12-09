@@ -6,7 +6,7 @@ namespace duckdb {
 
 // LCOV_EXCL_START
 
-vector<string> ListCompressionTypes() {
+vector<string> ListCompressionTypes(void) {
 	vector<string> compression_types;
 	uint8_t amount_of_compression_options = (uint8_t)CompressionType::COMPRESSION_COUNT;
 	compression_types.reserve(amount_of_compression_options);
