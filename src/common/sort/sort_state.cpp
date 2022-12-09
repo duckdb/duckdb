@@ -5,6 +5,7 @@
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 
+#include <algorithm>
 #include <numeric>
 
 namespace duckdb {
