@@ -22,6 +22,7 @@ public:
 	virtual ~FileOpener() {};
 
 	virtual bool TryGetCurrentSetting(const string &key, Value &result) = 0;
+	virtual ClientContext *TryGetClientContext() = 0;
 
 	DUCKDB_API static FileOpener *Get(ClientContext &context);
 };

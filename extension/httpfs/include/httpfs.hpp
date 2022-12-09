@@ -4,6 +4,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "http_metadata_cache.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -42,7 +44,7 @@ public:
 	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
-	virtual unique_ptr<ResponseWrapper> Initialize();
+	virtual void Initialize(FileOpener *opener);
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	unique_ptr<duckdb_httplib_openssl::Client> http_client;
@@ -64,6 +66,8 @@ public:
 	// Read buffer
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
+
+	HTTPStats *stats;
 
 public:
 	void Close() override {
@@ -120,6 +124,9 @@ public:
 	}
 
 	static void Verify();
+
+	// Global cache
+	unique_ptr<HTTPMetadataCache> global_metadata_cache;
 
 protected:
 	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,

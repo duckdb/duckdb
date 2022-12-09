@@ -30,6 +30,8 @@ CompressionType CompressionTypeFromString(const string &str) {
 
 string CompressionTypeToString(CompressionType type) {
 	switch (type) {
+	case CompressionType::COMPRESSION_AUTO:
+		return "Auto";
 	case CompressionType::COMPRESSION_UNCOMPRESSED:
 		return "Uncompressed";
 	case CompressionType::COMPRESSION_CONSTANT:
