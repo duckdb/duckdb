@@ -350,7 +350,6 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:

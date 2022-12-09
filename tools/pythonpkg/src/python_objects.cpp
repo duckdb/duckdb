@@ -311,7 +311,6 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
