@@ -204,34 +204,32 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
 	      "run the query as-is.",
 	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
-	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
-	      py::arg("connection") = py::none());
 	m.def("from_arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
 	      py::arg("arrow_object"), py::arg("connection") = py::none());
 	m.def("arrow", &DuckDBPyRelation::FromArrow, "Create a relation object from an Arrow object",
 	      py::arg("arrow_object"), py::arg("connection") = py::none());
-	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the Data.Frame df by the filter in filter_expr", py::arg("df"),
+	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the DataFrame df by the filter in filter_expr", py::arg("df"),
 	      py::arg("filter_expr"), py::arg("connection") = py::none());
-	m.def("project", &DuckDBPyRelation::ProjectDf, "Project the Data.Frame df by the projection in project_expr",
+	m.def("project", &DuckDBPyRelation::ProjectDf, "Project the DataFrame df by the projection in project_expr",
 	      py::arg("df"), py::arg("project_expr"), py::arg("connection") = py::none());
 	m.def("alias", &DuckDBPyRelation::AliasDF, "Create a relation from Data.Frame df with the passed alias",
 	      py::arg("df"), py::arg("alias"), py::arg("connection") = py::none());
-	m.def("order", &DuckDBPyRelation::OrderDf, "Reorder the Data.Frame df by order_expr", py::arg("df"),
+	m.def("order", &DuckDBPyRelation::OrderDf, "Reorder the DataFrame df by order_expr", py::arg("df"),
 	      py::arg("order_expr"), py::arg("connection") = py::none());
 	m.def("aggregate", &DuckDBPyRelation::AggregateDF,
-	      "Compute the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
+	      "Compute the aggregate aggr_expr by the optional groups group_expr on DataFrame df", py::arg("df"),
 	      py::arg("aggr_expr"), py::arg("group_expr") = "", py::arg("connection") = py::none());
-	m.def("distinct", &DuckDBPyRelation::DistinctDF, "Compute the distinct rows from Data.Frame df ", py::arg("df"),
+	m.def("distinct", &DuckDBPyRelation::DistinctDF, "Compute the distinct rows from DataFrame df ", py::arg("df"),
 	      py::arg("connection") = py::none());
-	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
+	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the DataFrame df", py::arg("df"),
 	      py::arg("n"), py::arg("connection") = py::none());
 
 	m.def("query_df", &DuckDBPyRelation::QueryDF,
 	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
-	      "Data.Frame df",
+	      "DataFrame df",
 	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"), py::arg("connection") = py::none());
 
-	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the Data.Frame df to a CSV file in file_name",
+	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the DataFrame df to a CSV file in file_name",
 	      py::arg("df"), py::arg("file_name"), py::arg("connection") = py::none());
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
