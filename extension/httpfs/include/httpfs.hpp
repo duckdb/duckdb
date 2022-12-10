@@ -4,6 +4,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "http_metadata_cache.hpp"
 
 namespace duckdb_httplib_openssl {
 struct Response;
@@ -25,8 +27,14 @@ public:
 
 struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
+	static constexpr uint64_t DEFAULT_RETRIES = 3;
+	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
+	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 
 	uint64_t timeout;
+	uint64_t retries;
+	uint64_t retry_wait_ms;
+	float retry_backoff;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
@@ -36,7 +44,7 @@ public:
 	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
-	virtual unique_ptr<ResponseWrapper> Initialize();
+	virtual void Initialize(FileOpener *opener);
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	unique_ptr<duckdb_httplib_openssl::Client> http_client;
@@ -58,6 +66,8 @@ public:
 	// Read buffer
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
+
+	HTTPStats *stats;
 
 public:
 	void Close() override {
@@ -114,6 +124,9 @@ public:
 	}
 
 	static void Verify();
+
+	// Global cache
+	unique_ptr<HTTPMetadataCache> global_metadata_cache;
 
 protected:
 	virtual unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
