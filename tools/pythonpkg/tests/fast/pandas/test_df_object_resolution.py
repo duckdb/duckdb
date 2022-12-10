@@ -376,6 +376,21 @@ class TestResolveObjectColumns(object):
         double_dtype = np.dtype('object')
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
+    # numpy.datetime64 is just a wrapper around a datetime.datetime object, because reasons..
+    def test_numpy_datetime(self):
+        numpy = pytest.importorskip("numpy")
+
+        standard_vector_size = 2048
+        data = []
+        data += [numpy.datetime64('2022-12-10T21:38:24.578696') for x in range(standard_vector_size)]
+        data += [numpy.datetime64('2022-02-21T06:59:23.324812') for x in range(standard_vector_size)]
+        data += [numpy.datetime64('1974-06-05T13:12:01.000000') for x in range(standard_vector_size)]
+        data += [numpy.datetime64('2049-01-13T00:24:31.999999') for x in range(standard_vector_size)]
+        #print(numpy.datetime64('2021-11-01T21:01:38').tolist().__class__)
+        x = pd.DataFrame({'dates': pd.Series(data=data, dtype='object')})
+        res = duckdb.query_df(x, "x", "select distinct * from x").df()
+        assert(len(res['dates'].__array__()) == 4)
+
     def test_fallthrough_object_conversion(self, duckdb_cursor):
         x = pd.DataFrame(
             [
@@ -434,9 +449,9 @@ class TestResolveObjectColumns(object):
         assert(str(conversion) == '[(nan,), (nan,), (nan,), (inf,), (inf,), (inf,)]')
 
     # Test that the column 'offset' is actually used when converting,
-    # and that the same 1024 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
+    # and that the same 2048 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
     def test_multiple_chunks(self):
-        standard_vector_size = 1024
+        standard_vector_size = 2048
 
         data = []
         data += [datetime.date(2022, 9, 13) for x in range(standard_vector_size)]
