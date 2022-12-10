@@ -376,6 +376,10 @@ void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 	config.options.http_metadata_cache_enable = input.GetValue<bool>();
 }
 
+void EnableHTTPMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_metadata_cache_enable = DBConfig().options.http_metadata_cache_enable;
+}
+
 Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
@@ -572,6 +576,10 @@ void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 		}
 		config.options.force_bitpacking_mode = mode;
 	}
+}
+
+void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.force_bitpacking_mode = DBConfig().options.force_bitpacking_mode;
 }
 
 Value ForceBitpackingModeSetting::GetSetting(ClientContext &context) {
