@@ -20,6 +20,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	LogicalType result_type;
 	if (base_type == LogicalTypeId::LIST) {
 		throw ParserException("LIST is not valid as a stand-alone type");
+	} else if (base_type == LogicalTypeId::ENUM) {
+		throw ParserException("ENUM is not valid as a stand-alone type");
 	} else if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");

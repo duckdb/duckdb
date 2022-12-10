@@ -63,6 +63,28 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 	return AllocateVector(type, chunk_meta, &append_state.current_chunk_state, prev_index);
 }
 
+VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta,
+                                                                ColumnDataAppendState &append_state,
+                                                                VectorDataIndex prev_index) {
+	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(size != 0);
+
+	VectorMetaData meta_data;
+	meta_data.count = 0;
+
+	allocator->AllocateData(AlignValue(size), meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
+	chunk_meta.block_ids.insert(meta_data.block_id);
+
+	VectorDataIndex index(vector_data.size());
+	vector_data.push_back(meta_data);
+
+	if (prev_index.IsValid()) {
+		GetVectorData(prev_index).next_data = index;
+	}
+
+	return index;
+}
+
 void ColumnDataCollectionSegment::AllocateNewChunk() {
 	ChunkMetaData meta_data;
 	meta_data.count = 0;
@@ -165,7 +187,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	if (vdata.count == 0) {
 		return 0;
 	}
-	auto count = ReadVectorInternal(state, vector_index, result);
+	auto vcount = ReadVectorInternal(state, vector_index, result);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
@@ -176,12 +198,19 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
 			auto child_count =
 			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
-			if (child_count != count) {
+			if (child_count != vcount) {
 				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}
 		}
+	} else if (internal_type == PhysicalType::VARCHAR &&
+	           allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		for (auto &swizzle_segment : vdata.swizzle_data) {
+			auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
+			allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
+			                             string_heap_segment.block_id, string_heap_segment.offset);
+		}
 	}
-	return count;
+	return vcount;
 }
 
 void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

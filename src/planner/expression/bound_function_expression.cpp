@@ -57,6 +57,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	vector<unique_ptr<Expression>> new_children;
+	new_children.reserve(children.size());
 	for (auto &child : children) {
 		new_children.push_back(child->Copy());
 	}
