@@ -20,6 +20,14 @@ static void LoadInternal(DatabaseInstance &instance) {
 	// Single timeout value is used for all 4 types of timeouts, we could split it into 4 if users need that
 	config.AddExtensionOption("httpfs_timeout", "HTTP timeout read/write/connection/retry (default 30000ms)",
 	                          LogicalType::UBIGINT, Value(30000));
+	config.AddExtensionOption("http_retries", "HTTP retries on I/O error (default 3)", LogicalType::UBIGINT, Value(3));
+	config.AddExtensionOption("http_retry_wait_ms", "Time between retries (default 100ms)", LogicalType::UBIGINT,
+	                          Value(100));
+	// Reduces the number of requests made while waiting, for example retry_wait_ms of 50 and backoff factor of 2 will
+	// result in wait times of  0 50 100 200 400...etc.
+	config.AddExtensionOption("http_retry_backoff",
+	                          "Backoff factor for exponentially increasing retry wait time (default 4)",
+	                          LogicalType::FLOAT, Value(4));
 
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
@@ -41,6 +49,9 @@ static void LoadInternal(DatabaseInstance &instance) {
 	                          LogicalType::UBIGINT, Value(10000));
 	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 50)",
 	                          LogicalType::UBIGINT, Value(50));
+
+	auto provider = make_unique<AWSEnvironmentCredentialsProvider>(config);
+	provider->SetAll();
 }
 
 void HTTPFsExtension::Load(DuckDB &db) {

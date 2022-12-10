@@ -36,9 +36,26 @@ public:
 public:
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
-	                                              unordered_set<idx_t> &left_bindings,
-	                                              unordered_set<idx_t> &right_bindings,
-	                                              vector<unique_ptr<Expression>> &expressions);
+	                                              unique_ptr<Expression> condition);
+	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+	                                              unique_ptr<LogicalOperator> right_child,
+	                                              vector<JoinCondition> conditions,
+	                                              vector<unique_ptr<Expression>> arbitrary_expressions);
+
+	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	                                  unique_ptr<LogicalOperator> &right_child, unique_ptr<Expression> condition,
+	                                  vector<JoinCondition> &conditions,
+	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
+	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	                                  unique_ptr<LogicalOperator> &right_child,
+	                                  vector<unique_ptr<Expression>> &expressions, vector<JoinCondition> &conditions,
+	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
+	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	                                  unique_ptr<LogicalOperator> &right_child,
+	                                  const unordered_set<idx_t> &left_bindings,
+	                                  const unordered_set<idx_t> &right_bindings,
+	                                  vector<unique_ptr<Expression>> &expressions, vector<JoinCondition> &conditions,
+	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
 };
 
 } // namespace duckdb

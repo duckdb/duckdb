@@ -97,6 +97,10 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
+idx_t GetAllocSize(idx_t size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
+}
+
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                              FileBufferType type) {
 	if (source) {
@@ -435,7 +439,7 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 190, handle->buffer->size);
+	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = move(replacement_buffer);
 #endif
 }

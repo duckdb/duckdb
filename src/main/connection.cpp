@@ -243,6 +243,13 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list));
 }
 
+shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {
+	vector<Value> params;
+	params.emplace_back(parquet_file);
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
+}
+
 unordered_set<string> Connection::GetTableNames(const string &query) {
 	return context->GetTableNames(query);
 }

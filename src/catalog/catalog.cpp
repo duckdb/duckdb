@@ -186,12 +186,8 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 }
 
 CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
-	auto schema = GetSchema(context, info->schema);
-	return AddFunction(context, schema, info);
-}
-
-CatalogEntry *Catalog::AddFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
-	return schema->AddFunction(context, info);
+	info->on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	return CreateFunction(context, info);
 }
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,

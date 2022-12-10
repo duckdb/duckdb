@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -369,6 +370,18 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable HTTP Metadata Cache
+//===--------------------------------------------------------------------===//
+void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_metadata_cache_enable = input.GetValue<bool>();
+}
+
+Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
 
@@ -541,6 +554,28 @@ void ForceCompressionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(*context.db);
 	return CompressionTypeToString(config.options.force_compression);
+}
+
+//===--------------------------------------------------------------------===//
+// Force Bitpacking mode
+//===--------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto mode_str = StringUtil::Lower(input.ToString());
+	if (mode_str == "none") {
+		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
+	} else {
+		auto mode = BitpackingModeFromString(mode_str);
+		if (mode == BitpackingMode::AUTO) {
+			throw ParserException(
+			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
+			    "delta_for, or for");
+		}
+		config.options.force_bitpacking_mode = mode;
+	}
+}
+
+Value ForceBitpackingModeSetting::GetSetting(ClientContext &context) {
+	return Value(BitpackingModeToString(context.db->config.options.force_bitpacking_mode));
 }
 
 //===--------------------------------------------------------------------===//
