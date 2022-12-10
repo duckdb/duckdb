@@ -3,6 +3,11 @@ from pandas import DataFrame
 import pandas as pd
 import pytest
 
+def is_dunder_method(method_name: str) -> bool:
+    if (len(method_name) < 4):
+        return False
+    return method_name[:2] == '__' and method_name[:-3:-1] == '__'
+
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
 class TestDuckDBConnection(object):
@@ -221,7 +226,8 @@ class TestDuckDBConnection(object):
         assert str(con.__class__) == "<class 'duckdb.DuckDBPyConnection'>"
 
         # Skip all of the initial __xxxx__ methods
-        connection_methods = dir(con)[27:]
-        for method in connection_methods:
-	        # Assert that every method of DuckDBPyConnection is wrapped by the 'duckdb' module
+        connection_methods = dir(con)
+        filtered_methods = [method for method in connection_methods if not is_dunder_method(method)]
+        for method in filtered_methods:
+            # Assert that every method of DuckDBPyConnection is wrapped by the 'duckdb' module
             assert method in dir(duckdb)
