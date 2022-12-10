@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 
 class TestNumpyDatetime64(object):
-    def test_bool(self, duckdb_cursor):
+    def test_numpy_datetime64(self, duckdb_cursor):
         duckdb_con = duckdb.connect()
 
         duckdb_con.execute("create table tbl(col TIMESTAMP)")
