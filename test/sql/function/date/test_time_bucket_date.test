@@ -1,0 +1,237 @@
+# name: test/sql/function/date/test_time_bucket_date.test
+# description: Test time bucket functionality
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(w INTERVAL, d DATE, shift INTERVAL, origin DATE);
+
+statement ok
+INSERT INTO dates VALUES
+	('10 days', '-infinity', '0 days', '1970-01-05'),
+	('10 days', '1701-12-02', '0 days', '1970-01-05'),
+	('1 week', '1832-12-03', '0 days', '1970-01-05'),
+	('10 days', '1897-12-05', '2 days', '1970-01-07'),
+	('10 days', '1906-12-08', '-2 days', '1970-01-03'),
+	('2 months', '1946-12-14', '0 months', '1970-01-05'),
+	('2 months', '1991-12-15', '1 month 1 week', '1970-02-01'),
+	('2 months', '1992-12-18', '-1 month 1 week', '1969-12-01'),
+	('2 year', '2004-12-20', '6 months', '1970-07-01'),
+	('2 year', '2032-12-31', '-6 months', '1969-07-01'),
+	('10 days', 'infinity', '0 days', '1970-01-01'),
+;
+
+query I
+select time_bucket('3 days'::interval, d) from dates;
+----
+-infinity
+1701-11-30
+1832-12-03
+1897-12-04
+1906-12-06
+1946-12-12
+1991-12-13
+1992-12-16
+2004-12-19
+2032-12-31
+infinity
+
+query I
+select time_bucket('3 years'::interval, d) from dates;
+----
+-infinity
+1700-01-01
+1832-01-01
+1895-01-01
+1904-01-01
+1946-01-01
+1991-01-01
+1991-01-01
+2003-01-01
+2030-01-01
+infinity
+
+query I
+select time_bucket(w, d) from dates;
+----
+-infinity
+1701-11-26
+1832-12-03
+1897-11-28
+1906-12-02
+1946-11-01
+1991-11-01
+1992-11-01
+2004-01-01
+2032-01-01
+infinity
+
+query I
+select time_bucket('4 days'::interval, d, '6 hours'::interval) from dates;
+----
+-infinity
+1701-11-30
+1832-12-01
+1897-12-04
+1906-12-06
+1946-12-12
+1991-12-12
+1992-12-14
+2004-12-19
+2032-12-28
+infinity
+
+query I
+select time_bucket('2 weeks'::interval, d, '6 days'::interval) from dates;
+----
+-infinity
+1701-11-20
+1832-11-25
+1897-11-28
+1906-12-02
+1946-12-08
+1991-12-08
+1992-12-06
+2004-12-19
+2032-12-26
+infinity
+
+query I
+select time_bucket('3 months'::interval, d, '6 days'::interval) from dates;
+----
+-infinity
+1701-10-07
+1832-10-07
+1897-10-07
+1906-10-07
+1946-10-07
+1991-10-07
+1992-10-07
+2004-10-07
+2032-10-07
+infinity
+
+query I
+select time_bucket(w, d, shift) from dates;
+----
+-infinity
+1701-11-26
+1832-12-03
+1897-11-30
+1906-11-30
+1946-11-01
+1991-12-08
+1992-12-08
+2004-07-01
+2031-07-01
+infinity
+
+query I
+select time_bucket('5 days'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity
+1701-11-30
+1832-12-03
+1897-12-02
+1906-12-06
+1946-12-11
+1991-12-15
+1992-12-14
+2004-12-16
+2032-12-29
+infinity
+
+query I
+select time_bucket('3 months'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity
+1701-10-01
+1832-10-01
+1897-10-01
+1906-10-01
+1946-10-01
+1991-10-01
+1992-10-01
+2004-10-01
+2032-10-01
+infinity
+
+query I
+select time_bucket('3 years'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity
+1700-01-01
+1832-01-01
+1895-01-01
+1904-01-01
+1946-01-01
+1991-01-01
+1991-01-01
+2003-01-01
+2030-01-01
+infinity
+
+query I
+select time_bucket(w, d, origin) from dates;
+----
+-infinity
+1701-12-01
+1832-12-03
+1897-12-05
+1906-12-05
+1946-11-01
+1991-12-01
+1992-12-01
+2004-07-01
+2031-07-01
+infinity
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date);
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date, '1 hour 30 minutes':: interval);
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date, '2019-04-05'::date);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week':: interval);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date, '2019-04-05'::date);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes':: interval);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2018-05-05'::date, '1 week':: interval);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2019-05-05'::date, '2019-05-05'::date);
+
+statement error
+select time_bucket('3 days'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+
+statement error
+select time_bucket('3 days'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+
+statement error
+select time_bucket('3 months'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+
+statement error
+select time_bucket('3 months'::interval, '2019-05-05'::date, '-2000000000 months'::interval);

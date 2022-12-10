@@ -61,6 +61,10 @@ struct StrpTimeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TimeBucketFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ToIntervalFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

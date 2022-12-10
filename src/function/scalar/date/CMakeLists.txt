@@ -10,6 +10,7 @@ add_library_unity(
   date_trunc.cpp
   make_date.cpp
   strftime.cpp
+  time_bucket.cpp
   to_interval.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_date>
