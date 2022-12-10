@@ -24,8 +24,8 @@ import re
 
 version_regex = re.compile(r'^v(\d+\.\d+\.\d+)$')
 
-if len(sys.argv) < 3 or not version_regex.match(sys.argv[1]) or not os.path.isdir(sys.argv[2]):
-  print("Usage: [release_tag, format: v1.2.3] [artifact_dir]")
+if len(sys.argv) < 4 or not version_regex.match(sys.argv[1]) or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
+  print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
   exit(1)
 
 def exec(cmd):
@@ -33,6 +33,7 @@ def exec(cmd):
   return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
 
 jdbc_artifact_dir = sys.argv[2]
+jdbc_root_path = sys.argv[3]
 
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
 
@@ -124,14 +125,6 @@ for build in combine_builds[1:]:
       old_jar.extract(zip_entry, staging_dir)
       exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
 
-# download sources to create separate sources and javadoc JARs, this is required by maven central
-source_zip_url = 'https://github.com/duckdb/duckdb/archive/%s.zip' % release_tag 
-source_zip_file = tempfile.mkstemp()[1]
-source_zip_dir = tempfile.mkdtemp()
-# print(source_zip_url)
-urllib.request.urlretrieve(source_zip_url, source_zip_file)
-zipfile.ZipFile(source_zip_file, 'r').extractall(source_zip_dir)
-jdbc_root_path = glob.glob('%s/*/tools/jdbc' % source_zip_dir)[0]
 javadoc_stage_dir = tempfile.mkdtemp()
 
 exec("javadoc -Xdoclint:-reference -d %s -sourcepath %s/src/main/java org.duckdb" % (javadoc_stage_dir, jdbc_root_path))
@@ -161,7 +154,14 @@ if not os.path.exists(javadoc_jar) or not os.path.exists(sources_jar) or not os.
 #   </servers>
 # </settings>
 
-#exit(0)
+results_dir = os.path.join(jdbc_artifact_dir, "results")
+os.mkdir(results_dir)
+
+for jar in [binary_jar, sources_jar, javadoc_jar]:
+  shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
+
+
+exit(0)
 
 print("JARs created, uploading (this can take a while!)")
 deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ -DrepositoryId=ossrh'

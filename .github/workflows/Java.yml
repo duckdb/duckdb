@@ -21,7 +21,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
 jobs:
   java-linux-amd64:
-    name: Java Linux (AMD64)
+    name: Java Linux (amd64)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     env:
@@ -65,7 +65,7 @@ jobs:
 
 
   java-linux-aarch64:
-    name: Java Linux (AARCH64)
+    name: Java Linux (aarch64)
     runs-on: ubuntu-latest
     container: ubuntu:18.04
 #    needs: java-linux-amd64
@@ -104,6 +104,7 @@ jobs:
           name: java-linux-aarch64
           path: |
             build/release/tools/jdbc/duckdb_jdbc.jar
+
 
   java-windows-amd64:
     name: Java Windows (arm64)
@@ -181,6 +182,7 @@ jobs:
           path: |
             build/release/tools/jdbc/duckdb_jdbc.jar
 
+
   java-combine:
     name: Java Combine
     runs-on: ubuntu-latest
@@ -195,33 +197,42 @@ jobs:
         with:
           fetch-depth: 0
 
+      - shell: bash
+        run: mkdir jdbc-artifacts
+
       - uses: actions/download-artifact@v2
         with:
           name: java-linux-aarch64
-          path: java-linux-aarch64
+          path: jdbc-artifacts/java-linux-aarch64
 
       - uses: actions/download-artifact@v2
         with:
           name: java-linux-amd64
-          path: java-linux-amd64
+          path: jdbc-artifacts/java-linux-amd64
 
       - uses: actions/download-artifact@v2
         with:
           name: java-windows-amd64
-          path: java-windows-amd64
+          path: jdbc-artifacts/java-windows-amd64
 
       - uses: actions/download-artifact@v2
         with:
           name: java-osx-universal
-          path: java-osx-universal
+          path: jdbc-artifacts/java-osx-universal
 
-      - name: Display structure of downloaded files
+      - name: Combine JARs
         shell: bash
         run: |
-          python scripts/jdbc_maven_deploy.py v0.0.1 .
+          python scripts/jdbc_maven_deploy.py v0.0.1 jdbc-artifacts tools/jdbc
+          ls -lahR jdbc-artifacts
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-jars
+          path: |
+            jdbc-artifacts/results
 
-  jdbc:
+  jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-18.04
     needs: java-linux-amd64
