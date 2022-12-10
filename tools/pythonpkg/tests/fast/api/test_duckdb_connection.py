@@ -46,7 +46,7 @@ class TestDuckDBConnection(object):
     def test_df(self):
         ref = [([1,2,3],)]
         duckdb.execute("select [1,2,3]")
-        res_df = duckdb.df()
+        res_df = duckdb.fetch_df()
         res = duckdb.query("select * from res_df").fetchall()
         assert res == ref
 
