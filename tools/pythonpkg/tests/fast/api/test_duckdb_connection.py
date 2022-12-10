@@ -29,7 +29,7 @@ class TestDuckDBConnection(object):
         duckdb.begin()
         duckdb.execute("create table tbl as select 1")
         duckdb.rollback()
-        with pytest.raises(duckdb.Error):
+        with pytest.raises(duckdb.CatalogException):
             # Table does not exist
             res = duckdb.table("tbl")
 
@@ -39,7 +39,7 @@ class TestDuckDBConnection(object):
         res = duckdb_cursor.table("tbl").fetchall()
         assert res == [(3,)]
         duckdb_cursor.execute("drop table tbl")
-        with pytest.raises(duckdb.Error):
+        with pytest.raises(duckdb.CatalogException):
             # 'tbl' no longer exists
             duckdb.table("tbl")
 
@@ -55,7 +55,7 @@ class TestDuckDBConnection(object):
         dup_conn = duckdb.duplicate()
         dup_conn.table("tbl").fetchall()
         duckdb.execute("drop table tbl")
-        with pytest.raises(duckdb.Error):
+        with pytest.raises(duckdb.CatalogException):
             dup_conn.table("tbl").fetchall()
 
     def test_execute(self):
