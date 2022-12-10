@@ -92,8 +92,13 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
-	         py::arg("binary_as_string") = false)
+	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
+	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
+	    .def("from_parquet", &DuckDBPyConnection::FromParquets,
+	         "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
+	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
@@ -115,12 +120,12 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	DuckDBPyConnection::ImportCache();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
 	if (params.is_none()) {
 		params = py::list();
 	}
 	Execute(query, std::move(params), true);
-	return this;
+	return shared_from_this();
 }
 
 static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
@@ -173,7 +178,7 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -189,7 +194,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
-			return this;
+			return shared_from_this();
 		}
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
@@ -252,15 +257,15 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			result = move(res);
 		}
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -300,7 +305,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
-	return this;
+	return shared_from_this();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
@@ -352,7 +357,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!py::hasattr(params, "__len__")) {
 		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
@@ -376,7 +381,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
 }
 
 static std::string GenerateRandomName() {
@@ -416,15 +421,42 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
+                                                             bool file_row_number, bool filename,
+                                                             bool hive_partitioning) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	string name = "parquet_" + GenerateRandomName();
 	vector<Value> params;
-	params.emplace_back(filename);
-	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	params.emplace_back(file_glob);
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
+                                                              bool file_row_number, bool filename,
+                                                              bool hive_partitioning) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	string name = "parquet_" + GenerateRandomName();
+	vector<Value> params;
+	auto file_globs_as_value = vector<Value>();
+	for (const auto &file : file_globs) {
+		file_globs_as_value.emplace_back(file);
+	}
+	params.emplace_back(Value::LIST(file_globs_as_value));
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
+	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
+	                                        {"filename", Value::BOOLEAN(filename)},
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {
@@ -499,32 +531,32 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	return connection->GetTableNames(query);
 }
 
-DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
 	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Begin() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Begin() {
 	Execute("BEGIN TRANSACTION");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Commit() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
 	if (connection->context->transaction.IsAutoCommit()) {
-		return this;
+		return shared_from_this();
 	}
 	Execute("COMMIT");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Rollback() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	Execute("ROLLBACK");
-	return this;
+	return shared_from_this();
 }
 
 py::object DuckDBPyConnection::GetDescription() {
@@ -751,7 +783,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	return res;
 }
 
-vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
+vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &params) {
 	vector<Value> args;
 	args.reserve(py::len(params));
 
@@ -761,12 +793,12 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 	return args;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
-	return default_connection.get();
+	return default_connection;
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -776,8 +808,8 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 	return import_cache.get();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Enter() {
-	return this;
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
+	return shared_from_this();
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,

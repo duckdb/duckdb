@@ -1,5 +1,5 @@
 
-#include "duckdb/optimizer/estimated_properties.hpp"
+#include "duckdb/optimizer/join_order/estimated_properties.hpp"
 
 namespace duckdb {
 

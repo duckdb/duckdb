@@ -15,7 +15,8 @@ namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
                                              bool perform_delim, bool any_join)
-    : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join) {
+    : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
+      perform_delim(perform_delim), any_join(any_join) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -23,10 +24,10 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 	}
 }
 
-bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op) {
+bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, bool lateral) {
 	D_ASSERT(op);
 	// check if this entry has correlated expressions
-	HasCorrelatedExpressions visitor(correlated_columns);
+	HasCorrelatedExpressions visitor(correlated_columns, lateral);
 	visitor.VisitOperator(*op);
 	bool has_correlation = visitor.has_correlated_expressions;
 	// now visit the children of this entry and check if they have correlated expressions
@@ -34,7 +35,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op) {
 		// we OR the property with its children such that has_correlation is true if either
 		// (1) this node has a correlated expression or
 		// (2) one of its children has a correlated expression
-		if (DetectCorrelatedExpressions(child.get())) {
+		if (DetectCorrelatedExpressions(child.get(), lateral)) {
 			has_correlation = true;
 		}
 	}
@@ -504,8 +505,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
+	case LogicalOperatorType::LOGICAL_GET:
+		throw BinderException("Table-in table-out functions not (yet) supported in correlated subqueries");
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		throw ParserException("Recursive CTEs not supported in correlated subquery");
+		throw BinderException("Recursive CTEs not supported in correlated subquery");
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");
 	}
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));

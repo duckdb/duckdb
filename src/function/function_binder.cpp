@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 

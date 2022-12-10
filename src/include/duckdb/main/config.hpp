@@ -21,6 +21,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -103,6 +104,8 @@ struct DBConfigOptions {
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
+	//! Whether or not the global http metadata cache is used
+	bool http_metadata_cache_enable = false;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -116,6 +119,8 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
+	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
+	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
