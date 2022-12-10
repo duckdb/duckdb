@@ -220,7 +220,7 @@ public:
 	DuckDBPyRelation &Execute();
 
 	static unique_ptr<DuckDBPyRelation> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
-	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	void InsertInto(const string &table);
 

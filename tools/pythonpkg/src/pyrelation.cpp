@@ -596,7 +596,7 @@ DuckDBPyRelation &DuckDBPyRelation::Execute() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
-                                                     const string &sql_query, shared_ptr<DuckDBPyConnection> conn) {
+                                                       const string &sql_query, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
