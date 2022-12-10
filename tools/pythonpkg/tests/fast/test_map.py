@@ -66,7 +66,7 @@ class TestMap(object):
         with pytest.raises(AttributeError):
             print(testrel.map(evil4).df())
 
-        with pytest.raises(duckdb.Error):
+        with pytest.raises(duckdb.InvalidInputException):
             print(testrel.map(evil5).df())
 
         # not a function
