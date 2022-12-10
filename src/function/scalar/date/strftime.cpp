@@ -1101,8 +1101,8 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					pos++;
 				}
 				const auto tz_begin = data + pos;
-				// stop when we encounter a space or the end of the string
-				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
+				// stop when we encounter a non-tz character
+				while (pos < size && Timestamp::CharacterIsTimeZone(data[pos])) {
 					pos++;
 				}
 				const auto tz_end = data + pos;
