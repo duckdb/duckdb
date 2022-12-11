@@ -135,6 +135,70 @@ select time_bucket('3 years'::interval, t) from timestamps_tz;
 infinity
 
 query I
+select time_bucket(null::interval, t) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 years'::interval, null::timestamptz) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, t) from timestamps_tz;
 ----
 -infinity
@@ -261,6 +325,102 @@ select time_bucket('3 months'::interval, t, '6 days 11 hours'::interval) from ti
 2024-10-07 11:00:00+00
 2032-10-07 11:00:00+00
 infinity
+
+query I
+select time_bucket(null::interval, t, '2 seconds'::interval) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, null::timestamptz, '2 seconds'::interval) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, t, null::interval) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket(w, t, shift) from timestamps_tz;
@@ -391,6 +551,102 @@ select time_bucket('7 months'::interval, t, '1990-01-06 08:08:10+01'::timestampt
 infinity
 
 query I
+select time_bucket(null::interval, t, '1990-01-06 08:08:10'::timestamptz) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('7 months'::interval, null::timestamptz, '1990-01-06 08:08:10'::timestamptz) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('7 months'::interval, t, null::timestamptz) from timestamps_tz;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, t, origin) from timestamps_tz;
 ----
 -infinity
@@ -426,7 +682,7 @@ statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz);
 
 statement error
-select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz, '1 hour 30 minutes':: interval);
+select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05 00:00:00+03'::timestamptz, '2019-04-05 00:00:00+03'::timestamptz);
@@ -435,7 +691,7 @@ statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz);
 
 statement error
-select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz, '1 hour 30 minutes':: interval);
+select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05 00:00:00-11'::timestamptz, '2018-04-05 00:00:00+11'::timestamptz);
@@ -444,7 +700,7 @@ statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz);
 
 statement error
-select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz, '1 hour 30 minutes':: interval);
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00+07'::timestamptz, '2018-05-05 00:00:00+07'::timestamptz);
@@ -453,7 +709,7 @@ statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz);
 
 statement error
-select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz, '1 hour 30 minutes':: interval);
+select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00+02'::timestamptz, '2018-05-05 00:00:00+02'::timestamptz);

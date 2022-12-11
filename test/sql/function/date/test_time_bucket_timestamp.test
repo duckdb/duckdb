@@ -136,6 +136,70 @@ select time_bucket('3 years'::interval, t) from timestamps;
 infinity
 
 query I
+select time_bucket(null::interval, t) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 years'::interval, null::timestamp) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, t) from timestamps;
 ----
 -infinity
@@ -264,6 +328,102 @@ select time_bucket('3 months'::interval, t, '6 days 11 hours'::interval) from ti
 infinity
 
 query I
+select time_bucket(null::interval, t, '2 seconds'::interval) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, null::timestamp, '2 seconds'::interval) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, t, null::interval) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, t, shift) from timestamps;
 ----
 -infinity
@@ -390,6 +550,102 @@ select time_bucket('7 months'::interval, t, '1990-01-06 08:08:10'::timestamp) fr
 2024-06-01 00:00:00
 2032-08-01 00:00:00
 infinity
+
+query I
+select time_bucket(null::interval, t, '1990-01-06 08:08:10'::timestamp) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('7 months'::interval, null::timestamp, '1990-01-06 08:08:10'::timestamp) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('7 months'::interval, t, null::timestamp) from timestamps;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket(w, t, origin) from timestamps;

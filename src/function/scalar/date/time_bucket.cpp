@@ -286,24 +286,29 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 	auto &offset_arg = args.data[2];
 
 	if (bucket_width_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-		if (bucket_width.months == 0) {
-			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			if (bucket_width_micros <= 0) {
-				throw NotImplementedException("Period must be greater than 0");
-			}
-			TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-			    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-			    TimeBucketOffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, T, interval_t, T>);
-		} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-			if (bucket_width.months < 0) {
-				throw NotImplementedException("Period must be greater than 0");
-			}
-			TernaryExecutor::Execute<interval_t, T, interval_t, T>(
-			    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-			    TimeBucketOffsetWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
+		if (ConstantVector::IsNull(bucket_width_arg)) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
 		} else {
-			throw NotImplementedException("Month intervals cannot have day or time component");
+			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
+			if (bucket_width.months == 0) {
+				int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
+				if (bucket_width_micros <= 0) {
+					throw NotImplementedException("Period must be greater than 0");
+				}
+				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
+				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
+				    TimeBucketOffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, T, interval_t, T>);
+			} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+				if (bucket_width.months < 0) {
+					throw NotImplementedException("Period must be greater than 0");
+				}
+				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
+				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
+				    TimeBucketOffsetWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
+			} else {
+				throw NotImplementedException("Month intervals cannot have day or time component");
+			}
 		}
 	} else {
 		TernaryExecutor::Execute<interval_t, T, interval_t, T>(

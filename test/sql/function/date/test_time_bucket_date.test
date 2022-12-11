@@ -54,6 +54,21 @@ select time_bucket('3 years'::interval, d) from dates;
 infinity
 
 query I
+select time_bucket(null::interval, d) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, d) from dates;
 ----
 -infinity
@@ -112,6 +127,51 @@ select time_bucket('3 months'::interval, d, '6 days'::interval) from dates;
 2004-10-07
 2032-10-07
 infinity
+
+query I
+select time_bucket(null::interval, d, '6 days'::interval) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, null::date, '6 days'::interval) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 months'::interval, d, null::interval) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket(w, d, shift) from dates;
@@ -174,6 +234,51 @@ select time_bucket('3 years'::interval, d, '1970-01-04'::date) from dates;
 infinity
 
 query I
+select time_bucket(null::interval, d, '1970-01-04'::date) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 years'::interval, null::date, '1970-01-04'::date) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+select time_bucket('3 years'::interval, d, null::date) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
 select time_bucket(w, d, origin) from dates;
 ----
 -infinity
@@ -192,7 +297,7 @@ statement error
 select time_bucket('-3 hours'::interval, '2019-04-05'::date);
 
 statement error
-select time_bucket('-3 hours'::interval, '2019-04-05'::date, '1 hour 30 minutes':: interval);
+select time_bucket('-3 hours'::interval, '2019-04-05'::date, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('-3 hours'::interval, '2019-04-05'::date, '2019-04-05'::date);
@@ -201,7 +306,7 @@ statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date);
 
 statement error
-select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week':: interval);
+select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week'::interval);
 
 statement error
 select time_bucket('-1 month'::interval, '2019-04-05'::date, '2019-04-05'::date);
@@ -210,7 +315,7 @@ statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date);
 
 statement error
-select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes':: interval);
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes'::interval);
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '2018-05-05'::date);
@@ -219,7 +324,7 @@ statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05'::date);
 
 statement error
-select time_bucket('1 month 1 day'::interval, '2018-05-05'::date, '1 week':: interval);
+select time_bucket('1 month 1 day'::interval, '2018-05-05'::date, '1 week'::interval);
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2019-05-05'::date, '2019-05-05'::date);
