@@ -1,18 +1,16 @@
 import duckdb
 import os
-try:
-    import pyarrow
-    import pyarrow.parquet
-    import numpy as np
-    can_run = True
-except:
-    can_run = False
+import pytest
+pyarrow_parquet = pytest.importorskip("pyarrow.parquet")
+import sys
+
+sys.setrecursionlimit(100)
 
 class TestProgressBarArrow(object):
 
-    def test_progress_arrow(self, duckdb_cursor):
-        if not can_run:
-            return
+    def test_progress_arrow(self):
+        np = pytest.importorskip("numpy")
+        pyarrow = pytest.importorskip("pyarrow")
 
         data = (pyarrow.array(np.arange(10000000), type=pyarrow.int32()))
         duckdb_conn = duckdb.connect()
@@ -40,9 +38,9 @@ class TestProgressBarArrow(object):
         py_res = duck_res.fetchone()[0]
         assert (py_res == 49999995000000)
 
-    def test_progress_arrow_empty(self, duckdb_cursor):
-        if not can_run:
-            return
+    def test_progress_arrow_empty(self):
+        np = pytest.importorskip("numpy")
+        pyarrow = pytest.importorskip("pyarrow")
 
         data = (pyarrow.array(np.arange(0), type=pyarrow.int32()))
         duckdb_conn = duckdb.connect()
