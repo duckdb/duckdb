@@ -4,8 +4,6 @@ import pytest
 pyarrow_parquet = pytest.importorskip("pyarrow.parquet")
 import sys
 
-sys.setrecursionlimit(100)
-
 class TestProgressBarArrow(object):
 
     def test_progress_arrow(self):
