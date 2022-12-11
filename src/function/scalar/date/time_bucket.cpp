@@ -360,14 +360,21 @@ void TimeBucketFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE, TimeBucketFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
 	                                       TimeBucketFunction<timestamp_t>));
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ},
+	                                       LogicalType::TIMESTAMP_TZ, TimeBucketFunction<timestamp_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE, LogicalType::INTERVAL},
 	                                       LogicalType::DATE, TimeBucketOffsetFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                       LogicalType::TIMESTAMP, TimeBucketOffsetFunction<timestamp_t>));
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
+	                                       LogicalType::TIMESTAMP_TZ, TimeBucketOffsetFunction<timestamp_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE, LogicalType::DATE},
 	                                       LogicalType::DATE, TimeBucketOriginFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
+	time_bucket.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ},
+	                   LogicalType::TIMESTAMP_TZ, TimeBucketOriginFunction<timestamp_t>));
 
 	set.AddFunction(time_bucket);
 }
