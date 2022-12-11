@@ -20,6 +20,7 @@ class TestDuckDBConnection(object):
         duckdb.execute("drop table integers")
 
     def test_arrow(self):
+        pyarrow = pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")
         result = duckdb.arrow()
 
