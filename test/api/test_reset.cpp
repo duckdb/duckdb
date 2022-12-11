@@ -55,6 +55,8 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"temp_directory", {"tmp", "tmp"}},
 	    {"wal_autocheckpoint", {"4.2GB", "4.2GB"}},
 	    {"worker_threads", {42, 42}},
+	    {"enable_http_metadata_cache", {true, true}},
+	    {"force_bitpacking_mode", {"constant", "constant"}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
