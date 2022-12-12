@@ -2540,7 +2540,7 @@ static const yytype_uint16 yyrline[] =
      148,     7,    14,    20,    28,    29,     8,    22,    36,    48,
       56,    70,    71,    72,    73,    74,    87,    88,    93,    94,
       98,    99,     7,    18,    31,    35,    42,    53,    54,    60,
-      61,     9,    19,     2,     7,    14,    24,    25,    32,     3,
+      61,     9,    19,     2,     7,    15,    26,    27,    34,     3,
       10,    17,    24,    31,    38,    45,    52,    61,    61,    63,
       64,    68,    69,     6,     8,    21,    34,    52,    74,    75,
       76,    77,    11,    24,    37,    54,    55,    56,    61,    74,
@@ -26321,27 +26321,29 @@ yyreduce:
     {
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
+					n->scope = VAR_SET_SCOPE_GLOBAL;
 					n->name = (yyvsp[(1) - (1)].str);
 					(yyval.vsetstmt) = n;
 				;}
     break;
 
   case 1295:
-#line 15 "third_party/libpg_query/grammar/statements/variable_reset.y"
+#line 16 "third_party/libpg_query/grammar/statements/variable_reset.y"
     {
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET_ALL;
+					n->scope = VAR_SET_SCOPE_GLOBAL;
 					(yyval.vsetstmt) = n;
 				;}
     break;
 
   case 1296:
-#line 24 "third_party/libpg_query/grammar/statements/variable_reset.y"
+#line 26 "third_party/libpg_query/grammar/statements/variable_reset.y"
     { (yyval.vsetstmt) = (yyvsp[(1) - (1)].vsetstmt); ;}
     break;
 
   case 1297:
-#line 26 "third_party/libpg_query/grammar/statements/variable_reset.y"
+#line 28 "third_party/libpg_query/grammar/statements/variable_reset.y"
     {
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
@@ -26351,7 +26353,7 @@ yyreduce:
     break;
 
   case 1298:
-#line 33 "third_party/libpg_query/grammar/statements/variable_reset.y"
+#line 35 "third_party/libpg_query/grammar/statements/variable_reset.y"
     {
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
@@ -26639,7 +26641,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 26643 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 26645 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
