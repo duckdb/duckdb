@@ -157,6 +157,9 @@ endif
 clean:
 	rm -rf build
 
+clean-python:
+	tools/pythonpkg/clean.sh
+
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \

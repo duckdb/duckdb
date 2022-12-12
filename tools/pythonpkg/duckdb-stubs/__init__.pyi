@@ -23,6 +23,8 @@ operator: token_type
 paramstyle: str
 string_const: token_type
 threadsafety: int
+__interactive__: bool
+__jupyter__: bool
 
 class BinderException(ProgrammingError): ...
 
