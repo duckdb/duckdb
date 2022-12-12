@@ -112,7 +112,7 @@ void SingleFileStorageManager::LoadDatabase() {
 	auto &config = db.config;
 	if (InMemory()) {
 		if (config.virtual_buffer_manager) {
-			block_manager = nullptr;
+			block_manager = make_unique<InMemoryBlockManager>(*config.virtual_buffer_manager);
 		} else {
 			block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
 		}
