@@ -40,6 +40,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"file_search_path", {"test", "test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test", "test"}},
+	    {"immediate_transaction_mode", {true, true}},
 	    {"log_query_path", {"test", "test"}},
 	    {"max_expression_depth", {50, 50}},
 	    {"max_memory", {"4.2GB", "4.2GB"}},
