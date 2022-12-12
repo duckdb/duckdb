@@ -223,25 +223,25 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-# FIXME         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            export XML='
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-  https://maven.apache.org/xsd/settings-1.0.0.xsd">
-  <servers>
-    <server>
-      <id>ossrh</id>
-      <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
-      <password>PASSWORD</password>
-    </server>
-  </servers>
-</settings> '
-            echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
-            echo ${{ secrets.MAVEN_PGP_PK }} | base64 -D > maven_pgp_key
-            gpg --import maven_pgp_key
-            python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
-#          fi
+          # FIXME         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          export XML='
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+            https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>ossrh</id>
+                <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+                <password>PASSWORD</password>
+              </server>
+            </servers>
+          </settings> '
+          echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
+          echo ${{ secrets.MAVEN_PGP_PK }} | base64 -D > maven_pgp_key
+          gpg --import maven_pgp_key
+          python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
+          #          fi
           ls -lahR jdbc-artifacts
 
       - uses: actions/upload-artifact@v3
