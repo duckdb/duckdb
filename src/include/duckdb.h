@@ -373,6 +373,38 @@ Destroys the specified configuration option and de-allocates all memory allocate
 */
 DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 
+/*!
+Sets the external buffer manager to use.
+Functions interacting with this buffer manager are provided as callbacks.
+
+* duckdb_config: The configuration object to add the buffer manager to.
+* allocation_context: The pointer to additional information passed to 'allocate_func'.
+* allocate_func: The function invoked when a buffer is allocated, returns a buffer handle.
+* reallocate_func: The function invoked when a buffer is reallocated, returns a buffer handle.
+* destroy_func: The function invoked when a buffer is destroyed.
+* get_allocation_func: The function invoked when the allocated memory is requested, returns allocated memory.
+* pin_func: The function invoked when the buffer is pinned.
+* unpin_func: The function invoked when the buffer is unpinned.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+
+typedef void *duckdb_buffer;
+
+typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size);
+typedef duckdb_buffer (*duckdb_reallocate_func)(duckdb_buffer buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_func)(duckdb_buffer buffer);
+typedef void *(*duckdb_buffer_allocation)(duckdb_buffer buffer);
+typedef void (*duckdb_pin_func)(duckdb_buffer buffer);
+typedef void (*duckdb_unpin_func)(duckdb_buffer buffer);
+typedef idx_t (*duckdb_max_memory_func)(void *data);
+typedef idx_t (*duckdb_used_memory_func)(void *data);
+
+DUCKDB_API duckdb_state duckdb_add_custom_buffer_manager(
+    duckdb_config config, void *allocation_context, duckdb_allocate_func allocate_func,
+    duckdb_reallocate_func reallocate_func, duckdb_destroy_func destroy_func,
+    duckdb_buffer_allocation get_allocation_func, duckdb_pin_func pin_func, duckdb_unpin_func unpin_func,
+    duckdb_max_memory_func max_memory_func, duckdb_used_memory_func used_memory_func);
+
 //===--------------------------------------------------------------------===//
 // Query Execution
 //===--------------------------------------------------------------------===//

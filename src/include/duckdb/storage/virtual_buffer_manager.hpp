@@ -11,6 +11,7 @@
 #include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/file_system.hpp"
 
 namespace duckdb {

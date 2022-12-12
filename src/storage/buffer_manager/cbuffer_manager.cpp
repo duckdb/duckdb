@@ -13,8 +13,7 @@ CBufferManager::CBufferManager(CBufferManagerConfig config_p)
 	block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
-BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy = true,
-                                      shared_ptr<BlockHandle> *block = nullptr) {
+BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
 	if (!can_destroy) {
 		throw InvalidInputException(
 		    "When using a callback-based BufferManager, we don't support creating temporary files");
@@ -24,7 +23,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy = true,
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
 	// Create an ExternalFileBuffer, which uses a callback to retrieve the allocation when Buffer() is called
-	auto buffer = make_shared<ExternalFileBuffer>(custom_allocator, config, alloc_size);
+	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, alloc_size);
 	BufferPoolReservation reservation;
 	reservation.size = alloc_size;
 
@@ -69,11 +68,11 @@ void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 idx_t CBufferManager::GetUsedMemory() const {
-	return config.used_memory_func();
+	return config.used_memory_func(config.data);
 }
 
 idx_t CBufferManager::GetMaxMemory() const {
-	return config.max_memory_func();
+	return config.max_memory_func(config.data);
 }
 
 //===--------------------------------------------------------------------===//
