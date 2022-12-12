@@ -2,6 +2,9 @@
 # description: Test update of string columns with NULLs
 # group: [update]
 
+statement ok
+SET immediate_transaction_mode=true
+
 # create a table
 statement ok con1
 CREATE TABLE test (a VARCHAR);

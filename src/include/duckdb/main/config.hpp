@@ -142,6 +142,8 @@ struct DBConfigOptions {
 	bool enable_fsst_vectors = false;
 	//! Experimental parallel CSV reader
 	bool experimental_parallel_csv_reader = false;
+	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
+	bool immediate_transaction_mode = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

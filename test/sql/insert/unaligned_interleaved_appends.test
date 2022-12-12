@@ -3,6 +3,9 @@
 # group: [insert]
 
 statement ok
+SET immediate_transaction_mode=true
+
+statement ok
 CREATE TABLE integers(i INTEGER)
 
 statement ok con1

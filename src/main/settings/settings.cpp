@@ -646,6 +646,22 @@ Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Immediate Transaction Mode
+//===--------------------------------------------------------------------===//
+void ImmediateTransactionModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.immediate_transaction_mode = BooleanValue::Get(input);
+}
+
+void ImmediateTransactionModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.immediate_transaction_mode = DBConfig().options.immediate_transaction_mode;
+}
+
+Value ImmediateTransactionModeSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.immediate_transaction_mode);
+}
+
+//===--------------------------------------------------------------------===//
 // Maximum Expression Depth
 //===--------------------------------------------------------------------===//
 

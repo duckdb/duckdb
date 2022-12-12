@@ -3,6 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -26,6 +28,15 @@ void TransactionContext::BeginTransaction() {
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
 	auto catalog_version = Catalog::GetSystemCatalog(context).GetCatalogVersion();
 	current_transaction = make_unique<MetaTransaction>(context, start_timestamp, catalog_version);
+
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.immediate_transaction_mode) {
+		// if immediate transaction mode is enabled then start all transactions immediately
+		auto databases = DatabaseManager::Get(context).GetDatabases(context);
+		for (auto db : databases) {
+			current_transaction->GetTransaction(db);
+		}
+	}
 }
 
 void TransactionContext::Commit() {

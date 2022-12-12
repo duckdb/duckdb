@@ -2,6 +2,9 @@
 # description: Schema creation/deletion with transactions
 # group: [catalog]
 
+statement ok
+SET immediate_transaction_mode=true
+
 # create a schema with a table
 statement ok con1
 CREATE SCHEMA test;
