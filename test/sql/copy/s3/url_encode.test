@@ -25,6 +25,9 @@ COPY test_1 TO 's3://test-bucket-public/url_encode/just because you can doesnt m
 statement ok
 COPY test_2 TO 's3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
 
+statement ok
+COPY test_3 TO 's3://test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet' (FORMAT 'parquet');
+
 # For S3 urls spaces are fine
 query I
 SELECT * FROM "s3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
@@ -36,6 +39,12 @@ query I
 SELECT * FROM "s3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
 ----
 2
+
+# Colons in S3 urls are encoded by duckdb internaly like boto3 (issue #5502)
+query I
+SELECT * FROM "s3://test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet" LIMIT 1;
+----
+3
 
 # NOTE! For HTTP(s) urls, the + symbol is not encoded by duckdb, leaving it up to the server to decide if it should be interpreted
 # as a space or a plus. In the case of AWS S3, they are interpreted as encoded spaces, however Minio does not
