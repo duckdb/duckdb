@@ -23,6 +23,8 @@ operator: token_type
 paramstyle: str
 string_const: token_type
 threadsafety: int
+__standard_vector_size__: int
+
 
 class BinderException(ProgrammingError): ...
 
