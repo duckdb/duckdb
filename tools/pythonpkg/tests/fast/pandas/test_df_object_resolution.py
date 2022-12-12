@@ -8,6 +8,8 @@ import math
 from decimal import Decimal
 import re
 
+standard_vector_size = duckdb.__standard_vector_size__
+
 def create_generic_dataframe(data):
     return pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
 
@@ -383,7 +385,6 @@ class TestResolveObjectColumns(object):
     def test_numpy_datetime(self):
         numpy = pytest.importorskip("numpy")
 
-        standard_vector_size = 2048
         data = []
         data += [numpy.datetime64('2022-12-10T21:38:24.578696')] * standard_vector_size
         data += [numpy.datetime64('2022-02-21T06:59:23.324812')] * standard_vector_size
@@ -461,8 +462,6 @@ class TestResolveObjectColumns(object):
     # Test that the column 'offset' is actually used when converting,
     # and that the same 2048 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
     def test_multiple_chunks(self):
-        standard_vector_size = 2048
-
         data = []
         data += [datetime.date(2022, 9, 13) for x in range(standard_vector_size)]
         data += [datetime.date(2022, 9, 14) for x in range(standard_vector_size)]
