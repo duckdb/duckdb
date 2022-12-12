@@ -42,80 +42,74 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
-	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
 
 public:
 	static void Initialize(py::handle &m);
 
-	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df,
-	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
-	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias,
-	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	FromParquets(const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	             bool hive_partitioning, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                                 bool file_row_number, bool filename, bool hive_partitioning,
+	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
+	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation>
-	GetSubstraitJSON(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
+	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
+	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	void InstallExtension(const string &query, bool force_install,
-	                      DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation>
-	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
+	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
 	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
 	static unique_ptr<DuckDBPyRelation> AliasDF(const DataFrame &df, const string &expr,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
 
 	static unique_ptr<DuckDBPyRelation> FilterDf(const DataFrame &df, const string &expr,
-	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 
 	static unique_ptr<DuckDBPyRelation> LimitDF(const DataFrame &df, int64_t n,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 
 	static unique_ptr<DuckDBPyRelation> OrderDf(const DataFrame &df, const string &expr,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
@@ -171,12 +165,11 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
 	static unique_ptr<DuckDBPyRelation> AggregateDF(const DataFrame &df, const string &expr, const string &groups = "",
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df,
-	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	DataFrame ToDF(bool date_as_object);
 
@@ -204,8 +197,7 @@ public:
 
 	void WriteCsv(const string &file);
 
-	static void WriteCsvDF(const DataFrame &df, const string &file,
-	                       DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	static void WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
@@ -215,11 +207,11 @@ public:
 	unique_ptr<DuckDBPyResult> Execute();
 
 	static unique_ptr<DuckDBPyResult> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
-	                                          DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	void InsertInto(const string &table);
 
-	void Insert(py::object params = py::list());
+	void Insert(const py::object &params = py::list());
 
 	void Create(const string &table);
 
@@ -233,6 +225,9 @@ public:
 
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+	                              const string &groups = "", const string &function_parameter = "",
+	                              const string &projected_columns = "", const string &window_function = "");
+	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
 };

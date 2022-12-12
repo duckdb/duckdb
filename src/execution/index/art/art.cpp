@@ -17,6 +17,9 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          AttachedDatabase &db, idx_t block_id, idx_t block_offset)
     : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
       estimated_art_size(0), estimated_key_size(16) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("ART indexes are not supported on big endian architectures");
+	}
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {

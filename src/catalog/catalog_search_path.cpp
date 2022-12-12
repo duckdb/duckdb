@@ -113,6 +113,10 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 }
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context_p) {
+	Reset();
+}
+
+void CatalogSearchPath::Reset() {
 	vector<CatalogSearchEntry> empty;
 	SetPaths(empty);
 }

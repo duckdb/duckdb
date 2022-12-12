@@ -118,7 +118,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-windows-32bit
         path: |
           libduckdb-windows-i386.zip
           duckdb_cli-windows-i386.zip

@@ -3,6 +3,7 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -136,6 +137,20 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 		}
 	}
 	return result;
+}
+
+void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
+	static char *evar;
+
+	if ((evar = std::getenv(env_var_name)) != NULL)
+		this->config.SetOption(key, Value(evar));
+}
+
+void AWSEnvironmentCredentialsProvider::SetAll() {
+	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
@@ -703,8 +718,8 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
-	auto res = HTTPFileHandle::Initialize();
+void S3FileHandle::Initialize(FileOpener *opener) {
+	HTTPFileHandle::Initialize(opener);
 
 	auto &s3fs = (S3FileSystem &)file_system;
 
@@ -726,8 +741,6 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 		parts_uploaded = 0;
 		upload_finalized = false;
 	}
-
-	return res;
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
@@ -808,8 +821,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Main paging loop
 	do {
 		// main listobject call, may
-		string response_str =
-		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token);
+		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
+		                                               main_continuation_token, HTTPStats::TryGetStats(opener));
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -823,8 +836,9 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			// Paging loop for common prefix requests
 			string common_prefix_continuation_token = "";
 			do {
-				auto prefix_res = AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params,
-				                                           common_prefix_continuation_token);
+				auto prefix_res =
+				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
+				                             HTTPStats::TryGetStats(opener));
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -859,7 +873,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, bool use_delimiter) {
+                                string &continuation_token, HTTPStats *stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
@@ -909,9 +923,15 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
+		    if (stats) {
+			    stats->total_bytes_received += data_length;
+		    }
 		    response << string(data, data_length);
 		    return true;
 	    });
+	if (stats) {
+		stats->get_count++;
+	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + listobjectv2_url + "'");
 	}

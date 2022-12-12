@@ -4,6 +4,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
@@ -63,8 +64,9 @@ static py::object PyTokenize(const string &query) {
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
-	DuckDBPyResult::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
+	DuckDBPyResult::Initialize(m);
+	PythonObject::Initialize();
 
 	py::options pybind_opts;
 
@@ -72,6 +74,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("__package__") = "duckdb";
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
+	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
+	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
 	m.attr("apilevel") = "1.0";
 	m.attr("threadsafety") = 1;
@@ -112,6 +116,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("connection") = py::none());
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
 	      py::arg("query"), py::arg("connection") = py::none());
+	m.def("from_substrait_json", &DuckDBPyRelation::FromSubstraitJSON, "Serialize a query object to protobuf",
+	      py::arg("json"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,

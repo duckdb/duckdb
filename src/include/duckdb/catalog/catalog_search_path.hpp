@@ -43,6 +43,7 @@ public:
 
 	DUCKDB_API void Set(const CatalogSearchEntry &new_value, bool is_set_schema);
 	DUCKDB_API void Set(const vector<CatalogSearchEntry> &new_paths, bool is_set_schema = false);
+	DUCKDB_API void Reset();
 
 	DUCKDB_API const vector<CatalogSearchEntry> &Get();
 	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {

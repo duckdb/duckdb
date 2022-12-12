@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_store_dfor.benchmark
+# description: Storing 1GB of ints compressed mostly with the DELTA FOR bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Insert Delta For Mode
+group bitpacking
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='delta_for';
+DROP TABLE IF EXISTS integers;
+
+run
+CREATE TABLE integers AS SELECT CASE WHEN i%2=0 THEN 0 ELSE 2048 END AS i FROM range(0, 250000000) tbl(i);
+checkpoint;

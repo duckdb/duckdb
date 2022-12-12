@@ -177,6 +177,10 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
 	return 0;
 }
 
+BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
+	return BindInfo(ScanType::TABLE);
+}
+
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	entries.insert(bind_data.table);
@@ -457,6 +461,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_batch_index = TableScanGetBatchIndex;
+	scan_function.get_batch_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;

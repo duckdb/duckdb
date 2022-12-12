@@ -61,6 +61,9 @@ public:
 		return types.size();
 	}
 
+	//! Get the allocator
+	DUCKDB_API Allocator &GetAllocator() const;
+
 	//! Initializes an Append state - useful for optimizing many appends made to the same column data collection
 	DUCKDB_API void InitializeAppend(ColumnDataAppendState &state);
 	//! Append a DataChunk to this ColumnDataCollection using the specified append state
