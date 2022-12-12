@@ -1,4 +1,4 @@
-# name: benchmark/micro/optimizer/many_joins.benchmark
+# name: benchmark/micro/join/many_left_joins.benchmark
 # description: Optimizer benchmark to ensure joins are not over-optimized
 # group: [join]
 
