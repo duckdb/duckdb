@@ -77,6 +77,34 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
 
+DUCKDB_API string Connection::GetSubstrait(const string &query) {
+	vector<Value> params;
+	params.emplace_back(query);
+	auto result = TableFunction("get_substrait", params)->Execute();
+	auto protobuf = result->FetchRaw()->GetValue(0, 0);
+	return protobuf.GetValueUnsafe<string_t>().GetString();
+}
+
+DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstrait(const string &proto) {
+	vector<Value> params;
+	params.emplace_back(Value::BLOB_RAW(proto));
+	return TableFunction("from_substrait", params)->Execute();
+}
+
+DUCKDB_API string Connection::GetSubstraitJSON(const string &query) {
+	vector<Value> params;
+	params.emplace_back(query);
+	auto result = TableFunction("get_substrait_json", params)->Execute();
+	auto protobuf = result->FetchRaw()->GetValue(0, 0);
+	return protobuf.GetValueUnsafe<string_t>().GetString();
+}
+
+DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstraitJSON(const string &json) {
+	vector<Value> params;
+	params.emplace_back(json);
+	return TableFunction("from_substrait_json", params)->Execute();
+}
+
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
 	auto result = context->Query(move(statement), false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
@@ -213,6 +241,13 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 		column_list.push_back(move(col_list.GetColumnMutable(LogicalIndex(0))));
 	}
 	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list));
+}
+
+shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool binary_as_string) {
+	vector<Value> params;
+	params.emplace_back(parquet_file);
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
 }
 
 unordered_set<string> Connection::GetTableNames(const string &query) {

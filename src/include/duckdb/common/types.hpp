@@ -32,8 +32,9 @@ public:
 public:
 	DUCKDB_API hugeint_t() = default;
 	DUCKDB_API hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
-	DUCKDB_API hugeint_t(const hugeint_t &rhs) = default;
-	DUCKDB_API hugeint_t(hugeint_t &&rhs) = default;
+	DUCKDB_API constexpr hugeint_t(int64_t upper, uint64_t lower): lower(lower), upper(upper) {};
+	DUCKDB_API constexpr hugeint_t(const hugeint_t &rhs) = default;
+	DUCKDB_API constexpr hugeint_t(hugeint_t &&rhs) = default;
 	DUCKDB_API hugeint_t &operator=(const hugeint_t &rhs) = default;
 	DUCKDB_API hugeint_t &operator=(hugeint_t &&rhs) = default;
 
@@ -413,7 +414,6 @@ public:
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
-	DUCKDB_API static LogicalType DEDUP_POINTER_ENUM(); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();

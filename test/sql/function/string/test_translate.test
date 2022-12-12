@@ -1,0 +1,135 @@
+# name: test/sql/function/string/test_translate.test
+# description: TRANSLATE test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test translate on NULLs
+query T
+select TRANSLATE('This is the main test string', NULL, 'ALT')
+----
+NULL
+
+query T
+select TRANSLATE(NULL, 'main', 'ALT')
+----
+NULL
+
+query T
+select TRANSLATE('This is the main test string', 'main', NULL)
+----
+NULL
+
+# test translate on scalars
+query T
+select TRANSLATE('12', '2', 'a')
+----
+1a
+
+query T
+select TRANSLATE('abcde', 'abcde', 'fghij')
+----
+fghij
+
+query T
+select TRANSLATE('abcde', 'aabcc', '14235')
+----
+123de
+
+query T
+select TRANSLATE('https://dxyzdb.org', 'zyx.orghttps:/', 'kcu')
+----
+duckdb
+
+query T
+select TRANSLATE('12345', '14367', 'ax')
+----
+a2x5
+
+query T
+select TRANSLATE('hacco worcdxxx', 'acx2', 'el')
+----
+hello world
+
+query T
+select TRANSLATE('hacCo worcd', 'acC', 'ellaabb')
+----
+hello world
+
+query T
+select TRANSLATE('RÄcks', 'Ä', 'A')
+----
+RAcks
+
+query T
+select TRANSLATE('🦆', '🦆', 'D')
+----
+D
+
+query T
+select TRANSLATE('MotörHeadΩ', 'aeΩ', 'eÄ')
+----
+MotörHÄed
+
+query T
+select TRANSLATE('This is 🐱.', '🐱', '🦆')
+----
+This is 🦆.
+
+query T
+select TRANSLATE('Äañt₡Xá你好世界我', 'ñá世界我xyz', 'naDBá')
+----
+Äant₡Xa你好DBá
+
+# test translate on tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL), ('Hi', '🦆')
+
+query T
+select TRANSLATE(a, 'öHl', 'oA-') FROM strings
+----
+Ae--o
+AuL-D
+MotorAead
+(empty)
+Ai
+
+query T
+select TRANSLATE(a, 'loD', '🦆') FROM strings
+----
+He🦆🦆
+HuL🦆
+MtörHead
+(empty)
+Hi
+
+query T
+select TRANSLATE(b, 'ÄW🦆l', 'ow🐱') FROM strings
+----
+word
+NULL
+Rocks
+NULL
+🐱
+
+query T
+select TRANSLATE(a, 'oel', 'OEL') FROM strings WHERE b IS NOT NULL
+----
+HELLO
+MOtörHEad
+Hi
+
+# test incorrect usage of translate
+statement error
+select TRANSLATE(1)
+
+statement error
+select TRANSLATE(1, 2)
+
+statement error
+select TRANSLATE(1, 2, 3, 4)
+
