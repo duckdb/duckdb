@@ -41,7 +41,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/preserved_error.hpp"
-#include "duckdb/common/progress_bar.hpp"
+#include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/common/http_stats.hpp"
 
@@ -390,7 +390,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	active_query->executor = make_unique<Executor>(*this);
 	auto &executor = *active_query->executor;
 	if (config.enable_progress_bar) {
-		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time, config.print_progress_bar);
+		progress_bar_display_create_func_t display_create_func = nullptr;
+		if (config.print_progress_bar) {
+			// If a custom display is set, use that, otherwise just use the default
+			display_create_func =
+			    config.display_create_func ? config.display_create_func : ProgressBar::DefaultProgressBarDisplay;
+		}
+		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time, display_create_func);
 		active_query->progress_bar->Start();
 		query_progress = 0;
 	}
