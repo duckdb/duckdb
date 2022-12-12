@@ -43,6 +43,7 @@ public:
 	// FIXME: default database should be client-specific and not live here
 	const string &GetDefaultDatabase();
 
+	AttachedDatabase *GetDatabaseFromPath(ClientContext &context, const string &path);
 	vector<AttachedDatabase *> GetDatabases(ClientContext &context);
 
 	transaction_t GetNewQueryNumber() {

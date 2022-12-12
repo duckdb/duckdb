@@ -46,6 +46,20 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 }
 
+AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
+	auto databases = GetDatabases(context);
+	for (auto db : databases) {
+		auto &storage = db->GetStorageManager();
+		if (storage.InMemory()) {
+			continue;
+		}
+		if (path == storage.GetDBPath()) {
+			return db;
+		}
+	}
+	return nullptr;
+}
+
 const string &DatabaseManager::GetDefaultDatabase() {
 	if (default_database.empty()) {
 		throw InternalException("GetDefaultDatabase called but there are no databases");

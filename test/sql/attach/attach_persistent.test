@@ -25,7 +25,6 @@ SELECT SUM(i) FROM persistent_attach.integers
 42
 
 # detach and re-attach
-
 statement ok
 DETACH persistent_attach
 

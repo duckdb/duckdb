@@ -102,11 +102,15 @@ void PragmaAttachDatabase(ClientContext &context, const FunctionParameters &para
 	if (name.empty()) {
 		name = AttachedDatabase::ExtractDatabaseName(path);
 	}
+	auto &db_manager = DatabaseManager::Get(context);
+	auto existing_db = db_manager.GetDatabaseFromPath(context, path);
+	if (existing_db) {
+		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
+	}
 	auto new_db =
 	    make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(context), name, path, AccessMode::READ_WRITE);
 	new_db->Initialize();
 
-	auto &db_manager = DatabaseManager::Get(context);
 	db_manager.AddDatabase(context, move(new_db));
 }
 

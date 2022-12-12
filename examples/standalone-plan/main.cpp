@@ -174,7 +174,7 @@ void CreateFunction(Connection &con, string name, vector<LogicalType> arguments,
 
 void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> arguments, LogicalType return_type) {
 	auto &context = *con.context;
-	auto &catalog = Catalog::Vs(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// we can register multiple functions here if we want overloads
 	AggregateFunctionSet set(name);
