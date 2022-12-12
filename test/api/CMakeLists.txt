@@ -5,6 +5,7 @@ set(TEST_API_OBJECTS
     test_api.cpp
     test_config.cpp
     test_custom_allocator.cpp
+    test_cbuffer_manager.cpp
     test_results.cpp
     test_get_table_names.cpp
     test_prepared_api.cpp

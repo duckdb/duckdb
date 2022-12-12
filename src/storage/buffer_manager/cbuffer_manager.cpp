@@ -88,6 +88,14 @@ idx_t CBufferManager::GetMaxMemory() const {
 	return config.max_memory_func(config.data);
 }
 
+atomic<idx_t> &CBufferManager::GetMutableUsedMemory() {
+	// FIXME: this is horrible
+
+	// We don't want this to throw an exception, it should just be a no-op
+	// So we have to have an `atomic<idx_t>` to return from this function, even if it's not used anywhere else
+	return get_mutable_used_memory_enabler;
+}
+
 //===--------------------------------------------------------------------===//
 // Buffer Allocator
 //===--------------------------------------------------------------------===//
