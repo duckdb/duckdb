@@ -284,6 +284,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
 	}
+	config.virtual_buffer_manager = move(new_config.virtual_buffer_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

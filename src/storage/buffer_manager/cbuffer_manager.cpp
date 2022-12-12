@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+Allocator &CBufferManager::GetBufferAllocator() {
+	return allocator;
+}
+
 CBufferManager::CBufferManager(CBufferManagerConfig config_p)
     : VirtualBufferManager(), config(move(config_p)),
       custom_allocator(CBufferAllocatorAllocate, CBufferAllocatorFree, CBufferAllocatorRealloc,
@@ -14,10 +18,10 @@ CBufferManager::CBufferManager(CBufferManagerConfig config_p)
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
-	if (!can_destroy) {
-		throw InvalidInputException(
-		    "When using a callback-based BufferManager, we don't support creating temporary files");
-	}
+	// if (!can_destroy) {
+	//	throw InvalidInputException(
+	//	    "When using a callback-based BufferManager, we don't support creating temporary files");
+	// }
 	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
@@ -31,6 +35,15 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), can_destroy, alloc_size,
 	                                     move(reservation));
 	return Pin(*handle_p);
+}
+
+shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
+	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, block_size);
+
+	// create a new block pointer for this block
+	BufferPoolReservation reservation;
+	reservation.size = block_size;
+	return make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), false, block_size, move(reservation));
 }
 
 //! FIXME: Maybe make this non-pure and just call Destroy and Allocate?

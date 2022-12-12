@@ -70,6 +70,10 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		// We never do IO on tiny buffers, so there's no need to add a header or sector-align.
 		result.header_size = 0;
 		result.alloc_size = user_size;
+	} else if (type == FileBufferType::EXTERNAL_BUFFER) {
+		// The responsibility of this is given to a callback instead
+		result.header_size = 0;
+		result.alloc_size = user_size;
 	} else {
 		result.header_size = Storage::BLOCK_HEADER_SIZE;
 		result.alloc_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(result.header_size + user_size);

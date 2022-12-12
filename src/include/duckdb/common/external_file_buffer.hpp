@@ -7,8 +7,8 @@ namespace duckdb {
 
 class ExternalFileBuffer : public FileBuffer {
 public:
-	ExternalFileBuffer(Allocator &allocator, CBufferManagerConfig config, uint64_t size)
-	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size) {
+	ExternalFileBuffer(Allocator &allocator, CBufferManagerConfig &config, uint64_t size)
+	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), config(config) {
 	}
 
 public:
@@ -22,7 +22,7 @@ public:
 
 private:
 	//! Contains the function to retrieve the buffer
-	CBufferManagerConfig config;
+	CBufferManagerConfig &config;
 };
 
 } // namespace duckdb
