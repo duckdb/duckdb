@@ -1,4 +1,5 @@
-#include "duckdb_python/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache_item.hpp"
 
 namespace duckdb {
 

@@ -349,6 +349,17 @@ Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable Progress Bar Print
+//===--------------------------------------------------------------------===//
+void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).print_progress_bar = input.GetValue<bool>();
+}
+
+Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
+}
+
+//===--------------------------------------------------------------------===//
 // Experimental Parallel CSV
 //===--------------------------------------------------------------------===//
 void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
