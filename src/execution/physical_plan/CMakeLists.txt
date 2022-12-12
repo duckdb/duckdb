@@ -30,6 +30,7 @@ add_library_unity(
   plan_projection.cpp
   plan_set_operation.cpp
   plan_set.cpp
+  plan_reset.cpp
   plan_sample.cpp
   plan_show_select.cpp
   plan_simple.cpp
