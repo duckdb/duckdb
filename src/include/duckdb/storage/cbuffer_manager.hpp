@@ -54,10 +54,11 @@ public:
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final override;
 	void Unpin(shared_ptr<BlockHandle> &handle) final override;
 	idx_t GetUsedMemory() const final override;
+	void AdjustUsedMemory(int64_t amount) final override;
 	idx_t GetMaxMemory() const final override;
 	Allocator &GetBufferAllocator() final override;
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
-	atomic<idx_t> &GetMutableUsedMemory() final override;
+	// atomic<idx_t> &GetMutableUsedMemory() final override;
 
 private:
 	static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
@@ -72,8 +73,6 @@ private:
 	atomic<block_id_t> temporary_id;
 	Allocator custom_allocator;
 	Allocator allocator;
-	// FIXME: this is horrible
-	atomic<idx_t> get_mutable_used_memory_enabler;
 };
 
 } // namespace duckdb

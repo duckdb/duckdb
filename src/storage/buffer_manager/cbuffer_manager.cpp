@@ -28,7 +28,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 
 	// Create an ExternalFileBuffer, which uses a callback to retrieve the allocation when Buffer() is called
 	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, alloc_size);
-	BufferPoolReservation reservation;
+	BufferPoolReservation reservation(*this);
 	reservation.size = alloc_size;
 
 	// create a new block pointer for this block
@@ -41,7 +41,7 @@ shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
 	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, block_size);
 
 	// create a new block pointer for this block
-	BufferPoolReservation reservation;
+	BufferPoolReservation reservation(*this);
 	reservation.size = block_size;
 	return make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), false, block_size, move(reservation));
 }
@@ -84,16 +84,12 @@ idx_t CBufferManager::GetUsedMemory() const {
 	return config.used_memory_func(config.data);
 }
 
-idx_t CBufferManager::GetMaxMemory() const {
-	return config.max_memory_func(config.data);
+void CBufferManager::AdjustUsedMemory(int64_t amount) {
+	// no op
 }
 
-atomic<idx_t> &CBufferManager::GetMutableUsedMemory() {
-	// FIXME: this is horrible
-
-	// We don't want this to throw an exception, it should just be a no-op
-	// So we have to have an `atomic<idx_t>` to return from this function, even if it's not used anywhere else
-	return get_mutable_used_memory_enabler;
+idx_t CBufferManager::GetMaxMemory() const {
+	return config.max_memory_func(config.data);
 }
 
 //===--------------------------------------------------------------------===//

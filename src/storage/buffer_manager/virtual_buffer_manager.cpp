@@ -6,10 +6,6 @@
 
 namespace duckdb {
 
-atomic<idx_t> &VirtualBufferManager::GetMutableUsedMemory() {
-	throw NotImplementedException("This type of BufferManager does not have a mutable used memory getter");
-}
-
 shared_ptr<BlockHandle> VirtualBufferManager::RegisterSmallMemory(idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }

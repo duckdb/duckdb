@@ -110,8 +110,10 @@ idx_t BufferManager::GetUsedMemory() const {
 idx_t BufferManager::GetMaxMemory() const {
 	return maximum_memory;
 }
-atomic<idx_t> &BufferManager::GetMutableUsedMemory() {
-	return current_memory;
+
+void BufferManager::AdjustUsedMemory(int64_t amount) {
+	D_ASSERT(amount > 0 || (int64_t)current_memory >= -amount);
+	current_memory += amount;
 }
 
 template <typename... ARGS>
@@ -180,7 +182,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		handle->memory_charge.Merge(move(reservation));
 	} else {
 		// no need to evict blocks, but we do need to decrement 'current_memory'.
-		handle->memory_charge.Resize(current_memory, req.alloc_size);
+		handle->memory_charge.Resize(req.alloc_size);
 	}
 
 	// resize and adjust current memory
@@ -212,7 +214,7 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		handle->readers++;
-		reservation.Resize(current_memory, 0);
+		reservation.Resize(0);
 		return handle->Load(handle);
 	}
 	// now we can actually load the current block
@@ -225,7 +227,7 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	if (delta) {
 		D_ASSERT(delta < 0);
 		handle->memory_usage += delta;
-		handle->memory_charge.Resize(current_memory, handle->memory_usage);
+		handle->memory_charge.Resize(handle->memory_usage);
 	}
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	return buf;
@@ -269,12 +271,12 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 BufferManager::EvictionResult BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
                                                          unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
-	TempBufferPoolReservation r(current_memory, extra_memory);
+	TempBufferPoolReservation r(*this, extra_memory);
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
 			// Failed to reserve. Adjust size of temp reservation to 0.
-			r.Resize(current_memory, 0);
+			r.Resize(0);
 			return {false, move(r)};
 		}
 		// get a reference to the underlying block pointer
@@ -775,9 +777,9 @@ data_ptr_t BufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_
 
 void BufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	auto &data = (BufferAllocatorData &)*private_data;
-	BufferPoolReservation r;
+	BufferPoolReservation r(data.manager);
 	r.size = size;
-	r.Resize(data.manager.current_memory, 0);
+	r.Resize(0);
 	return Allocator::Get(data.manager.db).FreeData(pointer, size);
 }
 
@@ -787,9 +789,9 @@ data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_d
 		return pointer;
 	}
 	auto &data = (BufferAllocatorData &)*private_data;
-	BufferPoolReservation r;
+	BufferPoolReservation r(data.manager);
 	r.size = old_size;
-	r.Resize(data.manager.current_memory, size);
+	r.Resize(size);
 	r.size = 0;
 	return Allocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
 }

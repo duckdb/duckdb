@@ -45,7 +45,8 @@ public:
 	//! Unpin and pin are nops on this block of memory
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
 	idx_t GetUsedMemory() const final override;
-	atomic<idx_t> &GetMutableUsedMemory() final override;
+	// atomic<idx_t> &GetMutableUsedMemory() final override;
+	void AdjustUsedMemory(int64_t amount) final override;
 	idx_t GetMaxMemory() const final override;
 
 	//! Allocate an in-memory buffer with a single pin.
