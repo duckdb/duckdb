@@ -12,7 +12,7 @@ MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_man
 		throw IOException("Could not allocate %d bytes", sizeof(MyBuffer));
 	}
 	buffer->size = size;
-	buffer->pinned = false;
+	buffer->pinned = 0;
 	buffer->allocation = allocation;
 	buffer->buffer_manager = buffer_manager;
 	buffer_manager->allocated_memory += size;
@@ -33,7 +33,7 @@ void Destroy(duckdb_buffer buffer) {
 	auto buffer_manager = my_buffer->buffer_manager;
 
 	// assert that the buffer was not pinned, otherwise it should not be allowed to be destroyed
-	D_ASSERT(!my_buffer->pinned);
+	D_ASSERT(my_buffer->pinned == 0);
 
 	free(my_buffer->allocation);
 	buffer_manager->allocated_memory -= my_buffer->size;
@@ -44,9 +44,6 @@ duckdb_buffer ReAllocate(duckdb_buffer buffer, idx_t old_size, idx_t new_size) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
 
-	// assert that the buffer is not pinned, otherwise it should not be allowed to be reallocated
-	D_ASSERT(!my_buffer->pinned);
-
 	Destroy(buffer);
 	return Allocate(buffer_manager, new_size);
 }
@@ -55,7 +52,7 @@ void *GetAllocation(duckdb_buffer buffer) {
 	auto my_buffer = (MyBuffer *)buffer;
 
 	// assert that the buffer was pinned, you should not be allowed to retrieve an allocation from an unpinned buffer
-	D_ASSERT(my_buffer->pinned);
+	D_ASSERT(my_buffer->pinned > 0);
 	return my_buffer->allocation;
 }
 
@@ -63,11 +60,10 @@ void Pin(duckdb_buffer buffer) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
 
-	// assert that the buffer was not pinned before
-	D_ASSERT(!my_buffer->pinned);
-
-	buffer_manager->pinned_buffers++;
-	my_buffer->pinned = true;
+	if (my_buffer->pinned != 0) {
+		buffer_manager->pinned_buffers++;
+	}
+	my_buffer->pinned++;
 }
 
 void Unpin(duckdb_buffer buffer) {
@@ -75,10 +71,12 @@ void Unpin(duckdb_buffer buffer) {
 	auto buffer_manager = my_buffer->buffer_manager;
 
 	// assert that the buffer was pinnned
-	D_ASSERT(my_buffer->pinned);
+	D_ASSERT(my_buffer->pinned > 0);
 
-	buffer_manager->pinned_buffers++;
-	my_buffer->pinned = false;
+	my_buffer->pinned--;
+	if (my_buffer->pinned == 0) {
+		buffer_manager->pinned_buffers--;
+	}
 }
 
 idx_t UsedMemory(void *data) {

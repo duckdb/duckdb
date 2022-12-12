@@ -72,11 +72,13 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
 	config.pin_func(buffer.ExternalBufferHandle());
+	handle->readers++;
 	return handle->Load(handle);
 }
 
 void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+	handle->readers--;
 	config.unpin_func(buffer.ExternalBufferHandle());
 }
 

@@ -11,7 +11,7 @@ struct MyBufferManager {
 struct MyBuffer {
 	MyBufferManager *buffer_manager;
 	void *allocation;
-	bool pinned;
+	idx_t pinned;
 	duckdb::idx_t size;
 };
 
