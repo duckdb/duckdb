@@ -4,33 +4,47 @@
 # this is the pgp key we use to sign releases
 # if this key should be lost, generate a new one with `gpg --full-generate-key` 
 # AND upload to keyserver: `gpg --keyserver hkp://keys.openpgp.org --send-keys [...]`
-
+# export the keys for GitHub Actions like so: `gpg --export-secret-keys | base64`
 # --------------------------------
-# sec   rsa2048 2020-06-04 [SC]
-#       63A86642934CDDC017123DE8B1DE1389E91BE914
+# pub   ed25519 2022-02-07 [SC]
+#       65F91213E069629F406F7CF27F610913E3A6F526
 # uid           [ultimate] DuckDB <quack@duckdb.org>
-# ssb   rsa2048 2020-06-04 [E]
+# sub   cv25519 2022-02-07 [E]
 
-import glob
 import os
 import pathlib
 import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.request
 import zipfile
 import re
-
-version_regex = re.compile(r'^v(\d+\.\d+\.\d+)$')
-
-if len(sys.argv) < 4 or not version_regex.match(sys.argv[1]) or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
-  print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
-  exit(1)
 
 def exec(cmd):
   print(cmd)
   return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
+
+if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
+  print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
+  exit(1)
+
+
+version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+)$')
+release_tag = sys.argv[1]
+
+if (release_tag == 'master'):
+  # for SNAPSHOT builds we increment the minor version and set patch level to zero.
+  # seemed the most sensible
+  last_tag = exec('git tag --sort=-committerdate').decode('utf8').split('\n')[0]
+  re_result = version_regex.search(last_tag)
+  if re_result is None:
+    raise ValueError("Could not parse last tag %s" % last_tag)
+  release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
+elif version_regex.match(release_tag):
+  release_version = version_regex.search(release_tag).group(1)
+else:
+  print("Not running on %s" % release_tag)
+  exit(0)
 
 jdbc_artifact_dir = sys.argv[2]
 jdbc_root_path = sys.argv[3]
@@ -38,10 +52,6 @@ jdbc_root_path = sys.argv[3]
 combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64', 'linux-aarch64']
 
 staging_dir = tempfile.mkdtemp()
-release_tag = sys.argv[1]
-release_version = version_regex.search(release_tag).group(1)
-
-release_prefix = 'https://github.com/duckdb/duckdb/releases/download/%s' % release_tag
 
 binary_jar = '%s/duckdb_jdbc-%s.jar' % (staging_dir, release_version)
 pom = '%s/duckdb_jdbc-%s.pom' % (staging_dir, release_version)
@@ -111,15 +121,10 @@ pom_template = """
 pom_path = pathlib.Path(pom)
 pom_path.write_text(pom_template.replace("${VERSION}", release_version))
 
-for build in combine_builds:
-# file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
-# urllib.request.urlretrieve(file_url, '%s/java-%s/duckdb_jdbc.jar' % (jdbc_artifact_dir, build))
-  shutil.copyfile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), '%s/duckdb_jdbc-%s.jar' % (staging_dir, build))
 # fatten up jar to add other binaries, start with first one
-shutil.copyfile('%s/duckdb_jdbc-%s.jar' % (staging_dir, combine_builds[0]), binary_jar)
-
+shutil.copyfile(os.path.join(jdbc_artifact_dir, "java-" + combine_builds[0], "duckdb_jdbc.jar"), binary_jar)
 for build in combine_builds[1:]:
-  old_jar = zipfile.ZipFile('%s/duckdb_jdbc-%s.jar' % (staging_dir, build), 'r')
+  old_jar = zipfile.ZipFile(os.path.join(jdbc_artifact_dir, "java-" + build, "duckdb_jdbc.jar"), 'r')
   for zip_entry in old_jar.namelist():
     if zip_entry.startswith('libduckdb_java.so'):
       old_jar.extract(zip_entry, staging_dir)
@@ -155,20 +160,18 @@ if not os.path.exists(javadoc_jar) or not os.path.exists(sources_jar) or not os.
 # </settings>
 
 results_dir = os.path.join(jdbc_artifact_dir, "results")
-os.mkdir(results_dir)
+if not os.path.exists(results_dir):
+  os.mkdir(results_dir)
+
 
 for jar in [binary_jar, sources_jar, javadoc_jar]:
   shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
-
-
-exit(0)
 
 print("JARs created, uploading (this can take a while!)")
 deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ -DrepositoryId=ossrh'
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
-
 
 # print("Close/Release steps")
 
@@ -181,7 +184,3 @@ exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom,
 # exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
 
 # print("Done?")
-
-
-# TODO upload the asset to gh releases, too!
-
