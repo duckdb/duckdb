@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_set.hpp"
+#include "duckdb/execution/operator/helper/physical_reset.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
@@ -6,23 +6,21 @@
 
 namespace duckdb {
 
-void PhysicalSet::SetExtensionVariable(ExecutionContext &context, DBConfig &config,
-                                       ExtensionOption &extension_option) const {
-	auto &target_type = extension_option.type;
-	Value target_value = value.CastAs(context.client, target_type);
+void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &config,
+                                           ExtensionOption &extension_option) const {
 	if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, target_value);
+		extension_option.set_function(context.client, scope, extension_option.default_value);
 	}
 	if (scope == SetScope::GLOBAL) {
-		config.SetOption(name, move(target_value));
+		config.ResetOption(name);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[name] = move(target_value);
+		client_config.set_variables[name] = extension_option.default_value;
 	}
 }
 
-void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                          LocalSourceState &lstate) const {
+void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                            LocalSourceState &lstate) const {
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
@@ -39,9 +37,11 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
 			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
 		}
-		SetExtensionVariable(context, config, entry->second);
+		ResetExtensionVariable(context, config, entry->second);
 		return;
 	}
+
+	// Transform scope
 	SetScope variable_scope = scope;
 	if (variable_scope == SetScope::AUTOMATIC) {
 		if (option->set_local) {
@@ -52,22 +52,21 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		}
 	}
 
-	Value input = value.CastAs(context.client, option->parameter_type);
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
-			throw CatalogException("option \"%s\" cannot be set globally", name);
+			throw CatalogException("option \"%s\" cannot be reset globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		auto &config = DBConfig::GetConfig(context.client);
-		config.SetOption(&db, *option, input);
+		config.ResetOption(&db, *option);
 		break;
 	}
 	case SetScope::SESSION:
-		if (!option->set_local) {
-			throw CatalogException("option \"%s\" cannot be set locally", name);
+		if (!option->reset_local) {
+			throw CatalogException("option \"%s\" cannot be reset locally", name);
 		}
-		option->set_local(context.client, input);
+		option->reset_local(context.client);
 		break;
 	default:
 		throw InternalException("Unsupported SetScope for variable");

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_set.hpp
+// duckdb/execution/operator/helper/physical_reset.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,12 +17,12 @@ namespace duckdb {
 struct DBConfig;
 struct ExtensionOption;
 
-//! PhysicalSet represents a SET operation (e.g. SET a = 42)
-class PhysicalSet : public PhysicalOperator {
+//! PhysicalReset represents a RESET operation (e.g. RESET a = 42)
+class PhysicalReset : public PhysicalOperator {
 public:
-	PhysicalSet(const std::string &name_p, Value value_p, SetScope scope_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
-	      value(value_p), scope(scope_p) {
+	PhysicalReset(const std::string &name_p, SetScope scope_p, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::RESET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
+	      scope(scope_p) {
 	}
 
 public:
@@ -32,11 +32,10 @@ public:
 
 public:
 	const std::string name;
-	const Value value;
 	const SetScope scope;
 
 private:
-	void SetExtensionVariable(ExecutionContext &context, DBConfig &config, ExtensionOption &extension_option) const;
+	void ResetExtensionVariable(ExecutionContext &context, DBConfig &config, ExtensionOption &extension_option) const;
 };
 
 } // namespace duckdb
