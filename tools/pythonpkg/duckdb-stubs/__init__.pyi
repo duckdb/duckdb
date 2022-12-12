@@ -25,6 +25,8 @@ string_const: token_type
 threadsafety: int
 __standard_vector_size__: int
 
+__interactive__: bool
+__jupyter__: bool
 
 class BinderException(ProgrammingError): ...
 
