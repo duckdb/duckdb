@@ -93,7 +93,7 @@ duckdb_state duckdb_add_custom_buffer_manager(duckdb_config config, void *alloca
 	cbuffer_manager_config.max_memory_func = max_memory_func;
 	cbuffer_manager_config.used_memory_func = used_memory_func;
 
-	auto cbuffer_manager = make_unique<duckdb::CBufferManager>(cbuffer_manager_config);
+	auto cbuffer_manager = duckdb::make_unique<duckdb::CBufferManager>(cbuffer_manager_config);
 	db_config->SetVirtualBufferManager(move(cbuffer_manager));
 	return DuckDBSuccess;
 }
