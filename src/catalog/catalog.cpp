@@ -79,6 +79,10 @@ const string &Catalog::GetName() {
 	return GetAttached().GetName();
 }
 
+idx_t Catalog::GetOid() {
+	return GetAttached().oid;
+}
+
 Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 	return Catalog::GetSystemCatalog(*context.db);
 }
@@ -619,6 +623,29 @@ vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const s
 		auto schemas = catalog->schemas->GetEntries<SchemaCatalogEntry>(catalog->GetCatalogTransaction(context));
 		result.insert(result.end(), schemas.begin(), schemas.end());
 	}
+	return result;
+}
+
+vector<SchemaCatalogEntry *> Catalog::GetAllSchemas(ClientContext &context) {
+	vector<SchemaCatalogEntry *> result;
+
+	auto &db_manager = DatabaseManager::Get(context);
+	auto databases = db_manager.GetDatabases(context);
+	for (auto database : databases) {
+		auto &catalog = database->GetCatalog();
+		auto new_schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(catalog.GetCatalogTransaction(context));
+		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
+	}
+	sort(result.begin(), result.end(), [&](SchemaCatalogEntry *x, SchemaCatalogEntry *y) {
+		if (x->catalog->GetName() < y->catalog->GetName()) {
+			return true;
+		}
+		if (x->catalog->GetName() == y->catalog->GetName()) {
+			return x->name < y->name;
+		}
+		return false;
+	});
+
 	return result;
 }
 

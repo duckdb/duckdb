@@ -13,12 +13,18 @@ struct DuckDBSequencesData : public GlobalTableFunctionState {
 	DuckDBSequencesData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<SequenceCatalogEntry *> entries;
 	idx_t offset;
 };
 
 static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -62,15 +68,11 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 	auto result = make_unique<DuckDBSequencesData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::SEQUENCE_ENTRY,
-		             [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		             [&](CatalogEntry *entry) { result->entries.push_back((SequenceCatalogEntry *)entry); });
 	};
-
-	// check the temp schema as well
-	//	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	//	    context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -88,30 +90,35 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		auto &seq = (SequenceCatalogEntry &)*entry;
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, entry->catalog->GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(0, count, Value(seq.schema->name));
+		output.SetValue(col++, count, Value(seq.schema->name));
 		// schema_oid, BIGINT
-		output.SetValue(1, count, Value::BIGINT(seq.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(seq.schema->oid));
 		// sequence_name, VARCHAR
-		output.SetValue(2, count, Value(seq.name));
+		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT
-		output.SetValue(3, count, Value::BIGINT(seq.oid));
+		output.SetValue(col++, count, Value::BIGINT(seq.oid));
 		// temporary, BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(seq.temporary));
+		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
-		output.SetValue(5, count, Value::BIGINT(seq.start_value));
+		output.SetValue(col++, count, Value::BIGINT(seq.start_value));
 		// min_value, BIGINT
-		output.SetValue(6, count, Value::BIGINT(seq.min_value));
+		output.SetValue(col++, count, Value::BIGINT(seq.min_value));
 		// max_value, BIGINT
-		output.SetValue(7, count, Value::BIGINT(seq.max_value));
+		output.SetValue(col++, count, Value::BIGINT(seq.max_value));
 		// increment_by, BIGINT
-		output.SetValue(8, count, Value::BIGINT(seq.increment));
+		output.SetValue(col++, count, Value::BIGINT(seq.increment));
 		// cycle, BOOLEAN
-		output.SetValue(9, count, Value::BOOLEAN(seq.cycle));
+		output.SetValue(col++, count, Value::BOOLEAN(seq.cycle));
 		// last_value, BIGINT
-		output.SetValue(10, count, seq.usage_count == 0 ? Value() : Value::BOOLEAN(seq.last_value));
+		output.SetValue(col++, count, seq.usage_count == 0 ? Value() : Value::BOOLEAN(seq.last_value));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(11, count, Value(seq.ToSQL()));
+		output.SetValue(col++, count, Value(seq.ToSQL()));
 
 		count++;
 	}

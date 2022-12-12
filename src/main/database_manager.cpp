@@ -70,6 +70,7 @@ const string &DatabaseManager::GetDefaultDatabase() {
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<AttachedDatabase *> result;
 	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
+	result.push_back(context.client_data->temporary_objects.get());
 	return result;
 }
 

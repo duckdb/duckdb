@@ -28,10 +28,10 @@ CREATE TEMPORARY TABLE mytemp(i INTEGER)
 statement ok
 CREATE VIEW v1 AS SELECT 42
 
-query IIIIIIII
-SELECT schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count FROM duckdb_tables() ORDER BY table_name;
+query IIIIIIIII
+SELECT database_name, schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count FROM duckdb_tables() ORDER BY table_name;
 ----
-main	integers	False	False	0	1	0	0
-myschema	mytable	False	False	0	1	0	0
-temp	mytemp	True	False	0	1	0	0
-main	pk	False	True	0	2	1	1
+memory	main	integers	False	False	0	1	0	0
+memory	myschema	mytable	False	False	0	1	0	0
+temp	main	mytemp	True	False	0	1	0	0
+memory	main	pk	False	True	0	2	1	1

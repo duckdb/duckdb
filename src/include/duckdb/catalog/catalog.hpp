@@ -96,6 +96,7 @@ public:
 
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const string &GetName();
+	DUCKDB_API idx_t GetOid();
 
 	DUCKDB_API CatalogTransaction GetCatalogTransaction(ClientContext &context);
 
@@ -223,6 +224,7 @@ public:
 	}
 
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context, const string &catalog_name);
+	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
 
 	DUCKDB_API void Verify();
 

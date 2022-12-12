@@ -16,10 +16,10 @@ CREATE SEQUENCE seq
 statement ok
 CREATE TEMPORARY SEQUENCE seq2 MINVALUE 3 MAXVALUE 5 START WITH 4 CYCLE;
 
-query IIIIIIII
-SELECT schema_name, sequence_name, temporary, start_value, min_value, max_value, increment_by, cycle FROM duckdb_sequences() ORDER BY sequence_name;
+query IIIIIIIII
+SELECT database_name, schema_name, sequence_name, temporary, start_value, min_value, max_value, increment_by, cycle FROM duckdb_sequences() ORDER BY sequence_name;
 ----
-main	seq	False	1	1	9223372036854775807	1	False
-temp	seq2	True	4	3	5	1	True
+memory	main	seq	False	1	1	9223372036854775807	1	False
+temp	main	seq2	True	4	3	5	1	True
 
 
