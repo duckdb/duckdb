@@ -22,7 +22,7 @@ import re
 
 def exec(cmd):
   print(cmd)
-  return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
+  return subprocess.run(cmd.split(' '), check=True, capture_output=True).stdout
 
 if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
   print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
