@@ -8,7 +8,6 @@
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
-#include "test_helper_extension.hpp"
 
 namespace duckdb {
 
@@ -501,8 +500,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
-			} else if (param == "test_helper") {
-				db->LoadExtension<TestHelperExtension>();
 			} else if (param == "skip_reload") {
 				skip_reload = true;
 			} else {

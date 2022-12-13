@@ -63,6 +63,8 @@ SET SCHEMA = 'test';
 
 statement error
 SET SCHEMA = 'test,test2';
+----
+expected a single entry
 
 statement error
 SET SCHEMA = 'does_not_exist';
@@ -106,7 +108,7 @@ test
 query I
 SELECT current_schemas(true);
 ----
-[temp, test, main, pg_catalog]
+[main, test, main, main, pg_catalog]
 
 query I
 SELECT current_schemas(false);

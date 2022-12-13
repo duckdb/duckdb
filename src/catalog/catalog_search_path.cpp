@@ -44,6 +44,7 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 	string catalog;
 	string schema;
 	string entry;
+	bool finished = false;
 normal:
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
@@ -52,12 +53,13 @@ normal:
 		} else if (input[idx] == '.') {
 			goto separator;
 		} else if (input[idx] == ',') {
-			idx++;
-			goto final;
+			finished = true;
+			goto separator;
 		}
 		entry += input[idx];
 	}
-	goto final;
+	finished = true;
+	goto separator;
 quoted:
 	//! look for another quote
 	for (; idx < input.size(); idx++) {
@@ -85,6 +87,9 @@ separator:
 	}
 	entry = "";
 	idx++;
+	if (finished) {
+		goto final;
+	}
 	goto normal;
 final:
 	if (schema.empty()) {
@@ -96,8 +101,8 @@ final:
 CatalogSearchEntry CatalogSearchEntry::Parse(const string &input) {
 	idx_t pos = 0;
 	auto result = ParseInternal(input, pos);
-	if (pos != input.size()) {
-		throw ParserException("Failed to convert entry \"%s\" to CatalogSearchEntry", input);
+	if (pos < input.size()) {
+		throw ParserException("Failed to convert entry \"%s\" to CatalogSearchEntry - expected a single entry", input);
 	}
 	return result;
 }
@@ -149,7 +154,7 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
 		}
-		if (path.catalog == catalog) {
+		if (StringUtil::CIEquals(path.catalog, catalog)) {
 			return path.schema;
 		}
 	}
@@ -161,7 +166,7 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
 		}
-		if (path.schema == schema) {
+		if (StringUtil::CIEquals(path.schema, schema)) {
 			return path.catalog;
 		}
 	}
@@ -171,7 +176,7 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
 	vector<string> schemas;
 	for (auto &path : paths) {
-		if (path.schema == schema) {
+		if (StringUtil::CIEquals(path.schema, schema)) {
 			schemas.push_back(path.catalog);
 		}
 	}
@@ -181,7 +186,7 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {
 	vector<string> schemas;
 	for (auto &path : paths) {
-		if (path.catalog == catalog) {
+		if (StringUtil::CIEquals(path.catalog, catalog)) {
 			schemas.push_back(path.schema);
 		}
 	}

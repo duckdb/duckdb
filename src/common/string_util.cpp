@@ -165,6 +165,10 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+bool StringUtil::CIEquals(const string &l1, const string &l2) {
+	return StringUtil::Lower(l1) == StringUtil::Lower(l2);
+}
+
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
