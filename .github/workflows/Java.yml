@@ -17,8 +17,7 @@ concurrency:
   cancel-in-progress: true
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+
 jobs:
   java-linux-amd64:
     name: Java Linux (amd64)
@@ -62,7 +61,6 @@ jobs:
           name: java-linux-amd64
           path: |
             build/release/tools/jdbc/duckdb_jdbc.jar
-
 
   java-linux-aarch64:
     name: Java Linux (aarch64)
@@ -223,8 +221,8 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            export XML='
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
               xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
