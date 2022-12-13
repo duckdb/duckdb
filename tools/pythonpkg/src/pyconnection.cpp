@@ -19,6 +19,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb_python/jupyter_progress_bar_display.hpp"
 
 #include <random>
 
@@ -27,6 +28,42 @@ namespace duckdb {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
+PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+
+void DuckDBPyConnection::DetectEnvironment() {
+	// If __main__ does not have a __file__ attribute, we are in interactive mode
+	auto main_module = py::module_::import("__main__");
+	if (py::hasattr(main_module, "__file__")) {
+		return;
+	}
+	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
+
+	// Check to see if we are in a Jupyter Notebook
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto get_ipython = import_cache.IPython.get_ipython();
+	if (get_ipython.ptr() == nullptr) {
+		// Could either not load the IPython module, or it has no 'get_ipython' attribute
+		return;
+	}
+	auto ipython = get_ipython();
+	if (!py::hasattr(ipython, "config")) {
+		return;
+	}
+	py::dict ipython_config = ipython.attr("config");
+	if (ipython_config.contains("IPKernelApp")) {
+		DuckDBPyConnection::environment = PythonEnvironmentType::JUPYTER;
+	}
+	return;
+}
+
+bool DuckDBPyConnection::DetectAndGetEnvironment() {
+	DuckDBPyConnection::DetectEnvironment();
+	return DuckDBPyConnection::IsInteractive();
+}
+
+bool DuckDBPyConnection::IsJupyter() {
+	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
+}
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -125,7 +162,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &que
 	return shared_from_this();
 }
 
-static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
+unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	do {
 		execution_result = pending_query.ExecuteTask();
@@ -186,6 +223,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		params_set = params;
 	}
 
+	// For every entry of the argument list, execute the prepared statement with said arguments
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
@@ -704,26 +742,39 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	auto &db_config = res.database->instance->config;
 	db_config.AddExtensionOption("pandas_analyze_sample",
 	                             "The maximum number of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::UBIGINT);
-	db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
+	                             LogicalType::UBIGINT, Value::UBIGINT(1000));
 	if (db_config.options.enable_external_access) {
 		db_config.replacement_scans.emplace_back(ScanReplacement);
 	}
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::object config_options) {
-	if (config_options.is_none()) {
-		config_options = py::dict();
+static void SetDefaultConfigArguments(ClientContext &context) {
+	if (!DuckDBPyConnection::IsInteractive()) {
+		// Don't need to set any special default arguments
+		return;
 	}
-	auto res = make_shared<DuckDBPyConnection>();
-	if (!py::isinstance<py::dict>(config_options)) {
-		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
-	}
-	py::dict py_config_dict = config_options;
-	auto config_dict = TransformPyConfigDict(py_config_dict);
-	DBConfig config(config_dict, read_only);
 
+	// Get the options we want to set/override
+	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
+	D_ASSERT(progress_bar_time_opt);
+	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
+	D_ASSERT(enable_progress_bar_opt);
+	auto progress_bar_print_opt = DBConfig::GetOptionByName("enable_progress_bar_print");
+	D_ASSERT(progress_bar_print_opt);
+
+	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
+	// FIXME: nasty hardcoded default value check
+	if (progress_bar_time_opt->get_setting(context) == 2000) {
+		progress_bar_time_opt->set_local(context, Value(0));
+	}
+	if (DuckDBPyConnection::IsJupyter()) {
+		// Set the function used to create the display for the progress bar
+		context.config.display_create_func = JupyterProgressBarDisplay::Create;
+	}
+}
+
+static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
+	auto res = make_shared<DuckDBPyConnection>();
 	res->database = instance_cache.GetInstance(database, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
@@ -731,6 +782,24 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);
+	return res;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           py::object config_options) {
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
+	py::dict py_config_dict = config_options;
+	auto config_dict = TransformPyConfigDict(py_config_dict);
+	DBConfig config(config_dict, read_only);
+
+	auto res = FetchOrCreateInstance(database, config);
+	auto &client_context = *res->connection->context;
+	SetDefaultConfigArguments(client_context);
 	return res;
 }
 
@@ -757,6 +826,10 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 		import_cache = make_shared<PythonImportCache>();
 	}
 	return import_cache.get();
+}
+
+bool DuckDBPyConnection::IsInteractive() {
+	return DuckDBPyConnection::environment != PythonEnvironmentType::NORMAL;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {

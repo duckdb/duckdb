@@ -71,6 +71,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("__package__") = "duckdb";
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
+	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
+	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
 	m.attr("apilevel") = "1.0";
 	m.attr("threadsafety") = 1;

@@ -1,30 +1,28 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/progress_bar.hpp
+// duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb.h"
-#include "duckdb/execution/executor.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/profiler.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/progress_bar/progress_bar_display.hpp"
 
 namespace duckdb {
 
-class ProgressBar {
+class TerminalProgressBarDisplay : public ProgressBarDisplay {
 public:
-	explicit ProgressBar(Executor &executor, idx_t show_progress_after, bool print_progress);
+	TerminalProgressBarDisplay() {
+	}
+	~TerminalProgressBarDisplay() override final {
+	}
 
-	//! Starts the thread
-	void Start();
-	//! Updates the progress bar and prints it to the screen
-	void Update(bool final);
-	//! Gets current percentage
-	double GetCurrentPercentage();
+public:
+	void Update(double percentage) override;
+	void Finish() override;
 
 private:
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = 8;
@@ -45,22 +43,8 @@ private:
 #endif
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 
-	void PrintProgressInternal(int percentage);
-	void PrintProgress(int percentage);
-	void FinishProgressBarPrint();
-
 private:
-	//! The executor
-	Executor &executor;
-	//! The profiler used to measure the time since the progress bar was started
-	Profiler profiler;
-	//! The time in ms after which to start displaying the progress bar
-	idx_t show_progress_after;
-	//! The current progress percentage
-	double current_percentage;
-	//! Whether or not we print the progress bar
-	bool print_progress;
-	//! Whether or not profiling is supported for the current query
-	bool supported = true;
+	void PrintProgressInternal(int percentage);
 };
+
 } // namespace duckdb
