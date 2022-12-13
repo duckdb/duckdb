@@ -78,8 +78,11 @@ else:
 with open(gyp_in, 'r') as f:
     text = f.read()
 
-text = text.replace('${SOURCE_FILES}', ',\n                '.join(['"' + x + '"' for x in source_list]))
-text = text.replace('${INCLUDE_FILES}', ',\n                '.join(['"' + x + '"' for x in include_list]))
+def sanitize_path(x):
+    return x.replace('\\', '/')
+
+text = text.replace('${SOURCE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in source_list]))
+text = text.replace('${INCLUDE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in include_list]))
 text = text.replace('${LIBRARY_FILES}', library_text)
 
 with open(gyp_out, 'w+') as f:
