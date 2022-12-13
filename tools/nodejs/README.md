@@ -109,6 +109,7 @@ You might want to add the `--ignore-scripts` option if you don't care about buil
 
 ### Tests:
 Tests are located in `tools/nodejs/test` and can be run with `npm test`
+To run a single test, you can use `npm test -- --grep "name of test as given in describe"`
 
 ### Additional notes:
 To build the NodeJS package from source, when on Windows, requires the following extra steps:
