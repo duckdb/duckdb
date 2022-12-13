@@ -141,6 +141,7 @@ jobs:
         shell: bash
         if: matrix.target_arch == 'arm64'
         run: |
+          brew install ninja
           GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
 
       - name: Setup
