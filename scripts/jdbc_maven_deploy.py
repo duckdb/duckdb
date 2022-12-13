@@ -22,15 +22,18 @@ import re
 
 def exec(cmd):
   print(cmd)
-  return subprocess.run(cmd.split(' '), check=True, capture_output=True).stdout
+  res = subprocess.run(cmd.split(' '), capture_output=True)
+  if res.returncode == 0:
+    return res.stdout
+  raise ValueError(res.stdout + res.stderr)
 
 if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.argv[3]):
   print("Usage: [release_tag, format: v1.2.3] [artifact_dir] [jdbc_root_path]")
   exit(1)
 
-
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+)$')
 release_tag = sys.argv[1]
+deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
 
 if (release_tag == 'master'):
   # for SNAPSHOT builds we increment the minor version and set patch level to zero.
@@ -40,6 +43,8 @@ if (release_tag == 'master'):
   if re_result is None:
     raise ValueError("Could not parse last tag %s" % last_tag)
   release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
+  # orssh uses a different deploy url for snapshots yay
+  deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
 elif version_regex.match(release_tag):
   release_version = version_regex.search(release_tag).group(1)
 else:
@@ -168,18 +173,19 @@ for jar in [binary_jar, sources_jar, javadoc_jar]:
   shutil.copyfile(jar, os.path.join(results_dir, os.path.basename(jar)))
 
 print("JARs created, uploading (this can take a while!)")
-deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ -DrepositoryId=ossrh'
+deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=%s -DrepositoryId=ossrh' % deploy_url
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
 
-# print("Close/Release steps")
+print("Close/Release steps")
 
 # # beautiful
-# os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
+os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
 
-# # this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
+# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
 # repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
+# print(repo_id)
 # exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
 # exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
 
