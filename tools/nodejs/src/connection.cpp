@@ -1,7 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb_node.hpp"
 #include "napi.h"
-
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include <iostream>
 #include <thread>
 

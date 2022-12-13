@@ -9,11 +9,11 @@
                 "src/connection.cpp",
                 "src/statement.cpp",
                 "src/utils.cpp",
-                "src/parquet-amalgamation.cpp",
-                "src/duckdb.cpp" # comment this out to build against existing lib
+                ${SOURCE_FILES}
             ],
             "include_dirs": [
-                "<!@(node -p \"require('node-addon-api').include\")"
+                "<!@(node -p \"require('node-addon-api').include\")",
+                ${INCLUDE_FILES}
             ],
             'defines': [
                 'NAPI_DISABLE_CPP_EXCEPTIONS=1',

@@ -1,6 +1,6 @@
 #include "duckdb_node.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "napi.h"
-#include "parquet-amalgamation.hpp"
 
 namespace node_duckdb {
 
@@ -56,8 +56,6 @@ struct OpenTask : public Task {
 	void DoWork() override {
 		try {
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &duckdb_config);
-			duckdb::ParquetExtension extension;
-			extension.Load(*Get<Database>().database);
 			success = true;
 
 		} catch (const duckdb::Exception &ex) {
