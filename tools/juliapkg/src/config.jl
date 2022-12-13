@@ -3,7 +3,7 @@ Configuration object
 """
 mutable struct Config
     handle::duckdb_config
-	registered_objects::Dict{Any, Any}
+    registered_objects::Dict{Any, Any}
 
     function Config()
         handle = Ref{duckdb_connection}()
