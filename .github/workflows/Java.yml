@@ -68,7 +68,7 @@ jobs:
     name: Java Linux (aarch64)
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-#    needs: java-linux-amd64
+    needs: java-linux-amd64
     env:
       GEN: ninja
       BUILD_JDBC: 1
@@ -109,7 +109,7 @@ jobs:
   java-windows-amd64:
     name: Java Windows (arm64)
     runs-on: windows-latest
-#   needs: java-linux-amd64
+   needs: java-linux-amd64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -144,7 +144,7 @@ jobs:
   java-osx-universal:
     name: Java OSX (Universal)
     runs-on: macos-latest
-#   needs: java-linux-amd64
+   needs: java-linux-amd64
     env:
       BUILD_JDBC: 1
       OSX_BUILD_UNIVERSAL: 1
@@ -223,26 +223,26 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          # FIXME         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          export XML='
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-            xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-            https://maven.apache.org/xsd/settings-1.0.0.xsd">
-            <servers>
-              <server>
-                <id>ossrh</id>
-                <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
-                <password>PASSWORD</password>
-              </server>
-            </servers>
-          </settings> '
-          mkdir ~/.m2
-          echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
-          echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
-          gpg --import maven_pgp_key
-          python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
-          #          fi
+          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            export XML='
+            <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <servers>
+                <server>
+                  <id>ossrh</id>
+                  <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+                  <password>PASSWORD</password>
+                </server>
+              </servers>
+            </settings> '
+            mkdir ~/.m2
+            echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
+            echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
+            gpg --import maven_pgp_key
+            python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
+          fi
           ls -lahR jdbc-artifacts
 
       - uses: actions/upload-artifact@v3
