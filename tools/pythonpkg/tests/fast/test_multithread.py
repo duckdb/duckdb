@@ -301,8 +301,8 @@ def from_parquet(duckdb_conn, queue):
 def description(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)').fetchall()
-    duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )").fetchall()
+    duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)')
+    duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )")
     rel = duckdb_conn.table("test")
     rel.execute()
     try:
