@@ -51,6 +51,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"profiler_history_size", {0, 0}},
 	    {"profile_output", {"test", "test"}},
 	    {"profiling_mode", {"detailed", "detailed"}},
+	    {"enable_progress_bar_print", {false, false}},
 	    {"progress_bar_time", {0, 0}},
 	    {"temp_directory", {"tmp", "tmp"}},
 	    {"wal_autocheckpoint", {"4.2GB", "4.2GB"}},
