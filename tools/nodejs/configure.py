@@ -22,6 +22,10 @@ import package_build
 def sanitize_path(x):
     return x.replace('\\', '/')
 
+defines = []
+for ext in extensions:
+    defines.extend(['BUILD_{}_EXTENSION'.format(ext.upper())])
+
 if 'DUCKDB_NODE_BUILD_CACHE' in os.environ and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
         cache = pickle.load(f)
@@ -97,6 +101,7 @@ else:
     windows_options = ''
     cflags = ''
 
+define_text = ',\n                '.join(['"' + x + '"' for x in defines])
 
 with open(gyp_in, 'r') as f:
     text = f.read()
@@ -106,6 +111,7 @@ text = text.replace('${INCLUDE_FILES}', ',\n                '.join(['"' + saniti
 text = text.replace('${LIBRARY_FILES}', library_text)
 text = text.replace('${WINDOWS_OPTIONS}', windows_options)
 text = text.replace('${CFLAGS}', cflags)
+text = text.replace('${DEFINES}', define_text)
 
 with open(gyp_out, 'w+') as f:
     f.write(text)
