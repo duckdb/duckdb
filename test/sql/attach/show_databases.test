@@ -13,12 +13,14 @@ SHOW DATABASES
 ----
 memory
 new_database
+temp
 
 query I
 SELECT name FROM pragma_database_list() ORDER BY name
 ----
 memory
 new_database
+temp
 
 # check changing the default database
 statement ok

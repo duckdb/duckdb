@@ -6,6 +6,9 @@
 load __TEST_DIR__/pending_updates.db
 
 statement ok
+SET immediate_transaction_mode=true
+
+statement ok
 CREATE TABLE test (i INTEGER);
 
 statement ok
