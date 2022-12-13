@@ -99,3 +99,14 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
   });
 });
 ```
+
+## Development
+
+Tests are located in `tools/nodejs/test`, these tests require Mocha to run.
+Mocha can be installed with `npm install mocha chai --save-dev`
+Tests can then be run with `npm test`
+
+To build the NodeJS package from source, when on Windows, requires the following extra steps:
+- Set `OPENSSL_ROOT_DIR` to the root directory of an OpenSSL installation
+- Supply the `STATIC_OPENSSL=1` option when executing `make`, or set `-DOPENSSL_USE_STATIC_LIBS=1` manually when calling `cmake`
+
