@@ -137,6 +137,12 @@ jobs:
           echo $OPENSSL_ROOT_DIR
           GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
+      - name: Build extensions
+        shell: bash
+        if: matrix.target_arch == 'arm64'
+        run: |
+          GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
+
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
