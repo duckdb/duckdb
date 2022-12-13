@@ -182,7 +182,7 @@ jobs:
   win-nodejs:
     name: node.js Windows
     runs-on: windows-latest
-    needs: linux-nodejs
+    # needs: linux-nodejs
 
     strategy:
       matrix:
