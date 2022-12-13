@@ -1,0 +1,451 @@
+name: Main
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'tools/nodejs/**'
+      - 'tools/juliapkg/**'
+      - 'tools/pythonpkg/**'
+      - 'tools/rpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+jobs:
+ linux-debug:
+    name: Linux Debug
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_INET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_ICU: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_PARQUET: 1
+      BUILD_SUBSTRAIT_EXTENSION: 1
+      BUILD_JEMALLOC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run:  make debug
+
+    - name: Test
+      shell: bash
+      run: make unittestci
+
+
+ force-storage:
+    name: Force Storage
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make reldebug
+
+    - name: Test
+      shell: bash
+      run: build/reldebug/test/unittest --force-storage
+
+ force-restart:
+    name: Force Restart
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make reldebug
+
+    - name: Test
+      shell: bash
+      run: build/reldebug/test/unittest --force-reload --force-storage
+
+ no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: build/debug/test/unittest
+
+ threadsan:
+    name: Thread Sanitizer
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+
+
+ valgrind:
+    name: Valgrind
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+ docs:
+    name: Website Docs
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Clone Website
+      shell: bash
+      run: git clone https://github.com/duckdb/duckdb-web
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Package
+      shell: bash
+      run: |
+        cd duckdb-web
+        python3 scripts/generate_docs.py ..
+
+
+ sqllogic:
+    name: Sqllogic tests
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Test
+      shell: bash
+      run: make sqlite
+
+ expanded:
+    name: Expanded
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      DISABLE_UNITY: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: ./.github/actions/swap_space
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+ jdbc:
+    name: JDBC Compliance
+    runs-on: ubuntu-18.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      BUILD_JDBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/cwida/jdbccts.git
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+
+ odbc:
+    name: ODBC
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      BUILD_ODBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pip julia
+        pip3 install pyodbc
+
+    - name: Install nanodbc
+      shell: bash
+      run: |
+        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+
+    - name: Install psqlodbc
+      shell: bash
+      run: |
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && git checkout 0a939c70ec405abde8a36dc4d88043561b64b78d && make debug)
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: DISABLE_SANITIZER=1 make debug
+
+    - name: Test nanodbc
+      shell: bash
+      run: ./tools/odbc/test/run_nanodbc_tests.sh
+
+    - name: Test psqlodbc
+      shell: bash
+      run: ./tools/odbc/test/run_psqlodbc_tests.sh
+
+    - name: Test isql
+      shell: bash
+      run: ./tools/odbc/test/run_isql_tests.sh
+
+    - name: Test R ODBC
+      shell: bash
+      run: R -f tools/odbc/test/rodbc.R
+
+    - name: Test Python ODBC
+      shell: bash
+      run: ./tools/odbc/test/run_pyodbc_tests.sh
+
+    - name: Test Julia ODBC
+      shell: bash
+      run: |
+        export ASAN_OPTIONS=verify_asan_link_order=0
+        julia tools/odbc/test/julia-test.jl

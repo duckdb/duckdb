@@ -1,0 +1,235 @@
+name: R
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/juliapkg/**'
+      - 'tools/nodejs/**'
+      - 'tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/R.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+jobs:
+
+  r-test-extension:
+    name: Extension for R test
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
+
+    - uses: ./.github/actions/build_extensions
+      with:
+        run_tests: 0
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: r-test-extensions
+        path: |
+          build/release/extension/*/*.duckdb_extension
+
+  rstats-linux:
+    name: R Package Linux
+    runs-on: ubuntu-20.04
+    needs: r-test-extension
+    env:
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - name: Install
+      env:
+        GITHUB_PAT: ${{ github.token }}
+      shell: bash
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc tidy
+        mkdir -p $HOME/.R
+        R -f tools/rpkg/dependencies.R
+
+    - name: Prepare
+      shell: bash
+      run: |
+        mkdir -p /tmp/duckdb_extensions
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+
+    - uses: actions/download-artifact@v3
+      with:
+        name: r-test-extensions
+        path: /tmp/duckdb_extensions
+
+    - name: Tests
+      shell: bash
+      run: |
+        ls /tmp/duckdb_extensions
+        cd tools/rpkg
+        R CMD INSTALL -d duckdb_*.tar.gz
+        (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
+
+    - name: R CMD check
+      shell: bash
+      run: |
+        cd tools/rpkg
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+        if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+    - name: Print R log (1)
+      # Print logs now only if success, for the case of failure there's another identical step below.
+      if: ${{ success() }}
+      shell: bash
+      run: |
+        cat /tmp/duckdb.Rcheck/00check.log
+        find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
+
+    - name: Valgrind
+      shell: bash
+      run: |
+        cd tools/rpkg
+        export NOT_CRAN='false'
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
+
+    - name: Print check directory tree
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        ls -R /tmp/duckdb.Rcheck
+
+    - name: Print R log (2)
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        cat /tmp/duckdb.Rcheck/00check.log
+        find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
+
+    - name: Coverage
+      env:
+        DUCKDB_R_DEBUG: 1
+      shell: Rscript {0}
+      run: |
+        pkgload::load_all("tools/rpkg")
+        cov <- covr::codecov("tools/rpkg", relative_path = ".")
+
+    - name: Deploy
+      shell: bash
+      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
+
+  rstats-linux-debug:
+    name: R Package Linux debug mode
+    runs-on: ubuntu-20.04
+    needs: rstats-linux
+
+    env:
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
+      DUCKDB_R_DEBUG: 1
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - name: Install
+      env:
+        GITHUB_PAT: ${{ github.token }}
+      shell: bash
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+        mkdir -p $HOME/.R
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD INSTALL .
+
+  rstats-windows:
+    name: R Package Windows
+    runs-on: windows-latest
+    needs: rstats-linux
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - uses: r-lib/actions/setup-pandoc@v2
+
+    - name: Install
+      shell: bash
+      run: |
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
+        (cd tests && R -f testthat.R)
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+        if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+  rubsan:
+    name: R UBSAN
+    runs-on: ubuntu-latest
+    needs: rstats-linux
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Run
+      shell: bash
+      run: |
+        (cd tools/rpkg && ./configure && R CMD build .)
+        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c /duckdb/scripts/r_ubsan.sh

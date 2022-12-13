@@ -1,0 +1,448 @@
+name: Python
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/juliapkg/**'
+      - 'tools/nodejs/**'
+      - 'tools/rpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+jobs:
+#  This is just a sanity check of Python 3.9 running with Arrow
+   linux-python3-9:
+    name: Python 3.9 Linux
+    runs-on: ubuntu-20.04
+
+    env:
+      CIBW_BUILD: 'cp39-manylinux_x86_64'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+      PYTEST_TIMEOUT: '600'
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      shell: bash
+      run: pip install cibuildwheel twine
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/pythonpkg
+        python setup.py sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+
+   manylinux-extensions:
+    name: DuckDB Extensions (gcc4)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-python3-9
+
+    steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        yum install -y gcc gcc-c++ cmake make
+        yum install -y epel-release
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+        yum install -y git
+        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker
+
+    - name: Install AWS CLI
+      shell: bash
+      run: |
+        python3 -m pip install awscli
+        aws --version
+
+      # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
+    - name: Download OpenSSL 1.1.1s
+      shell: bash
+      run: |
+        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1s.tar.gz
+        tar -xzvf OpenSSL_1_1_1s.tar.gz
+        mv openssl-OpenSSL_1_1_1s openssl-1.1.1s
+        cd openssl-1.1.1s
+        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
+
+    - name: Configure OpenSSL
+      shell: bash
+      run: |
+        cd openssl-1.1.1s
+        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
+
+    - name: Build OpenSSL
+      shell: bash
+      run: |
+        cd openssl-1.1.1s
+        make
+        make install
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Version Check
+      shell: bash
+      run: |
+        cmake --version
+        ldd --version ldd
+        ls -al
+        pwd
+        echo "$USER"
+
+    - uses: ./.github/actions/build_extensions
+      with:
+        deploy_as: linux_amd64_gcc4
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
+        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+        treat_warn_as_error: 0
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: manylinux-extensions-x86_64
+        path: |
+          build/release/extension/*/*.duckdb_extension
+
+   linux-python3:
+    name: Python 3 Linux
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: [i686, x86_64]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            python_build: 'cp38-*'
+          - isRelease: false
+            python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
+    needs: manylinux-extensions
+    env:
+      CIBW_BUILD: ${{ matrix.python_build}}
+      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+      PYTEST_TIMEOUT: '600'
+      DUCKDB_BUILD_UNITY: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      shell: bash
+      run: pip install cibuildwheel twine
+
+    - uses: actions/download-artifact@v3
+      if: ${{ matrix.arch == 'x86_64' }}
+      with:
+        name: manylinux-extensions-x86_64
+        path: tools/pythonpkg
+
+    - name: List extensions to be tested
+      shell: bash
+      run: |
+        find tools/pythonpkg -maxdepth 2 -type f -name "*.duckdb_extension"
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/pythonpkg
+        python setup.py sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        ls duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+        ls wheelhouse
+
+    - name: Deploy
+      shell: bash
+      run: |
+        python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        fi
+
+   osx-python3:
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      name: Python 3 OSX
+      runs-on: macos-latest
+      strategy:
+       matrix:
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+      needs: linux-python3-9
+      env:
+        CIBW_BUILD: ${{ matrix.python_build}}
+        CIBW_ARCHS: 'x86_64 universal2 arm64'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
+        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+        TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Install
+        shell: bash
+        run: pip install cibuildwheel twine
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
+      - name: Build
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          python setup.py sdist
+          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+
+      - name: Deploy
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
+
+   win-python3:
+      name: Python 3 Windows
+      runs-on: windows-latest
+      strategy:
+       matrix:
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            python_build: 'cp37-*'
+          - isRelease: false
+            python_build: 'cp38-*'
+          - isRelease: false
+            python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp311-*'
+      needs: linux-python3-9
+
+      env:
+        CIBW_BUILD: ${{ matrix.python_build}}
+        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+        SETUPTOOLS_USE_DISTUTILS: 'stdlib'
+        TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Install
+        shell: bash
+        run: pip install cibuildwheel twine
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
+      - name: Build
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          python setup.py sdist
+          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+
+      - name: Deploy
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
+
+   linux-tarball:
+      name: Python 3 Tarball
+      runs-on: ubuntu-20.04
+      needs: linux-python3-9
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Install
+        shell: bash
+        run: pip install numpy pytest pandas mypy psutil
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build
+        shell: bash
+        run: |
+          python --version
+          git archive --format zip --output test-tarball.zip HEAD
+          mkdir duckdb-test-tarball
+          mv test-tarball.zip duckdb-test-tarball
+          cd duckdb-test-tarball
+          unzip test-tarball.zip
+          cd tools/pythonpkg
+          export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          pip install . --user
+          (cd tests/ && python -m pytest)
+
+   python-address-sanitizer:
+      name: Python Address Sanitizer (Linux)
+      runs-on: ubuntu-latest
+      container: ubuntu:16.04
+      needs: linux-python3-9
+      env:
+         GEN: ninja
+         DUCKDEBUG: 1
+         ASAN_OPTIONS: detect_leaks=0
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/ubuntu_16_setup
+        with:
+          openssl: 0
+          python: 0
+
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          apt-get install -y -qq libbz2-dev
+          wget https://www.openssl.org/source/openssl-1.0.2o.tar.gz
+          tar -xf openssl-1.0.2o.tar.gz
+          cd openssl-1.0.2o
+          ./config shared --prefix=/usr/local/
+          make
+          make install
+          mkdir lib
+          cp ./*.{so,so.1.0.0,a,pc} ./lib
+
+      - name: Install Python 3 With Sanitizers
+        shell: bash
+        run: |
+          wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
+          unzip v3.9.12.zip
+          rm v3.9.12.zip
+          cd cpython-3.9.12
+          mkdir debug-build
+          export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/openssl-1.0.2o/lib
+          ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --with-openssl=${GITHUB_WORKSPACE}/openssl-1.0.2o --prefix=${GITHUB_WORKSPACE}/debug-build
+          make -j
+          make install
+
+      - name: Install Python Test Dependencies
+        shell: bash
+        run: |
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy pandas pyarrow pytest psutil
+
+      - name: Install DuckDB Python
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
+
+      - name: Run Python Tests
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast
+
+   linux-release-cleanup:
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      name: PyPi Release Cleanup
+      runs-on: ubuntu-20.04
+      needs: linux-python3-9
+      env:
+        PYPI_PASSWORD: ${{secrets.PYPI_PASSWORD}}
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Cleanup Releases
+        shell: bash
+        run: python3 scripts/pypi_cleanup.py

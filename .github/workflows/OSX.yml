@@ -1,0 +1,193 @@
+name: OSX
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches-ignore:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
+jobs:
+  xcode-debug:
+    name: OSX Debug
+    runs-on: macos-latest
+
+    env:
+      TREAT_WARNINGS_AS_ERRORS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: make unittestci
+
+    - name: Amalgamation
+      shell: bash
+      run: |
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+
+  xcode-release:
+    name: OSX Release
+    runs-on: macos-latest
+    needs: xcode-debug
+    env:
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+      BUILD_JDBC: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_ODBC: 1
+      OSX_BUILD_UNIVERSAL: 1
+      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Install UnixODBC
+      shell: bash
+      run: |
+        brew remove --ignore-dependencies unixodbc
+        CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Unit Test
+      shell: bash
+      run: make allunit
+
+    - name: Tools Tests
+      shell: bash
+      run: |
+        python tools/shell/shell-test.py build/release/duckdb
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+    - name: Examples
+      shell: bash
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
+
+    - name: Deploy
+      shell: bash
+      run: |
+        python scripts/amalgamation.py
+        zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+        zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
+        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-osx
+        path: |
+          libduckdb-osx-universal.zip
+          duckdb_cli-osx-universal.zip
+          duckdb_odbc-osx-universal.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+
+  xcode-extensions:
+    name: OSX Extensions Release
+    runs-on: macos-latest
+    needs: xcode-debug
+    env:
+      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+      AWS_DEFAULT_REGION: us-east-1
+      OSX_BUILD_UNIVERSAL: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          mkdir -p build/openssl
+          cd build/openssl
+          mkdir sources build
+          curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
+          export OPENSSL_ROOT_DIR=`pwd`/build
+          cd sources
+          export CC="clang -arch x86_64 -arch arm64"
+          perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm
+          make -j
+          make install_sw
+
+      - name: Get OpenSSL path
+        shell: bash
+        run: |
+          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
+
+      - uses: ./.github/actions/build_extensions
+        with:
+          openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
+          treat_warn_as_error: 0
+          post_install: rm build/release/src/libduckdb*
+          run_tests: 0
+          osx_universal: 1
+
+      - name: Deploy
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            pip install awscli
+            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
+            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
+            ./scripts/extension-upload-test.sh
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            pip install awscli
+            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
+            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
+            ./scripts/extension-upload-test.sh
+          else
+            ./scripts/extension-upload-test.sh local
+          fi
