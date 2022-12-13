@@ -50,7 +50,8 @@
                 "VCCLCompilerTool": {
                     "ExceptionHandling": 1,
                     "AdditionalOptions": [
-                        "/bigobj"
+                        "/bigobj",
+                        ${WINDOWS_OPTIONS}
                     ]
                 }
             },

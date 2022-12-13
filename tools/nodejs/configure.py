@@ -19,18 +19,22 @@ scripts_dir = 'scripts'
 sys.path.append(scripts_dir)
 import package_build
 
+def sanitize_path(x):
+    return x.replace('\\', '/')
+
 if 'DUCKDB_NODE_BUILD_CACHE' in os.environ and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
         cache = pickle.load(f)
     source_list = cache['source_list']
     include_list = cache['include_list']
     library_text = cache['library_text']
+    windows_options = cache['windows_options']
 elif 'DUCKDB_NODE_BINDIR' in os.environ:
     def find_library_path(libdir, libname):
         flist = os.listdir(libdir)
         for fname in flist:
             fpath = os.path.join(libdir, fname)
-            if os.path.isfile(fpath) and libname in fname:
+            if os.path.isfile(fpath) and package_build.file_is_lib(fname, libname):
                 return fpath
         raise Exception(f"Failed to find library {libname} in {libdir}")
     # existing build
@@ -48,17 +52,22 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             continue
         libraries.append(find_library_path(libdir, libname))
 
-    libs = ',\n                 '.join(['"' + x + '"' for x in libraries])
+    libs = ',\n                 '.join(['"' + sanitize_path(x) + '"' for x in libraries])
     source_list = []
     library_text = f'''"libraries": [
                  {libs}
             ]
     '''
+    windows_options = ''
+    if os.name == 'nt':
+        all_options = [x for x in os.environ['DUCKDB_NODE_CFLAGS'].split(' ') if len(x) > 0 and x[0] == '/']
+        windows_options = ',\n                        '.join(['"' + x + '"' for x in all_options])
     if 'DUCKDB_NODE_BUILD_CACHE' in os.environ:
         cache = {
             'source_list': source_list,
             'include_list': include_list,
-            'library_text': library_text
+            'library_text': library_text,
+            'windows_options': windows_options
         }
         with open(cache_file, 'wb+') as f:
             pickle.dump(cache, f)
@@ -73,17 +82,16 @@ else:
     source_list = [os.path.relpath(x, basedir) if os.path.isabs(x) else os.path.join('src', x) for x in source_list]
     include_list = [os.path.join('src', 'duckdb', x) for x in include_list]
     library_text = ''
+    windows_options = ''
 
 
 with open(gyp_in, 'r') as f:
     text = f.read()
 
-def sanitize_path(x):
-    return x.replace('\\', '/')
-
 text = text.replace('${SOURCE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in source_list]))
 text = text.replace('${INCLUDE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in include_list]))
 text = text.replace('${LIBRARY_FILES}', library_text)
+text = text.replace('${WINDOWS_OPTIONS}', windows_options)
 
 with open(gyp_out, 'w+') as f:
     f.write(text)

@@ -170,9 +170,9 @@ if(BUILD_PYTHON
     add_custom_target(
       duckdb_node ALL
       COMMAND
-        DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
+        make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
         DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-        DUCKDB_NODE_LIBS=\"${duckdb_libs}\" make complete_build
+        DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
       DEPENDS duckdb
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
       COMMENT Build

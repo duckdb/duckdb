@@ -44,19 +44,19 @@ public:
 
 public:
 	//! Returns the stored error message
-	const string &GetError();
+	DUCKDB_API const string &GetError();
 	//! Returns whether or not an error occurred
-	bool HasError() const;
+	DUCKDB_API bool HasError() const;
 	//! Returns the number of columns in the result
-	idx_t ColumnCount();
+	DUCKDB_API idx_t ColumnCount();
 	//! Returns the statement type of the underlying prepared statement object
-	StatementType GetStatementType();
+	DUCKDB_API StatementType GetStatementType();
 	//! Returns the underlying statement properties
-	StatementProperties GetStatementProperties();
+	DUCKDB_API StatementProperties GetStatementProperties();
 	//! Returns the result SQL types of the prepared statement
-	const vector<LogicalType> &GetTypes();
+	DUCKDB_API const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
-	const vector<string> &GetNames();
+	DUCKDB_API const vector<string> &GetNames();
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
 	template <typename... Args>
