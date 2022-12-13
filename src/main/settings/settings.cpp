@@ -458,6 +458,10 @@ void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value
 	ClientConfig::GetConfig(context).print_progress_bar = input.GetValue<bool>();
 }
 
+void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).print_progress_bar = ClientConfig().print_progress_bar;
+}
+
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
 }
