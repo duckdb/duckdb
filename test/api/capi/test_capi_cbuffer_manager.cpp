@@ -41,7 +41,7 @@ TEST_CASE("Test C API CBufferManager", "[capi]") {
 		REQUIRE(1 == 0);
 	}
 	for (idx_t i = 0; i < 1000000; i++) {
-		REQUIRE(duckdb_value_int64(&result, 0, i) == i);
+		REQUIRE(duckdb_value_int64(&result, 0, i) == (int64_t)i);
 	}
 
 	// cleanup
