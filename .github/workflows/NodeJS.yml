@@ -74,32 +74,32 @@ jobs:
         run: ./scripts/node_build.sh 10
 
       - name: Node 12
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 12
 
       - name: Node 14
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 14
 
       - name: Node 15
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 15
 
       - name: Node 16
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 16
 
       - name: Node 17
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 17
 
       - name: Node 18
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 18
 
@@ -108,15 +108,16 @@ jobs:
         run: ./scripts/node_build.sh 19
 
   osx-nodejs:
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+    # if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     name: node.js OSX
     runs-on: macos-latest
-    needs: linux-nodejs
+    # needs: linux-nodejs
     strategy:
       matrix:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -134,7 +135,7 @@ jobs:
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
           echo $OPENSSL_ROOT_DIR
-          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash
