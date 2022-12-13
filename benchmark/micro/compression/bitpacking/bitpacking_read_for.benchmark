@@ -1,0 +1,20 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_read_for.benchmark
+# description: Scanning 1GB of ints compressed mostly with the FOR bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Scan For Mode
+group bitpacking
+storage persistent
+
+load
+DROP TABLE IF EXISTS integers;
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='for';
+CREATE TABLE integers AS SELECT (i%4000000)::INT32 AS i FROM range(0, 250000000) tbl(i);
+checkpoint;
+
+run
+select avg(i) from integers;
+
+result I
+1991999.5

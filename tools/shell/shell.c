@@ -746,7 +746,6 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation){
 #else
     free(zPrior);
     zResult = shell_readline(zPrompt);
-    if( zResult && *zResult && *zResult != '\3' ) shell_add_history(zResult);
 #endif
   }
   return zResult;
@@ -12892,7 +12891,8 @@ static void exec_prepared_stmt(
 ){
   int rc;
   if (pArg->cMode == MODE_DuckBox) {
-	  char *str = sqlite3_print_duckbox(pStmt, pArg->max_rows, pArg->nullValue);
+	  size_t max_rows = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_rows : (size_t) -1;
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, pArg->nullValue);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -20051,6 +20051,9 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   open_db(p, 0);
   if( ShellHasFlag(p,SHFLG_Backslash) ) resolve_backslashes(zSql);
   if( p->flgProgress & SHELL_PROGRESS_RESET ) p->nProgress = 0;
+#ifndef SHELL_USE_LOCAL_GETLINE
+  if( zSql && *zSql && *zSql != '\3' ) shell_add_history(zSql);
+#endif
   BEGIN_TIMER;
   rc = shell_exec(p, zSql, &zErrMsg);
   END_TIMER;
@@ -20134,6 +20137,9 @@ static int process_input(ShellState *p){
     if( zLine && (zLine[0]=='.' || zLine[0]=='#') && nSql==0 ){
       if( ShellHasFlag(p, SHFLG_Echo) ) printf("%s\n", zLine);
       if( zLine[0]=='.' ){
+#ifndef SHELL_USE_LOCAL_GETLINE
+        if( zLine && *zLine && *zLine != '\3' ) shell_add_history(zLine);
+#endif
         rc = do_meta_command(zLine, p);
         if( rc==2 ){ /* exit requested */
           break;
@@ -20391,7 +20397,7 @@ static void verify_uninitialized(void){
 static void main_init(ShellState *data) {
   memset(data, 0, sizeof(*data));
   data->normalMode = data->cMode = data->mode = MODE_DuckBox;
-  data->max_rows = 20;
+  data->max_rows = 40;
   data->autoExplain = 1;
   memcpy(data->colSeparator,SEP_Column, 2);
   memcpy(data->rowSeparator,SEP_Row, 2);

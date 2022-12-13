@@ -57,6 +57,7 @@ const DUCKDB_PENDING_ERROR = 2;
     DUCKDB_TYPE_MAP
     DUCKDB_TYPE_UUID
     DUCKDB_TYPE_JSON
+    DUCKDB_TYPE_UNION
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -179,7 +180,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_LIST => duckdb_list_entry_t,
     DUCKDB_TYPE_STRUCT => Cvoid,
-    DUCKDB_TYPE_MAP => Cvoid
+    DUCKDB_TYPE_MAP => Cvoid,
+    DUCKDB_TYPE_UNION => Cvoid
 )
 
 JULIA_TYPE_MAP = Dict(
@@ -239,13 +241,21 @@ function duckdb_type_to_julia_type(x)
         return Vector{Union{Missing, duckdb_type_to_julia_type(get_list_child_type(x))}}
     elseif type_id == DUCKDB_TYPE_STRUCT
         child_count = get_struct_child_count(x)
-        names::Vector{Symbol} = Vector()
+        struct_names::Vector{Symbol} = Vector()
         for i in 1:child_count
             child_name::Symbol = Symbol(get_struct_child_name(x, i))
-            push!(names, child_name)
+            push!(struct_names, child_name)
         end
-        names_tuple = Tuple(x for x in names)
-        return Union{Missing, NamedTuple{names_tuple}}
+        struct_names_tuple = Tuple(x for x in struct_names)
+        return Union{Missing, NamedTuple{struct_names_tuple}}
+    elseif type_id == DUCKDB_TYPE_UNION
+        member_count = get_union_member_count(x)
+        member_types::Vector{DataType} = Vector()
+        for i in 1:member_count
+            member_type::DataType = duckdb_type_to_julia_type(get_union_member_type(x, i))
+            push!(member_types, member_type)
+        end
+        return Union{Missing, member_types...}
     end
     if !haskey(JULIA_TYPE_MAP, type_id)
         throw(NotImplementedException(string("Unsupported type for duckdb_type_to_julia_type: ", type_id)))

@@ -111,7 +111,7 @@ protected:
 	                                             ARGS...);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue();
+	void PurgeQueue() final override;
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;
@@ -134,7 +134,7 @@ protected:
 	                                         idx_t size);
 
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
-	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice TODO rewrite
+	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
 protected:

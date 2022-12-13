@@ -7,6 +7,7 @@ add_library_unity(
   test_capi_appender.cpp
   test_capi_arrow.cpp
   test_capi_data_chunk.cpp
+  test_capi_extract.cpp
   test_capi_pending.cpp
   test_capi_prepared.cpp
   test_capi_website.cpp

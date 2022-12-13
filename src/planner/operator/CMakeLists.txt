@@ -35,6 +35,7 @@ add_library_unity(
   logical_recursive_cte.cpp
   logical_sample.cpp
   logical_set.cpp
+  logical_reset.cpp
   logical_set_operation.cpp
   logical_show.cpp
   logical_simple.cpp

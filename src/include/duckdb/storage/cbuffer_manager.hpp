@@ -60,6 +60,9 @@ public:
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
 	// atomic<idx_t> &GetMutableUsedMemory() final override;
 
+protected:
+	void PurgeQueue() final override;
+
 private:
 	static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
 	static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);

@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {

@@ -250,7 +250,7 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 190, handle->buffer->size);
+	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = move(replacement_buffer);
 #endif
 }
@@ -509,7 +509,9 @@ private:
 			// as a result we can truncate the file
 			auto max_index = index_manager.GetMaxIndex();
 			auto &fs = FileSystem::GetFileSystem(db);
+#ifndef WIN32 // this ended up causing issues when sorting
 			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
+#endif
 		}
 	}
 

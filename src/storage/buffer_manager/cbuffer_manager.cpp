@@ -94,6 +94,10 @@ idx_t CBufferManager::GetMaxMemory() const {
 	return config.max_memory_func(config.data);
 }
 
+void CBufferManager::PurgeQueue() {
+	//no op
+}
+
 //===--------------------------------------------------------------------===//
 // Buffer Allocator
 //===--------------------------------------------------------------------===//

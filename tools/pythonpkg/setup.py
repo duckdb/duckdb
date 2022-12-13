@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+from glob import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -160,10 +161,14 @@ class get_numpy_include(object):
 extra_files = []
 header_files = []
 
+def list_source_files(directory):
+    sources = glob('src/**/*.cpp', recursive=True)
+    return sources
+
 script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
-main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
+main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 
 if len(existing_duckdb_dir) == 0:
