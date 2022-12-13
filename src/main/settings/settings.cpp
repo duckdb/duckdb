@@ -450,10 +450,6 @@ Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Progress Bar Print
 //===--------------------------------------------------------------------===//
-void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).print_progress_bar = ClientConfig().print_progress_bar;
-}
-
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).print_progress_bar = input.GetValue<bool>();
 }
