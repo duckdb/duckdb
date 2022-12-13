@@ -415,6 +415,9 @@ string InterpretedBenchmark::GetDatabasePath() {
 	if (!cache_db.empty()) {
 		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	}
+	if (in_memory) {
+		return "";
+	}
 	auto db_path = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
 	DeleteDatabase(db_path);
 	return db_path;
