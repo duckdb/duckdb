@@ -55,7 +55,7 @@ def get_libraries(binary_dir, libraries, extensions):
                 if entry != None:
                     return entry
             elif os.path.isfile(fpath) and fname in potential_libnames:
-                return (search_dir, fname)
+                return search_dir
         return None
 
     def find_library(search_dir, libname, result_libs):
@@ -68,7 +68,7 @@ def get_libraries(binary_dir, libraries, extensions):
         for ext in libextensions:
             for prefix in libprefixes:
                 potential_libnames.append(prefix + libname + ext)
-        (libdir, fname) = find_library_recursive(binary_dir, potential_libnames)
+        libdir = find_library_recursive(binary_dir, potential_libnames)
 
         result_libs += [(libdir, libname)]
 
