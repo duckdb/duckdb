@@ -103,7 +103,7 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
 ## Development
 
 Tests are located in `tools/nodejs/test`, these tests require Mocha to run.
-Mocha can be installed with `npm install mocha chai --save-dev`
+Along with all the other dev dependencies, this can be installed using `npm install` ran from `tools/nodejs` (this uses package.json)
 Tests can then be run with `npm test`
 
 To build the NodeJS package from source, when on Windows, requires the following extra steps:
