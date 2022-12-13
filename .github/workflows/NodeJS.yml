@@ -30,7 +30,8 @@ jobs:
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
-
+    env:
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -57,7 +58,7 @@ jobs:
       - name: Build extensions
         shell: bash
         run: |
-          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash

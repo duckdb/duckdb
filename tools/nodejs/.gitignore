@@ -6,3 +6,4 @@ test/support/big.db*
 test/tmp/*
 src/duckdb
 binding.gyp
+filelist.cache

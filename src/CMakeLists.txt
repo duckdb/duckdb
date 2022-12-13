@@ -103,6 +103,7 @@ endif()
 
 if(BUILD_PYTHON
    OR BUILD_R
+   OR BUILD_NODE
    OR CONFIGURE_R)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
@@ -164,6 +165,19 @@ if(BUILD_PYTHON
       COMMENT Build
       R package)
     add_extension_dependencies(duckdb_r)
+  endif()
+  if (BUILD_NODE)
+    add_custom_target(
+      duckdb_node ALL
+      COMMAND
+        DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
+        DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+        DUCKDB_NODE_LIBS=\"${duckdb_libs}\" make complete_build
+      DEPENDS duckdb
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
+      COMMENT Build
+      Node package)
+    add_extension_dependencies(duckdb_node)
   endif()
 endif()
 
