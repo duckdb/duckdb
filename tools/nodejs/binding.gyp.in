@@ -32,6 +32,7 @@
                 "-frtti",
                 "-fexceptions",
                 "-Wno-redundant-move",
+                ${CFLAGS}
             ],
             "cflags!": [
                 "-fno-rrti",

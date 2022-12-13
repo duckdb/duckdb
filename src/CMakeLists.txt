@@ -166,7 +166,7 @@ if(BUILD_PYTHON
       R package)
     add_extension_dependencies(duckdb_r)
   endif()
-  if (BUILD_NODE)
+  if(BUILD_NODE)
     add_custom_target(
       duckdb_node ALL
       COMMAND

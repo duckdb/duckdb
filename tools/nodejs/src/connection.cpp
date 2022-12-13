@@ -244,6 +244,7 @@ struct RegisterUdfTask : public Task {
 			// here we can do only DuckDB stuff because we do not have a functioning env
 
 			// Flatten all args to simplify udfs
+			bool all_constant = args.AllConstant();
 			args.Flatten();
 
 			JSArgs jsargs;
@@ -258,6 +259,9 @@ struct RegisterUdfTask : public Task {
 			}
 			if (jsargs.error) {
 				jsargs.error.Throw();
+			}
+			if (all_constant) {
+				result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
 			}
 		};
 
