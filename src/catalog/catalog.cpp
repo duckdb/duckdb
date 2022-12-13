@@ -422,15 +422,17 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
                                                       const unordered_set<SchemaCatalogEntry *> &schemas,
                                                       QueryErrorContext error_context) {
 	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
-	//
-	//	vector<SchemaCatalogEntry *> unseen_schemas;
-	//	this->schemas->Scan([&schemas, &unseen_schemas](CatalogEntry *entry) {
-	//		auto schema_entry = (SchemaCatalogEntry *)entry;
-	//		if (std::find(schemas.begin(), schemas.end(), schema_entry) == schemas.end()) {
-	//			unseen_schemas.emplace_back(schema_entry);
-	//		}
-	//	});
-	//	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
+
+	unordered_set<SchemaCatalogEntry *> unseen_schemas;
+	auto databases = DatabaseManager::Get(context).GetDatabases(context);
+	for (auto database : databases) {
+		auto &catalog = database->GetCatalog();
+		auto current_schemas = catalog.GetAllSchemas(context);
+		for (auto &current_schema : current_schemas) {
+			unseen_schemas.insert(current_schema);
+		}
+	}
+	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	auto extension_name = FindExtension(entry_name);
 	if (!extension_name.empty()) {
 		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
@@ -438,10 +440,9 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		                        entry_name, extension_name, extension_name, extension_name);
 	}
 	string did_you_mean;
-	//	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
-	//		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
-	//	} else
-	if (entry.Found()) {
+	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
+	} else if (entry.Found()) {
 		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
 	}
 
