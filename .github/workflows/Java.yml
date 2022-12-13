@@ -107,7 +107,7 @@ jobs:
   java-windows-amd64:
     name: Java Windows (arm64)
     runs-on: windows-latest
-   needs: java-linux-amd64
+    needs: java-linux-amd64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -142,7 +142,7 @@ jobs:
   java-osx-universal:
     name: Java OSX (Universal)
     runs-on: macos-latest
-   needs: java-linux-amd64
+    needs: java-linux-amd64
     env:
       BUILD_JDBC: 1
       OSX_BUILD_UNIVERSAL: 1
