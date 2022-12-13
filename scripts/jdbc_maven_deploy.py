@@ -34,6 +34,7 @@ if len(sys.argv) < 4 or not os.path.isdir(sys.argv[2]) or not os.path.isdir(sys.
 version_regex = re.compile(r'^v((\d+)\.(\d+)\.\d+)$')
 release_tag = sys.argv[1]
 deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+is_release = True
 
 if (release_tag == 'master'):
   # for SNAPSHOT builds we increment the minor version and set patch level to zero.
@@ -45,6 +46,7 @@ if (release_tag == 'master'):
   release_version = "%d.%d.0-SNAPSHOT" % (int(re_result.group(2)), int(re_result.group(3)) + 1)
   # orssh uses a different deploy url for snapshots yay
   deploy_url = 'https://oss.sonatype.org/content/repositories/snapshots/'
+  is_release = False
 elif version_regex.match(release_tag):
   release_version = version_regex.search(release_tag).group(1)
 else:
@@ -178,15 +180,18 @@ exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
 
-print("Close/Release steps")
 
+if not is_release:
+  print("Not a release, not closing repo")
+  exit(0)
+
+print("Close/Release steps")
 # # beautiful
 os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
 
-# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
-# repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
-# print(repo_id)
-# exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
-# exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
+#this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
+repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
+exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
+exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
 
-# print("Done?")
+print("Done?")
