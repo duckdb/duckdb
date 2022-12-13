@@ -102,10 +102,15 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
 
 ## Development
 
-Tests are located in `tools/nodejs/test`, these tests require Mocha to run.
-Along with all the other dev dependencies, this can be installed using `npm install` ran from `tools/nodejs` (this uses package.json)
-Tests can then be run with `npm test`
+### First install:
 
+To install all the dev dependencies of the project, navigate over to `tools/nodejs` and run `npm install` (this uses package.json)
+You might want to add the `--ignore-scripts` option if you don't care about building the package for now and just want to install the dependencies.
+
+### Tests:
+Tests are located in `tools/nodejs/test` and can be run with `npm test`
+
+### Additional notes:
 To build the NodeJS package from source, when on Windows, requires the following extra steps:
 - Set `OPENSSL_ROOT_DIR` to the root directory of an OpenSSL installation
 - Supply the `STATIC_OPENSSL=1` option when executing `make`, or set `-DOPENSSL_USE_STATIC_LIBS=1` manually when calling `cmake`
