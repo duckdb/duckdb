@@ -32,14 +32,11 @@ public:
 public:
 	virtual BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
-	//! FIXME: Maybe make this non-pure and just call Destroy and Allocate?
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
-	//! FIXME: Missing prototype for Destroy??
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual idx_t GetUsedMemory() const = 0;
 	virtual idx_t GetMaxMemory() const = 0;
-	// virtual atomic<idx_t> &GetMutableUsedMemory();
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);

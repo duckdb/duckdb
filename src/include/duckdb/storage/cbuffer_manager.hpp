@@ -58,7 +58,6 @@ public:
 	idx_t GetMaxMemory() const final override;
 	Allocator &GetBufferAllocator() final override;
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
-	// atomic<idx_t> &GetMutableUsedMemory() final override;
 
 protected:
 	void PurgeQueue() final override;

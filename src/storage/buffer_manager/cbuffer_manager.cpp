@@ -18,10 +18,6 @@ CBufferManager::CBufferManager(CBufferManagerConfig config_p)
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
-	// if (!can_destroy) {
-	//	throw InvalidInputException(
-	//	    "When using a callback-based BufferManager, we don't support creating temporary files");
-	// }
 	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
@@ -46,7 +42,6 @@ shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
 	return make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), false, block_size, move(reservation));
 }
 
-//! FIXME: Maybe make this non-pure and just call Destroy and Allocate?
 void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	lock_guard<mutex> lock(handle->lock);
@@ -57,10 +52,7 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 	auto req = handle->buffer->CalculateMemory(block_size);
 	int64_t memory_delta = (int64_t)req.alloc_size - handle->memory_usage;
 
-	// FIXME: we don't have an atomix<idx_t>, can't use Resize()
-	// Resize also increases `used_memory`, which we can't do, we just have to trust that `reallocate_func` updates the
-	// used memory
-	handle->memory_charge.size = req.alloc_size;
+	handle->memory_charge.Resize(req.alloc_size);
 
 	// resize and adjust current memory
 	handle->buffer->Resize(block_size);
@@ -68,7 +60,6 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 }
 
-//! FIXME: Missing prototype for Destroy??
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
 	config.pin_func(buffer.ExternalBufferHandle());
