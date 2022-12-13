@@ -26,6 +26,7 @@ const DUCKDB_PENDING_RESULT_READY = 0;
 const DUCKDB_PENDING_RESULT_NOT_READY = 1;
 const DUCKDB_PENDING_ERROR = 2;
 
+const duckdb_buffer = Ptr{Cvoid}
 
 @enum DUCKDB_TYPE_::UInt32 begin
     DUCKDB_TYPE_INVALID = 0

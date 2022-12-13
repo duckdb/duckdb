@@ -11,7 +11,7 @@ end
 //===--------------------------------------------------------------------===//
 =#
 """
-	duckdb_open(path, out_database)
+    duckdb_open(path, out_database)
 Creates a new database or opens an existing database file stored at the the given path.
 If no path is given a new in-memory database is created instead.
 * `path`: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
@@ -22,7 +22,7 @@ function duckdb_open(path, out_database)
     return ccall((:duckdb_open, libduckdb), duckdb_state, (Ptr{UInt8}, Ref{duckdb_database}), path, out_database)
 end
 """
-	Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
+    Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the the given path.
 
     * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
     * out_database: The result database object.
@@ -43,7 +43,7 @@ function duckdb_open_ext(path, out_database, config, out_error)
     )
 end
 """
-	duckdb_close(database)
+    duckdb_close(database)
 Closes the specified database and de-allocates all memory allocated for that database.
 This should be called after you are done with any database allocated through `duckdb_open`.
 Note that failing to call `duckdb_close` (in case of e.g. a program crash) will not cause data corruption.
@@ -54,7 +54,7 @@ function duckdb_close(database)
     return ccall((:duckdb_close, libduckdb), Cvoid, (Ref{duckdb_database},), database)
 end
 """
-	duckdb_connect(database, out_connection)
+    duckdb_connect(database, out_connection)
 Opens a connection to a database. Connections are required to query the database, and store transactional state
 associated with the connection.
 * `database`: The database file to connect to.
@@ -72,7 +72,7 @@ function duckdb_connect(database, out_connection)
 end
 
 """
-	duckdb_disconnect(connection)
+    duckdb_disconnect(connection)
 Closes the specified connection and de-allocates all memory allocated for that connection.
 * `connection`: The connection to close.
 """
@@ -87,7 +87,7 @@ end
 =#
 
 """
-	duckdb_create_config(config)
+    duckdb_create_config(config)
 Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance
 through `duckdb_open_ext`.
 This will always succeed unless there is a malloc failure.
@@ -99,7 +99,7 @@ function duckdb_create_config(config)
 end
 
 """
-	duckdb_config_count()
+    duckdb_config_count()
 This returns the total amount of configuration options available for usage with `duckdb_get_config_flag`.
 This should not be called in a loop as it internally loops over all the options.
 * returns: The amount of config options available.
@@ -109,7 +109,7 @@ function duckdb_config_count()
 end
 
 """
-	duckdb_get_config_flag(index,out_name,out_description)
+    duckdb_get_config_flag(index,out_name,out_description)
 Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.
 display configuration options. This will succeed unless `index` is out of range (i.e. `>= duckdb_config_count`).
 The result name or description MUST NOT be freed.
@@ -130,7 +130,7 @@ function duckdb_get_config_flag(index, out_name, out_description)
 end
 
 """
-	duckdb_set_config(config,name,option)
+    duckdb_set_config(config,name,option)
 Sets the specified option for the specified configuration. The configuration option is indicated by name.
 To obtain a list of config options, see `duckdb_get_config_flag`.
 In the source code, configuration options are defined in `config.cpp`.
@@ -152,7 +152,7 @@ function duckdb_set_config(config, name, option)
 end
 
 """
-	duckdb_destroy_config(config)
+    duckdb_destroy_config(config)
 Destroys the specified configuration option and de-allocates all memory allocated for the object.
 * `config`: The configuration object to destroy.
 """
@@ -190,7 +190,7 @@ end
 # end
 #
 """
-	duckdb_destroy_result(result)
+    duckdb_destroy_result(result)
 Closes the result and de-allocates all memory allocated for that connection.
 * `result`: The result to destroy.
 """
@@ -199,7 +199,7 @@ function duckdb_destroy_result(result)
 end
 
 """
-	duckdb_column_name(result,col)
+    duckdb_column_name(result,col)
 Returns the column name of the specified column. The result should not need be freed; the column names will
 automatically be destroyed when the result is destroyed.
 Returns `NULL` if the column is out of range.
@@ -212,7 +212,7 @@ function duckdb_column_name(result, col)
 end
 
 """
-	duckdb_column_type(result,col)
+    duckdb_column_type(result,col)
 Returns the column type of the specified column.
 Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 * `result`: The result object to fetch the column type from.
@@ -245,7 +245,7 @@ function duckdb_column_logical_type(result, col)
 end
 
 """
-	duckdb_column_count(result)
+    duckdb_column_count(result)
 Returns the number of columns present in a the result object.
 * `result`: The result object.
 * returns: The number of columns present in the result object.
@@ -255,7 +255,7 @@ function duckdb_column_count(result)
 end
 
 """
-	duckdb_row_count(result)
+    duckdb_row_count(result)
 Returns the number of rows present in a the result object.
 * `result`: The result object.
 * returns: The number of rows present in the result object.
@@ -265,7 +265,7 @@ function duckdb_row_count(result)
 end
 
 """
-	duckdb_rows_changed(result)
+    duckdb_rows_changed(result)
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
 * `result`: The result object.
@@ -276,7 +276,7 @@ function duckdb_rows_changed(result)
 end
 
 """
-	duckdb_column_data(result,col)
+    duckdb_column_data(result,col)
 Returns the data of a specific column of a result in columnar format. This is the fastest way of accessing data in a
 query result, as no conversion or type checking must be performed (outside of the original switch). If performance
 is a concern, it is recommended to use this API over the `duckdb_value` functions.
@@ -297,7 +297,7 @@ function duckdb_column_data(result, col)
 end
 
 """
-	duckdb_nullmask_data(result,col)
+    duckdb_nullmask_data(result,col)
 Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row
 whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided
 by `duckdb_column_data` are undefined.
@@ -319,7 +319,7 @@ function duckdb_nullmask_data(result, col)
 end
 
 """
-	duckdb_result_error(result)
+    duckdb_result_error(result)
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
 * `result`: The result object to fetch the nullmask from.
@@ -371,7 +371,7 @@ end
 
 
 """
-	duckdb_value_boolean(result,col,row)
+    duckdb_value_boolean(result,col,row)
 * returns: The boolean value at the specified location, or false if the value cannot be converted.
 """
 function duckdb_value_boolean(result, col, row)
@@ -386,7 +386,7 @@ function duckdb_value_boolean(result, col, row)
 end
 
 """
-	duckdb_value_int8(result,col,row)
+    duckdb_value_int8(result,col,row)
 * returns: The int8_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int8(result, col, row)
@@ -394,7 +394,7 @@ function duckdb_value_int8(result, col, row)
 end
 
 """
-	duckdb_value_int16(result,col,row)
+    duckdb_value_int16(result,col,row)
  * returns: The int16_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int16(result, col, row)
@@ -402,7 +402,7 @@ function duckdb_value_int16(result, col, row)
 end
 
 """
-	duckdb_value_int32(result,col,row)
+    duckdb_value_int32(result,col,row)
  * returns: The int32_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int32(result, col, row)
@@ -410,7 +410,7 @@ function duckdb_value_int32(result, col, row)
 end
 
 """
-	duckdb_value_int64(result,col,row)
+    duckdb_value_int64(result,col,row)
  * returns: The int64_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_int64(result, col, row)
@@ -418,7 +418,7 @@ function duckdb_value_int64(result, col, row)
 end
 
 """
-	duckdb_value_hugeint(result,col,row)
+    duckdb_value_hugeint(result,col,row)
  * returns: The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_hugeint(result, col, row)
@@ -433,7 +433,7 @@ function duckdb_value_hugeint(result, col, row)
 end
 
 """
-	duckdb_value_uint8(result,col,row)
+    duckdb_value_uint8(result,col,row)
  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
 
 """
@@ -442,7 +442,7 @@ function duckdb_value_uint8(result, col, row)
 end
 
 """
-	duckdb_value_uint16(result,col,row)
+    duckdb_value_uint16(result,col,row)
  * returns: The uint16_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_uint16(result, col, row)
@@ -457,7 +457,7 @@ function duckdb_value_uint16(result, col, row)
 end
 
 """
-	duckdb_value_uint32(result,col,row)
+    duckdb_value_uint32(result,col,row)
  * returns: The uint32_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_uint32(result, col, row)
@@ -472,7 +472,7 @@ function duckdb_value_uint32(result, col, row)
 end
 
 """
-	duckdb_value_uint64(result,col,row)
+    duckdb_value_uint64(result,col,row)
 * returns: The uint64_t value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_uint64(result, col, row)
@@ -487,7 +487,7 @@ function duckdb_value_uint64(result, col, row)
 end
 
 """
-	duckdb_value_float(result,col,row)
+    duckdb_value_float(result,col,row)
  * returns: The float value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_float(result, col, row)
@@ -502,7 +502,7 @@ function duckdb_value_float(result, col, row)
 end
 
 """
-	duckdb_value_double(result,col,row)
+    duckdb_value_double(result,col,row)
  * returns: The double value at the specified location, or 0 if the value cannot be converted.
 """
 function duckdb_value_double(result, col, row)
@@ -2825,4 +2825,52 @@ on the task state.
 """
 function duckdb_destroy_task_state(state)
     return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+#=
+//===--------------------------------------------------------------------===//
+// Replacement scans
+//===--------------------------------------------------------------------===//
+=#
+"""
+Add a custom buffer manager to the specified config
+
+* config: The database config to add the custom buffer manager to
+* allocation_context: The pointer to additional information passed to 'allocate_func'.
+* allocate_func: The function invoked when a buffer is allocated, returns a buffer handle.
+* reallocate_func: The function invoked when a buffer is reallocated, returns a buffer handle.
+* destroy_func: The function invoked when a buffer is destroyed.
+* get_allocation_func: The function invoked when the allocated memory is requested, returns allocated memory.
+* pin_func: The function invoked when the buffer is pinned.
+* unpin_func: The function invoked when the buffer is unpinned.
+* used_memory_func: The function used to query the current used memory.
+* max_memory_func: The function used to query the maximum allowed used memory.
+"""
+function duckdb_add_custom_buffer_manager(
+    config,
+    allocation_context,
+    allocate_func,
+    reallocate_func,
+    destroy_func,
+    get_allocation_func,
+    pin_func,
+    unpin_func,
+    used_memory_func,
+    max_memory_func
+)
+    return ccall(
+        (:duckdb_add_custom_buffer_manager, libduckdb),
+        duckdb_state,
+        (duckdb_config, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+        config,
+        allocation_context,
+        allocate_func,
+        reallocate_func,
+        destroy_func,
+        get_allocation_func,
+        pin_func,
+        unpin_func,
+        used_memory_func,
+        max_memory_func
+    )
 end

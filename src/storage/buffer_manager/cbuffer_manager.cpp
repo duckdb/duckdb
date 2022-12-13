@@ -95,7 +95,7 @@ idx_t CBufferManager::GetMaxMemory() const {
 }
 
 void CBufferManager::PurgeQueue() {
-	//no op
+	// no op
 }
 
 //===--------------------------------------------------------------------===//

@@ -414,6 +414,8 @@ Functions interacting with this buffer manager are provided as callbacks.
 * get_allocation_func: The function invoked when the allocated memory is requested, returns allocated memory.
 * pin_func: The function invoked when the buffer is pinned.
 * unpin_func: The function invoked when the buffer is unpinned.
+* used_memory_func: The function used to query the current used memory.
+* max_memory_func: The function used to query the maximum allowed used memory.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 
