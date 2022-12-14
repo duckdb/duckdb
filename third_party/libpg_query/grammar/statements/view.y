@@ -18,6 +18,19 @@ ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->withCheckOption = $9;
 					$$ = (PGNode *) n;
 				}
+		| CREATE_P OptTemp VIEW IF_P NOT EXISTS qualified_name opt_column_list opt_reloptions
+				AS SelectStmt opt_check_option
+				{
+					PGViewStmt *n = makeNode(PGViewStmt);
+					n->view = $7;
+					n->view->relpersistence = $2;
+					n->aliases = $8;
+					n->query = $11;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
+					n->options = $9;
+					n->withCheckOption = $12;
+					$$ = (PGNode *) n;
+				}
 		| CREATE_P OR REPLACE OptTemp VIEW qualified_name opt_column_list opt_reloptions
 				AS SelectStmt opt_check_option
 				{

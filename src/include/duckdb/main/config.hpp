@@ -21,6 +21,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -49,6 +50,8 @@ enum class CheckpointAbort : uint8_t {
 
 typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
+typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
+typedef void (*reset_local_function_t)(ClientContext &context);
 typedef Value (*get_setting_function_t)(ClientContext &context);
 
 struct ConfigurationOption {
@@ -57,19 +60,24 @@ struct ConfigurationOption {
 	LogicalTypeId parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
+	reset_global_function_t reset_global;
+	reset_local_function_t reset_local;
 	get_setting_function_t get_setting;
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
-	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p)
-	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p) {
+	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
+	                Value default_value_p)
+	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p),
+	      default_value(move(default_value_p)) {
 	}
 
 	string description;
 	LogicalType type;
 	set_option_callback_t set_function;
+	Value default_value;
 };
 
 struct DBConfigOptions {
@@ -103,6 +111,8 @@ struct DBConfigOptions {
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
+	//! Whether or not the global http metadata cache is used
+	bool http_metadata_cache_enable = false;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -116,12 +126,16 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
+	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
+	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
+	//! Database configuration variable default values;
+	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
@@ -177,8 +191,8 @@ public:
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 
-	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
-	                                   set_option_callback_t function = nullptr);
+	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
+	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
@@ -186,7 +200,9 @@ public:
 
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void ResetOption(const string &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
@@ -199,6 +215,8 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	void SetDefaultMaxThreads();
+	void SetDefaultMaxMemory();
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

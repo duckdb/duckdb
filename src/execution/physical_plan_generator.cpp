@@ -194,6 +194,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_SET:
 		plan = CreatePlan((LogicalSet &)op);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		plan = CreatePlan((LogicalReset &)op);
+		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
 

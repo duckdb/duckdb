@@ -2,7 +2,7 @@
 test_that("we can roundtrip an integer64", {
   skip_if_not_installed("bit64")
 
-  con <- dbConnect(duckdb(bigint="integer64"))
+  con <- dbConnect(duckdb(bigint = "integer64"))
   on.exit(dbDisconnect(con, shutdown = TRUE))
   df <- data.frame(a = bit64::as.integer64(42), b = bit64::as.integer64(-42), c = bit64::as.integer64(NA))
 

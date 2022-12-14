@@ -28,6 +28,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		} else {
 			// // we cannot! we need to bind this as a coalesce between all the relevant columns
 			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+			coalesce->children.reserve(using_binding->bindings.size());
 			for (auto &entry : using_binding->bindings) {
 				coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, entry));
 			}

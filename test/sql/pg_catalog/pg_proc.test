@@ -21,3 +21,13 @@ query I
 select distinct proname from pg_proc where proname='sqrt';
 ----
 sqrt
+
+query IIII
+select proisagg, prorettype, proargtypes, proargnames FROM pg_proc WHERE proname='corr';
+----
+true	DOUBLE	[DOUBLE, DOUBLE]	[col0, col1]
+
+query IIII
+select provariadic, prorettype, proargtypes, proargnames FROM pg_proc WHERE proname='printf';
+----
+ANY	VARCHAR	[VARCHAR]	[col0]

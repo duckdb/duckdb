@@ -1,7 +1,7 @@
 #ifndef DUCKDB_NO_THREADS
 
 #include "catch.hpp"
-#include "duckdb/common/progress_bar.hpp"
+#include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
 
