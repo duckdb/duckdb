@@ -1,13 +1,13 @@
-var sqlite3 = require('..');
-var assert = require('assert');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
+import {DuckDbError} from "..";
 
 // FIXME each is not streaming yet
-return
 
-describe('interrupt', function() {
+describe.skip('interrupt', function() {
     it('should interrupt queries', function(done) {
         var interrupted = false;
-        var saved = null;
+        var saved: DuckDbError | null = null;
 
         var db = new sqlite3.Database(':memory:', function() {
             db.serialize();
@@ -17,7 +17,7 @@ describe('interrupt', function() {
                 setup += 'insert into t values (' + i + ');';
             }
 
-            db.exec(setup, function(err) {
+            db.exec(setup, function(err: null | Error) {
                 if (err) {
                     return done(err);
                 }
@@ -25,7 +25,7 @@ describe('interrupt', function() {
                 var query = 'select last.n ' +
                     'from t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t as last';
 
-                db.each(query, function(err) {
+                db.each(query, function(err: null | DuckDbError) {
                     if (err) {
                         saved = err;
                     } else if (!interrupted) {

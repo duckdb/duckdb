@@ -1,7 +1,7 @@
-var sqlite3 = require('..');
-var assert = require('assert');
-var fs = require('fs');
-var helper = require('./support/helper');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
+import * as fs from 'fs';
+import * as helper from './support/helper';
 
 describe('open/close', function() {
     before(function() {
@@ -13,7 +13,7 @@ describe('open/close', function() {
             helper.deleteFile('test/tmp/test_create.db');
         });
 
-        var db;
+        var db: sqlite3.Database;
         it('should open the database', function(done) {
             db = new sqlite3.Database('test/tmp/test_create.db', done);
         });
@@ -23,7 +23,7 @@ describe('open/close', function() {
         });
 
         it('should have created the file', function() {
-            assert.fileExists('test/tmp/test_create.db');
+            helper.fileExists('test/tmp/test_create.db');
         });
 
         after(function() {
@@ -123,7 +123,7 @@ describe('open/close', function() {
         });
 
         it('should not have created the file', function() {
-            assert.fileDoesNotExist('test/tmp/test_readonly.db');
+            helper.fileDoesNotExist('test/tmp/test_readonly.db');
         });
 
         after(function() {
@@ -132,7 +132,7 @@ describe('open/close', function() {
     });
 
     describe('open and close memory database queuing', function() {
-        var db;
+        var db: sqlite3.Database;
         it('should open the database', function(done) {
             db = new sqlite3.Database(':memory:', done);
         });
@@ -155,7 +155,7 @@ describe('open/close', function() {
         var completedSecond = false;
         var closed = false;
 
-        var db;
+        var db: sqlite3.Database;
         before(function(done) {
             db = new sqlite3.Database(':memory:', done);
         });
@@ -164,7 +164,7 @@ describe('open/close', function() {
             db.run("CREATE TABLE foo (id INT, num INT)", done);
         });
 
-        var stmt;
+        var stmt: sqlite3.Statement;
         it('should prepare/run a statement', function(done) {
             stmt = db.prepare('INSERT INTO foo VALUES (?, ?)');
             stmt.run(1, 2, done);
