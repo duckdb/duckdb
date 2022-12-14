@@ -37,6 +37,7 @@ TEST_CASE("Test C API CBufferManager", "[capi]") {
 	if (duckdb_query(connection, "create table tbl as select * from range(1000000)", &result) != DuckDBSuccess) {
 		REQUIRE(1 == 0);
 	}
+	duckdb_destroy_result(&result);
 	if (duckdb_query(connection, "select * from tbl", &result) != DuckDBSuccess) {
 		REQUIRE(1 == 0);
 	}
