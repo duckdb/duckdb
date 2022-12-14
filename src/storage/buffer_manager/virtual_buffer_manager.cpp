@@ -1,7 +1,6 @@
 #include "duckdb/storage/virtual_buffer_manager.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {

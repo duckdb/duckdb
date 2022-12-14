@@ -4,7 +4,6 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/storage/virtual_buffer_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -251,11 +250,11 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	shared_ptr<BlockHandle> block;
 	auto handle = buffer_manager.Allocate(requested_size, false, &block);
-	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+	CHECK(buffer_manager.GetUsedMemory() == VirtualBufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
 		buffer_manager.ReAllocate(block, requested_size);
-		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == VirtualBufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
@@ -263,13 +262,13 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == VirtualBufferManager::GetAllocSize(requested_size));
 	}
 	requested_size /= 2;
 	for (; requested_size > Storage::BLOCK_SIZE; requested_size /= 2) {
 		// decrease size
 		buffer_manager.ReAllocate(block, requested_size);
-		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == VirtualBufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
@@ -277,7 +276,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
+		CHECK(buffer_manager.GetUsedMemory() == VirtualBufferManager::GetAllocSize(requested_size));
 	}
 }
 
@@ -342,7 +341,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 
 	// now we do exactly the same, but with variable-sized blocks
 	idx_t block_size = 424242;
-	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
+	idx_t alloc_size = VirtualBufferManager::GetAllocSize(block_size);
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
@@ -363,7 +362,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size++;
-		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
+		CHECK(VirtualBufferManager::GetAllocSize(block_size) == alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
@@ -380,7 +379,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size--;
-		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
+		CHECK(VirtualBufferManager::GetAllocSize(block_size) == alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);

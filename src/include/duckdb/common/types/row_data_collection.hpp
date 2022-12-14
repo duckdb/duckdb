@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/virtual_buffer_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

@@ -1,6 +1,5 @@
 #include "duckdb/storage/cbuffer_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/common/external_file_buffer.hpp"
 
