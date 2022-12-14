@@ -1,13 +1,14 @@
-var sqlite3 = require('..');
-var assert = require('assert');
+import * as sqlite3 from '..';
+import {TableData} from "..";
+import * as assert from 'assert';
 
 describe('unicode', function() {
-    var first_values = [],
-        trailing_values = [],
-        subranges = new Array(2),
-        len = subranges.length,
-        db,
-        i;
+    let i;
+    let first_values: number[] = [],
+      trailing_values: number[] = [],
+      subranges = new Array(2),
+      len = subranges.length,
+      db: sqlite3.Database;
 
     before(function(done) { db = new sqlite3.Database(':memory:', done); });
 
@@ -35,12 +36,12 @@ describe('unicode', function() {
         subranges[1].push(i);
     }
 
-    function random_choice(arr) {
+    function random_choice(arr: number[]) {
         return arr[Math.random() * arr.length | 0];
     }
 
     function random_utf8() {
-        var first = random_choice(first_values);
+        const first = random_choice(first_values);
 
         if (first < 0x80) {
             return String.fromCharCode(first);
@@ -56,8 +57,8 @@ describe('unicode', function() {
     }
 
     function randomString() {
-        var str = '',
-        i;
+        let str = '',
+          i;
 
         for (i = Math.random() * 300; i > 0; i--) {
             str += random_utf8();
@@ -68,23 +69,23 @@ describe('unicode', function() {
 
 
         // Generate random data.
-    var data = [];
-    var length = Math.floor(Math.random() * 1000) + 200;
-    for (var i = 0; i < length; i++) {
+    const data: string[] = [];
+    const length = Math.floor(Math.random() * 1000) + 200;
+    for (i = 0; i < length; i++) {
         data.push(randomString());
     }
 
-    var inserted = 0;
-    var retrieved = 0;
+    let inserted = 0;
+    let retrieved = 0;
 
     it('should create the table', function(done) {
         db.run("CREATE TABLE foo (id int, txt text)", done);
     });
 
     it('should insert all values', function(done) {
-        var stmt = db.prepare("INSERT INTO foo VALUES(?, ?)");
-        for (var i = 0; i < data.length; i++) {
-            stmt.run(i, data[i], function(err) {
+        const stmt = db.prepare("INSERT INTO foo VALUES(?, ?)");
+        for (let i = 0; i < data.length; i++) {
+            stmt.run(i, data[i], function(err: null | Error) {
                 if (err) throw err;
                 inserted++;
             });
@@ -93,10 +94,10 @@ describe('unicode', function() {
     });
 
     it('should retrieve all values', function(done) {
-        db.all("SELECT txt FROM foo ORDER BY id", function(err, rows) {
+        db.all("SELECT txt FROM foo ORDER BY id", function(err: null | Error, rows: TableData) {
             if (err) throw err;
 
-            for (var i = 0; i < rows.length; i++) {
+            for (let i = 0; i < rows.length; i++) {
                 assert.equal(rows[i].txt, data[i]);
                 retrieved++;
             }

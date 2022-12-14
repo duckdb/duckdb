@@ -200,13 +200,13 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	auto gil = make_unique<PythonGILWrapper>(); // We're creating python objects here, so we need the GIL
-
-	for (idx_t i = 0; i < count; i++) {
-		idx_t source_idx = offset + i;
-		ScanPandasObject(bind_data, col[source_idx], i, out);
+	{
+		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+		for (idx_t i = 0; i < count; i++) {
+			idx_t source_idx = offset + i;
+			ScanPandasObject(bind_data, col[source_idx], i, out);
+		}
 	}
-	gil.reset();
 	VerifyTypeConstraints(out, count);
 }
 

@@ -1,9 +1,10 @@
-var sqlite3 = require('..');
-var assert = require('assert');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
+import {TableData} from "..";
 
 
 describe('serialize() and parallelize()', function() {
-    var db;
+    var db: sqlite3.Database;
     before(function(done) { db = new sqlite3.Database(':memory:', done); });
 
     var inserted1 = 0;
@@ -23,12 +24,12 @@ describe('serialize() and parallelize()', function() {
         var stmt2 = db.prepare("INSERT INTO foo VALUES(?, ?, ?, ?)");
         for (var i = 0; i < count; i++) {
             // Interleaved inserts with two statements.
-            stmt1.run('String ' + i, i, i * Math.PI, null, function(err) {
+            stmt1.run('String ' + i, i, i * Math.PI, null, function(err: null | Error) {
                 if (err) throw err;
                 inserted1++;
             });
             i++;
-            stmt2.run('String ' + i, i, i * Math.PI, null, function(err) {
+            stmt2.run('String ' + i, i, i * Math.PI, null, function(err: null | Error) {
                 if (err) throw err;
                 inserted2++;
             });
@@ -39,7 +40,7 @@ describe('serialize() and parallelize()', function() {
 
     it('should have inserted all the rows after synchronizing with serialize()', function(done) {
         db.serialize();
-        db.all("SELECT txt, num, flt, blb FROM foo ORDER BY num", function(err, rows) {
+        db.all("SELECT txt, num, flt, blb FROM foo ORDER BY num", function(err: null | Error, rows: TableData) {
             if (err) throw err;
             for (var i = 0; i < rows.length; i++) {
                 assert.equal(rows[i].txt, 'String ' + i);
@@ -59,7 +60,7 @@ describe('serialize() and parallelize()', function() {
 });
 
 describe('serialize(fn)', function() {
-    var db;
+    var db: sqlite3.Database;
     before(function(done) { db = new sqlite3.Database(':memory:', done); });
 
     var inserted = 0;
@@ -75,14 +76,14 @@ describe('serialize(fn)', function() {
             for (var i = 0; i < count; i++) {
                 var d = new Date(Date.UTC(2018, 0, i));
                 var ts = new Date(Date.UTC(2021, 6, 10, 0, 0, i));
-                stmt.run('String ' + i, i, i * Math.PI, null, d, ts, function(err) {
+                stmt.run('String ' + i, i, i * Math.PI, null, d, ts, function(err: null | Error) {
                     if (err) throw err;
                     inserted++;
                 });
             }
             stmt.finalize();
 
-            db.all("SELECT txt, num, flt, blb, d, ts FROM foo ORDER BY num", function(err, rows) {
+            db.all("SELECT txt, num, flt, blb, d, ts FROM foo ORDER BY num", function(err: null | Error, rows: TableData) {
                 if (err) throw err;
                 for (var i = 0; i < rows.length; i++) {
                     var d = new Date(Date.UTC(2018, 0, i));

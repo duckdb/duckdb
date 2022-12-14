@@ -195,6 +195,15 @@ unique_ptr<QueryResult> Relation::Execute() {
 	return context.GetContext()->Execute(shared_from_this());
 }
 
+unique_ptr<QueryResult> Relation::ExecuteOrThrow() {
+	auto res = Execute();
+	D_ASSERT(res);
+	if (res->HasError()) {
+		res->ThrowError();
+	}
+	return res;
+}
+
 BoundStatement Relation::Bind(Binder &binder) {
 	SelectStatement stmt;
 	stmt.node = GetQueryNode();
