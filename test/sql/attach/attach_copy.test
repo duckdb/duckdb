@@ -1,6 +1,6 @@
 # name: test/sql/attach/attach_copy.test
 # description: Test attach mixed with the COPY statement
-# group: [csv]
+# group: [attach]
 
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
