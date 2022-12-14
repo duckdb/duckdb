@@ -9,43 +9,43 @@
                 "src/connection.cpp",
                 "src/statement.cpp",
                 "src/utils.cpp",
-                ${SOURCE_FILES}
+                "${SOURCE_FILES}"
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",
-                ${INCLUDE_FILES}
+                "${INCLUDE_FILES}"
             ],
-            'defines': [
-                'NAPI_DISABLE_CPP_EXCEPTIONS=1',
+            "defines": [
+                "NAPI_DISABLE_CPP_EXCEPTIONS=1",
                 "NAPI_VERSION=5",
-                ${DEFINES}
+                "${DEFINES}"
             ],
             "cflags_cc": [
                 "-frtti",
                 "-fexceptions",
-                "-Wno-redundant-move",
+                "-Wno-redundant-move"
             ],
             "cflags_cc!": [
                 "-fno-rrti",
-                "-fno-exceptions",
+                "-fno-exceptions"
             ],
             "cflags": [
                 "-frtti",
                 "-fexceptions",
                 "-Wno-redundant-move",
-                ${CFLAGS}
+                "${CFLAGS}"
             ],
             "cflags!": [
                 "-fno-rrti",
-                "-fno-exceptions",
+                "-fno-exceptions"
             ],
             "xcode_settings": {
                 "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
                 "GCC_ENABLE_CPP_RTTI": "YES",
                 "CLANG_CXX_LIBRARY": "libc++",
                 "MACOSX_DEPLOYMENT_TARGET": "10.15",
-                'CLANG_CXX_LANGUAGE_STANDARD':'c++11',
-                'OTHER_CFLAGS' : ['-fexceptions', '-frtti', '-Wno-redundant-move']
+                "CLANG_CXX_LANGUAGE_STANDARD": "c++11",
+                "OTHER_CFLAGS" : ["-fexceptions", "-frtti", "-Wno-redundant-move"]
 
             },
             "msvs_settings": {
@@ -53,21 +53,23 @@
                     "ExceptionHandling": 1,
                     "AdditionalOptions": [
                         "/bigobj",
-                        ${WINDOWS_OPTIONS}
+                        "${WINDOWS_OPTIONS}"
                     ]
                 }
             },
             "conditions": [
                 [
-                    'OS=="win"',
+                    "OS==\"win\"",
                     {
                         "defines": [
                             "DUCKDB_BUILD_LIBRARY"
                         ]
-                    },
-                ],  # OS=="win"
-            ],  # conditions
-            ${LIBRARY_FILES}
+                    }
+                ]
+            ],
+            "libraries": [
+                "${LIBRARY_FILES}"
+            ]
         },
         {
             "target_name": "action_after_build",

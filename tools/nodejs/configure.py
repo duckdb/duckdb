@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import pickle
 
 # list of extensions to bundle
@@ -19,19 +20,14 @@ scripts_dir = 'scripts'
 sys.path.append(scripts_dir)
 import package_build
 
-def sanitize_path(x):
-    return x.replace('\\', '/')
-
-defines = []
-for ext in extensions:
-    defines.extend(['BUILD_{}_EXTENSION'.format(ext.upper())])
+defines = ['BUILD_{}_EXTENSION'.format(ext.upper()) for ext in extensions]
 
 if 'DUCKDB_NODE_BUILD_CACHE' in os.environ and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
         cache = pickle.load(f)
     source_list = cache['source_list']
     include_list = cache['include_list']
-    library_text = cache['library_text']
+    libraries = cache['libraries']
     windows_options = cache['windows_options']
     cflags = cache['cflags']
 elif 'DUCKDB_NODE_BINDIR' in os.environ:
@@ -57,31 +53,22 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             continue
         libraries.append(find_library_path(libdir, libname))
 
-    libs = ',\n                 '.join(['"' + sanitize_path(x) + '"' for x in libraries])
     source_list = []
-    library_text = f'''"libraries": [
-                 {libs}
-            ]
-    '''
-    cflags = ''
-    windows_options = ''
-    print(os.environ['DUCKDB_NODE_CFLAGS'])
+    cflags = []
+    windows_options = []
     if os.name == 'nt':
-        all_options = [x for x in os.environ['DUCKDB_NODE_CFLAGS'].split(' ') if len(x) > 0 and x[0] == '/']
-        windows_options = ',\n                        '.join(['"' + x + '"' for x in all_options])
+        windows_options = [x for x in os.environ['DUCKDB_NODE_CFLAGS'].split(' ') if x.startswith('/')]
     else:
-        cflag_list = []
         if '-g' in os.environ['DUCKDB_NODE_CFLAGS']:
-            cflag_list += ['-g']
+            cflags += ['-g']
         if '-O0' in os.environ['DUCKDB_NODE_CFLAGS']:
-            cflag_list += ['-O0']
-        cflags = ',\n                '.join(['"' + x + '"' for x in cflag_list])
+            cflags += ['-O0']
 
     if 'DUCKDB_NODE_BUILD_CACHE' in os.environ:
         cache = {
             'source_list': source_list,
             'include_list': include_list,
-            'library_text': library_text,
+            'libraries': libraries,
             'cflags': cflags,
             'windows_options': windows_options
         }
@@ -97,21 +84,43 @@ else:
     # print(include_list)
     source_list = [os.path.relpath(x, basedir) if os.path.isabs(x) else os.path.join('src', x) for x in source_list]
     include_list = [os.path.join('src', 'duckdb', x) for x in include_list]
-    library_text = ''
-    windows_options = ''
-    cflags = ''
+    libraries = []
+    windows_options = []
+    cflags = []
 
-define_text = ',\n                '.join(['"' + x + '"' for x in defines])
+def sanitize_path(x):
+    return x.replace('\\', '/')
+
+source_list = [sanitize_path(x) for x in source_list]
+include_list = [sanitize_path(x) for x in include_list]
+libraries = [sanitize_path(x) for x in libraries]
 
 with open(gyp_in, 'r') as f:
-    text = f.read()
+    input_json = json.load(f)
 
-text = text.replace('${SOURCE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in source_list]))
-text = text.replace('${INCLUDE_FILES}', ',\n                '.join(['"' + sanitize_path(x) + '"' for x in include_list]))
-text = text.replace('${LIBRARY_FILES}', library_text)
-text = text.replace('${WINDOWS_OPTIONS}', windows_options)
-text = text.replace('${CFLAGS}', cflags)
-text = text.replace('${DEFINES}', define_text)
+def replace_entries(node, replacement_map):
+    if type(node) == type([]):
+        for key in replacement_map.keys():
+            if key in node:
+                node.remove(key)
+                node += replacement_map[key]
+        for entry in node:
+            if type(entry) == type([]) or type(entry) == type({}):
+                replace_entries(entry, replacement_map)
+    if type(node) == type({}):
+        for key in node.keys():
+            replace_entries(node[key], replacement_map)
+
+
+replacement_map = {}
+replacement_map['${SOURCE_FILES}'] = source_list
+replacement_map['${INCLUDE_FILES}'] = include_list
+replacement_map['${DEFINES}'] = defines
+replacement_map['${LIBRARY_FILES}'] = libraries
+replacement_map['${CFLAGS}'] = cflags
+replacement_map['${WINDOWS_OPTIONS}'] = windows_options
+
+replace_entries(input_json, replacement_map)
 
 with open(gyp_out, 'w+') as f:
-    f.write(text)
+    json.dump(input_json, f, indent=4, separators=(", ", ": "))
