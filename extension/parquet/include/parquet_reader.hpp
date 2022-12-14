@@ -73,6 +73,7 @@ struct ParquetOptions {
 	bool filename = false;
 	bool file_row_number = false;
 	bool hive_partitioning = false;
+	bool union_by_name = false;
 
 public:
 	void Serialize(FieldWriter &writer) const;

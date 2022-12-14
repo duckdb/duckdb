@@ -127,6 +127,7 @@ void ParquetOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(filename);
 	writer.WriteField<bool>(file_row_number);
 	writer.WriteField<bool>(hive_partitioning);
+	writer.WriteField<bool>(union_by_name);
 }
 
 void ParquetOptions::Deserialize(FieldReader &reader) {
@@ -134,6 +135,7 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 	filename = reader.ReadRequired<bool>();
 	file_row_number = reader.ReadRequired<bool>();
 	hive_partitioning = reader.ReadRequired<bool>();
+	union_by_name = reader.ReadRequired<bool>();
 }
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
@@ -148,6 +150,7 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	bind_info.InsertOption("filename", Value::BOOLEAN(parquet_bind->parquet_options.filename));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind->parquet_options.file_row_number));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(parquet_bind->parquet_options.hive_partitioning));
+	bind_info.InsertOption("union_by_name", Value::BOOLEAN(parquet_bind->parquet_options.union_by_name));
 	return bind_info;
 }
 
@@ -164,6 +167,7 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -180,6 +184,7 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
 	}
@@ -201,6 +206,8 @@ public:
 				parquet_options.file_row_number = true;
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = true;
+			} else if (loption == "union_by_name") {
+				parquet_options.union_by_name = true;  
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
@@ -337,6 +344,8 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
+			} else if (loption == "union_by_name"){
+				parquet_options.union_by_name = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -370,6 +379,8 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
+			} else if (loption == "union_by_name") {
+				parquet_options.union_by_name = true;  
 			}
 		}
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
