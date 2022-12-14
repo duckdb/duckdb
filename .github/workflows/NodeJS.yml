@@ -55,7 +55,7 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         run: |
           GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
@@ -128,7 +128,7 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         if: matrix.target_arch == 'x64'
         run: |
@@ -137,7 +137,7 @@ jobs:
           echo $OPENSSL_ROOT_DIR
           GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         if: matrix.target_arch == 'arm64'
         run: |
