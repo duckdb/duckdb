@@ -217,7 +217,7 @@ void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = (BoundFunctionExpression &)expr;
 		if (function.function.dependency) {
@@ -289,7 +289,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
-			result->dependencies.insert(type_dependency);
+			result->dependencies.AddDependency(type_dependency);
 		}
 	}
 	properties.allow_stream_result = false;

@@ -18,6 +18,7 @@
 namespace duckdb {
 class Catalog;
 class ClientContext;
+class DependencyList;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -44,7 +45,7 @@ private:
 	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry *object, DependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry *object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry *old_obj, CatalogEntry *new_obj);
 	void EraseObjectInternal(CatalogEntry *object);

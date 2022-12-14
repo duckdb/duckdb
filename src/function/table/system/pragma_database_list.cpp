@@ -42,7 +42,11 @@ void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data
 	for (; count < STANDARD_VECTOR_SIZE && data.index < data.databases.size(); data.index++, count++) {
 		output.data[0].SetValue(count, Value::INTEGER(data.index));
 		output.data[1].SetValue(count, Value(data.databases[data.index]->GetName()));
-		output.data[2].SetValue(count, Value(data.databases[data.index]->GetStorageManager().GetDBPath()));
+		Value file_name;
+		if (!data.databases[data.index]->IsSystem()) {
+			file_name = Value(data.databases[data.index]->GetStorageManager().GetDBPath());
+		}
+		output.data[2].SetValue(count, file_name);
 	}
 	output.SetCardinality(count);
 }

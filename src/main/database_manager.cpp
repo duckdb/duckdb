@@ -29,7 +29,7 @@ AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const str
 
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
 	auto name = db_instance->GetName();
-	unordered_set<CatalogEntry *> dependencies;
+	DependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
@@ -49,11 +49,14 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
 	auto databases = GetDatabases(context);
 	for (auto db : databases) {
+		if (db->IsSystem()) {
+			continue;
+		}
 		auto &storage = db->GetStorageManager();
 		if (storage.InMemory()) {
 			continue;
 		}
-		if (path == storage.GetDBPath()) {
+		if (StringUtil::CIEquals(path, storage.GetDBPath())) {
 			return db;
 		}
 	}
@@ -70,6 +73,7 @@ const string &DatabaseManager::GetDefaultDatabase() {
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<AttachedDatabase *> result;
 	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
+	result.push_back(system.get());
 	result.push_back(context.client_data->temporary_objects.get());
 	return result;
 }

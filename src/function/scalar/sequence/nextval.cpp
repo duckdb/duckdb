@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/sequence_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -119,10 +120,10 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 	return make_unique<NextvalBindData>(sequence);
 }
 
-static void NextValDependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	if (info.sequence) {
-		dependencies.insert(info.sequence);
+		dependencies.AddDependency(info.sequence);
 	}
 }
 

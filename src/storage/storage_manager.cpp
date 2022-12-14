@@ -15,8 +15,11 @@
 
 namespace duckdb {
 
-StorageManager::StorageManager(AttachedDatabase &db, string path, bool read_only)
-    : db(db), path(move(path)), read_only(read_only) {
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
+    : db(db), path(move(path_p)), read_only(read_only) {
+	if (path.empty()) {
+		path = ":memory:";
+	}
 }
 
 StorageManager::~StorageManager() {
@@ -46,7 +49,8 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 bool StorageManager::InMemory() {
-	return path.empty() || path == ":memory:";
+	D_ASSERT(!path.empty());
+	return path == ":memory:";
 }
 
 void StorageManager::Initialize() {

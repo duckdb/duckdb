@@ -10,7 +10,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 statement ok
 ROLLBACK
@@ -21,13 +21,13 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 statement ok
-CREATE TABLE persistent_attach.integers(i INTEGER)
+CREATE TABLE attach_transaction.integers(i INTEGER)
 
 statement ok
-INSERT INTO persistent_attach.integers VALUES (42)
+INSERT INTO attach_transaction.integers VALUES (42)
 
 statement ok
 ROLLBACK
@@ -37,13 +37,13 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 statement ok
-CREATE TABLE persistent_attach.integers(i INTEGER)
+CREATE TABLE attach_transaction.integers(i INTEGER)
 
 statement ok
-INSERT INTO persistent_attach.integers VALUES (42)
+INSERT INTO attach_transaction.integers VALUES (42)
 
 statement ok
 COMMIT
@@ -53,26 +53,26 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-DETACH persistent_attach
+DETACH attach_transaction
 
 statement ok
 ROLLBACK
 
 statement ok
-DETACH persistent_attach
+DETACH attach_transaction
 
 # what if we attach, push entries, then detach, and then rollback!?
 statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 statement ok
-INSERT INTO persistent_attach.integers VALUES (84)
+INSERT INTO attach_transaction.integers VALUES (84)
 
 statement ok
-DETACH persistent_attach
+DETACH attach_transaction
 
 statement ok
 ROLLBACK
@@ -82,29 +82,29 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 # verify the previous data was not written
 query I
-SELECT * FROM persistent_attach.integers
+SELECT * FROM attach_transaction.integers
 ----
 42
 
 statement ok
-INSERT INTO persistent_attach.integers VALUES (84)
+INSERT INTO attach_transaction.integers VALUES (84)
 
 statement ok
-DETACH persistent_attach
+DETACH attach_transaction
 
 statement ok
 COMMIT
 
 # now if we attach we should see [42, 84]
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '__TEST_DIR__/attach_transaction.db'
 
 query I
-SELECT * FROM persistent_attach.integers ORDER BY 1
+SELECT * FROM attach_transaction.integers ORDER BY 1
 ----
 42
 84

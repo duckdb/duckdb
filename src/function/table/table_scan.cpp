@@ -13,6 +13,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -181,9 +182,9 @@ BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
 	return BindInfo(ScanType::TABLE);
 }
 
-void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
+void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	entries.insert(bind_data.table);
+	entries.AddDependency(bind_data.table);
 }
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {

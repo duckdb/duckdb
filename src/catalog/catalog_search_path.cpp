@@ -126,12 +126,21 @@ void CatalogSearchPath::Reset() {
 	SetPaths(empty);
 }
 
-void CatalogSearchPath::Set(const vector<CatalogSearchEntry> &new_paths, bool is_set_schema) {
+void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_schema) {
 	if (is_set_schema && new_paths.size() != 1) {
 		throw CatalogException("SET schema can set only 1 schema. This has %d", new_paths.size());
 	}
-	for (const auto &path : new_paths) {
+	for (auto &path : new_paths) {
 		if (!Catalog::GetSchema(context, path.catalog, path.schema, true)) {
+			if (path.catalog.empty()) {
+				// only schema supplied - check if this is a database instead
+				auto schema = Catalog::GetSchema(context, path.schema, DEFAULT_SCHEMA, true);
+				if (schema) {
+					path.catalog = move(path.schema);
+					path.schema = schema->name;
+					continue;
+				}
+			}
 			throw CatalogException("SET %s: No catalog + schema named %s found.",
 			                       is_set_schema ? "schema" : "search_path", path.ToString());
 		}
@@ -140,9 +149,9 @@ void CatalogSearchPath::Set(const vector<CatalogSearchEntry> &new_paths, bool is
 	SetPaths(set_paths);
 }
 
-void CatalogSearchPath::Set(const CatalogSearchEntry &new_value, bool is_set_schema) {
-	vector<CatalogSearchEntry> new_paths {new_value};
-	Set(new_paths, is_set_schema);
+void CatalogSearchPath::Set(CatalogSearchEntry new_value, bool is_set_schema) {
+	vector<CatalogSearchEntry> new_paths {move(new_value)};
+	Set(move(new_paths), is_set_schema);
 }
 
 const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {

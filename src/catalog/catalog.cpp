@@ -108,7 +108,7 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
 	D_ASSERT(!info->schema.empty());
-	unordered_set<CatalogEntry *> dependencies;
+	DependencyList dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info->schema, move(entry), dependencies)) {

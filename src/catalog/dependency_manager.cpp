@@ -7,17 +7,23 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
 DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
 }
 
-void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *object,
-                                  unordered_set<CatalogEntry *> &dependencies) {
+void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *object, DependencyList &dependencies) {
 	// check for each object in the sources if they were not deleted yet
-	for (auto &dependency : dependencies) {
+	for (auto &dependency : dependencies.set) {
 		CatalogEntry *catalog_entry;
+		if (dependency->catalog != object->catalog) {
+			throw InternalException("Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
+			                        "\"%s\", which does not match the catalog \"%s\"",
+			                        object->name, dependency->name, dependency->catalog->GetName(),
+			                        object->catalog->GetName());
+		}
 		if (!dependency->set) {
 			throw InternalException("Dependency has no set");
 		}
@@ -29,12 +35,12 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *
 	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
 	                                                                : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
-	for (auto &dependency : dependencies) {
+	for (auto &dependency : dependencies.set) {
 		dependents_map[dependency].insert(Dependency(object, dependency_type));
 	}
 	// create the dependents map for this object: it starts out empty
 	dependents_map[object] = dependency_set_t();
-	dependencies_map[object] = dependencies;
+	dependencies_map[object] = dependencies.set;
 }
 
 void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry *object, bool cascade) {

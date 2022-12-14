@@ -119,7 +119,7 @@ private:
 	                       OnCreateConflict on_conflict);
 	//! Add a catalog entry to this schema
 	CatalogEntry *AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-	                       OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies);
+	                       OnCreateConflict on_conflict, DependencyList dependencies);
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

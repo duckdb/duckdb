@@ -11,7 +11,7 @@ ATTACH '__TEST_DIR__/persistent_attach.db'
 statement error
 ATTACH '__TEST_DIR__/persistent_attach.db'
 ----
-already exists
+already attached
 
 statement ok
 CREATE TABLE persistent_attach.integers(i INTEGER)

@@ -36,6 +36,7 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 #include <sstream>
 
@@ -80,14 +81,14 @@ CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &cont
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-                                           OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies) {
+                                           OnCreateConflict on_conflict, DependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-	dependencies.insert(this);
+	dependencies.AddDependency(this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
@@ -113,7 +114,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, uniqu
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                            OnCreateConflict on_conflict) {
-	unordered_set<CatalogEntry *> dependencies;
+	DependencyList dependencies;
 	return AddEntry(transaction, move(entry), on_conflict, dependencies);
 }
 
@@ -146,7 +147,7 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(CatalogTransaction transaction, Bo
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info->dependencies.insert(set.GetEntry(transaction, fk_info->name));
+		info->dependencies.AddDependency(set.GetEntry(transaction, fk_info->name));
 	}
 	return entry;
 }
@@ -157,8 +158,8 @@ CatalogEntry *SchemaCatalogEntry::CreateView(CatalogTransaction transaction, Cre
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
-	unordered_set<CatalogEntry *> dependencies;
-	dependencies.insert(table);
+	DependencyList dependencies;
+	dependencies.AddDependency(table);
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
 	return AddEntry(GetCatalogTransaction(context), move(index), info->on_conflict, dependencies);
 }
