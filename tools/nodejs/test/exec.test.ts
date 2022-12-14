@@ -1,23 +1,24 @@
-var sqlite3 = require('..');
-var assert = require('assert');
-var fs = require('fs');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
+import * as fs from 'fs';
+import {TableData} from "..";
 
 describe('exec', function() {
-    var db;
+    var db: sqlite3.Database;
     before(function(done) {
         db = new sqlite3.Database(':memory:', done);
     });
 
     it('Database#exec', function(done) {
         var sql = fs.readFileSync('test/support/script.sql', 'utf8');
-        db.exec(sql, function(err) {
+        db.exec(sql, function(err: null | Error) {
             if (err) throw err;
             done();
         });
     });
 
     it('retrieve database structure', function(done) {
-        db.all("SELECT type, name FROM sqlite_master ORDER BY type, name", function(err, rows) {
+        db.all("SELECT type, name FROM sqlite_master ORDER BY type, name", function(err: null | Error, rows: TableData) {
             if (err) throw err;
             assert.deepEqual(rows, [
                // { type: 'index', name: 'grid_key_lookup' },

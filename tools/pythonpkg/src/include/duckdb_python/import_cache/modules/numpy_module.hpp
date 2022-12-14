@@ -18,10 +18,12 @@ public:
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		ndarray.LoadAttribute("ndarray", cache, *this);
+		datetime64.LoadAttribute("datetime64", cache, *this);
 	}
 
 public:
 	PythonImportCacheItem ndarray;
+	PythonImportCacheItem datetime64;
 };
 
 } // namespace duckdb
