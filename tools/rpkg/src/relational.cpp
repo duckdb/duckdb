@@ -159,11 +159,16 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		res_aggregates.push_back(move(expr));
 		aggr_idx++;
 	}
-	if (groups.size() == 0) {
-		auto res = std::make_shared<ProjectionRelation>(rel->rel, move())
-	}
 
 	auto res = std::make_shared<AggregateRelation>(rel->rel, move(res_aggregates), move(res_groups));
+	if (groups.size() == 0) {
+		auto lim = std::make_shared<LimitRelation>(res, 1, 0);
+		return make_external<RelationWrapper>("duckdb_relation", lim);
+	}
+	return make_external<RelationWrapper>("duckdb_relation", res);
+
+
+	
 }
 
 [[cpp11::register]] SEXP rapi_rel_order(duckdb::rel_extptr_t rel, list orders) {
