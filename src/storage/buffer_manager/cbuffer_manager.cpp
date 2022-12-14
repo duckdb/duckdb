@@ -11,7 +11,7 @@ Allocator &CBufferManager::GetBufferAllocator() {
 }
 
 CBufferManager::CBufferManager(CBufferManagerConfig config_p)
-    : VirtualBufferManager(), config(move(config_p)),
+    : VirtualBufferManager(), config(config_p),
       custom_allocator(CBufferAllocatorAllocate, CBufferAllocatorFree, CBufferAllocatorRealloc,
                        make_unique<CBufferAllocatorData>(*this)) {
 	block_manager = make_unique<InMemoryBlockManager>(*this);
