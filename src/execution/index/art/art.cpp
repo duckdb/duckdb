@@ -825,6 +825,55 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	return true;
 }
 
+string GenerateKeyName(DataChunk &expression_chunk, vector<unique_ptr<Expression>> &unbound_expressions, idx_t row) {
+	string key_name;
+	for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
+		if (k > 0) {
+			key_name += ", ";
+		}
+		key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(row).ToString();
+	}
+	return key_name;
+}
+
+bool SuccessfulVerification(Node *result, VerifyExistenceType type) {
+	switch (type) {
+	case VerifyExistenceType::APPEND:
+		// We expect this to not exist yet
+		return result == nullptr;
+	case VerifyExistenceType::APPEND_FK:
+		// We expect this to exist
+		return result != nullptr;
+	case VerifyExistenceType::DELETE_FK:
+		// We expect this to not exist anymore
+		return result == nullptr;
+	default:
+		throw NotImplementedException("Type not implemented for VerifyExistenceType");
+	}
+}
+
+string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, bool is_primary, string key_name) {
+	switch (verify_type) {
+	case VerifyExistenceType::APPEND: {
+		// node already exists in tree
+		string type = is_primary ? "primary key" : "unique";
+		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint", key_name, type);
+	}
+	case VerifyExistenceType::APPEND_FK: {
+		// found node no exists in tree
+		return StringUtil::Format(
+		    "Violates foreign key constraint because key \"%s\" does not exist in referenced table", key_name);
+	}
+	case VerifyExistenceType::DELETE_FK: {
+		// found node exists in tree
+		return StringUtil::Format("Violates foreign key constraint because key \"%s\" exists in table has foreign key",
+		                          key_name);
+	}
+	default:
+		throw NotImplementedException("Type not implemented for VerifyExistenceType");
+	}
+}
+
 void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr) {
 	if (verify_type != VerifyExistenceType::DELETE_FK && !IsUnique()) {
 		return;
@@ -835,6 +884,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 
 	// unique index, check
 	lock_guard<mutex> l(lock);
+
 	// first resolve the expressions for the index
 	ExecuteExpressions(chunk, expression_chunk);
 
@@ -848,40 +898,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			continue;
 		}
 		Node *node_ptr = Lookup(tree, keys[i], 0);
-		bool throw_exception =
-		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
-		if (!throw_exception) {
+		if (SuccessfulVerification(node_ptr, verify_type)) {
 			continue;
 		}
-		string key_name;
-		for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
-			if (k > 0) {
-				key_name += ", ";
-			}
-			key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(i).ToString();
-		}
-		string exception_msg;
-		switch (verify_type) {
-		case VerifyExistenceType::APPEND: {
-			// node already exists in tree
-			string type = IsPrimary() ? "primary key" : "unique";
-			exception_msg = "duplicate key \"" + key_name + "\" violates ";
-			exception_msg += type + " constraint";
-			break;
-		}
-		case VerifyExistenceType::APPEND_FK: {
-			// found node no exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
-			break;
-		}
-		case VerifyExistenceType::DELETE_FK: {
-			// found node exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" exist in table has foreign key";
-			break;
-		}
-		}
+		string key_name = GenerateKeyName(expression_chunk, unbound_expressions, i);
+		auto exception_msg = GenerateConstraintErrorMessage(verify_type, IsPrimary(), move(key_name));
 		if (err_msg_ptr) {
 			err_msg_ptr[i] = exception_msg;
 		} else {

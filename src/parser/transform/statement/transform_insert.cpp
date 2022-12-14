@@ -4,6 +4,22 @@
 
 namespace duckdb {
 
+InsertConflictActionType TransformConflictAction(duckdb_libpgquery::PGOnConflictClause *on_conflict) {
+	if (!on_conflict) {
+		return InsertConflictActionType::NONE;
+	}
+	switch (on_conflict->action) {
+	case duckdb_libpgquery::PG_ONCONFLICT_NONE:
+		return InsertConflictActionType::NONE;
+	case duckdb_libpgquery::PG_ONCONFLICT_NOTHING:
+		return InsertConflictActionType::NOTHING;
+	case duckdb_libpgquery::PG_ONCONFLICT_UPDATE:
+		return InsertConflictActionType::UPDATE;
+	default:
+		throw InternalException("Type not implemented for InsertConflictActionType");
+	}
+}
+
 unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList *list) {
 	auto result = make_unique<ExpressionListRef>();
 	for (auto value_list = list->head; value_list != nullptr; value_list = value_list->next) {
@@ -25,14 +41,19 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGInsertStmt *>(node);
 	D_ASSERT(stmt);
-	if (stmt->onConflictClause && stmt->onConflictClause->action != duckdb_libpgquery::PG_ONCONFLICT_NONE) {
+
+	auto conflict_action = TransformConflictAction(stmt->onConflictClause);
+
+	if (conflict_action != InsertConflictActionType::NONE) {
 		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
 	}
 	if (!stmt->selectStmt) {
+		// FIXME: default values is not supported, but in the binder we do BindDefaultValues ?
 		throw ParserException("DEFAULT VALUES clause is not supported!");
 	}
 
 	auto result = make_unique<InsertStatement>();
+	result->action_type = conflict_action;
 	if (stmt->withClause) {
 		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
 	}

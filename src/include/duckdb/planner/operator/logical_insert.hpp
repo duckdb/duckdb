@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/index_vector.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
 
@@ -33,6 +34,8 @@ public:
 	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
+	// Which action to take on conflict
+	InsertConflictActionType action_type;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

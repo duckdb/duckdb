@@ -30,6 +30,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
+	// Fetch the table to insert into
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	D_ASSERT(table);
 	if (!table->temporary) {
@@ -38,7 +39,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
-
+	insert->action_type = stmt.action_type;
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
@@ -72,13 +73,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
+		// No columns specified, assume insertion into all columns
 		for (auto &col : table->columns.Physical()) {
 			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
 		}
 	}
 
-	// bind the default values
+	// Bind the default values
 	BindDefaultValues(table->columns, insert->bound_defaults);
 	if (!stmt.select_statement) {
 		result.plan = move(insert);
@@ -101,6 +103,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+			D_ASSERT(named_column_map.size() >= col_idx);
 			auto table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement

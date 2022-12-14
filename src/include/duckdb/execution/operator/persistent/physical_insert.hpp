@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/common/index_vector.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,8 @@ public:
 	//! Whether or not the INSERT can be executed in parallel
 	//! This insert is not order preserving if executed in parallel
 	bool parallel;
+	// Which action to perform on conflict
+	InsertConflictActionType action_type;
 
 public:
 	// Source interface

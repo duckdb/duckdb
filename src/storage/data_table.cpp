@@ -416,6 +416,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (table.HasGeneratedColumns()) {
+		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
 		physical_index_set_t bound_columns;
 		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);

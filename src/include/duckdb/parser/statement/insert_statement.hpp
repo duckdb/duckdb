@@ -15,6 +15,9 @@
 namespace duckdb {
 class ExpressionListRef;
 
+// Which action should we perform when a insert conflict occurs
+enum class InsertConflictActionType : uint8_t { NONE, NOTHING, UPDATE };
+
 class InsertStatement : public SQLStatement {
 public:
 	InsertStatement();
@@ -31,6 +34,9 @@ public:
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
+
+	//! Action to perform if the insert statement fails because of a conflict
+	InsertConflictActionType action_type;
 
 	//! CTEs
 	CommonTableExpressionMap cte_map;
