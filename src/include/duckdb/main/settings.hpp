@@ -185,6 +185,7 @@ struct EnableProgressBarPrintSetting {
 	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(ClientContext &context);
 };
 
