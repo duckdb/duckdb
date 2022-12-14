@@ -1,11 +1,11 @@
-var duckdb = require('..');
-var assert = require('assert');
+import * as duckdb from '..';
+import * as assert from 'assert';
 
 describe('QueryResult', () => {
     const total = 1000;
 
-    let db;
-    let conn;
+    let db: duckdb.Database;
+    let conn: duckdb.Connection;
     before((done) => {
         db = new duckdb.Database(':memory:', () => {
             conn = new duckdb.Connection(db, done);
