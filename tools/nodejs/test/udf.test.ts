@@ -38,7 +38,7 @@ describe('UDFs', function() {
 
         it('0ary non-inlined string', function(done) {
             db.register_udf("udf", "varchar", () => 'this string is over 12 characters');
-            db.all("select udf() v", function(err, rows) {
+            db.all("select udf() v", function(err: null | Error, rows: TableData) {
                 if (err) throw err;
                 assert.equal(rows[0].v, 'this string is over 12 characters');
             });
