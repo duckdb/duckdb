@@ -583,7 +583,7 @@ template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();
 

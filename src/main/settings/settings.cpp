@@ -899,7 +899,7 @@ void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.temporary_directory = DBConfig().options.temporary_directory;
 	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
 	if (db) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		auto &buffer_manager = VirtualBufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
 	}
 }
