@@ -11,8 +11,6 @@
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 
-#include "datetime.h" // from Python
-
 #include "duckdb.hpp"
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
@@ -161,7 +159,6 @@ static void InitializeConnectionMethods(py::module_ &m) {
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyResult::Initialize(m);
 	PythonObject::Initialize();
 
 	InitializeConnectionMethods(m);
@@ -261,8 +258,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 		DuckDBPyConnection::Cleanup();
 	};
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
-
-	PyDateTime_IMPORT;
 }
 
 } // namespace duckdb

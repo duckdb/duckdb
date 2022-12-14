@@ -51,6 +51,7 @@ public:
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
 	DUCKDB_API virtual string GetAlias();
 
+	DUCKDB_API unique_ptr<QueryResult> ExecuteOrThrow();
 	DUCKDB_API unique_ptr<QueryResult> Execute();
 	DUCKDB_API string ToString();
 	DUCKDB_API virtual string ToString(idx_t depth) = 0;

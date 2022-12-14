@@ -1,6 +1,5 @@
 #include "duckdb_python/pyconnection.hpp"
 
-#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
@@ -251,7 +250,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		}
 
 		if (!many) {
-			result = move(res);
+			result = make_unique<DuckDBPyRelation>(move(res));
 		}
 	}
 	return shared_from_this();
@@ -598,21 +597,21 @@ py::object DuckDBPyConnection::FetchOne() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchone();
+	return result->FetchOne();
 }
 
 py::list DuckDBPyConnection::FetchMany(idx_t size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchmany(size);
+	return result->FetchMany(size);
 }
 
 py::list DuckDBPyConnection::FetchAll() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchall();
+	return result->FetchAll();
 }
 
 py::dict DuckDBPyConnection::FetchNumpy() {
@@ -639,7 +638,7 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchArrowTable(chunk_size);
+	return result->ToArrowTable(chunk_size);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
