@@ -113,6 +113,10 @@ Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expressio
 
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
+	if (!allow_unfoldable && result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		throw InvalidTypeException(
+		    "Prevent throwing an InternalException through a failed assertion, catch this in TryEvaluateScalar");
+	}
 
 	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
@@ -122,7 +126,7 @@ Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expressio
 
 bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Expression &expr, Value &result) {
 	try {
-		result = EvaluateScalar(context, expr);
+		result = EvaluateScalar(context, expr, false);
 		return true;
 	} catch (InternalException &ex) {
 		throw ex;
