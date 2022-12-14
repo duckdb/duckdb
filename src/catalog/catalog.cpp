@@ -342,7 +342,7 @@ struct SimilarCatalogEntry {
 string SimilarCatalogEntry::GetQualifiedName() const {
 	D_ASSERT(Found());
 
-	return schema->name + "." + name;
+	return schema->catalog->GetName() + "." + schema->name + "." + name;
 }
 
 //===--------------------------------------------------------------------===//

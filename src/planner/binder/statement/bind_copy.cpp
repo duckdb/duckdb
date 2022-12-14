@@ -94,6 +94,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	InsertStatement insert;
 	insert.table = stmt.info->table;
 	insert.schema = stmt.info->schema;
+	insert.catalog = stmt.info->catalog;
 	insert.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
@@ -109,7 +110,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	// lookup the table to copy into
-	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, stmt.info->schema, stmt.info->table);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
@@ -143,6 +144,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_unique<BaseTableRef>();
+		ref->catalog_name = stmt.info->catalog;
 		ref->schema_name = stmt.info->schema;
 		ref->table_name = stmt.info->table;
 
