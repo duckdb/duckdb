@@ -12,7 +12,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	auto &fs = instance.GetFileSystem();
 
 	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
-	fs.RegisterSubSystem(make_unique<S3FileSystem>(VirtualBufferManager::GetBufferManager(instance)));
+	fs.RegisterSubSystem(make_unique<S3FileSystem>(BufferManager::GetBufferManager(instance)));
 
 	auto &config = DBConfig::GetConfig(instance);
 

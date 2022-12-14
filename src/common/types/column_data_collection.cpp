@@ -4,7 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -55,7 +55,7 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<Logica
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(VirtualBufferManager &buffer_manager, vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
 }

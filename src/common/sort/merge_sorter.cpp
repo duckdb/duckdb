@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-MergeSorter::MergeSorter(GlobalSortState &state, VirtualBufferManager &buffer_manager)
+MergeSorter::MergeSorter(GlobalSortState &state, BufferManager &buffer_manager)
     : state(state), buffer_manager(buffer_manager), sort_layout(state.sort_layout) {
 }
 

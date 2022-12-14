@@ -9,7 +9,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -669,7 +669,7 @@ Value MaximumExpressionDepthSetting::GetSetting(ClientContext &context) {
 void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
-		VirtualBufferManager::GetBufferManager(*db).SetLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetLimit(config.options.maximum_memory);
 	}
 }
 
@@ -890,7 +890,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 	config.options.temporary_directory = input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
 	if (db) {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(*db);
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
 	}
 }
@@ -899,13 +899,13 @@ void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.temporary_directory = DBConfig().options.temporary_directory;
 	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
 	if (db) {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(*db);
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
 	}
 }
 
 Value TempDirectorySetting::GetSetting(ClientContext &context) {
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(context);
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	return Value(buffer_manager.GetTemporaryDirectory());
 }
 

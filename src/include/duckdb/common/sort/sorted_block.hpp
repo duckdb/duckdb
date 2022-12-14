@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class VirtualBufferManager;
+class BufferManager;
 struct RowDataBlock;
 struct SortLayout;
 struct GlobalSortState;
@@ -25,8 +25,7 @@ enum class SortedDataType { BLOB, PAYLOAD };
 //! Object that holds sorted rows, and an accompanying heap if there are blobs
 struct SortedData {
 public:
-	SortedData(SortedDataType type, const RowLayout &layout, VirtualBufferManager &buffer_manager,
-	           GlobalSortState &state);
+	SortedData(SortedDataType type, const RowLayout &layout, BufferManager &buffer_manager, GlobalSortState &state);
 	//! Number of rows that this object holds
 	idx_t Count();
 	//! Initialize new block to write to
@@ -48,7 +47,7 @@ public:
 
 private:
 	//! The buffer manager
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	//! The global state
 	GlobalSortState &state;
 };
@@ -56,7 +55,7 @@ private:
 //! Block that holds sorted rows: radix, blob and payload data
 struct SortedBlock {
 public:
-	SortedBlock(VirtualBufferManager &buffer_manager, GlobalSortState &gstate);
+	SortedBlock(BufferManager &buffer_manager, GlobalSortState &gstate);
 	//! Number of rows that this object holds
 	idx_t Count() const;
 	//! Initialize this block to write data to
@@ -86,7 +85,7 @@ public:
 
 private:
 	//! Buffer manager, global state, and sorting layout constants
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	GlobalSortState &state;
 	const SortLayout &sort_layout;
 	const RowLayout &payload_layout;
@@ -95,7 +94,7 @@ private:
 //! State used to scan a SortedBlock e.g. during merge sort
 struct SBScanState {
 public:
-	SBScanState(VirtualBufferManager &buffer_manager, GlobalSortState &state);
+	SBScanState(BufferManager &buffer_manager, GlobalSortState &state);
 
 	void PinRadix(idx_t block_idx_to);
 	void PinData(SortedData &sd);
@@ -110,7 +109,7 @@ public:
 	void SetIndices(idx_t block_idx_to, idx_t entry_idx_to);
 
 public:
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	const SortLayout &sort_layout;
 	GlobalSortState &state;
 

@@ -2,7 +2,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -10,8 +10,7 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, const AggregateFunction &function_p,
 	                        vector<unique_ptr<Expression>> &children, unique_ptr<FunctionData> bind_info_p,
 	                        const BoundOrderModifier &order_bys)
-	    : buffer_manager(VirtualBufferManager::GetBufferManager(context)), function(function_p),
-	      bind_info(move(bind_info_p)) {
+	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p), bind_info(move(bind_info_p)) {
 		arg_types.reserve(children.size());
 		for (const auto &child : children) {
 			arg_types.emplace_back(child->return_type);
@@ -61,7 +60,7 @@ struct SortedAggregateBindData : public FunctionData {
 		return true;
 	}
 
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	AggregateFunction function;
 	vector<LogicalType> arg_types;
 	unique_ptr<FunctionData> bind_info;

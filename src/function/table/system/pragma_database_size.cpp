@@ -54,7 +54,7 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 		return;
 	}
 	auto &storage = StorageManager::GetStorageManager(context);
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(context);
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
 
 	auto ds = storage.GetDatabaseSize();
 

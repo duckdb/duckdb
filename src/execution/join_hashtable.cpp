@@ -7,7 +7,7 @@
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -16,7 +16,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
-JoinHashTable::JoinHashTable(VirtualBufferManager &buffer_manager, const vector<JoinCondition> &conditions,
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(4),
@@ -1204,7 +1204,7 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
 		local_spill_collections.emplace_back(
-		    make_unique<ColumnDataCollection>(VirtualBufferManager::GetBufferManager(context), probe_types));
+		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
 		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 
@@ -1236,7 +1236,7 @@ void ProbeSpill::Finalize() {
 	} else {
 		if (local_spill_collections.empty()) {
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(VirtualBufferManager::GetBufferManager(context), probe_types);
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			global_spill_collection = move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1254,7 +1254,7 @@ void ProbeSpill::PrepareNextProbe() {
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
 			// Can't probe, just make an empty one
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(VirtualBufferManager::GetBufferManager(context), probe_types);
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = move(partitions[ht.partition_start]);

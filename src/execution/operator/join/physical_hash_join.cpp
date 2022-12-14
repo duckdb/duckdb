@@ -10,7 +10,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
@@ -59,7 +59,7 @@ public:
 		// for external hash join
 		external = op.can_go_external && ClientConfig::GetConfig(context).force_external;
 		// memory usage per thread scales with max mem / num threads
-		double max_memory = VirtualBufferManager::GetBufferManager(context).GetMaxMemory();
+		double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 		double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		// HT may not exceed 60% of memory
 		max_ht_size = max_memory * 0.6;
@@ -126,7 +126,7 @@ public:
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
 	auto result =
-	    make_unique<JoinHashTable>(VirtualBufferManager::GetBufferManager(context), conditions, build_types, join_type);
+	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {

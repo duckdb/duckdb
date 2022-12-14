@@ -4,7 +4,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/chrono.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "httpfs.hpp"
 
@@ -135,7 +135,7 @@ protected:
 
 class S3FileSystem : public HTTPFileSystem {
 public:
-	explicit S3FileSystem(VirtualBufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
 	// Global limits to write buffers
@@ -144,7 +144,7 @@ public:
 	atomic<uint16_t> buffers_available;
 	atomic<uint16_t> threads_waiting_for_memory = {0};
 
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 
 public:
 	// HTTP Requests

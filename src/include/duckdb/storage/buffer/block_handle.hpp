@@ -16,7 +16,7 @@
 namespace duckdb {
 class BlockManager;
 class BufferHandle;
-class VirtualBufferManager;
+class BufferManager;
 class DatabaseInstance;
 class FileBuffer;
 
@@ -24,9 +24,9 @@ enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 struct BufferPoolReservation {
 	idx_t size {0};
-	VirtualBufferManager &manager;
+	BufferManager &manager;
 
-	BufferPoolReservation(VirtualBufferManager &manager) : manager(manager) {
+	BufferPoolReservation(BufferManager &manager) : manager(manager) {
 	}
 	BufferPoolReservation(const BufferPoolReservation &) = delete;
 	BufferPoolReservation &operator=(const BufferPoolReservation &) = delete;
@@ -41,7 +41,7 @@ struct BufferPoolReservation {
 };
 
 struct TempBufferPoolReservation : BufferPoolReservation {
-	TempBufferPoolReservation(VirtualBufferManager &manager, idx_t size) : BufferPoolReservation(manager) {
+	TempBufferPoolReservation(BufferManager &manager, idx_t size) : BufferPoolReservation(manager) {
 		Resize(size);
 	}
 	TempBufferPoolReservation(TempBufferPoolReservation &&) = default;
@@ -54,9 +54,9 @@ class BlockHandle {
 	friend class BlockManager;
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
-	friend class VirtualBufferManager;
-	friend class CBufferManager;
 	friend class BufferManager;
+	friend class CBufferManager;
+	friend class StandardBufferManager;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id);

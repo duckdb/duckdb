@@ -7,7 +7,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/transaction/transaction.hpp"

@@ -161,7 +161,7 @@ public:
 
 	PiecewiseMergeJoinState(ClientContext &context, const PhysicalPiecewiseMergeJoin &op, bool force_external)
 	    : context(context), allocator(Allocator::Get(context)), op(op),
-	      buffer_manager(VirtualBufferManager::GetBufferManager(context)), force_external(force_external),
+	      buffer_manager(BufferManager::GetBufferManager(context)), force_external(force_external),
 	      left_outer(IsLeftOuterJoin(op.join_type)), left_position(0), first_fetch(true), finished(true),
 	      right_position(0), right_chunk_index(0), rhs_executor(context) {
 		vector<LogicalType> condition_types;
@@ -187,7 +187,7 @@ public:
 	ClientContext &context;
 	Allocator &allocator;
 	const PhysicalPiecewiseMergeJoin &op;
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	bool force_external;
 
 	// Block sorting

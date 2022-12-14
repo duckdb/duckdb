@@ -4,7 +4,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include <functional>
 
@@ -152,7 +152,7 @@ struct RLECompressState : public CompressionState {
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		column_segment->function = function;
 		current_segment = move(column_segment);
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 	}
 
@@ -248,7 +248,7 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 template <class T>
 struct RLEScanState : public SegmentScanState {
 	explicit RLEScanState(ColumnSegment &segment) {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;
 		position_in_entry = 0;

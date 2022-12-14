@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -49,8 +49,8 @@ public:
 	StorageManager(DatabaseInstance &db, string path, bool read_only);
 	virtual ~StorageManager();
 
-	//! The VirtualBufferManager of the database
-	unique_ptr<VirtualBufferManager> buffer_manager;
+	//! The BufferManager of the database
+	unique_ptr<BufferManager> buffer_manager;
 	//! The database this storagemanager belongs to
 	DatabaseInstance &db;
 

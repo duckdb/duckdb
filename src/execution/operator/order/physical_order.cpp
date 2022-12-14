@@ -5,7 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/event.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -20,7 +20,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
-	OrderGlobalSinkState(VirtualBufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
+	OrderGlobalSinkState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
 	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
@@ -58,8 +58,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
-	auto state =
-	    make_unique<OrderGlobalSinkState>(VirtualBufferManager::GetBufferManager(context), *this, payload_layout);
+	auto state = make_unique<OrderGlobalSinkState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	state->memory_per_thread = GetMaxThreadMemory(context);
@@ -80,7 +79,7 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 
 	// Initialize local state (if necessary)
 	if (!local_sort_state.initialized) {
-		local_sort_state.Initialize(global_sort_state, VirtualBufferManager::GetBufferManager(context.client));
+		local_sort_state.Initialize(global_sort_state, BufferManager::GetBufferManager(context.client));
 	}
 
 	// Obtain sorting columns
@@ -118,7 +117,7 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		// Initialize merge sorted and iterate until done
 		auto &global_sort_state = state.global_sort_state;
-		MergeSorter merge_sorter(global_sort_state, VirtualBufferManager::GetBufferManager(context));
+		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;

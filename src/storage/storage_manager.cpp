@@ -13,7 +13,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/standard_buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -28,8 +28,8 @@ StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
 	return StorageManager::GetStorageManager(*context.db);
 }
 
-VirtualBufferManager &VirtualBufferManager::GetBufferManager(ClientContext &context) {
-	return VirtualBufferManager::GetBufferManager(*context.db);
+BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
+	return BufferManager::GetBufferManager(*context.db);
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
@@ -49,7 +49,7 @@ void StorageManager::CreateBufferManager() {
 	if (!config.virtual_buffer_manager) {
 		// Only create a buffer manager if a custom one wasn't provided at creation
 		buffer_manager =
-		    make_unique<BufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
+		    make_unique<StandardBufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
 	}
 }
 

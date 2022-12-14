@@ -10,14 +10,14 @@ Allocator &CBufferManager::GetBufferAllocator() {
 }
 
 CBufferManager::CBufferManager(CBufferManagerConfig config_p)
-    : VirtualBufferManager(), config(config_p),
+    : BufferManager(), config(config_p),
       custom_allocator(CBufferAllocatorAllocate, CBufferAllocatorFree, CBufferAllocatorRealloc,
                        make_unique<CBufferAllocatorData>(*this)) {
 	block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
-	idx_t alloc_size = VirtualBufferManager::GetAllocSize(block_size);
+	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 

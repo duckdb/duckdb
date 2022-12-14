@@ -178,7 +178,7 @@ public:
 		next_width = 0;
 
 		// Reset the pointers into the current segment
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(checkpointer.GetDatabase());
+		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		current_handle = buffer_manager.Pin(current_segment->block);
 		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, current_handle);
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
@@ -262,7 +262,7 @@ public:
 	}
 
 	idx_t Finalize() {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(checkpointer.GetDatabase());
+		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		auto handle = buffer_manager.Pin(current_segment->block);
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
@@ -438,7 +438,7 @@ struct CompressedStringScanState : public StringScanState {
 
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
 	auto state = make_unique<CompressedStringScanState>();
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
 	auto baseptr = state->handle.Ptr() + segment.GetBlockOffset();

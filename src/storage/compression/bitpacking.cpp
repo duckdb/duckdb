@@ -5,7 +5,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -471,7 +471,7 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
 		current_segment = move(compressed_segment);
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
 		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
@@ -583,7 +583,7 @@ template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();
 

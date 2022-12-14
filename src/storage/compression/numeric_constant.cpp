@@ -1,5 +1,5 @@
 #include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"

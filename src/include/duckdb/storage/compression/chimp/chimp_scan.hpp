@@ -16,7 +16,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -136,7 +136,7 @@ public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
 	explicit ChimpScanState(ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
 		auto dataptr = handle.Ptr();

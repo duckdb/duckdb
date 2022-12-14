@@ -152,7 +152,7 @@ void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option
 	option.set_global(db, *this, input);
 }
 
-void DBConfig::SetVirtualBufferManager(unique_ptr<VirtualBufferManager> buffer_manager) {
+void DBConfig::SetVirtualBufferManager(unique_ptr<BufferManager> buffer_manager) {
 	this->virtual_buffer_manager = move(buffer_manager);
 }
 

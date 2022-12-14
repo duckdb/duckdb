@@ -17,7 +17,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -132,7 +132,7 @@ public:
 		compressed_segment->function = function;
 		current_segment = move(compressed_segment);
 
-		auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
 		segment_data = handle.Ptr() + PatasPrimitives::HEADER_SIZE;

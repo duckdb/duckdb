@@ -157,7 +157,7 @@ void Database::TaskComplete(Napi::Env env) {
 		// Bookkeeping: tell node (and the node GC in particular) how much
 		// memory we're using, such that it can make better decisions on when to
 		// trigger collections.
-		auto &buffer_manager = duckdb::VirtualBufferManager::GetBufferManager(*database->instance);
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(*database->instance);
 		auto current_bytes = buffer_manager.GetUsedMemory();
 		Napi::MemoryManagement::AdjustExternalMemory(env, current_bytes - bytes_allocated);
 		bytes_allocated = current_bytes;

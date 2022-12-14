@@ -16,7 +16,7 @@
 
 namespace duckdb {
 class BlockHandle;
-class VirtualBufferManager;
+class BufferManager;
 class ClientContext;
 class DatabaseInstance;
 
@@ -24,12 +24,12 @@ class DatabaseInstance;
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
 class BlockManager {
 public:
-	explicit BlockManager(VirtualBufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 
 public:
 	//! Creates a new block inside the block manager

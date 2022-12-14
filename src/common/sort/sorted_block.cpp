@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-SortedData::SortedData(SortedDataType type, const RowLayout &layout, VirtualBufferManager &buffer_manager,
+SortedData::SortedData(SortedDataType type, const RowLayout &layout, BufferManager &buffer_manager,
                        GlobalSortState &state)
     : type(type), layout(layout), swizzled(state.external), buffer_manager(buffer_manager), state(state) {
 }
@@ -77,7 +77,7 @@ void SortedData::Unswizzle() {
 	heap_blocks.clear();
 }
 
-SortedBlock::SortedBlock(VirtualBufferManager &buffer_manager, GlobalSortState &state)
+SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
     : buffer_manager(buffer_manager), state(state), sort_layout(state.sort_layout),
       payload_layout(state.payload_layout) {
 	blob_sorting_data = make_unique<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
@@ -213,7 +213,7 @@ idx_t SortedBlock::SizeInBytes() const {
 	return bytes;
 }
 
-SBScanState::SBScanState(VirtualBufferManager &buffer_manager, GlobalSortState &state)
+SBScanState::SBScanState(BufferManager &buffer_manager, GlobalSortState &state)
     : buffer_manager(buffer_manager), sort_layout(state.sort_layout), state(state), block_idx(0), entry_idx(0) {
 }
 

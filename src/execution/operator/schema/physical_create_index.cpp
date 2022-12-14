@@ -86,7 +86,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	state->payload_layout.Initialize(state->payload_types);
 
 	// initialize global and local sort state
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(table.storage->db);
+	auto &buffer_manager = BufferManager::GetBufferManager(table.storage->db);
 	state->global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, state->payload_layout);
 	state->local_sort_state.Initialize(*state->global_sort_state, buffer_manager);
 

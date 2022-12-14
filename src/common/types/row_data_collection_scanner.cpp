@@ -2,7 +2,7 @@
 
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
@@ -21,7 +21,7 @@ typedef void (*duckdb_unpin_buffer_t)(duckdb_buffer buffer);
 typedef idx_t (*duckdb_max_memory_t)(void *data);
 typedef idx_t (*duckdb_used_memory_t)(void *data);
 
-// Contains the information that makes up the virtual buffer manager
+// Contains the information that makes up the custom buffer manager
 struct CBufferManagerConfig {
 	void *data; // Context provided to 'allocate_func'
 	duckdb_allocate_buffer_t allocate_func;
@@ -41,7 +41,7 @@ struct CBufferAllocatorData : public PrivateAllocatorData {
 	CBufferManager &manager;
 };
 
-class CBufferManager : public VirtualBufferManager {
+class CBufferManager : public BufferManager {
 public:
 	CBufferManager(CBufferManagerConfig config);
 	virtual ~CBufferManager() {

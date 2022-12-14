@@ -1,7 +1,7 @@
 #include "duckdb/common/types/column_data_allocator.hpp"
 
 #include "duckdb/common/types/column_data_collection_segment.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -9,7 +9,7 @@ ColumnDataAllocator::ColumnDataAllocator(Allocator &allocator) : type(ColumnData
 	alloc.allocator = &allocator;
 }
 
-ColumnDataAllocator::ColumnDataAllocator(VirtualBufferManager &buffer_manager)
+ColumnDataAllocator::ColumnDataAllocator(BufferManager &buffer_manager)
     : type(ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 	alloc.buffer_manager = &buffer_manager;
 }
@@ -18,7 +18,7 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
     : type(allocator_type) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
-		alloc.buffer_manager = &VirtualBufferManager::GetBufferManager(context);
+		alloc.buffer_manager = &BufferManager::GetBufferManager(context);
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
 		alloc.allocator = &Allocator::Get(context);

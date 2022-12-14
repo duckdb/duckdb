@@ -39,7 +39,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
                                                                 idx_t start, idx_t segment_size) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	shared_ptr<BlockHandle> block;
 	// transient: allocate a buffer for the uncompressed segment
 	if (segment_size < Storage::BLOCK_SIZE) {
@@ -127,7 +127,7 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > this->segment_size);
 	D_ASSERT(offset == 0);
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(db);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
 	auto new_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);

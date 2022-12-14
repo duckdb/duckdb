@@ -2,7 +2,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
@@ -122,7 +122,7 @@ struct FixedSizeScanState : public SegmentScanState {
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 	auto result = make_unique<FixedSizeScanState>();
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	return move(result);
 }
@@ -168,7 +168,7 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 template <class T>
 void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                        idx_t result_idx) {
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
@@ -181,7 +181,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	return make_unique<CompressionAppendState>(move(handle));
 }

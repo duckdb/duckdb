@@ -53,8 +53,7 @@ public:
 
 struct GlobalSortState {
 public:
-	GlobalSortState(VirtualBufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
-	                RowLayout &payload_layout);
+	GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
 
 	//! Add local state sorted data to this global state
 	void AddLocalState(LocalSortState &local_sort_state);
@@ -72,7 +71,7 @@ public:
 	//! The lock for updating the order global state
 	mutex lock;
 	//! The buffer manager
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 
 	//! Sorting and payload layouts
 	const SortLayout sort_layout;
@@ -104,7 +103,7 @@ public:
 	LocalSortState();
 
 	//! Initialize the layouts and RowDataCollections
-	void Initialize(GlobalSortState &global_sort_state, VirtualBufferManager &buffer_manager_p);
+	void Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p);
 	//! Sink one DataChunk into the local sort state
 	void SinkChunk(DataChunk &sort, DataChunk &payload);
 	//! Size of accumulated data in bytes
@@ -127,7 +126,7 @@ public:
 	//! Whether this local state has been initialized
 	bool initialized;
 	//! The buffer manager
-	VirtualBufferManager *buffer_manager;
+	BufferManager *buffer_manager;
 	//! The sorting and payload layouts
 	const SortLayout *sort_layout;
 	const RowLayout *payload_layout;
@@ -150,7 +149,7 @@ private:
 
 struct MergeSorter {
 public:
-	MergeSorter(GlobalSortState &state, VirtualBufferManager &buffer_manager);
+	MergeSorter(GlobalSortState &state, BufferManager &buffer_manager);
 
 	//! Finds and merges partitions until the current cascaded merge round is finished
 	void PerformInMergeRound();
@@ -159,7 +158,7 @@ private:
 	//! The global sorting state
 	GlobalSortState &state;
 	//! The sorting and payload layouts
-	VirtualBufferManager &buffer_manager;
+	BufferManager &buffer_manager;
 	const SortLayout &sort_layout;
 
 	//! The left and right reader

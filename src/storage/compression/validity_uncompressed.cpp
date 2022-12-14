@@ -1,5 +1,5 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/virtual_buffer_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
@@ -208,7 +208,7 @@ struct ValidityScanState : public SegmentScanState {
 
 unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto result = make_unique<ValidityScanState>();
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	result->block_id = segment.block->BlockId();
 	return move(result);
@@ -379,7 +379,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
 	ValidityMask mask((validity_t *)dataptr);
@@ -393,13 +393,13 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	return make_unique<CompressionAppendState>(move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
 		memset(handle.Ptr(), 0xFF, segment.SegmentSize());
@@ -442,7 +442,7 @@ idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
 void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 	idx_t start_bit = start_row - segment.start;
 
-	auto &buffer_manager = VirtualBufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	idx_t revert_start;
 	if (start_bit % 8 != 0) {

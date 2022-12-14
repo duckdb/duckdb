@@ -124,8 +124,7 @@ idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_
 // Row Data Partitioning
 //===--------------------------------------------------------------------===//
 template <idx_t radix_bits>
-static void InitPartitions(VirtualBufferManager &buffer_manager,
-                           vector<unique_ptr<RowDataCollection>> &partition_collections,
+static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowDataCollection>> &partition_collections,
                            RowDataBlock *partition_blocks[], vector<BufferHandle> &partition_handles,
                            data_ptr_t partition_ptrs[], idx_t block_capacity, idx_t row_width) {
 	using CONSTANTS = RadixPartitioningConstants<radix_bits>;
@@ -144,7 +143,7 @@ static void InitPartitions(VirtualBufferManager &buffer_manager,
 
 struct PartitionFunctor {
 	template <idx_t radix_bits>
-	static void Operation(VirtualBufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
+	static void Operation(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
 	                      RowDataCollection &block_collection, RowDataCollection &string_heap,
 	                      vector<unique_ptr<RowDataCollection>> &partition_block_collections,
 	                      vector<unique_ptr<RowDataCollection>> &partition_string_heaps) {
@@ -319,7 +318,7 @@ struct PartitionFunctor {
 		block_count += count;
 	}
 
-	static inline void CreateNewBlock(VirtualBufferManager &buffer_manager, const bool &has_heap,
+	static inline void CreateNewBlock(BufferManager &buffer_manager, const bool &has_heap,
 	                                  vector<unique_ptr<RowDataCollection>> &partition_block_collections,
 	                                  RowDataBlock *partition_data_blocks[],
 	                                  vector<BufferHandle> &partition_data_handles, data_ptr_t partition_data_ptrs[],
@@ -353,14 +352,14 @@ struct PartitionFunctor {
 		block_counts[bin] = 0;
 	}
 
-	static inline void PinAndSet(VirtualBufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
+	static inline void PinAndSet(BufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
 	                             BufferHandle &handle, data_ptr_t &ptr) {
 		*block_ptr = &block;
 		handle = buffer_manager.Pin(block.block);
 		ptr = handle.Ptr();
 	}
 
-	static inline void PartitionHeap(VirtualBufferManager &buffer_manager, const RowLayout &layout,
+	static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout,
 	                                 RowDataCollection &string_heap, RowDataBlock &data_block,
 	                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle) {
 		D_ASSERT(!layout.AllConstant());
@@ -408,7 +407,7 @@ struct PartitionFunctor {
 	}
 };
 
-void RadixPartitioning::PartitionRowData(VirtualBufferManager &buffer_manager, const RowLayout &layout,
+void RadixPartitioning::PartitionRowData(BufferManager &buffer_manager, const RowLayout &layout,
                                          const idx_t hash_offset, RowDataCollection &block_collection,
                                          RowDataCollection &string_heap,
                                          vector<unique_ptr<RowDataCollection>> &partition_block_collections,
