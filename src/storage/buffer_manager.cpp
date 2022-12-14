@@ -268,6 +268,12 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
+shared_ptr<BlockHandle> BlockManager::RegisterMetaBlock(block_id_t block_id) {
+	auto handle = RegisterBlock(block_id);
+	meta_blocks[block_id] = handle;
+	return handle;
+}
+
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
 
 	// pin the old block to ensure we have it loaded in memory

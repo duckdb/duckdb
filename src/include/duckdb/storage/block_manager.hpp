@@ -66,6 +66,8 @@ public:
 
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
+	//! Register a meta block with the given block id and save the handle to meta_blocks
+	shared_ptr<BlockHandle> RegisterMetaBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
@@ -79,5 +81,7 @@ private:
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
+	//! A mapping of meta block id -> BlockHandle
+	unordered_map<block_id_t, shared_ptr<BlockHandle>> meta_blocks;
 };
 } // namespace duckdb
