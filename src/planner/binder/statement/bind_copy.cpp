@@ -110,6 +110,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	// lookup the table to copy into
+	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
