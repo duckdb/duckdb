@@ -183,7 +183,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	if (!GetEntryInternal(context, name, &entry_index, entry)) {
 		return false;
 	}
-	if (entry->internal) {
+	if (!alter_info->allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
@@ -298,6 +298,7 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 	// destroy the backed up entry: it is no longer required
 	D_ASSERT(catalog_entry->parent);
 	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+		lock_guard<mutex> write_lock(catalog.write_lock);
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet

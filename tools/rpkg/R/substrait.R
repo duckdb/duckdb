@@ -12,11 +12,32 @@ duckdb_prepare_substrait <- function(conn, query, arrow = FALSE) {
   stopifnot(is.raw(query))
   stmt_lst <- rapi_prepare_substrait(conn@conn_ref, query)
   duckdb_result(
+    connection = conn,
+    stmt_lst = stmt_lst,
+    arrow = arrow
+  )
+}
+
+#' Query DuckDB using Substrait
+#' Method for interpreting a Substrait JSON plan as a DuckDB Query Plan
+#' It interprets and executes the query.
+#'
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param json The Json Query Plan. Qack!
+#' @param arrow Whether the result should be in Arrow format
+#' @return A DuckDB Query Result
+#' @export
+duckdb_prepare_substrait_json <- function(conn, json, arrow = FALSE) {
+  stopifnot(dbIsValid(conn))
+  stopifnot(is.character(json))
+  stmt_lst <- rapi_prepare_substrait_json(conn@conn_ref, json)
+  duckdb_result(
       connection = conn,
       stmt_lst = stmt_lst,
       arrow = arrow
     )
 }
+
 
 
 

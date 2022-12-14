@@ -18,7 +18,7 @@ namespace duckdb {
 //! Represents a join
 class BoundJoinRef : public BoundTableRef {
 public:
-	BoundJoinRef() : BoundTableRef(TableReferenceType::JOIN) {
+	BoundJoinRef() : BoundTableRef(TableReferenceType::JOIN), lateral(false) {
 	}
 
 	//! The binder used to bind the LHS of the join
@@ -33,5 +33,9 @@ public:
 	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
+	//! Whether or not this is a lateral join
+	bool lateral;
+	//! The correlated columns of the right-side with the left-side
+	vector<CorrelatedColumnInfo> correlated_columns;
 };
 } // namespace duckdb

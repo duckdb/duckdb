@@ -123,7 +123,14 @@ private:
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
+
+	//===--------------------------------------------------------------------===//
+	// SetStatement Transform
+	//===--------------------------------------------------------------------===//
 	unique_ptr<SetStatement> TransformSet(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SetStatement> TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt *stmt);
+	unique_ptr<SetStatement> TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt *stmt);
+
 	unique_ptr<SQLStatement> TransformCheckpoint(duckdb_libpgquery::PGNode *node);
 	unique_ptr<LoadStatement> TransformLoad(duckdb_libpgquery::PGNode *node);
 
