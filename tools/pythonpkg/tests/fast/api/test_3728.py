@@ -12,4 +12,4 @@ class Test3728(object):
         cursor.execute("CREATE TABLE person (name text, current_mood mood);")
 
         # This fails with "RuntimeError: Not implemented Error: unsupported type: mood"
-        assert cursor.table("person").execute().description() == [('name', 'STRING', None, None, None, None, None), ('current_mood', 'mood', None, None, None, None, None)]
+        assert cursor.table("person").execute().description == [('name', 'STRING', None, None, None, None, None), ('current_mood', 'mood', None, None, None, None, None)]
