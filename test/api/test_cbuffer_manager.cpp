@@ -13,7 +13,7 @@ using namespace std;
 unique_ptr<DBConfig> ConfigWithCBufferManager(MyBufferManager *manager) {
 	unique_ptr<DBConfig> config = make_unique<DBConfig>();
 	CBufferManagerConfig cbuffer_manager_config = DefaultCBufferManagerConfig(manager);
-	config->SetVirtualBufferManager(make_unique<CBufferManager>(cbuffer_manager_config));
+	config->SetCustomBufferManager(make_unique<CBufferManager>(cbuffer_manager_config));
 	return config;
 }
 

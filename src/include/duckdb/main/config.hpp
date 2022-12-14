@@ -181,8 +181,8 @@ public:
 	unique_ptr<ErrorManager> error_manager;
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
-	//! The BufferManager (if provided)
-	unique_ptr<BufferManager> virtual_buffer_manager;
+	//! The (custom) BufferManager (if provided)
+	unique_ptr<BufferManager> custom_buffer_manager;
 	//! Extensions made to binder
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
 
@@ -195,7 +195,7 @@ public:
 	DUCKDB_API static idx_t GetOptionCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 
-	DUCKDB_API void SetVirtualBufferManager(unique_ptr<BufferManager> buffer_manager);
+	DUCKDB_API void SetCustomBufferManager(unique_ptr<BufferManager> buffer_manager);
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);

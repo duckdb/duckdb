@@ -2,7 +2,7 @@ add_library_unity(
   duckdb_storage_buffer_manager
   OBJECT
   buffer_manager.cpp
-  virtual_buffer_manager.cpp
+  standard_buffer_manager.cpp
   block_manager.cpp
   block_handle.cpp
   cbuffer_manager.cpp

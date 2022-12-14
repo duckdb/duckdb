@@ -73,9 +73,9 @@ DatabaseInstance::~DatabaseInstance() {
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	auto &config = DBConfig::GetConfig(db);
-	if (config.virtual_buffer_manager) {
+	if (config.custom_buffer_manager) {
 		D_ASSERT(db.GetStorageManager().buffer_manager == nullptr);
-		return *config.virtual_buffer_manager;
+		return *config.custom_buffer_manager;
 	}
 	return *db.GetStorageManager().buffer_manager;
 }
@@ -277,7 +277,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
 	}
-	config.virtual_buffer_manager = move(new_config.virtual_buffer_manager);
+	config.custom_buffer_manager = move(new_config.custom_buffer_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

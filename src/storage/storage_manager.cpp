@@ -46,7 +46,7 @@ bool StorageManager::InMemory() {
 
 void StorageManager::CreateBufferManager() {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.virtual_buffer_manager) {
+	if (!config.custom_buffer_manager) {
 		// Only create a buffer manager if a custom one wasn't provided at creation
 		buffer_manager =
 		    make_unique<StandardBufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
@@ -111,8 +111,8 @@ SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string 
 void SingleFileStorageManager::LoadDatabase() {
 	auto &config = db.config;
 	if (InMemory()) {
-		if (config.virtual_buffer_manager) {
-			block_manager = make_unique<InMemoryBlockManager>(*config.virtual_buffer_manager);
+		if (config.custom_buffer_manager) {
+			block_manager = make_unique<InMemoryBlockManager>(*config.custom_buffer_manager);
 		} else {
 			block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
 		}
