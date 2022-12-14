@@ -22,7 +22,7 @@ unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_
                                                              FileBufferType type) {
 	if (source) {
 		auto tmp = move(source);
-		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
+		D_ASSERT(tmp->AllocSize() == VirtualBufferManager::GetAllocSize(size));
 		return make_unique<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
@@ -249,8 +249,8 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
-	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
+	memcpy(replacement_buffer->Buffer(), handle->buffer->Buffer(), handle->buffer->size);
+	memset(handle->buffer->Buffer(), 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = move(replacement_buffer);
 #endif
 }

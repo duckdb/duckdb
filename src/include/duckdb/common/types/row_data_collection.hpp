@@ -20,7 +20,7 @@ public:
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		idx_t size = MaxValue<idx_t>(Storage::BLOCK_SIZE, capacity * entry_size);
 		buffer_manager.Allocate(size, false, &block);
-		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
+		D_ASSERT(VirtualBufferManager::GetAllocSize(size) == block->GetMemoryUsage());
 	}
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {
 	}
@@ -109,7 +109,8 @@ public:
 	void VerifyBlockSizes() const {
 #ifdef DEBUG
 		for (auto &block : blocks) {
-			D_ASSERT(block->block->GetMemoryUsage() == BufferManager::GetAllocSize(block->capacity * entry_size));
+			D_ASSERT(block->block->GetMemoryUsage() ==
+			         VirtualBufferManager::GetAllocSize(block->capacity * entry_size));
 		}
 #endif
 	}

@@ -17,7 +17,7 @@ CBufferManager::CBufferManager(CBufferManagerConfig config_p)
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
-	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
+	idx_t alloc_size = VirtualBufferManager::GetAllocSize(block_size);
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
