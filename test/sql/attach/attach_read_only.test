@@ -39,6 +39,8 @@ SELECT SUM(i) FROM db1.integers
 ----
 45
 
+mode skip
+
 # database is opened in read-only mode - cannot create a table
 statement error
 CREATE TABLE db1.test AS SELECT * FROM range(10) t(i);
