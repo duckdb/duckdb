@@ -336,13 +336,26 @@ struct SimilarCatalogEntry {
 		return !name.empty();
 	}
 
-	DUCKDB_API string GetQualifiedName() const;
+	DUCKDB_API string GetQualifiedName(bool qualify_catalog, bool qualify_schema) const;
 };
 
-string SimilarCatalogEntry::GetQualifiedName() const {
+string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_schema) const {
 	D_ASSERT(Found());
-
-	return schema->catalog->GetName() + "." + schema->name + "." + name;
+	string result;
+	if (qualify_catalog) {
+		result += schema->catalog->GetName();
+	}
+	if (qualify_schema) {
+		if (!result.empty()) {
+			result += ".";
+		}
+		result += schema->name;
+	}
+	if (!result.empty()) {
+		result += ".";
+	}
+	result += name;
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -417,52 +430,6 @@ string FindExtension(const string &function_name) {
 	}
 	return "";
 }
-CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
-                                                      CatalogType type,
-                                                      const unordered_set<SchemaCatalogEntry *> &schemas,
-                                                      QueryErrorContext error_context) {
-	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
-
-	unordered_set<SchemaCatalogEntry *> unseen_schemas;
-	auto databases = DatabaseManager::Get(context).GetDatabases(context);
-	for (auto database : databases) {
-		auto &catalog = database->GetCatalog();
-		auto current_schemas = catalog.GetAllSchemas(context);
-		for (auto &current_schema : current_schemas) {
-			unseen_schemas.insert(current_schema);
-		}
-	}
-	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-	auto extension_name = FindExtension(entry_name);
-	if (!extension_name.empty()) {
-		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
-		                        "Install and Load the extension, run: INSTALL %s; LOAD %s;",
-		                        entry_name, extension_name, extension_name, extension_name);
-	}
-	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
-		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
-	} else if (entry.Found()) {
-		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
-	}
-
-	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
-	                                                  entry_name, did_you_mean));
-}
-
-CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
-                                                const string &name) {
-
-	auto schema_entry = (SchemaCatalogEntry *)GetSchema(transaction, schema, true);
-	if (!schema_entry) {
-		return {nullptr, nullptr};
-	}
-	auto entry = schema_entry->GetCatalogSet(type).GetEntry(transaction, name);
-	if (!entry) {
-		return {schema_entry, nullptr};
-	}
-	return {schema_entry, entry};
-}
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
 	vector<CatalogSearchEntry> entries;
@@ -491,6 +458,96 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 		entries.emplace_back(catalog, schema);
 	}
 	return entries;
+}
+
+void FindMinimalQualification(ClientContext &context, const string &catalog_name, const string &schema_name,
+                              bool &qualify_database, bool &qualify_schema) {
+	// check if we can we qualify ONLY the schema
+	bool found = false;
+	auto entries = GetCatalogEntries(context, INVALID_CATALOG, schema_name);
+	for (auto &entry : entries) {
+		if (entry.catalog == catalog_name && entry.schema == schema_name) {
+			found = true;
+			break;
+		}
+	}
+	if (found) {
+		qualify_database = false;
+		qualify_schema = true;
+		return;
+	}
+	// check if we can qualify ONLY the catalog
+	found = false;
+	entries = GetCatalogEntries(context, catalog_name, INVALID_SCHEMA);
+	for (auto &entry : entries) {
+		if (entry.catalog == catalog_name && entry.schema == schema_name) {
+			found = true;
+			break;
+		}
+	}
+	if (found) {
+		qualify_database = true;
+		qualify_schema = false;
+		return;
+	}
+	// need to qualify both catalog and schema
+	qualify_database = true;
+	qualify_schema = true;
+}
+
+CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
+                                                      CatalogType type,
+                                                      const unordered_set<SchemaCatalogEntry *> &schemas,
+                                                      QueryErrorContext error_context) {
+	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
+
+	unordered_set<SchemaCatalogEntry *> unseen_schemas;
+	auto &db_manager = DatabaseManager::Get(context);
+	auto databases = db_manager.GetDatabases(context);
+	for (auto database : databases) {
+		auto &catalog = database->GetCatalog();
+		auto current_schemas = catalog.GetAllSchemas(context);
+		for (auto &current_schema : current_schemas) {
+			unseen_schemas.insert(current_schema);
+		}
+	}
+	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
+	auto extension_name = FindExtension(entry_name);
+	if (!extension_name.empty()) {
+		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
+		                        "Install and Load the extension, run: INSTALL %s; LOAD %s;",
+		                        entry_name, extension_name, extension_name, extension_name);
+	}
+	string did_you_mean;
+	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+		// the closest matching entry requires qualification as it is not in the default search path
+		// check how to minimally qualify this entry
+		auto catalog_name = unseen_entry.schema->catalog->GetName();
+		auto schema_name = unseen_entry.schema->name;
+		bool qualify_database;
+		bool qualify_schema;
+		FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
+		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName(qualify_database, qualify_schema) + "\"?";
+	} else if (entry.Found()) {
+		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
+	}
+
+	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
+	                                                  entry_name, did_you_mean));
+}
+
+CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
+                                                const string &name) {
+
+	auto schema_entry = (SchemaCatalogEntry *)GetSchema(transaction, schema, true);
+	if (!schema_entry) {
+		return {nullptr, nullptr};
+	}
+	auto entry = schema_entry->GetCatalogSet(type).GetEntry(transaction, name);
+	if (!entry) {
+		return {schema_entry, nullptr};
+	}
+	return {schema_entry, entry};
 }
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -599,9 +656,21 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
-	auto entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, false);
+	CatalogEntry *entry;
+	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, true);
+	if (!entry) {
+		// look in the system catalog
+		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, true);
+		if (!entry) {
+			// repeat the search to get the error
+			GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name);
+			throw InternalException("Catalog::GetType - second type lookup somehow succeeded!?");
+		}
+	}
 	auto type_entry = (TypeCatalogEntry *)entry;
-	return type_entry->catalog->GetType(context, schema, name);
+	auto result_type = type_entry->user_type;
+	LogicalType::SetCatalog(result_type, type_entry);
+	return result_type;
 }
 
 vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
@@ -649,13 +718,6 @@ vector<SchemaCatalogEntry *> Catalog::GetAllSchemas(ClientContext &context) {
 	});
 
 	return result;
-}
-
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {
-	auto user_type_catalog = GetEntry<TypeCatalogEntry>(context, schema, name);
-	auto result_type = user_type_catalog->user_type;
-	LogicalType::SetCatalog(result_type, user_type_catalog);
-	return result_type;
 }
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {

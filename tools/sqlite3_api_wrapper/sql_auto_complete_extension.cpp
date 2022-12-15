@@ -102,7 +102,7 @@ static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_tabl
 	// scan all the schemas for tables and collect them and collect them
 	// for column names we avoid adding internal entries, because it pollutes the auto-complete too much
 	// for table names this is generally fine, however
-	auto schemas = Catalog::GetSchemas(context, INVALID_CATALOG);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (!entry->internal || for_table_names) {
@@ -121,13 +121,6 @@ static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_tabl
 			             [&](CatalogEntry *entry) { result.push_back(entry); });
 		};
 	}
-
-	// check the temp schema as well
-	//	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry
-	//*entry) { 		if (!entry->internal || for_table_names) { 			result.push_back(entry);
-	//		}
-	//	});
-
 	return result;
 }
 

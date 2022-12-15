@@ -191,7 +191,6 @@ public:
 	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &schema, const string &name);
 
 	//! Fetches a logical type from the catalog
-	DUCKDB_API LogicalType GetType(ClientContext &context, const string &schema, const string &name);
 	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
 	                                      const string &name);
 

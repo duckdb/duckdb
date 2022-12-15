@@ -1,0 +1,44 @@
+# name: test/sql/attach/attach_did_you_mean.test
+# description: The error messages that suggest possible alternative mixed with ATTACH
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE hello(i INTEGER);
+
+statement ok
+CREATE TABLE db1.test(a INTEGER);
+
+statement error
+SELECT * FROM test;
+----
+Did you mean "db1.test"
+
+statement ok
+CREATE SCHEMA db1.myschema
+
+statement ok
+CREATE TABLE db1.myschema.blablabla(i INTEGER)
+
+statement error
+SELECT * FROM blablabla;
+----
+Did you mean "db1.myschema.blablabla"
+
+statement ok
+USE "db1.myschema"
+
+statement ok
+SELECT * FROM blablabla
+
+statement error
+SELECT * FROM test;
+----
+Did you mean "db1.main.test"
+
+statement ok
+SELECT * FROM db1.main.test
