@@ -19,10 +19,10 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *
 	for (auto &dependency : dependencies.set) {
 		CatalogEntry *catalog_entry;
 		if (dependency->catalog != object->catalog) {
-			throw InternalException("Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			                        "\"%s\", which does not match the catalog \"%s\"",
-			                        object->name, dependency->name, dependency->catalog->GetName(),
-			                        object->catalog->GetName());
+			throw DependencyException(
+			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
+			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
+			    object->name, dependency->name, dependency->catalog->GetName(), object->catalog->GetName());
 		}
 		if (!dependency->set) {
 			throw InternalException("Dependency has no set");

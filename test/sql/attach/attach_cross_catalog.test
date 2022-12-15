@@ -31,3 +31,19 @@ statement error
 CREATE TABLE integers(i mood)
 ----
 does not exist
+
+# casts search in the default catalog
+# this does not work
+statement error
+SELECT 'happy'::mood
+----
+does not exist
+
+# until we specify that we are using db1
+statement ok
+USE db1
+
+query I
+SELECT 'happy'::mood
+----
+happy

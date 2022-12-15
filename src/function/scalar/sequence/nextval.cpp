@@ -10,6 +10,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -75,6 +76,13 @@ struct NextSequenceValueOperator {
 	}
 };
 
+SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
+	auto qname = QualifiedName::Parse(name);
+	// fetch the sequence from the catalog
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+}
+
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
@@ -95,9 +103,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	} else {
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
-			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence = Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+			auto sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
 			auto &transaction = Transaction::Get(context, *sequence->catalog);
 			return OP::Operation(transaction, sequence);
@@ -113,8 +120,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (!seqname.IsNull()) {
-			auto qname = QualifiedName::Parse(seqname.ToString());
-			sequence = Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+			sequence = BindSequence(context, StringValue::Get(seqname));
 		}
 	}
 	return make_unique<NextvalBindData>(sequence);
