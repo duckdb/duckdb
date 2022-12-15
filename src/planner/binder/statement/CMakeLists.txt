@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_bind_statement
   OBJECT
+  bind_attach.cpp
   bind_call.cpp
   bind_copy.cpp
   bind_create.cpp

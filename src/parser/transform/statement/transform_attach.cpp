@@ -1,14 +1,15 @@
-#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/statement/attach_statement.hpp"
 
 namespace duckdb {
 
-unique_ptr<PragmaStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNode *node) {
+unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAttachStmt *>(node);
-	auto result = make_unique<PragmaStatement>();
-	result->info->name = "attach_database";
-	result->info->parameters.emplace_back(stmt->name ? stmt->name : string());
-	result->info->parameters.emplace_back(stmt->path);
+	auto result = make_unique<AttachStatement>();
+	auto info = make_unique<AttachInfo>();
+	info->name = stmt->name ? stmt->name : string();
+	info->path = stmt->path;
+	result->info = move(info);
 	return result;
 }
 

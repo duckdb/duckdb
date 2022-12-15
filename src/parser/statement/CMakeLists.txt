@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_statement
   OBJECT
   alter_statement.cpp
+  attach_statement.cpp
   call_statement.cpp
   copy_statement.cpp
   create_statement.cpp

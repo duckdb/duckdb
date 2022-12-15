@@ -87,6 +87,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExecuteStatement &)statement);
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 		return Bind((LogicalPlanStatement &)statement);
+	case StatementType::ATTACH_STATEMENT:
+		return Bind((AttachStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
