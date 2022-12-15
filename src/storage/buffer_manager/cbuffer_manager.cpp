@@ -88,6 +88,10 @@ void CBufferManager::PurgeQueue() {
 	// no op
 }
 
+void CBufferManager::DeleteTemporaryFile(block_id_t block_id) {
+	// no op
+}
+
 //===--------------------------------------------------------------------===//
 // Buffer Allocator
 //===--------------------------------------------------------------------===//

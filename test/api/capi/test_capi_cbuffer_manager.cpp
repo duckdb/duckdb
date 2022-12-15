@@ -33,6 +33,12 @@ TEST_CASE("Test C API CBufferManager", "[capi]") {
 	}
 
 	duckdb_result result;
+	// Set to single threaded because the dummy buffer manager does not support multi threaded operations
+	if (duckdb_query(connection, "pragma threads=1", &result) != DuckDBSuccess) {
+		REQUIRE(1 == 0);
+	}
+	duckdb_destroy_result(&result);
+
 	// run queries...
 	if (duckdb_query(connection, "create table tbl as select * from range(1000000)", &result) != DuckDBSuccess) {
 		REQUIRE(1 == 0);
