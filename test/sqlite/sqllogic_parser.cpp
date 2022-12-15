@@ -9,7 +9,7 @@ bool SQLLogicParser::OpenFile(const string &path) {
 	this->file_name = path;
 
 	std::ifstream infile(file_name);
-	if (infile.bad()) {
+	if (infile.bad() || infile.fail()) {
 		return false;
 	}
 

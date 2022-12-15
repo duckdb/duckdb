@@ -49,15 +49,16 @@ export class QueryResult {
 }
 
 export class Database {
-  constructor(path: string, accessMode?: number, callback?: Callback<any>);
+  constructor(path: string, accessMode?: number | Record<string,string>, callback?: Callback<any>);
+  constructor(path: string, callback?: Callback<any>);
 
-  close(callback: Callback<void>): void;
+  close(callback?: Callback<void>): void;
 
   connect(): Connection;
 
-  all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
-  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
-  each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
+  all(sql: string, ...args: [...any, Callback<TableData>] | []): this;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<QueryResult>] | []): void;
+  each(sql: string, ...args: [...any, Callback<RowData>] | []): this;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
   prepare(sql: string, ...args: [...any, Callback<Statement>] | []): Statement;
@@ -71,21 +72,36 @@ export class Database {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
-  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): Promise<QueryResult>;
+
+  serialize(done?: Callback<void>): void;
+  parallelize(done?: Callback<void>): void;
+  wait(done: Callback<void>): void;
+
+  get(columnName: string, cb: Callback<RowData>): void;
+  get(columnName: string, num: number, cb: Callback<RowData>): void;
+
+  interrupt(): void;
+
+  register_buffer(name: string, array: ArrayLike<any>, force: boolean, callback?: Callback<void>): void;
+
+  unregister_buffer(name: string, callback?: Callback<void>): void;
 }
 
 export class Statement {
-  constructor();
+  sql: string;
 
-  all(...args: [...any, Callback<TableData>] | []): void;
+  constructor(connection: Connection, sql: string);
 
-  arrowIPCAll(...args: [...any, Callback<TableData>] | []): void;
+  all(...args: [...any, Callback<TableData>] | any[]): this;
 
-  each(...args: [...any, Callback<RowData>] | []): void;
+  arrowIPCAll(...args: [...any, Callback<TableData>] | any[]): void;
+
+  each(...args: [...any, Callback<RowData>] | any[]): this;
 
   finalize(callback?: Callback<void>): void;
 
-  run(...args: [...any, Callback<void>] | []): Statement;
+  run(...args: [...any, Callback<void>] | any[]): Statement;
 }
 
 export const ERROR: number;
@@ -101,3 +117,5 @@ export const OPEN_READONLY: number;
 export const OPEN_READWRITE: number;
 
 export const OPEN_SHAREDCACHE: number;
+
+export const INTERRUPT: number;
