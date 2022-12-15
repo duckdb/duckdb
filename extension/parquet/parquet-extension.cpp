@@ -374,6 +374,7 @@ public:
 
 		for (auto &reader : result->union_readers) {
 			reader->have_init_schema = true;
+			reader->union_types = union_col_types;
 			auto &col_names = reader->names;
 			vector<bool> is_null_cols(union_col_names.size(), true);
 
@@ -384,9 +385,9 @@ public:
 			}
 			for (idx_t col = 0; col < union_col_names.size(); ++col) {
 				if (is_null_cols[col]) {
-					reader->union_cols.push_back(false);
+					reader->is_union_cols.push_back(false);
 				}else {
-					reader->union_cols.push_back(true);
+					reader->is_union_cols.push_back(true);
 				}
 			}
 		}

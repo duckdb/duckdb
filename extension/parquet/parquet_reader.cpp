@@ -366,10 +366,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 			root_struct_reader.child_readers[column_idx] = move(cast_reader);
 		}
 	}else if(have_init_schema){
-		vector<unique_ptr<ColumnReader>> union_child_readers(union_cols.size());
-		for(idx_t col = 0 ; col < union_cols.size(); ++col){
-			if(union_cols[col]){
-				union_child_readers[col] = move(root_struct_reader.child_readers[union_column_map[col]]);
+		vector<unique_ptr<ColumnReader>> union_child_readers(is_union_cols.size());
+		for(idx_t col = 0 ; col < is_union_cols.size(); ++col){
+			if(is_union_cols[col]){
+				auto child_reader = move(root_struct_reader.child_readers[union_column_map[col]]);
+				auto union_reader = make_unique<CastColumnReader>(move(child_reader), union_types[col]);
+				union_child_readers[col] = move(union_reader);
 			} else {
 				auto null_reader = make_unique<GeneratedNullColumnReader>(*this, LogicalTypeId::SQLNULL, SchemaElement(), next_file_idx, 0, 0);
 				union_child_readers[col] = move(null_reader);
