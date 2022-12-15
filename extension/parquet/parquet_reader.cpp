@@ -5,6 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "generated_column_reader.hpp"
+#include "generated_null_column_reader.hpp"
 #include "row_number_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
@@ -370,8 +371,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 			if(union_cols[col]){
 				union_child_readers[col] = move(root_struct_reader.child_readers[union_column_map[col]]);
 			} else {
-				Value val = Value(999);
-				auto null_reader = make_unique<GeneratedConstantColumnReader>(*this, LogicalType::INTEGER, SchemaElement(), next_file_idx, 0, 0, val);
+				auto null_reader = make_unique<GeneratedNullColumnReader>(*this, LogicalTypeId::SQLNULL, SchemaElement(), next_file_idx, 0, 0);
 				union_child_readers[col] = move(null_reader);
 			}
 		}

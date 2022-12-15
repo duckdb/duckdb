@@ -117,8 +117,8 @@ public:
 	unordered_map<column_t, column_t> union_column_map;
 	//! some parquet files may not have all union cols
 	vector<bool> union_cols;
-	//! Sinced We will call ParquetReader::CreateReader multiple times, When we have all union names 
-	//! remap the child_readers 
+	//! Since We will call ParquetReader::CreateReader multiple times, When we have all union names 
+	//! remap the child_readers. 
 	bool have_init_schema;
 	//! Last idx before the generated cols. 
 	idx_t last_parquet_col;
