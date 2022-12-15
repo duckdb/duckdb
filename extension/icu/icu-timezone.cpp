@@ -149,13 +149,42 @@ struct ICUToLocalTimestamp : public ICUDateFunc {
 
 struct ICULocalTimestampFunc : public ICUDateFunc {
 
+	struct BindDataNow : public BindData {
+		explicit BindDataNow(ClientContext &context) : BindData(context) {
+			now = context.ActiveTransaction().start_timestamp;
+		}
+
+		BindDataNow(const BindDataNow &other) : BindData(other), now(other.now) {
+		}
+
+		bool Equals(const FunctionData &other_p) const override {
+			auto &other = (const BindDataNow &)other_p;
+			if (now != other.now) {
+				return false;
+			}
+
+			return BindData::Equals(other_p);
+		}
+
+		unique_ptr<FunctionData> Copy() const override {
+			return make_unique<BindDataNow>(*this);
+		}
+
+		timestamp_t now;
+	};
+
+	static unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
+	                                        vector<unique_ptr<Expression>> &arguments) {
+		return make_unique<BindDataNow>(context);
+	}
+
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = (BindDataNow &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		const auto now = state.GetContext().ActiveTransaction().start_timestamp;
+		const auto now = info.now;
 		return ICUToLocalTimestamp::Operation(calendar, now);
 	}
 
@@ -168,7 +197,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 	static void AddFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, Bind));
+		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -188,7 +217,7 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 
 	static void AddFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, Bind));
+		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
