@@ -32,8 +32,15 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
 	for (auto &entry : info->options) {
-		if (entry.first == "readonly") {
+		if (entry.first == "readonly" || entry.first == "read_only") {
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (read_only) {
+				access_mode = AccessMode::READ_ONLY;
+			} else {
+				access_mode = AccessMode::READ_WRITE;
+			}
+		} else if (entry.first == "read_write" || entry.first == "read_write") {
+			auto read_only = !BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {

@@ -20,8 +20,9 @@ class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
 
-enum class BuiltInDatabaseType {
-	NOT_BUILT_IN,
+enum class AttachedDatabaseType {
+	READ_WRITE_DATABASE,
+	READ_ONLY_DATABASE,
 	SYSTEM_DATABASE,
 	TEMP_DATABASE,
 };
@@ -30,7 +31,7 @@ enum class BuiltInDatabaseType {
 class AttachedDatabase : public CatalogEntry {
 public:
 	//! Create the built-in system attached database (without storage)
-	explicit AttachedDatabase(DatabaseInstance &db, BuiltInDatabaseType type = BuiltInDatabaseType::SYSTEM_DATABASE);
+	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
 	~AttachedDatabase();
@@ -48,6 +49,7 @@ public:
 	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
+	bool IsReadOnly() const;
 
 	static string ExtractDatabaseName(const string &dbpath);
 
@@ -56,7 +58,7 @@ private:
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
-	BuiltInDatabaseType type;
+	AttachedDatabaseType type;
 };
 
 } // namespace duckdb

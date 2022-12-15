@@ -16,7 +16,12 @@ unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNo
 		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
-			auto val = TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value;
+			Value val;
+			if (def_elem->arg) {
+				val = TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value;
+			} else {
+				val = Value::BOOLEAN(true);
+			}
 			info->options[StringUtil::Lower(def_elem->defname)] = move(val);
 		}
 	}

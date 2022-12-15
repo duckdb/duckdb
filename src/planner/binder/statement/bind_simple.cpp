@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (entry) {
 		if (!entry->temporary) {
 			// we can only alter temporary tables/views in read-only mode
-			properties.read_only = false;
+			properties.modified_databases.insert(entry->catalog->GetName());
 		}
 		stmt.info->catalog = entry->catalog->GetName();
 		stmt.info->schema = ((StandardEntry *)entry)->schema->name;

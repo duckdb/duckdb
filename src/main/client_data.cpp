@@ -15,7 +15,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_unique
 	auto &db = DatabaseInstance::GetDatabase(context);
 	profiler = make_shared<QueryProfiler>(context);
 	query_profiler_history = make_unique<QueryProfilerHistory>();
-	temporary_objects = make_shared<AttachedDatabase>(db, BuiltInDatabaseType::TEMP_DATABASE);
+	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
 	random_engine = make_unique<RandomEngine>();
 	file_opener = make_unique<ClientContextFileOpener>(context);
 	temporary_objects->Initialize();

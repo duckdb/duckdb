@@ -18,7 +18,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	case CatalogType::SCHEMA_ENTRY:
 		// dropping a schema is never read-only because there are no temporary schemas
-		properties.read_only = false;
+		properties.modified_databases.insert(stmt.info->catalog);
 		break;
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
@@ -33,18 +33,17 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (!entry) {
 			break;
 		}
+		stmt.info->catalog = entry->catalog->GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary tables in read-only mode
-			properties.read_only = false;
+			properties.modified_databases.insert(stmt.info->catalog);
 		}
-		stmt.info->catalog = entry->catalog->GetName();
 		stmt.info->schema = entry->schema->name;
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY:
 		// attaching and detaching is read-only
 		stmt.info->catalog = SYSTEM_CATALOG;
-		properties.read_only = true;
 		break;
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");

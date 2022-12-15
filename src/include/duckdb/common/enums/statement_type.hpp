@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -59,12 +60,12 @@ string StatementReturnTypeToString(StatementReturnType type);
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : read_only(true), requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
+	    : requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0) {
 	}
 
-	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
-	bool read_only;
+	//! The set of databases this statement will modify
+	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of
 	bool requires_valid_transaction;
@@ -76,6 +77,10 @@ struct StatementProperties {
 	StatementReturnType return_type;
 	//! The number of prepared statement parameters
 	idx_t parameter_count;
+
+	bool IsReadOnly() {
+		return modified_databases.empty();
+	}
 };
 
 } // namespace duckdb

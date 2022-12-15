@@ -5,12 +5,12 @@
 
 namespace duckdb {
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, BuiltInDatabaseType type)
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, nullptr,
-                   type == BuiltInDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG),
+                   type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG),
       db(db), type(type) {
-	D_ASSERT(type == BuiltInDatabaseType::TEMP_DATABASE || type == BuiltInDatabaseType::SYSTEM_DATABASE);
-	if (type == BuiltInDatabaseType::TEMP_DATABASE) {
+	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
+	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		storage = make_unique<SingleFileStorageManager>(*this, ":memory:", false);
 	}
 	catalog = make_unique<Catalog>(*this);
@@ -21,7 +21,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, BuiltInDatabaseType typ
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path,
                                    AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, move(name_p)), db(db),
-      type(BuiltInDatabaseType::NOT_BUILT_IN) {
+      type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+                                                : AttachedDatabaseType::READ_WRITE_DATABASE) {
 	storage = make_unique<SingleFileStorageManager>(*this, file_path, access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
@@ -51,12 +52,15 @@ AttachedDatabase::~AttachedDatabase() {
 }
 
 bool AttachedDatabase::IsSystem() const {
-	D_ASSERT(!storage || type != BuiltInDatabaseType::SYSTEM_DATABASE);
-	return type == BuiltInDatabaseType::SYSTEM_DATABASE;
+	D_ASSERT(!storage || type != AttachedDatabaseType::SYSTEM_DATABASE);
+	return type == AttachedDatabaseType::SYSTEM_DATABASE;
 }
 
 bool AttachedDatabase::IsTemporary() const {
-	return type == BuiltInDatabaseType::TEMP_DATABASE;
+	return type == AttachedDatabaseType::TEMP_DATABASE;
+}
+bool AttachedDatabase::IsReadOnly() const {
+	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {

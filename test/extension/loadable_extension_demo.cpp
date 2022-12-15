@@ -205,7 +205,6 @@ public:
 		ParserExtensionPlanResult result;
 		result.function = QuackFunction();
 		result.parameters.push_back(Value::BIGINT(quack_data.number_of_quacks));
-		result.read_only = true;
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;

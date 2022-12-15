@@ -62,8 +62,8 @@ struct ParserExtensionPlanResult {
 	TableFunction function;
 	//! Parameters to the function
 	vector<Value> parameters;
-	//! Whether or not the statement is read_only (i.e. can be executed in a read_only database)
-	bool read_only = false;
+	//! The set of databases that will be modified by this statement (empty for a read-only statement)
+	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns

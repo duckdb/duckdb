@@ -28,7 +28,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
 	// Add CTEs as bindable
