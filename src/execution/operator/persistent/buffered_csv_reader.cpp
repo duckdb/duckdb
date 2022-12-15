@@ -434,8 +434,13 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
-
-					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
+					idx_t num_buffers = 0;
+					bool parsing_success = true;
+					while (num_buffers < options.sample_chunks && !end_of_file_reached) {
+						parsing_success = parsing_success && TryParseCSV(ParserMode::SNIFFING_DIALECT);
+						num_buffers++;
+					}
+					if (!parsing_success) {
 						continue;
 					}
 
