@@ -110,6 +110,19 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 
+	//! when reading multiple parquet files (with union by name option)
+	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
+	//! cols, those files might have cols at different positions and with different LogicType.
+	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
+	unordered_map<column_t, column_t> union_column_map;
+	//! some parquet files may not have all union cols
+	vector<bool> union_cols;
+	//! Sinced We will call ParquetReader::CreateReader multiple times, When we have all union names 
+	//! remap the child_readers 
+	bool have_init_schema;
+	//! Last idx before the generated cols. 
+	idx_t last_parquet_col;
+
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
 	                    TableFilterSet *table_filters);

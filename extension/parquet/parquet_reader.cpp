@@ -355,15 +355,29 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 
 	auto &root_struct_reader = (StructColumnReader &)*ret;
 
-	// add casts if required
-	for (auto &entry : cast_map) {
-		auto column_idx = entry.first;
-		auto &expected_type = entry.second;
-		auto child_reader = move(root_struct_reader.child_readers[column_idx]);
-		auto cast_reader = make_unique<CastColumnReader>(move(child_reader), expected_type);
-		root_struct_reader.child_readers[column_idx] = move(cast_reader);
+	if(!parquet_options.union_by_name){
+		// add casts if required
+		for (auto &entry : cast_map) {
+			auto column_idx = entry.first;
+			auto &expected_type = entry.second;
+			auto child_reader = move(root_struct_reader.child_readers[column_idx]);
+			auto cast_reader = make_unique<CastColumnReader>(move(child_reader), expected_type);
+			root_struct_reader.child_readers[column_idx] = move(cast_reader);
+		}
+	}else if(have_init_schema){
+		vector<unique_ptr<ColumnReader>> union_child_readers(union_cols.size());
+		for(idx_t col = 0 ; col < union_cols.size(); ++col){
+			if(union_cols[col]){
+				union_child_readers[col] = move(root_struct_reader.child_readers[union_column_map[col]]);
+			} else {
+				Value val = Value(999);
+				auto null_reader = make_unique<GeneratedConstantColumnReader>(*this, LogicalType::INTEGER, SchemaElement(), next_file_idx, 0, 0, val);
+				union_child_readers[col] = move(null_reader);
+			}
+		}
+		root_struct_reader.child_readers = move(union_child_readers);
 	}
-
+	
 	if (parquet_options.filename) {
 		Value val = Value(file_name);
 		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
@@ -401,6 +415,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		throw FormatException("Need at least one non-root column in the file");
 	}
 
+	have_init_schema = false;
 	bool has_expected_names = !expected_names.empty();
 	bool has_expected_types = !expected_types.empty();
 	auto root_reader = CreateReader(file_meta_data);
@@ -412,6 +427,8 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		names.push_back(type_pair.first);
 		return_types.push_back(type_pair.second);
 	}
+
+	last_parquet_col = names.size() - 1;
 
 	// Add generated constant column for filename
 	if (parquet_options.filename) {
