@@ -108,5 +108,5 @@ class TestMap(object):
         df = pd.DataFrame({'date': pd.Series([date(2000,1,1), date(2000,1,2)], dtype="datetime64[us]"), 'days_to_add': [1,2]})
         rel = duckdb.from_df(df)
         rel = process(rel)
-        x = rel.execute().fetchdf()
+        x = rel.fetchdf()
         assert x['days_to_add'].to_numpy()[0] == 1

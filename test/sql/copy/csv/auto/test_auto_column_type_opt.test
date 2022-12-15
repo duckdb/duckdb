@@ -1,0 +1,65 @@
+# name: test/sql/copy/csv/auto/test_auto_column_type_opt.test
+# description: Test read_csv_auto with column_types option
+# group: [auto]
+
+# Test read_csv wout auto_detect throws
+statement error
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'INTEGER'))
+
+# Test non-struct throws
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=1)
+
+# Test empty throws
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK())
+
+# Test funky type throws
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(a := 'BLA'))
+
+# Test funky name throws
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(bla := 'INTEGER'))
+
+# Test wrong type throws
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column3 := 'INTEGER'))
+
+# Test 1st column defined
+query I
+SELECT typeof(#1) from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column0 := 'DOUBLE')) LIMIT 1
+----
+DOUBLE
+
+query I
+SELECT typeof(#1) from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column0 := 'INTEGER')) LIMIT 1
+----
+INTEGER
+
+# Test 3rd column defined
+
+query I
+SELECT typeof(#3) from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK( column2 := 'HUGEINT')) LIMIT 1
+----
+HUGEINT
+
+# Test 1st and 3rd column defined
+
+query II
+SELECT typeof(#1),typeof(#3) from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column0 := 'BIGINT', column2 := 'HUGEINT')) LIMIT 1
+----
+BIGINT	HUGEINT
+
+query IIII
+SELECT * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(column0 := 'BIGINT', column2 := 'HUGEINT'))
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9

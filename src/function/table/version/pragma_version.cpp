@@ -44,6 +44,10 @@ void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(pragma_version);
 }
 
+idx_t DuckDB::StandardVectorSize() {
+	return STANDARD_VECTOR_SIZE;
+}
+
 const char *DuckDB::SourceID() {
 	return DUCKDB_SOURCE_ID;
 }

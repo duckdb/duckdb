@@ -1,9 +1,7 @@
-var sqlite3 = require('..');
-var assert = require('assert');
-var helper = require('./support/helper');
+import * as sqlite3 from '..';
 
 describe('can query parquet', function() {
-    var db;
+    var db: sqlite3.Database;
 
     before(function(done) {
         db = new sqlite3.Database(':memory:', done);

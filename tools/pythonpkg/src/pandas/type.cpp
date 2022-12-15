@@ -6,6 +6,16 @@
 
 namespace duckdb {
 
+static bool IsDateTime(const string &col_type_str) {
+	if (StringUtil::StartsWith(col_type_str, "datetime64[ns")) {
+		return true;
+	}
+	if (col_type_str == "<M8[ns]") {
+		return true;
+	}
+	return false;
+}
+
 PandasType ConvertPandasType(const py::object &col_type) {
 	auto col_type_str = string(py::str(col_type));
 
@@ -36,7 +46,7 @@ PandasType ConvertPandasType(const py::object &col_type) {
 		return PandasType::OBJECT;
 	} else if (col_type_str == "timedelta64[ns]") {
 		return PandasType::TIMEDELTA;
-	} else if (StringUtil::StartsWith(col_type_str, "datetime64[ns") || col_type_str == "<M8[ns]") {
+	} else if (IsDateTime(col_type_str)) {
 		if (hasattr(col_type, "tz")) {
 			// The datetime has timezone information.
 			return PandasType::DATETIME_TZ;
