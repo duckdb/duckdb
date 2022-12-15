@@ -464,6 +464,35 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 	return {schema_entry, entry};
 }
 
+vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
+	vector<CatalogSearchEntry> entries;
+	auto &search_path = *context.client_data->catalog_search_path;
+	if (catalog == INVALID_CATALOG && schema == INVALID_SCHEMA) {
+		// no catalog or schema provided - scan the entire search path
+		entries = search_path.Get();
+	} else if (catalog == INVALID_CATALOG) {
+		auto catalogs = search_path.GetCatalogsForSchema(schema);
+		for (auto &catalog_name : catalogs) {
+			entries.emplace_back(catalog_name, schema);
+		}
+		if (entries.empty()) {
+			entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
+		}
+	} else if (schema == INVALID_SCHEMA) {
+		auto schemas = search_path.GetSchemasForCatalog(catalog);
+		for (auto &schema_name : schemas) {
+			entries.emplace_back(catalog, schema_name);
+		}
+		if (entries.empty()) {
+			entries.emplace_back(catalog, DEFAULT_SCHEMA);
+		}
+	} else {
+		// specific catalog and schema provided
+		entries.emplace_back(catalog, schema);
+	}
+	return entries;
+}
+
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
 	unordered_set<SchemaCatalogEntry *> schemas;
@@ -473,8 +502,9 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		if (catalog_name == DatabaseManager::Get(context).GetDefaultDatabase()) {
 			catalog_name = INVALID_CATALOG;
 		}
-		const auto schema_names = ClientData::Get(context).catalog_search_path->GetSchemasForCatalog(catalog_name);
-		for (auto &candidate_schema : schema_names) {
+		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
+		for (auto &entry : entries) {
+			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
 			auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
 			if (result.Found()) {
@@ -535,35 +565,6 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, co
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
 	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry;
-}
-
-vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
-	vector<CatalogSearchEntry> entries;
-	auto &search_path = *context.client_data->catalog_search_path;
-	if (catalog == INVALID_CATALOG && schema == INVALID_SCHEMA) {
-		// no catalog or schema provided - scan the entire search path
-		entries = search_path.Get();
-	} else if (catalog == INVALID_CATALOG) {
-		auto catalogs = search_path.GetCatalogsForSchema(schema);
-		for (auto &catalog_name : catalogs) {
-			entries.emplace_back(catalog_name, schema);
-		}
-		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
-		}
-	} else if (schema == INVALID_SCHEMA) {
-		auto schemas = search_path.GetSchemasForCatalog(catalog);
-		for (auto &schema_name : schemas) {
-			entries.emplace_back(catalog, schema_name);
-		}
-		if (entries.empty()) {
-			entries.emplace_back(catalog, DEFAULT_SCHEMA);
-		}
-	} else {
-		// specific catalog and schema provided
-		entries.emplace_back(catalog, schema);
-	}
-	return entries;
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,

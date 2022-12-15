@@ -14,7 +14,7 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	}
 	// FIXME: We can also implement 'hello'::schema.custom_type; and pass by the schema down here.
 	// Right now just considering its DEFAULT_SCHEMA always
-	Binder::BindLogicalType(context, expr.cast_type, DEFAULT_SCHEMA);
+	Binder::BindLogicalType(context, expr.cast_type, INVALID_CATALOG, INVALID_SCHEMA);
 	// the children have been successfully resolved
 	auto &child = (BoundExpression &)*expr.child;
 	if (expr.try_cast) {

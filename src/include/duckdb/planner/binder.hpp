@@ -153,7 +153,8 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
-	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema = "");
+	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,
+	                            const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,

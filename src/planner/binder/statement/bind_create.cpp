@@ -161,17 +161,17 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST) {
 		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(context, child_type, schema);
+		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
 		type = LogicalType::LIST(child_type);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			BindLogicalType(context, child_type.second, schema);
+			BindLogicalType(context, child_type.second, catalog, schema);
 		}
 		// Generate new Struct/Map Type
 		auto alias = type.GetAlias();
@@ -184,18 +184,17 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
-			BindLogicalType(context, member_type.second, schema);
+			BindLogicalType(context, member_type.second, catalog, schema);
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
-		type = Catalog::GetType(context, INVALID_CATALOG, schema, UserType::GetTypeName(type));
+		type = Catalog::GetType(context, catalog, schema, UserType::GetTypeName(type));
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
-		auto enum_type_catalog =
-		    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);
+		auto enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, catalog, schema, enum_type_name, true);
 		LogicalType::SetCatalog(type, enum_type_catalog);
 	}
 }

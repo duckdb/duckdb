@@ -2048,7 +2048,7 @@ typedef struct PGCreateTypeStmt
 {
 	PGNodeTag		type;
 	PGNewTypeKind	kind;
-	PGList	   *typeName;		/* qualified name (list of Value strings) */
+	PGRangeVar	   *typeName;	/* qualified name (list of Value strings) */
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
