@@ -63,11 +63,17 @@ AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, c
 	return nullptr;
 }
 
-const string &DatabaseManager::GetDefaultDatabase() {
-	if (default_database.empty()) {
-		throw InternalException("GetDefaultDatabase called but there are no databases");
+const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+	auto &config = ClientData::Get(context);
+	auto &default_entry = config.catalog_search_path->GetDefault();
+	if (default_entry.catalog == INVALID_CATALOG) {
+		auto &result = DatabaseManager::Get(context).default_database;
+		if (result.empty()) {
+			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
+		}
+		return result;
 	}
-	return default_database;
+	return default_entry.catalog;
 }
 
 vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {

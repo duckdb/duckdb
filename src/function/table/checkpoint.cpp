@@ -33,7 +33,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	if (input.inputs.size() > 0) {
 		db = db_manager.GetDatabase(context, StringValue::Get(input.inputs[0]));
 	} else {
-		db = db_manager.GetDatabase(context, db_manager.GetDefaultDatabase());
+		db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
 	}
 	return make_unique<CheckpointBindData>(db);
 }

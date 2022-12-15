@@ -95,8 +95,8 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 	if (catalog_name == SYSTEM_CATALOG) {
 		return GetSystemCatalog(context);
 	}
-	auto entry = db_manager.GetDatabase(context, catalog_name == INVALID_CATALOG ? db_manager.GetDefaultDatabase()
-	                                                                             : catalog_name);
+	auto entry = db_manager.GetDatabase(
+	    context, catalog_name == INVALID_CATALOG ? DatabaseManager::GetDefaultDatabase(context) : catalog_name);
 	if (!entry) {
 		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
 	}
@@ -443,7 +443,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 			entries.emplace_back(catalog_name, schema);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::Get(context).GetDefaultDatabase(), schema);
+			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 		}
 	} else if (schema == INVALID_SCHEMA) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
@@ -556,7 +556,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	if (schema == INVALID_SCHEMA) {
 		// try all schemas for this catalog
 		auto catalog_name = GetName();
-		if (catalog_name == DatabaseManager::Get(context).GetDefaultDatabase()) {
+		if (catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
 			catalog_name = INVALID_CATALOG;
 		}
 		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);

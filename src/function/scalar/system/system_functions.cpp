@@ -46,7 +46,7 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
-	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::Get(context).GetDefaultDatabase());
+	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
 	auto &transaction = Transaction::Get(context, catalog);
 	auto val = Value::BIGINT(transaction.start_time);
 	result.Reference(val);

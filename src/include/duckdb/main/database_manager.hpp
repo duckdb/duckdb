@@ -40,8 +40,7 @@ public:
 	void DetachDatabase(ClientContext &context, const string &name, bool if_exists);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
-	// FIXME: default database should be client-specific and not live here
-	const string &GetDefaultDatabase();
+	static const string &GetDefaultDatabase(ClientContext &context);
 
 	AttachedDatabase *GetDatabaseFromPath(ClientContext &context, const string &path);
 	vector<AttachedDatabase *> GetDatabases(ClientContext &context);
