@@ -23,9 +23,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		db_instance = db_instances[abs_database_path].lock();
 		if (db_instance) {
 			if (db_instance->instance->config != config) {
-				throw duckdb::Exception(ExceptionType::CONNECTION,
-				                        "Can't open a connection to same database file with a different configuration "
-				                        "than existing connections");
+				throw duckdb::ConnectionException(
+				    "Can't open a connection to same database file with a different configuration "
+				    "than existing connections");
 			}
 		} else {
 			// clean-up
