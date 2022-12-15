@@ -181,6 +181,8 @@ jobs:
     name: node.js Windows
     runs-on: windows-latest
     needs: linux-nodejs
+    env:
+      npm_config_msvs_version: 2019
 
     strategy:
       matrix:
@@ -226,7 +228,6 @@ jobs:
         shell: bash
         run: |
           choco install python visualstudio2019-workload-vctools -y
-          npm config set msvs_version 2019
 
       - name: Node Version
         shell: bash
