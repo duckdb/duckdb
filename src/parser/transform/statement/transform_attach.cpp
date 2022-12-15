@@ -1,5 +1,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -9,6 +11,15 @@ unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNo
 	auto info = make_unique<AttachInfo>();
 	info->name = stmt->name ? stmt->name : string();
 	info->path = stmt->path;
+
+	if (stmt->options) {
+		duckdb_libpgquery::PGListCell *cell = nullptr;
+		for_each_cell(cell, stmt->options->head) {
+			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
+			auto val = TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value;
+			info->options[StringUtil::Lower(def_elem->defname)] = move(val);
+		}
+	}
 	result->info = move(info);
 	return result;
 }

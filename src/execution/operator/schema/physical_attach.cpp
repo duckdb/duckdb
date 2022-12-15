@@ -23,11 +23,27 @@ unique_ptr<GlobalSourceState> PhysicalAttach::GetGlobalSourceState(ClientContext
 }
 
 void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                            LocalSourceState &lstate) const {
+                             LocalSourceState &lstate) const {
 	auto &state = (AttachSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}
+	// parse the options
+	auto &config = DBConfig::GetConfig(context.client);
+	AccessMode access_mode = config.options.access_mode;
+	for (auto &entry : info->options) {
+		if (entry.first == "readonly") {
+			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (read_only) {
+				access_mode = AccessMode::READ_ONLY;
+			} else {
+				access_mode = AccessMode::READ_WRITE;
+			}
+		} else {
+			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
+		}
+	}
+	// attach the database
 	auto name = info->name;
 	auto path = info->path;
 	auto &db = DatabaseInstance::GetDatabase(context.client);
@@ -39,8 +55,7 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	if (existing_db) {
 		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
 	}
-	auto new_db =
-	    make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(context.client), name, path, AccessMode::READ_WRITE);
+	auto new_db = make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(context.client), name, path, access_mode);
 	new_db->Initialize();
 
 	db_manager.AddDatabase(context.client, move(new_db));

@@ -2064,6 +2064,7 @@ typedef struct PGAttachStmt
 	PGNodeTag		type;
 	char *path;			/* The file path of the to-be-attached database */
 	char *name;			/* The name of the attached database */
+	PGList *options;      /* PGList of PGDefElem nodes */
     PGNode *query;
 } PGAttachStmt;
 

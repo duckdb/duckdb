@@ -24,7 +24,7 @@ struct AttachInfo : public ParseInfo {
 	//! The path to the attached database
 	string path;
 	//! Set of (key, value) options
-	unordered_map<string, vector<Value>> options;
+	unordered_map<string, Value> options;
 
 public:
 	unique_ptr<AttachInfo> Copy() const {

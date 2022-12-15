@@ -4,11 +4,12 @@
  *
  *****************************************************************************/
 AttachStmt:
-				ATTACH opt_database Sconst opt_database_alias
+				ATTACH opt_database Sconst opt_database_alias copy_options
 				{
 					PGAttachStmt *n = makeNode(PGAttachStmt);
 					n->path = $3;
 					n->name = $4;
+					n->options = $5;
 					$$ = (PGNode *)n;
 				}
 		;
