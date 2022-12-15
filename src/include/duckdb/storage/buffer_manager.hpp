@@ -43,7 +43,7 @@ public:
 	virtual DUCKDB_API void FreeReservedMemory(idx_t size);
 	virtual void SetLimit(idx_t limit = (idx_t)-1);
 	virtual const string &GetTemporaryDirectory();
-	virtual void SetTemporaryDirectory(string new_dir);
+	virtual void SetTemporaryDirectory(const string &new_dir);
 	virtual DatabaseInstance &GetDatabase();
 	virtual bool HasTemporaryDirectory() const;
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,

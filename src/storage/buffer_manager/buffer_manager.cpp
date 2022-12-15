@@ -28,7 +28,7 @@ const string &BufferManager::GetTemporaryDirectory() {
 	throw InternalException("CBufferManager does not allow a temporary directory");
 }
 
-void BufferManager::SetTemporaryDirectory(string new_dir) {
+void BufferManager::SetTemporaryDirectory(const string &new_dir) {
 	throw NotImplementedException("This type of BufferManager can not set a temporary directory");
 }
 

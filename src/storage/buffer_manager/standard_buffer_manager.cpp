@@ -85,11 +85,11 @@ private:
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 
-void StandardBufferManager::SetTemporaryDirectory(string new_dir) {
+void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 	if (temp_directory_handle) {
 		throw NotImplementedException("Cannot switch temporary directory after the current one has been used");
 	}
-	this->temp_directory = move(new_dir);
+	this->temp_directory = new_dir;
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)

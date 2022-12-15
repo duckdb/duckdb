@@ -67,7 +67,7 @@ public:
 		return temp_directory;
 	}
 
-	void SetTemporaryDirectory(string new_dir) final override;
+	void SetTemporaryDirectory(const string &new_dir) final override;
 
 	DUCKDB_API Allocator &GetBufferAllocator() final override;
 
