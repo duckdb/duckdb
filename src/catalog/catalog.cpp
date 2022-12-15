@@ -28,12 +28,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_functions.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include <algorithm>
 

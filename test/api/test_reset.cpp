@@ -151,7 +151,8 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			continue;
 		}
 		// Set the new option
-		op->set_global(db.instance.get(), config, value_pair.input);
+		auto input = value_pair.input.DefaultCastAs(op->parameter_type);
+		op->set_global(db.instance.get(), config, input);
 
 		// Get the value of the option again
 		auto changed_value = op->get_setting(*con.context);
