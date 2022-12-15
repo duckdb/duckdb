@@ -145,9 +145,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		res_aggregates.push_back(expr->Copy());
 	}
 
-	std::cout << "aggregates = " << aggregates << std::endl;
-	std::cout << "groups.size() = " << groups.size() << std::endl;
-
 	int aggr_idx = 0; // has to be int for - reasons
 	auto aggr_names = aggregates.names();
 
@@ -166,15 +163,11 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		return make_external<RelationWrapper>("duckdb_relation", lim);
 	}
 	return make_external<RelationWrapper>("duckdb_relation", res);
-
-
-	
 }
 
 [[cpp11::register]] SEXP rapi_rel_order(duckdb::rel_extptr_t rel, list orders) {
 	vector<OrderByNode> res_orders;
 
-	std::cout << "IN RAPI rel Order" << std::endl;
 	for (expr_extptr_t expr : orders) {
 		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
 	}
@@ -212,7 +205,6 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	D_ASSERT(res->type == QueryResultType::MATERIALIZED_RESULT);
 	auto mat_res = (MaterializedQueryResult *)res.get();
 
-	std::cout << "IN result to df" << std::endl;
 	writable::integers row_names;
 	row_names.push_back(NA_INTEGER);
 	row_names.push_back(-mat_res->RowCount());

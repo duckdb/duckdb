@@ -178,3 +178,16 @@ test_that("A union with different column types throws an error", {
      rel <- rel_union_all(test_df_a1, test_df_a2)
      expect_error(rapi_rel_to_df(rel), "Invalid Error: Result mismatch in query!")
 })
+
+
+test_that("rel aggregate with no groups but a sum over a column, sums the column", {
+skip("duckplyr specific")
+})
+
+test_that("rel aggregate with groups and aggregate function works", {
+skip("duckplyr specific")
+})
+
+test_that("rel aggregate with no groups and no aggregate function returns one line", {
+skip("duckplyr specific")
+})
