@@ -48,7 +48,11 @@ string PragmaCollations(ClientContext &context, const FunctionParameters &parame
 }
 
 string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_functions() ORDER BY 1;";
+	return "SELECT function_name AS name, upper(function_type) AS type, parameter_types AS parameters, varargs, "
+	       "return_type, has_side_effects AS side_effects"
+	       " FROM duckdb_functions()"
+	       " WHERE function_type IN ('scalar', 'aggregate')"
+	       " ORDER BY 1;";
 }
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {

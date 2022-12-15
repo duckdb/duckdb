@@ -17,10 +17,6 @@ struct PragmaCollations {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct PragmaFunctionPragma {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaTableInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

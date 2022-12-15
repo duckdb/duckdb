@@ -17,7 +17,6 @@ add_library_unity(
   pragma_collations.cpp
   pragma_database_list.cpp
   pragma_database_size.cpp
-  pragma_functions.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
   test_all_types.cpp

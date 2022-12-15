@@ -4,11 +4,3 @@
 
 statement ok
 PRAGMA functions
-
-statement ok
-SELECT * FROM pragma_functions();
-
-query I
-SELECT name FROM pragma_functions() WHERE name='count' GROUP BY name
-----
-count

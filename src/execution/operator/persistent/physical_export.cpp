@@ -115,7 +115,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	vector<CatalogEntry *> indexes;
 	vector<CatalogEntry *> macros;
 
-	auto schema_list = Catalog::GetSchemas(ccontext, INVALID_CATALOG);
+	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
 	for (auto &schema : schema_list) {
 		if (!schema->internal) {
 			schemas.push_back(schema);
