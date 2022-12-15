@@ -120,7 +120,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (!seqname.IsNull()) {
-			sequence = BindSequence(context, StringValue::Get(seqname));
+			sequence = BindSequence(context, seqname.ToString());
 		}
 	}
 	return make_unique<NextvalBindData>(sequence);
