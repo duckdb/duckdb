@@ -45,6 +45,8 @@ public:
 public:
 	//! Returns the stored error message
 	const string &GetError();
+	//! Gives over ownership of the error object
+	PreservedError &&TakeErrorObject();
 	//! Returns whether or not an error occurred
 	bool HasError() const;
 	//! Returns the number of columns in the result

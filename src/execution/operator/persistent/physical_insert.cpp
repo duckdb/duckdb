@@ -153,7 +153,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+		auto error = table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+		// FIXME: only throw on transaction exception
+		if (error.HasError()) {
+			error.Throw();
+		}
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);

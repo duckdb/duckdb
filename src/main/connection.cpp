@@ -130,7 +130,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto statement = Prepare(query);
 	if (statement->HasError()) {
-		return make_unique<MaterializedQueryResult>(statement->error);
+		return make_unique<MaterializedQueryResult>(statement->TakeErrorObject());
 	}
 	return statement->Execute(values, false);
 }

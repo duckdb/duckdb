@@ -182,7 +182,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
 			if (res->HasError()) {
-				db->last_error = res->GetErrorObject();
+				db->last_error = res->TakeErrorObject();
 				return SQLITE_ERROR;
 			}
 		}
@@ -191,7 +191,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		auto prepared = db->con->Prepare(move(statements.back()));
 		if (prepared->HasError()) {
 			// failed to prepare: set the error message
-			db->last_error = prepared->error;
+			db->last_error = prepared->TakeErrorObject();
 			return SQLITE_ERROR;
 		}
 
@@ -237,7 +237,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_val
 	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
 	if (pStmt->result->HasError()) {
 		// error in execute: clear prepared statement
-		pStmt->db->last_error = pStmt->result->GetErrorObject();
+		pStmt->db->last_error = pStmt->result->TakeErrorObject();
 		pStmt->prepared = nullptr;
 		return nullptr;
 	}
@@ -283,7 +283,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
-			pStmt->db->last_error = pStmt->result->GetErrorObject();
+			pStmt->db->last_error = pStmt->result->TakeErrorObject();
 			pStmt->prepared = nullptr;
 			return SQLITE_ERROR;
 		}
@@ -715,7 +715,7 @@ int sqlite3_initialize(void) {
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
 		if (pStmt->result && pStmt->result->HasError()) {
-			pStmt->db->last_error = pStmt->result->GetErrorObject();
+			pStmt->db->last_error = pStmt->result->TakeErrorObject();
 			delete pStmt;
 			return SQLITE_ERROR;
 		}

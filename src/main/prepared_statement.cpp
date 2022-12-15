@@ -22,6 +22,10 @@ const string &PreparedStatement::GetError() {
 	return error.Message();
 }
 
+PreservedError &&PreparedStatement::TakeErrorObject() {
+	return move(error);
+}
+
 bool PreparedStatement::HasError() const {
 	return !success;
 }
@@ -54,7 +58,7 @@ const vector<string> &PreparedStatement::GetNames() {
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
 	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
+		return make_unique<MaterializedQueryResult>(pending->TakeErrorObject());
 	}
 	return pending->Execute();
 }

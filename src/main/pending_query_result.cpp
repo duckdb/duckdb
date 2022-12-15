@@ -58,7 +58,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
 	}
 	if (HasError()) {
-		return make_unique<MaterializedQueryResult>(error);
+		return make_unique<MaterializedQueryResult>(move(error));
 	}
 	auto result = context->FetchResultInternal(lock, *this);
 	Close();

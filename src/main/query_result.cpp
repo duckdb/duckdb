@@ -47,6 +47,10 @@ PreservedError &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
+PreservedError &&BaseQueryResult::TakeErrorObject() {
+	return move(error);
+}
+
 idx_t BaseQueryResult::ColumnCount() {
 	return types.size();
 }

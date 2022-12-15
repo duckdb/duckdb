@@ -366,7 +366,7 @@ struct ExecTask : public Task {
 				auto res = connection.connection->Query(move(statements[i]));
 				if (res->HasError()) {
 					success = false;
-					error = res->GetErrorObject();
+					error = res->TakeErrorObject();
 					break;
 				}
 			}

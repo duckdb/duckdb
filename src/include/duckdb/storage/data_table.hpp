@@ -88,7 +88,8 @@ public:
 	//! Initializes an append to transaction-local storage
 	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);
 	//! Append a DataChunk to the transaction-local storage of the table.
-	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	PreservedError LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	                           DataChunk &chunk);
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
 	//! Append a chunk to the transaction-local storage of this table
@@ -176,7 +177,7 @@ public:
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	PreservedError VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

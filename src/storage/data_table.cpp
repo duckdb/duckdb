@@ -255,8 +255,8 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
-static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
-                                             Expression &expr, column_t index) {
+static PreservedError VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table,
+                                                       DataChunk &chunk, Expression &expr, column_t index) {
 	auto &col = table.columns.GetColumn(LogicalIndex(index));
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(context, expr);
@@ -264,10 +264,11 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-
-		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
+		// FIXME: should this be this lenient? assertions are also caught this way
+		return ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
+		                           col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
+	return PreservedError();
 }
 
 static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &table, Expression &expr,
@@ -414,7 +415,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
-void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+PreservedError DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
@@ -428,7 +429,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			generated_check_binder.target_type = col.Type();
 			auto to_be_bound_expression = col.GeneratedExpression().Copy();
 			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
+			auto error = VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
+			if (error.HasError()) {
+				return error;
+			}
 		}
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
@@ -467,6 +471,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
+	return PreservedError();
 }
 
 void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &context) {
@@ -477,23 +482,28 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	local_storage.InitializeAppend(state, this);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
-                            DataChunk &chunk) {
+PreservedError DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+                                      DataChunk &chunk) {
 	if (chunk.size() == 0) {
-		return;
+		return PreservedError();
 	}
 	D_ASSERT(chunk.ColumnCount() == table.columns.PhysicalColumnCount());
 	if (!is_root) {
-		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+		return TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	VerifyAppendConstraints(table, context, chunk);
+	auto error = VerifyAppendConstraints(table, context, chunk);
+	// FIXME: change to only throw on TransactionException
+	if (error.HasError()) {
+		error.Throw();
+	}
 
 	// append to the transaction local data
 	LocalStorage::Append(state, chunk);
+	return PreservedError();
 }
 
 void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
