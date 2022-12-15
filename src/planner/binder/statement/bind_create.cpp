@@ -98,6 +98,14 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	return schema_obj;
 }
 
+SchemaCatalogEntry *Binder::BindCreateSchema(CreateInfo &info) {
+	auto schema = BindSchema(info);
+	if (schema->catalog->IsSystemCatalog()) {
+		throw BinderException("Cannot create entry in system catalog");
+	}
+	return schema;
+}
+
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
 	// note that we bind the original, and replace the original with a copy
@@ -162,7 +170,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		throw BinderException(error);
 	}
 
-	return BindSchema(info);
+	return BindCreateSchema(info);
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog, const string &schema) {
@@ -383,18 +391,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
-		auto schema = BindSchema(*stmt.info);
+		auto schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		auto schema = BindSchema(*stmt.info);
+		auto schema = BindCreateSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		auto schema = BindSchema(*stmt.info);
+		auto schema = BindCreateSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
 		break;
 	}
@@ -515,7 +523,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		auto schema = BindSchema(*stmt.info);
+		auto schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
 		if (create_type_info.query) {

@@ -14,6 +14,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 	auto info = make_unique<CreateSequenceInfo>();
 
 	auto qname = TransformQualifiedName(stmt->sequence);
+	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
 

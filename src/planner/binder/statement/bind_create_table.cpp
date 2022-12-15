@@ -246,7 +246,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = (CreateTableInfo &)*info;
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
-	result->schema = BindSchema(*result->base);
+	result->schema = BindCreateSchema(*result->base);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);

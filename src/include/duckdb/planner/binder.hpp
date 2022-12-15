@@ -320,6 +320,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	SchemaCatalogEntry *BindCreateSchema(CreateInfo &info);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
