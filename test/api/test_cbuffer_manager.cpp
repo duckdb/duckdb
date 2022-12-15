@@ -29,6 +29,8 @@ TEST_CASE("Test CBufferManager with TPCH", "[api]") {
 	}
 
 	REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=" + to_string(sf) + ")"));
+	// Run this test single threaded because the dummy buffer manager does not support multithreaded operations
+	REQUIRE_NO_FAIL(con.Query("pragma threads=1"));
 
 	for (idx_t i = 1; i < 22; i++) {
 		auto query = TPCHExtension::GetQuery(i);
