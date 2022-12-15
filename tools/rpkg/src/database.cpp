@@ -5,7 +5,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "iostream"
 
 using namespace duckdb;
 
