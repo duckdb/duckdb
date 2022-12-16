@@ -44,7 +44,7 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	if (free_blocks_on_read) {
 		block_manager.MarkBlockAsModified(id);
 	}
-	block = block_manager.RegisterMetaBlock(id);
+	block = block_manager.RegisterBlock(id, true);
 	handle = buffer_manager.Pin(block);
 
 	next_block = Load<block_id_t>(handle.Ptr());
