@@ -2859,17 +2859,7 @@ function duckdb_add_custom_buffer_manager(
     return ccall(
         (:duckdb_add_custom_buffer_manager, libduckdb),
         duckdb_state,
-        (
-            duckdb_config,
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid},
-            Ptr{Cvoid}
-        ),
+        (duckdb_config, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
         config,
         allocation_context,
         allocate_func,
