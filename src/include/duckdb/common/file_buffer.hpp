@@ -85,7 +85,7 @@ protected:
 	uint64_t GetMallocedSize() {
 		return malloced_size;
 	}
-	void Init();
+	virtual void Init();
 };
 
 } // namespace duckdb

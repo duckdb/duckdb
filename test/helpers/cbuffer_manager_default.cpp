@@ -16,6 +16,9 @@ MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_man
 	buffer->allocation = allocation;
 	buffer->buffer_manager = buffer_manager;
 	buffer_manager->allocated_memory += size;
+#ifdef DEBUG
+	buffer_manager->allocated_buffers.insert((data_ptr_t)buffer);
+#endif
 	return buffer;
 }
 
@@ -31,44 +34,53 @@ duckdb_buffer Allocate(void *data, idx_t size) {
 void Destroy(duckdb_buffer buffer) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
+#ifdef DEBUG
+	D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
+#endif
 
 	// assert that the buffer was not pinned, otherwise it should not be allowed to be destroyed
 	D_ASSERT(my_buffer->pinned == 0);
 
 	free(my_buffer->allocation);
 	buffer_manager->allocated_memory -= my_buffer->size;
+#ifdef DEBUG
+	buffer_manager->allocated_buffers.erase((data_ptr_t)buffer);
+#endif
 	free(my_buffer);
 }
 
 duckdb_buffer ReAllocate(duckdb_buffer buffer, idx_t old_size, idx_t new_size) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
+#ifdef DEBUG
+	D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
+#endif
 
 	Destroy(buffer);
 	return Allocate(buffer_manager, new_size);
 }
 
-void *GetAllocation(duckdb_buffer buffer) {
-	auto my_buffer = (MyBuffer *)buffer;
-
-	// assert that the buffer was pinned, you should not be allowed to retrieve an allocation from an unpinned buffer
-	D_ASSERT(my_buffer->pinned > 0);
-	return my_buffer->allocation;
-}
-
-void Pin(duckdb_buffer buffer) {
+void *Pin(duckdb_buffer buffer) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
+#ifdef DEBUG
+	// this doesn't really work.. but at least it will segfault if the pointer is faulty
+	D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
+#endif
 
 	if (my_buffer->pinned != 0) {
 		buffer_manager->pinned_buffers++;
 	}
 	my_buffer->pinned++;
+	return my_buffer->allocation;
 }
 
 void Unpin(duckdb_buffer buffer) {
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
+#ifdef DEBUG
+	D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
+#endif
 
 	// assert that the buffer was pinnned
 	D_ASSERT(my_buffer->pinned > 0);
@@ -98,7 +110,6 @@ duckdb::CBufferManagerConfig DefaultCBufferManagerConfig(MyBufferManager *manage
 
 	cbuffer_manager_config.data = manager;
 	cbuffer_manager_config.allocate_func = Allocate;
-	cbuffer_manager_config.get_allocation_func = GetAllocation;
 	cbuffer_manager_config.reallocate_func = ReAllocate;
 	cbuffer_manager_config.destroy_func = Destroy;
 	cbuffer_manager_config.pin_func = Pin;

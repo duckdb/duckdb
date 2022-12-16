@@ -2840,7 +2840,6 @@ Add a custom buffer manager to the specified config
 * allocate_func: The function invoked when a buffer is allocated, returns a buffer handle.
 * reallocate_func: The function invoked when a buffer is reallocated, returns a buffer handle.
 * destroy_func: The function invoked when a buffer is destroyed.
-* get_allocation_func: The function invoked when the allocated memory is requested, returns allocated memory.
 * pin_func: The function invoked when the buffer is pinned.
 * unpin_func: The function invoked when the buffer is unpinned.
 * used_memory_func: The function used to query the current used memory.
@@ -2852,7 +2851,6 @@ function duckdb_add_custom_buffer_manager(
     allocate_func,
     reallocate_func,
     destroy_func,
-    get_allocation_func,
     pin_func,
     unpin_func,
     used_memory_func,
@@ -2870,7 +2868,6 @@ function duckdb_add_custom_buffer_manager(
             Ptr{Cvoid},
             Ptr{Cvoid},
             Ptr{Cvoid},
-            Ptr{Cvoid},
             Ptr{Cvoid}
         ),
         config,
@@ -2878,7 +2875,6 @@ function duckdb_add_custom_buffer_manager(
         allocate_func,
         reallocate_func,
         destroy_func,
-        get_allocation_func,
         pin_func,
         unpin_func,
         used_memory_func,

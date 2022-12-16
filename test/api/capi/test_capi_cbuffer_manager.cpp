@@ -15,8 +15,8 @@ TEST_CASE("Test C API CBufferManager", "[capi]") {
 	MyBufferManager external_manager;
 
 	// set some configuration options
-	if (duckdb_add_custom_buffer_manager(config, &external_manager, Allocate, ReAllocate, Destroy, GetAllocation, Pin,
-	                                     Unpin, MaxMemory, UsedMemory) != DuckDBSuccess) {
+	if (duckdb_add_custom_buffer_manager(config, &external_manager, Allocate, ReAllocate, Destroy, Pin, Unpin,
+	                                     MaxMemory, UsedMemory) != DuckDBSuccess) {
 		REQUIRE(1 == 0);
 	}
 

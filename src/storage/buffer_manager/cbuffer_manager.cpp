@@ -22,7 +22,9 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
 	// Create an ExternalFileBuffer, which uses a callback to retrieve the allocation when Buffer() is called
-	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, alloc_size);
+	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, alloc_size);
+
+	// Used to manage the used_memory counter with RAII
 	BufferPoolReservation reservation(*this);
 	reservation.size = alloc_size;
 
@@ -33,7 +35,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 }
 
 shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
-	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, block_size);
+	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, block_size);
 
 	// create a new block pointer for this block
 	BufferPoolReservation reservation(*this);
@@ -61,7 +63,12 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
-	config.pin_func(buffer.ExternalBufferHandle());
+	auto allocation = (data_ptr_t)(config.pin_func(buffer.ExternalBufferHandle()));
+	if (handle->readers == 0) {
+		// FIXME: this is not protecting anything really,
+		// if the number goes up, then goes down to 0 again, this will be called twice for a single buffer
+		buffer.SetAllocation(allocation);
+	}
 	handle->readers++;
 	return handle->Load(handle);
 }
