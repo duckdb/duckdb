@@ -93,7 +93,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase *db) {
 	if (db != modified_database) {
 		throw TransactionException(
 		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
-		    "single transaction can only write to a single persistent database.",
+		    "single transaction can only write to a single attached database.",
 		    db->GetName(), modified_database->GetName());
 	}
 }
