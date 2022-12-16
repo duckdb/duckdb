@@ -6,6 +6,7 @@
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
@@ -13,6 +14,47 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
 using duckdb::timestamp_t;
 using duckdb::Value;
+
+idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
+                                duckdb_extracted_statements *out_extracted_statements) {
+	if (!connection || !query || !out_extracted_statements) {
+		return 0;
+	}
+	auto wrapper = new ExtractStatementsWrapper();
+	Connection *conn = (Connection *)connection;
+	try {
+		wrapper->statements = conn->ExtractStatements(query);
+	} catch (const duckdb::ParserException &e) {
+		wrapper->error = e.what();
+	}
+
+	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
+	return wrapper->statements.size();
+}
+
+duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
+                                                duckdb_extracted_statements extracted_statements, idx_t index,
+                                                duckdb_prepared_statement *out_prepared_statement) {
+	Connection *conn = (Connection *)connection;
+	auto source_wrapper = (ExtractStatementsWrapper *)extracted_statements;
+
+	if (!connection || !out_prepared_statement || index >= source_wrapper->statements.size()) {
+		return DuckDBError;
+	}
+	auto wrapper = new PreparedStatementWrapper();
+	wrapper->statement = conn->Prepare(move(source_wrapper->statements[index]));
+
+	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
+	return wrapper->statement->HasError() ? DuckDBError : DuckDBSuccess;
+}
+
+const char *duckdb_extract_statements_error(duckdb_extracted_statements extracted_statements) {
+	auto wrapper = (ExtractStatementsWrapper *)extracted_statements;
+	if (!wrapper || wrapper->error.empty()) {
+		return nullptr;
+	}
+	return wrapper->error.c_str();
+}
 
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
@@ -194,13 +236,23 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	return duckdb_translate_result(move(result), out_result);
 }
 
-void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
-	if (!prepared_statement) {
+template <class T>
+void duckdb_destroy(void **wrapper) {
+	if (!wrapper) {
 		return;
 	}
-	auto wrapper = (PreparedStatementWrapper *)*prepared_statement;
-	if (wrapper) {
-		delete wrapper;
+
+	auto casted = (T *)*wrapper;
+	if (casted) {
+		delete casted;
 	}
-	*prepared_statement = nullptr;
+	*wrapper = nullptr;
+}
+
+void duckdb_destroy_extracted(duckdb_extracted_statements *extracted_statements) {
+	duckdb_destroy<ExtractStatementsWrapper>(reinterpret_cast<void **>(extracted_statements));
+}
+
+void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
+	duckdb_destroy<PreparedStatementWrapper>(reinterpret_cast<void **>(prepared_statement));
 }

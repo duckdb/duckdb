@@ -16,8 +16,8 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-rapi_register_df <- function(conn, name, value, integer64, overwrite) {
-  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite))
+rapi_register_df <- function(conn, name, value, integer64, overwrite, experimental) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite, experimental))
 }
 
 rapi_unregister_df <- function(conn, name) {
@@ -74,6 +74,10 @@ rapi_rel_order <- function(rel, orders) {
 
 rapi_rel_inner_join <- function(left, right, conds) {
   .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
+}
+
+rapi_rel_union_all <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_union_all`, rel_a, rel_b)
 }
 
 rapi_rel_limit <- function(rel, n) {

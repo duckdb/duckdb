@@ -14,10 +14,6 @@ PreservedError::PreservedError(const Exception &exception)
     : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())) {
 }
 
-PreservedError::PreservedError(const std::exception &exception)
-    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(exception.what())) {
-}
-
 PreservedError::PreservedError(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(message)) {
 }

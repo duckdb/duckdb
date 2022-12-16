@@ -30,7 +30,8 @@ jobs:
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
-
+    env:
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -54,10 +55,10 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         run: |
-          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash
@@ -116,6 +117,7 @@ jobs:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -126,14 +128,21 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         if: matrix.target_arch == 'x64'
         run: |
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
           echo $OPENSSL_ROOT_DIR
-          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
+
+      - name: Build DuckDB
+        shell: bash
+        if: matrix.target_arch == 'arm64'
+        run: |
+          brew install ninja
+          GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash
@@ -181,6 +190,8 @@ jobs:
     name: node.js Windows
     runs-on: windows-latest
     needs: linux-nodejs
+    env:
+      npm_config_msvs_version: 2019
 
     strategy:
       matrix:
@@ -226,7 +237,6 @@ jobs:
         shell: bash
         run: |
           choco install python visualstudio2019-workload-vctools -y
-          npm config set msvs_version 2019
 
       - name: Node Version
         shell: bash

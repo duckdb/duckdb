@@ -12,12 +12,14 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
 class FileOpener;
+class HTTPStats;
 class QueryProfiler;
 class QueryProfilerHistory;
 class PreparedStatementData;
@@ -48,6 +50,9 @@ struct ClientData {
 
 	//! The file opener of the client context
 	unique_ptr<FileOpener> file_opener;
+
+	//! Statistics on HTTP traffic
+	unique_ptr<HTTPStats> http_stats;
 
 	//! The file search path
 	string file_search_path;

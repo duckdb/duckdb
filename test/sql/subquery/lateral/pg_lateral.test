@@ -1,0 +1,549 @@
+# name: test/sql/subquery/lateral/pg_lateral.test
+# description: Several LATERAL JOIN tests taken from Postgres
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select s1, s2, sm
+from generate_series(1, 3) s1(s1),
+     lateral (select s2, sum(s1 + s2) sm
+              from generate_series(1, 3) s2(s2) group by s2) ss
+order by 1, 2;
+----
+1	1	2
+1	2	3
+1	3	4
+2	1	3
+2	2	4
+2	3	5
+3	1	4
+3	2	5
+3	3	6
+
+statement ok
+create table agg_data_1k as select g*10 AS g from generate_series(0, 999) g(g);
+
+query IIII
+select * from
+  (values (100), (300), (500)) as r(a),
+  lateral (
+    select (g/2)::int as c1,
+           array_agg(g::int) as c2,
+	   count(*) as c3
+    from agg_data_1k
+    where g < r.a
+    group by g/2) as s
+order by 1, 2, 4, 3;
+----
+100	0	[0]	1
+100	5	[10]	1
+100	10	[20]	1
+100	15	[30]	1
+100	20	[40]	1
+100	25	[50]	1
+100	30	[60]	1
+100	35	[70]	1
+100	40	[80]	1
+100	45	[90]	1
+300	0	[0]	1
+300	5	[10]	1
+300	10	[20]	1
+300	15	[30]	1
+300	20	[40]	1
+300	25	[50]	1
+300	30	[60]	1
+300	35	[70]	1
+300	40	[80]	1
+300	45	[90]	1
+300	50	[100]	1
+300	55	[110]	1
+300	60	[120]	1
+300	65	[130]	1
+300	70	[140]	1
+300	75	[150]	1
+300	80	[160]	1
+300	85	[170]	1
+300	90	[180]	1
+300	95	[190]	1
+300	100	[200]	1
+300	105	[210]	1
+300	110	[220]	1
+300	115	[230]	1
+300	120	[240]	1
+300	125	[250]	1
+300	130	[260]	1
+300	135	[270]	1
+300	140	[280]	1
+300	145	[290]	1
+500	0	[0]	1
+500	5	[10]	1
+500	10	[20]	1
+500	15	[30]	1
+500	20	[40]	1
+500	25	[50]	1
+500	30	[60]	1
+500	35	[70]	1
+500	40	[80]	1
+500	45	[90]	1
+500	50	[100]	1
+500	55	[110]	1
+500	60	[120]	1
+500	65	[130]	1
+500	70	[140]	1
+500	75	[150]	1
+500	80	[160]	1
+500	85	[170]	1
+500	90	[180]	1
+500	95	[190]	1
+500	100	[200]	1
+500	105	[210]	1
+500	110	[220]	1
+500	115	[230]	1
+500	120	[240]	1
+500	125	[250]	1
+500	130	[260]	1
+500	135	[270]	1
+500	140	[280]	1
+500	145	[290]	1
+500	150	[300]	1
+500	155	[310]	1
+500	160	[320]	1
+500	165	[330]	1
+500	170	[340]	1
+500	175	[350]	1
+500	180	[360]	1
+500	185	[370]	1
+500	190	[380]	1
+500	195	[390]	1
+500	200	[400]	1
+500	205	[410]	1
+500	210	[420]	1
+500	215	[430]	1
+500	220	[440]	1
+500	225	[450]	1
+500	230	[460]	1
+500	235	[470]	1
+500	240	[480]	1
+500	245	[490]	1
+
+
+statement ok
+CREATE TABLE INT2_TBL(f1 int2);
+
+statement ok
+INSERT INTO INT2_TBL(f1) VALUES
+  ('0   '),
+  ('  1234 '),
+  ('    -1234'),
+  ('32767'),  -- largest and smallest values
+  ('-32767');
+
+
+statement ok
+CREATE TABLE INT4_TBL(f1 int4);
+
+statement ok
+INSERT INTO INT4_TBL(f1) VALUES
+  ('   0  '),
+  ('123456     '),
+  ('    -123456'),
+  ('2147483647'),  -- largest and smallest values
+  ('-2147483647');
+
+statement ok
+CREATE TABLE INT8_TBL(q1 int8, q2 int8);
+
+statement ok
+INSERT INTO INT8_TBL VALUES
+  ('  123   ','  456'),
+  ('123   ','4567890123456789'),
+  ('4567890123456789','123'),
+  (+4567890123456789,'4567890123456789'),
+  ('+4567890123456789','-4567890123456789');
+
+statement ok
+CREATE TABLE TEXT_TBL (f1 text);
+
+statement ok
+INSERT INTO TEXT_TBL VALUES
+  ('doh!'),
+  ('hi de ho neighbor');
+
+statement ok
+CREATE TABLE tenk1 (
+	unique1		int4,
+	unique2		int4,
+	two			int4,
+	four		int4,
+	ten			int4,
+	twenty		int4,
+	hundred		int4,
+	thousand	int4,
+	twothousand	int4,
+	fivethous	int4,
+	tenthous	int4,
+	odd			int4,
+	even		int4,
+	stringu1	varchar,
+	stringu2	varchar,
+	string4		varchar
+);
+
+statement ok
+COPY tenk1 FROM 'data/csv/tenk.tsv.gz' (DELIMITER '\t')
+
+query II rowsort
+select * from
+  int4_tbl as i41,
+  lateral
+    (select 1 as x from
+      (select i41.f1 as lat,
+              i42.f1 as loc from
+         int8_tbl as i81, int4_tbl as i42) as ss1
+      right join int4_tbl as i43 on (i43.f1 > 1)
+      where ss1.loc = ss1.lat) as ss2
+where i41.f1 > 0;
+----
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+123456	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+2147483647	1
+
+query I
+select ss1.d1 from
+  tenk1 as t1
+  inner join tenk1 as t2
+  on t1.tenthous = t2.ten
+  inner join
+    int8_tbl as i8
+    left join int4_tbl as i4
+      inner join (select 64 as d1
+                  from tenk1 t3,
+                       lateral (select abs(t3.unique1) + random()) ss0(x)
+                  where t3.fivethous < 0) as ss1
+      on i4.f1 = ss1.d1
+    on i8.q1 = i4.f1
+  on t1.tenthous = ss1.d1
+where t1.unique1 < i4.f1;
+----
+
+query III
+select * from
+  (select 1 as x) ss1 left join (select 2 as y) ss2 on (true),
+  lateral (select ss2.y as z limit 1) ss3;
+----
+1	2	2
+
+query III
+select * from
+  (select 0 as z) as t1
+  left join
+  (select true as a) as t2
+  on true,
+  lateral (select true as b
+           union all
+           select a as b) as t3
+where b;
+----
+0	true	true
+0	true	true
+
+query IIIII
+select * from
+  text_tbl t1
+  left join int8_tbl i8
+  on i8.q2 = 123,
+  lateral (select i8.q1, t2.f1 from text_tbl t2 limit 1) as ss
+where t1.f1 = ss.f1;
+----
+doh!	4567890123456789	123	4567890123456789	doh!
+
+# FIXME: lateral chain with star
+mode skip
+
+query IIIIIII
+select * from
+  text_tbl t1
+  left join int8_tbl i8
+  on i8.q2 = 123,
+  lateral (select i8.q1, t2.f1 from text_tbl t2 limit 1) as ss1,
+  lateral (select ss1.* from text_tbl t3 limit 1) as ss2
+where t1.f1 = ss2.f1;
+----
+doh!	4567890123456789	123	4567890123456789	doh!	4567890123456789	doh!
+
+query I
+select 1 from
+  text_tbl as tt1
+  inner join text_tbl as tt2 on (tt1.f1 = 'foo')
+  left join text_tbl as tt3 on (tt3.f1 = 'foo')
+  left join text_tbl as tt4 on (tt3.f1 = tt4.f1),
+  lateral (select tt4.f1 as c0 from text_tbl as tt5 limit 1) as ss1
+where tt1.f1 = ss1.c0;
+----
+
+query I
+select ss2.* from
+  int4_tbl i41
+  left join int8_tbl i8
+    join (select i42.f1 as c1, i43.f1 as c2, 42 as c3
+          from int4_tbl i42, int4_tbl i43) ss1
+    on i8.q1 = ss1.c2
+  on i41.f1 = ss1.c1,
+  lateral (select i41.*, i8.*, ss1.* from text_tbl limit 1) ss2
+where ss1.c2 = 0;
+----
+
+
+mode unskip
+
+statement error
+select i8.*, ss.v, t.unique2
+  from int8_tbl i8
+    left join int4_tbl i4 on i4.f1 = 1
+    left join lateral (select i4.f1 + 1 as v) as ss on true
+    left join tenk1 t on t.unique2 = ss.v
+where q2 = 456;
+----
+Join condition for non-inner LATERAL JOIN must be a comparison
+
+query II
+select unique2, x.*
+from tenk1 a, lateral (select * from int4_tbl b where f1 = a.unique1) x;
+----
+9998	0
+
+query II
+select unique2, x.*
+from int4_tbl x, lateral (select unique2 from tenk1 where f1 = unique1) ss;
+----
+9998	0
+
+statement error
+select unique2, x.*
+from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true;
+----
+Join condition for non-inner LATERAL JOIN must be a comparison
+
+# FIXME: INTERNAL Error: Logical operator type "DELIM_JOIN" for dependent join
+mode skip
+
+query IIII rowsort qlateral
+select *, (select r from (select q1 as q2) x, (select q2 as r) y) from int8_tbl;
+----
+
+query IIII rowsort qlateral
+select *, (select r from (select q1 as q2) x, lateral (select q2 as r) y) from int8_tbl;
+----
+
+mode unskip
+
+# FIXME: Not implemented Error: LATERAL not implemented
+mode skip
+
+query I
+select count(*) from tenk1 a, lateral generate_series(1,two) g;
+----
+5000
+
+mode unskip
+
+
+query III rowsort
+select * from generate_series(100,200) g(g),
+  lateral (select * from int8_tbl a where g = q1 union all
+           select * from int8_tbl b where g = q2) ss;
+----
+123	123	456
+123	123	4567890123456789
+123	4567890123456789	123
+
+statement error
+select count(*) from tenk1 a,
+  tenk1 b join lateral (values(a.unique1)) ss(x) on b.unique2 = ss.x;
+----
+Nested lateral joins
+
+statement error
+select count(*) from tenk1 a,
+  tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
+----
+Nested lateral joins
+
+query III
+select * from (select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1,
+  lateral (select x) ss2(y);
+----
+0	0	0
+
+query III rowsort
+select * from (select f1 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1,
+  lateral (values(x)) ss2(y);
+----
+-123456	-123456	-123456
+-2147483647	-2147483647	-2147483647
+0	0	0
+123456	123456	123456
+2147483647	2147483647	2147483647
+
+query III
+select * from ((select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1) j,
+  lateral (select x) ss2(y);
+----
+0	0	0
+
+# FIXME: Not implemented Error: LATERAL not implemented
+mode skip
+
+query II
+select * from (values(1)) x(lb),
+  lateral generate_series(lb,4) x4
+ORDER BY ALL;
+----
+1	1
+1	2
+1	3
+1	4
+
+query II
+select * from (select f1/1000000000 from int4_tbl) x(lb),
+  lateral generate_series(lb,4) x4
+ORDER BY ALL;
+----
+-2	-2
+-2	-1
+-2	0
+-2	1
+-2	2
+-2	3
+-2	4
+0	0
+0	1
+0	2
+0	3
+0	4
+0	0
+0	1
+0	2
+0	3
+0	4
+0	0
+0	1
+0	2
+0	3
+0	4
+2	2
+2	3
+2	4
+
+mode unskip
+
+query II
+select * from (values(1)) x(lb),
+  lateral (values(lb)) y(lbcopy);
+----
+1	1
+
+query II
+select * from (values(1)) x(lb),
+  lateral (select lb from int4_tbl) y(lbcopy);
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+
+query II rowsort
+select x.* from
+  int8_tbl x left join (select q1,coalesce(q2,0) q2 from int8_tbl) y on x.q2 = y.q1,
+  lateral (select x.q1,y.q1,y.q2) v(xq1,yq1,yq2);
+----
+123	456
+123	4567890123456789
+123	4567890123456789
+123	4567890123456789
+4567890123456789	-4567890123456789
+4567890123456789	123
+4567890123456789	123
+4567890123456789	4567890123456789
+4567890123456789	4567890123456789
+4567890123456789	4567890123456789
+
+# FIXME: postgres has a better error message here
+statement error
+select 1 from tenk1 a, lateral (select max(a.unique1) from int4_tbl b) ss;
+----
+not found
+
+statement ok
+create table xx1 as select f1 as x1, -f1 as x2 from int4_tbl;
+
+query II
+select * from xx1;
+----
+0	0
+123456	-123456
+-123456	123456
+2147483647	-2147483647
+-2147483647	2147483647
+
+statement error
+update xx1 set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
+----
+not found
+
+statement error
+update xx1 set x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss;
+----
+not found
+
+statement error
+update xx1 set x2 = f1 from lateral (select * from int4_tbl where f1 = x1) ss;
+----
+not found
+
+statement ok
+update xx1 set x2 = f1 from xx1 AS xx2, lateral (select * from int4_tbl where f1 = xx2.x1 AND f1=-2147483647) ss;
+
+query II
+select * from xx1;
+----
+0	-2147483647
+123456	-2147483647
+-123456	-2147483647
+2147483647	-2147483647
+-2147483647	-2147483647
+
+statement error
+delete from xx1 using (select * from int4_tbl where f1 = x1) ss;
+----
+not found
+
+statement error
+delete from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss;
+----
+not found
+
+statement error
+delete from xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
+----
+not found

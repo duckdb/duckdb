@@ -25,6 +25,17 @@ BoundOrderByNode BoundOrderByNode::Copy() const {
 	}
 }
 
+bool BoundOrderByNode::Equals(const BoundOrderByNode &other) const {
+	if (type != other.type || null_order != other.null_order) {
+		return false;
+	}
+	if (!expression->Equals(other.expression.get())) {
+		return false;
+	}
+
+	return true;
+}
+
 string BoundOrderByNode::ToString() const {
 	auto str = expression->ToString();
 	switch (type) {
