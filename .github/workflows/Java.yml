@@ -1,0 +1,284 @@
+---
+name: Java JDBC
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "**"
+      - "!src/include/**"
+      - "!tools/jdbc/**"
+      - "!.github/workflows/Java.yml"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
+    github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha
+    }}
+  cancel-in-progress: true
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  java-linux-amd64:
+    name: Java Linux (amd64)
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+    env:
+      GEN: ninja
+      BUILD_JDBC: 1
+      BUILD_JEMALLOC: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
+      STATIC_LIBCPP: 1
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/ubuntu_16_setup
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+      - name: Build
+        shell: bash
+        run: make
+      - name: Java Tests
+        shell: bash
+        run: >
+          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
+          org.duckdb.test.TestDuckDBJDBC
+      - name: Java Example
+        shell: bash
+        run: |
+          (cd examples/jdbc; make; make maven)
+      - name: Deploy
+        shell: bash
+        run: >
+          python3.7 scripts/asset-upload-gha.py
+          duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-linux-amd64
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+
+  java-linux-aarch64:
+    name: Java Linux (aarch64)
+    runs-on: ubuntu-latest
+    container: ubuntu:18.04
+    needs: java-linux-amd64
+    env:
+      GEN: ninja
+      BUILD_JDBC: 1
+      OVERRIDE_JDBC_OS_ARCH: arm64
+      JAVA_HOME: ../../jdk8u345-b01
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/ubuntu_16_setup
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+      - name: Install Stuff
+        shell: bash
+        run: >
+          apt-get update -y -qq
+
+          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+
+          curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
+      - name: Build
+        shell: bash
+        run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+      - name: Deploy
+        shell: bash
+        run: >
+          python3.7 scripts/asset-upload-gha.py
+          duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-linux-aarch64
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+  java-windows-amd64:
+    name: Java Windows (arm64)
+    runs-on: windows-latest
+    needs: java-linux-amd64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.7"
+      - name: Build
+        shell: bash
+        run: >
+          python scripts/windows_ci.py
+
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
+
+          cmake --build . --config Release
+      - name: Java Test
+        shell: bash
+        run: |
+          java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+      - name: Deploy
+        shell: bash
+        run: >
+          python scripts/asset-upload-gha.py
+          duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-windows-amd64
+          path: |
+            tools/jdbc/duckdb_jdbc.jar
+
+
+  java-osx-universal:
+    name: Java OSX (Universal)
+    runs-on: macos-latest
+    needs: java-linux-amd64
+    env:
+      BUILD_JDBC: 1
+      OSX_BUILD_UNIVERSAL: 1
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.7"
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+      - name: Build
+        shell: bash
+        run: make
+      - name: Java Tests
+        shell: bash
+        run: >
+          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
+          org.duckdb.test.TestDuckDBJDBC
+      - name: Java Example
+        shell: bash
+        run: |
+          (cd examples/jdbc; make; make maven)
+      - name: Deploy
+        shell: bash
+        run: >
+          python scripts/asset-upload-gha.py
+          duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-osx-universal
+          path: |
+            build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+  java-combine:
+    name: Java Combine
+    runs-on: ubuntu-latest
+    needs:
+      - java-linux-aarch64
+      - java-linux-amd64
+      - java-windows-amd64
+      - java-osx-universal
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - shell: bash
+        run: mkdir jdbc-artifacts
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: java-linux-aarch64
+          path: jdbc-artifacts/java-linux-aarch64
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: java-linux-amd64
+          path: jdbc-artifacts/java-linux-amd64
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: java-windows-amd64
+          path: jdbc-artifacts/java-windows-amd64
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: java-osx-universal
+          path: jdbc-artifacts/java-osx-universal
+
+      - name: Combine JARs
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          export XML='
+            <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <servers>
+                <server>
+                  <id>ossrh</id>
+                  <username>hfmuehleisen</username> <!-- Sonatype OSSRH JIRA user/pw -->
+                  <password>PASSWORD</password>
+                </server>
+              </servers>
+            </settings> '
+            mkdir ~/.m2
+            echo $XML | sed "s/PASSWORD/${{ secrets.MAVEN_PASSWORD }}/" > ~/.m2/settings.xml
+            echo "${{ secrets.MAVEN_PGP_PK }}" | base64 -d > maven_pgp_key
+            gpg --import maven_pgp_key
+            python scripts/jdbc_maven_deploy.py ${{ github.ref_name }} jdbc-artifacts tools/jdbc
+          fi
+          ls -lahR jdbc-artifacts
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java-jars
+          path: |
+            jdbc-artifacts/results
+
+  jdbc-compliance:
+    name: JDBC Compliance
+    runs-on: ubuntu-18.04
+    needs: java-linux-amd64
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      BUILD_JDBC: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: |
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+          git clone https://github.com/cwida/jdbccts.git
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build
+        shell: bash
+        run: make release
+
+      - name: Test
+        shell: bash
+        run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
