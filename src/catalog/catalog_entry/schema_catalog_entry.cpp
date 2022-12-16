@@ -249,7 +249,7 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
-	if (!set.DropEntry(transaction, info->name, info->cascade)) {
+	if (!set.DropEntry(transaction, info->name, info->cascade, info->allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 

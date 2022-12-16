@@ -30,6 +30,8 @@ struct DropInfo : public ParseInfo {
 	//! Cascade drop (drop all dependents instead of throwing an error if there
 	//! are any)
 	bool cascade = false;
+	//! Allow dropping of internal system entries
+	bool allow_drop_internal = false;
 
 public:
 	unique_ptr<DropInfo> Copy() const {
@@ -40,6 +42,7 @@ public:
 		result->name = name;
 		result->if_exists = if_exists;
 		result->cascade = cascade;
+		result->allow_drop_internal = allow_drop_internal;
 		return result;
 	}
 };

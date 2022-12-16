@@ -330,6 +330,7 @@ struct UnregisterUdfTask : public Task {
 		duckdb::DropInfo info;
 		info.type = duckdb::CatalogType::SCALAR_FUNCTION_ENTRY;
 		info.name = name;
+		info.allow_drop_internal = true;
 		catalog.DropEntry(context, &info);
 		con.Commit();
 	}
