@@ -101,14 +101,14 @@ LIMIT 1;
 BIGINT	INTEGER	INTEGER
 
 statement ok
-COPY (SELECT [42::INT] a, [43::INT] b) TO '__TEST_DIR__/list1.parquet' (FORMAT PARQUET)
+COPY (SELECT [42::INT] a, [43::INT] b) TO '__TEST_DIR__/listubn1.parquet' (FORMAT PARQUET)
 
 statement ok
-COPY (SELECT [44::BIGINT] b, [45::INT] c) TO '__TEST_DIR__/list2.parquet' (FORMAT PARQUET)
+COPY (SELECT [44::BIGINT] b, [45::INT] c) TO '__TEST_DIR__/listubn2.parquet' (FORMAT PARQUET)
 
 query III
 SELECT a,b,c 
-FROM parquet_scan('__TEST_DIR__/list*.parquet', union_by_name=true)
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
 ORDER BY a;
 ----
 NULL	[44]	[45]
@@ -117,7 +117,7 @@ NULL	[44]	[45]
 
 query TTT
 SELECT typeof(a),typeof(b),typeof(c)
-FROM parquet_scan('__TEST_DIR__/list*.parquet', union_by_name=true)
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
 LIMIT 1;
 ----
 INTEGER[]	BIGINT[]	INTEGER[]
