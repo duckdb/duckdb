@@ -30,7 +30,8 @@ jobs:
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
-
+    env:
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -54,10 +55,10 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         run: |
-          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash
@@ -98,11 +99,11 @@ jobs:
         run: ./scripts/node_build.sh 17
 
       - name: Node 18
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 18
 
       - name: Node 19
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
         shell: bash
         run: ./scripts/node_build.sh 19
 
@@ -116,6 +117,7 @@ jobs:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
+      DUCKDB_NODE_BUILD_CACHE: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -126,14 +128,21 @@ jobs:
         with:
           key: ${{ github.job }}
 
-      - name: Build extensions
+      - name: Build DuckDB
         shell: bash
         if: matrix.target_arch == 'x64'
         run: |
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
           echo $OPENSSL_ROOT_DIR
-          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
+
+      - name: Build DuckDB
+        shell: bash
+        if: matrix.target_arch == 'arm64'
+        run: |
+          brew install ninja
+          GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
 
       - name: Setup
         shell: bash
@@ -199,7 +208,7 @@ jobs:
           - isRelease: false
             node: 17
           - isRelease: false
-            node: 18
+            node: 19
 
     steps:
       - uses: actions/setup-python@v2
