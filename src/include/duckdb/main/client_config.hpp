@@ -69,6 +69,9 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
+	//! If this context should also try to use the available replacement scans
+	//! True by default
+	bool use_replacement_scans = true;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;

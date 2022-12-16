@@ -1,11 +1,9 @@
-var sqlite3 = require('..');
-var assert = require('assert');
+import * as sqlite3 from '..';
+import * as assert from 'assert';
 
 // TODO
-return
-
-describe('named columns', function() {
-    var db;
+describe.skip('named columns', function() {
+    var db: sqlite3.Database;
     before(function(done) {
         db = new sqlite3.Database(':memory:', done);
     });

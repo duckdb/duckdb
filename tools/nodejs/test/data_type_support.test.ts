@@ -1,8 +1,9 @@
-var sqlite3 = require("..");
-var assert = require("assert");
+import * as sqlite3 from "..";
+import * as assert from "assert";
+import {RowData, TableData} from "..";
 
 describe("data type support", function () {
-  let db;
+  let db: sqlite3.Database;
   before(function (done) {
     db = new sqlite3.Database(":memory:", done);
   });
@@ -14,9 +15,9 @@ describe("data type support", function () {
     values.forEach((bool) => {
       stmt.run(bool);
     });
-    db.prepare("SELECT i from boolean_table;").all((err, res) => {
-      assert(err === null);
-      assert(res.every((v, i) => v.i === values[i]));
+    db.prepare("SELECT i from boolean_table;").all((err: null | Error, res: TableData) => {
+      assert.equal(err, null);
+      assert.ok(res.every((v, i) => v.i === values[i]));
       done();
     });
   });
@@ -26,9 +27,9 @@ describe("data type support", function () {
     const stmt = db.prepare("INSERT INTO integer_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 
     // Numerical limits
-    signedMinValue = (bitWidth) => Math.max(-(2**(bitWidth-1)-1)-1, Number.MIN_SAFE_INTEGER);
-    signedMaxValue = (bitWidth) => Math.min(2**(bitWidth-1)-1, Number.MAX_SAFE_INTEGER);
-    unsignedMaxValue = (bitWidth) => Math.min(2**(bitWidth)-1, Number.MAX_SAFE_INTEGER);
+    let signedMinValue = (bitWidth: number) => Math.max(-(2**(bitWidth-1)-1)-1, Number.MIN_SAFE_INTEGER);
+    let signedMaxValue = (bitWidth: number) => Math.min(2**(bitWidth-1)-1, Number.MAX_SAFE_INTEGER);
+    let unsignedMaxValue = (bitWidth: number) => Math.min(2**(bitWidth)-1, Number.MAX_SAFE_INTEGER);
     let minValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), 0, 0, 0, 0];
     let maxValues = [signedMinValue(8), signedMinValue(16), signedMinValue(32), signedMinValue(64), unsignedMaxValue(8), unsignedMaxValue(16), unsignedMaxValue(32), unsignedMaxValue(64)];
 
@@ -36,11 +37,11 @@ describe("data type support", function () {
     stmt.run(...minValues);
     stmt.run(...maxValues);
 
-    db.prepare("SELECT * from integer_table;").all((err, res) => {
-      assert(err === null);
-      assert(res.length === 2);
-      assert(Object.entries(res[0]).length === 8);
-      assert(Object.entries(res[1]).length === 8);
+    db.prepare("SELECT * from integer_table;").all((err: null | Error, res: TableData) => {
+      assert.equal(err, null);
+      assert.equal(res.length, 2);
+      assert.equal(Object.entries(res[0]).length, 8);
+      assert.equal(Object.entries(res[1]).length, 8);
       assert.deepEqual(Object.entries(res[0]).map(v => v[1]), minValues);
       assert.deepEqual(Object.entries(res[1]).map(v => v[1]), maxValues);
       done();
@@ -54,8 +55,8 @@ describe("data type support", function () {
     INTERVAL 5 DAY as days,
     INTERVAL 4 MONTH as months,
     INTERVAL 4 MONTH + INTERVAL 5 DAY + INTERVAL 1 MINUTE as combined;`
-    ).each((err, row) => {
-      assert(err === null);
+    ).each((err: null | Error, row: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(row.minutes, {
         months: 0,
         days: 0,
@@ -74,7 +75,7 @@ describe("data type support", function () {
 
   it("supports STRUCT values", function (done) {
     db.prepare(`SELECT {'x': 1, 'y': 2, 'z': {'a': 'b'}} as struct`).each(
-      (err, row) => {
+      (err: null | Error, row: RowData) => {
         assert.deepEqual(row.struct, { x: 1, y: 2, z: { a: "b" } });
         done();
       }
@@ -86,8 +87,8 @@ describe("data type support", function () {
     db.run("INSERT INTO struct_table VALUES ({'a': 'hello', 'b': true})");
     db.run("INSERT INTO struct_table VALUES ({'a': 'goodbye', 'b': false})");
     db.run("INSERT INTO struct_table VALUES ({'a': 'aloha', 'b': NULL})");
-    db.prepare("SELECT s from struct_table;").all((err, res) => {
-      assert(err === null);
+    db.prepare("SELECT s from struct_table;").all((err: null | Error, res: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(res, [
         { s: { a: "hello", b: true } },
         { s: { a: "goodbye", b: false } },
@@ -106,8 +107,8 @@ describe("data type support", function () {
       {'a': 43, 'b': NULL}
    ] l UNION ALL SELECT NULL`
     );
-    db.prepare("SELECT l from recursive_struct").all((err, res) => {
-      assert(err === null);
+    db.prepare("SELECT l from recursive_struct").all((err: null | Error, res: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(res, [
         {
           l: [
@@ -135,32 +136,32 @@ describe("data type support", function () {
   });
 
   it("supports LIST values", function (done) {
-    db.prepare(`SELECT ['duck', 'duck', 'goose'] as list`).each((err, row) => {
-      assert(err === null);
+    db.prepare(`SELECT ['duck', 'duck', 'goose'] as list`).each((err: null | Error, row: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(row.list, ["duck", "duck", "goose"]);
       done();
     });
   });
 
   it("supports LIST with NULL values", function (done) {
-    db.prepare(`SELECT ['duck', 'duck', NULL] as list`).each((err, row) => {
-      assert(err === null);
+    db.prepare(`SELECT ['duck', 'duck', NULL] as list`).each((err: null | Error, row: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(row.list, ["duck", "duck", null]);
       done();
     });
   });
 
   it("supports DATE values", function (done) {
-    db.prepare(`SELECT '2021-01-01'::DATE as dt;`).each((err, row) => {
-      assert(err === null);
+    db.prepare(`SELECT '2021-01-01'::DATE as dt;`).each((err: null | Error, row: RowData) => {
+      assert.equal(err, null);
       assert.deepEqual(row.dt, new Date(Date.UTC(2021, 0, 1)));
       done();
     });
   });
   it("supports TIMESTAMP values", function (done) {
     db.prepare(`SELECT '2021-01-01T00:00:00'::TIMESTAMP as ts;`).each(
-      (err, row) => {
-        assert(err === null);
+      (err: null | Error, row: RowData) => {
+        assert.equal(err, null);
         assert.deepEqual(row.ts, new Date(Date.UTC(2021, 0, 1)));
         done();
       }
@@ -168,8 +169,8 @@ describe("data type support", function () {
   });
   it("supports TIMESTAMP WITH TIME ZONE values", function (done) {
     db.prepare(`SELECT '2021-01-01T00:00:00Z'::TIMESTAMPTZ as tstz;`).each(
-      (err, row) => {
-        assert(err === null);
+      (err: null | Error, row: RowData) => {
+        assert.equal(err, null);
         assert.deepEqual(row.tstz, new Date(Date.UTC(2021, 0, 1)));
         done();
       }
@@ -182,14 +183,14 @@ describe("data type support", function () {
     values.forEach((d) => {
       stmt.run(d);
     });
-    db.prepare("SELECT d from decimal_table;").all((err, res) => {
-      assert(err === null);
-      assert(res.every((v, i) => v.d === values[i]));
+    db.prepare("SELECT d from decimal_table;").all((err: null | Error, res: TableData) => {
+      assert.equal(err, null);
+      assert.ok(res.every((v, i) => v.d === values[i]));
       done();
     });
   });
   it("converts unsupported data types to strings", function(done) {
-      db.all("SELECT CAST('11:10:10' AS TIME) as time", function(err, rows) {
+      db.all("SELECT CAST('11:10:10' AS TIME) as time", function(err: null | Error, rows: TableData) {
           assert.equal(rows[0].time, '11:10:10');
           done();
       });

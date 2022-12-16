@@ -2,46 +2,43 @@
  * Intended to be similar to stubtest for python
  */
 
-var duckdb = require("..");
-var jsdoc = require("jsdoc3-parser");
+import * as duckdb from "..";
+// @ts-ignore
+import jsdoc from "jsdoc3-parser";
 const { expect } = require('chai');
 const { promisify } = require('util');
 
-function lastDot(string) {
+function lastDot(string: string) {
   if (string.endsWith(')')) {
-    string = string.substr(0, string.length - 1);
+    string = string.substring(0, string.length - 1);
   }
   const array = string.split('.');
   return array[array.length - 1];
 }
 
-/**
- * @typedef {Object} Node
- * @property {string} name
- * @property {string} memberof
- * @property {string} longname
- * @property {string} scope
- */
-
+export interface Node {
+  undocumented: boolean;
+  name: string;
+  memberof: string;
+  longname: string;
+  scope: string;
+}
 describe("JSDoc contains all methods", () => {
-  /**
-   * @type {Node[]}
-   */
-  let docs;
+  let docs: Node[];
   before(async () => {
     docs = await promisify(jsdoc)(require.resolve("../lib/duckdb"));
   })
 
-  function checkDocs(obj, scope) {
+  function checkDocs(obj: object, scope: string) {
     const symbols = Object.getOwnPropertySymbols(obj).map(i => lastDot(i.toString()));
     const expected = Object
       .getOwnPropertyNames(obj)
       .concat(symbols)
       .sort()
-      .filter(name => name !== 'constructor');
+      .filter(name => name !== 'constructor' && name !== 'default');
 
     const actual = docs
-      .filter((node) => node.memberof === scope && !node.undocumented)
+      .filter((node) => node.memberof === scope && !node.undocumented && node.name !== 'sql')  // `sql` is a field, so won't show up in the prototype
       .map((node) => lastDot(node.name))
       .sort();
 
@@ -50,7 +47,9 @@ describe("JSDoc contains all methods", () => {
 
   for (const clazz of ['Database', 'QueryResult', 'Connection', 'Statement']) {
     it(clazz, () => {
-      checkDocs(duckdb[clazz].prototype, `module:duckdb~${clazz}`);
+      // @ts-ignore
+      let clazzObj = duckdb[clazz];
+      checkDocs(clazzObj.prototype, `module:duckdb~${clazz}`);
     });
   }
 

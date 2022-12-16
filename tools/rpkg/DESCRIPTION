@@ -62,5 +62,5 @@ Suggests:
     withr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.2
+RoxygenNote: 7.2.3
 SystemRequirements: C++11, GCC on Solaris
