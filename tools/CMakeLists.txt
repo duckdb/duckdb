@@ -6,10 +6,6 @@ if(JDBC_DRIVER)
   add_subdirectory(jdbc)
 endif()
 
-if(BUILD_NODE)
-  add_subdirectory(nodejs)
-endif()
-
 if(BUILD_ODBC_DRIVER)
   add_subdirectory(odbc)
 endif()
