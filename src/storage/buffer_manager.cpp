@@ -264,7 +264,9 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(*this, block_id);
 	// for meta block, cache the handle in meta_blocks
-	if (is_meta_block) meta_blocks[block_id] = result;
+	if (is_meta_block) {
+		meta_blocks[block_id] = result;
+	}
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
