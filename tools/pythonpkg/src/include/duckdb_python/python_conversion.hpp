@@ -38,6 +38,7 @@ enum class PythonObjectType {
 	List,
 	Dict,
 	NdArray,
+	NdDatetime,
 };
 
 PythonObjectType GetPythonObjectType(py::handle &ele);

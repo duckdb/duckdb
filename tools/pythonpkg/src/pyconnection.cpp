@@ -66,9 +66,8 @@ bool DuckDBPyConnection::IsJupyter() {
 	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
-void DuckDBPyConnection::Initialize(py::handle &m) {
-	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
-	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
+	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -82,14 +81,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
-	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
-	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
-	         py::kw_only(), py::arg("date_as_object") = false)
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1,
 	         py::kw_only(), py::arg("date_as_object") = false)
-	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
@@ -144,14 +143,22 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter)
-	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
 
+void DuckDBPyConnection::Initialize(py::handle &m) {
+	auto connection_module =
+	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
+
+	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+
+	InitializeConnectionMethods(connection_module);
+	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
 
