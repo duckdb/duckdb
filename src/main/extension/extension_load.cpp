@@ -42,15 +42,12 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	}
 
 	if (!fs.FileExists(filename)) {
-		string extra_error;
-		for (idx_t i = 0, ext_count = ExtensionHelper::DefaultExtensionCount(); i < ext_count; i++) {
-			if (ExtensionHelper::GetDefaultExtension(i).name == extension) {
-				extra_error = "\nExtension \"" + extension +
-				              "\" is a known extension. Install it first using \"INSTALL " + extension + "\".";
-				break;
-			}
+		string message;
+		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
+		if (exact_match) {
+			message += "\nInstall it first using \"INSTALL " + extension + "\".";
 		}
-		throw IOException("Extension \"%s\" not found%s", filename, extra_error);
+		throw IOException("Extension \"%s\" not found.\n%s", filename, message);
 	}
 	{
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
