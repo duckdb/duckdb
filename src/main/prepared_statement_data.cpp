@@ -28,8 +28,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<V
 		// parameters not yet bound: query always requires a rebind
 		return true;
 	}
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
-	if (catalog.GetCatalogVersion() != catalog_version) {
+	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {
 		//! context is out of bounds
 		return true;
 	}
