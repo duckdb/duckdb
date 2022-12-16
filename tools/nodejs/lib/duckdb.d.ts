@@ -61,6 +61,15 @@ export class IpcResultStreamIterator implements AsyncIterator<Uint8Array>, Async
   toArray(): Promise<ArrowArray>;
 }
 
+export interface ReplacementScanResult {
+  function: string;
+  parameter: string;
+}
+
+export type ReplacementScanCallback = (
+  table: string
+) => ReplacementScanResult | null;
+
 export class Database {
   constructor(path: string, accessMode?: number | Record<string,string>, callback?: Callback<any>);
   constructor(path: string, callback?: Callback<any>);
@@ -99,6 +108,11 @@ export class Database {
   register_buffer(name: string, array: ArrowIterable, force: boolean, callback?: Callback<void>): void;
 
   unregister_buffer(name: string, callback?: Callback<void>): void;
+
+  register_replacement_scan(
+    replacementScan: ReplacementScanCallback,
+    callback?: Callback<void>
+  ): void;
 }
 
 export class Statement {

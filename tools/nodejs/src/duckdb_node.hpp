@@ -56,6 +56,11 @@ struct Task {
 
 class Connection;
 
+struct JSRSArgs;
+void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, JSRSArgs *data);
+
+typedef Napi::TypedThreadSafeFunction<std::nullptr_t, JSRSArgs, DuckDBNodeRSLauncher> duckdb_node_rs_function_t;
+
 class Database : public Napi::ObjectWrap<Database> {
 public:
 	explicit Database(const Napi::CallbackInfo &info);
@@ -83,6 +88,7 @@ public:
 	Napi::Value Parallelize(const Napi::CallbackInfo &info);
 	Napi::Value Interrupt(const Napi::CallbackInfo &info);
 	Napi::Value Close(const Napi::CallbackInfo &info);
+	Napi::Value RegisterReplacementScan(const Napi::CallbackInfo &info);
 
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;

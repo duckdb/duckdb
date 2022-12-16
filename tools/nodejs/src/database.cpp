@@ -1,6 +1,12 @@
 #include "duckdb_node.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "napi.h"
+
+#include <iostream>
+#include <thread>
 
 namespace node_duckdb {
 
@@ -13,7 +19,8 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	    env, "Database",
 	    {InstanceMethod("close_internal", &Database::Close), InstanceMethod("wait", &Database::Wait),
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
-	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt)});
+	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
+	     InstanceMethod("register_replacement_scan", &Database::RegisterReplacementScan)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -265,6 +272,102 @@ Napi::Value Database::Interrupt(const Napi::CallbackInfo &info) {
 
 Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
 	return Connection::constructor.New({Value()});
+}
+
+struct JSRSArgs {
+	std::string table = "";
+	std::string function = "";
+	duckdb::Value parameter;
+	bool done = false;
+	duckdb::PreservedError error;
+};
+
+struct NodeReplacementScanData : duckdb::ReplacementScanData {
+	NodeReplacementScanData(duckdb_node_rs_function_t rs) : rs(std::move(rs)) {};
+	duckdb_node_rs_function_t rs;
+};
+
+void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, JSRSArgs *jsargs) {
+	try {
+		Napi::EscapableHandleScope scope(env);
+		auto arg = Napi::String::New(env, jsargs->table);
+		auto result = jsrs({arg});
+		if (result && result.IsObject()) {
+			auto obj = result.As<Napi::Object>();
+			jsargs->function = obj.Get("function").ToString().Utf8Value();
+			jsargs->parameter = duckdb::Value(obj.Get("parameter").ToString().Utf8Value());
+		} else if (!result.IsNull()) {
+			throw duckdb::Exception("Invalid scan replacement result");
+		}
+	} catch (const duckdb::Exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
+	} catch (const std::exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
+	}
+	jsargs->done = true;
+}
+
+static duckdb::unique_ptr<duckdb::TableFunctionRef>
+ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
+	JSRSArgs jsargs;
+	jsargs.table = table_name;
+	((NodeReplacementScanData *)data)->rs.BlockingCall(&jsargs);
+	while (!jsargs.done) {
+		std::this_thread::yield();
+	}
+	if (jsargs.error) {
+		jsargs.error.Throw();
+	}
+	if (jsargs.function != "") {
+		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
+		std::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
+		duckdb::vector<duckdb::Value> params;
+
+		params.push_back(jsargs.parameter);
+		children.push_back(
+		    duckdb::make_unique<duckdb::ConstantExpression>(duckdb::Value::LIST(std::move(params))));
+
+		table_function->function =
+		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
+		return table_function;
+	}
+	return nullptr;
+}
+
+struct RegisterRsTask : public Task {
+	RegisterRsTask(Database &database, duckdb_node_rs_function_t rs, Napi::Function callback)
+	    : Task(database, callback), rs(std::move(rs)) {
+	}
+
+	void DoWork() override {
+		auto &database = Get<Database>();
+		if (database.database) {
+			database.database->instance->config.replacement_scans.emplace_back(
+			    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(rs));
+		}
+	}
+	duckdb_node_rs_function_t rs;
+};
+
+Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+	if (info.Length() < 1) {
+		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+	Napi::Function rs_callback = info[0].As<Napi::Function>();
+	Napi::Function completion_callback;
+	if (info.Length() > 1 && info[1].IsFunction()) {
+		completion_callback = info[1].As<Napi::Function>();
+	}
+
+	auto rs = duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs", 0, 1, nullptr,
+	                                         [](Napi::Env, void *, std::nullptr_t *ctx) {});
+	rs.Unref(env);
+
+	Schedule(info.Env(), duckdb::make_unique<RegisterRsTask>(*this, rs, completion_callback));
+
+	return info.This();
 }
 
 } // namespace node_duckdb
