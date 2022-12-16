@@ -13,6 +13,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/execution_failure_vector.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -24,10 +25,13 @@ class ExpressionExecutor {
 	friend class CreateIndexLocalSinkState;
 
 public:
-	DUCKDB_API explicit ExpressionExecutor(ClientContext &context);
-	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression);
-	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression);
-	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions);
+	DUCKDB_API explicit ExpressionExecutor(ClientContext &context, ExecutionFailureVector *failure_vector = nullptr);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression,
+	                              ExecutionFailureVector *failure_vector = nullptr);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression,
+	                              ExecutionFailureVector *failure_vector = nullptr);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
+	                              ExecutionFailureVector *failure_vector = nullptr);
 	ExpressionExecutor(ExpressionExecutor &&) = delete;
 
 	//! The expressions of the executor
@@ -154,6 +158,8 @@ private:
 	ClientContext *context;
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
+	//! The optional failure vector of this expression executor
+	ExecutionFailureVector *failure_vector;
 
 private:
 	// it is possible to create an expression executor without a ClientContext - but it should be avoided

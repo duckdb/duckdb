@@ -255,8 +255,8 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
-static PreservedError VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table,
-                                                       DataChunk &chunk, Expression &expr, column_t index) {
+static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
+                                             Expression &expr, column_t index) {
 	auto &col = table.columns.GetColumn(LogicalIndex(index));
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(context, expr);
@@ -265,10 +265,9 @@ static PreservedError VerifyGeneratedExpressionSuccess(ClientContext &context, T
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
 		// FIXME: should this be this lenient? assertions are also caught this way
-		return ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                           col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
+		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
+		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
-	return PreservedError();
 }
 
 static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &table, Expression &expr,
@@ -353,14 +352,16 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	vector<string> err_msgs, tran_err_msgs;
 	err_msgs.resize(count);
 	tran_err_msgs.resize(count);
+	ExecutionFailureVector errors(false, count, true);
+	ExecutionFailureVector transaction_errors(false, count, true);
 
-	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, err_msgs);
+	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, errors);
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &local_storage = LocalStorage::Get(context);
 	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
-		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, tran_err_msgs);
+		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, transaction_errors);
 	}
 
 	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
@@ -368,8 +369,8 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		if (!transaction_check) {
 			// if there is no transaction-local data we only need to check if there is an error message in the main
 			// index
-			if (!err_msgs[i].empty()) {
-				throw ConstraintException(err_msgs[i]);
+			if (errors.HasFailure(i)) {
+				errors.GetFailure(i).Throw();
 			} else {
 				continue;
 			}
@@ -377,20 +378,19 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		if (is_append) {
 			// if we are appending we need to check to ensure the foreign key exists in either the transaction-local
 			// storage or the main table
-			if (!err_msgs[i].empty() && !tran_err_msgs[i].empty()) {
-				throw ConstraintException(err_msgs[i]);
+			if (errors.HasFailure(i) && transaction_errors.HasFailure(i)) {
+				errors.GetFailure(i).Throw();
 			} else {
 				continue;
 			}
 		}
 		// if we are deleting we need to ensure the foreign key DOES NOT exist in EITHER the transaction-local storage
 		// OR the main table
-		if (!err_msgs[i].empty() || !tran_err_msgs[i].empty()) {
-			string &err_msg = err_msgs[i];
-			if (err_msg.empty()) {
-				err_msg = tran_err_msgs[i];
-			}
-			throw ConstraintException(err_msg);
+		if (errors.HasFailure(i)) {
+			errors.GetFailure(i).Throw();
+		}
+		if (transaction_errors.HasFailure(i)) {
+			transaction_errors.GetFailure(i).Throw();
 		}
 	}
 }
@@ -415,7 +415,10 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
-PreservedError DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+ExecutionFailureVector DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context,
+                                                          DataChunk &chunk, bool should_throw) {
+	ExecutionFailureVector execution_status(should_throw, chunk.size());
+
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
@@ -429,10 +432,7 @@ PreservedError DataTable::VerifyAppendConstraints(TableCatalogEntry &table, Clie
 			generated_check_binder.target_type = col.Type();
 			auto to_be_bound_expression = col.GeneratedExpression().Copy();
 			auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
-			auto error = VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
-			if (error.HasError()) {
-				return error;
-			}
+			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
 		}
 	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
@@ -454,7 +454,7 @@ PreservedError DataTable::VerifyAppendConstraints(TableCatalogEntry &table, Clie
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
 			info->indexes.Scan([&](Index &index) {
-				index.VerifyAppend(chunk);
+				index.VerifyAppend(chunk, execution_status);
 				return false;
 			});
 			break;
@@ -471,7 +471,7 @@ PreservedError DataTable::VerifyAppendConstraints(TableCatalogEntry &table, Clie
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-	return PreservedError();
+	return execution_status;
 }
 
 void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &context) {
@@ -495,11 +495,9 @@ PreservedError DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	auto error = VerifyAppendConstraints(table, context, chunk);
+	auto error = VerifyAppendConstraints(table, context, chunk, true);
 	// FIXME: change to only throw on TransactionException
-	if (error.HasError()) {
-		error.Throw();
-	}
+	D_ASSERT(error.AllSucceeded());
 
 	// append to the transaction local data
 	LocalStorage::Append(state, chunk);

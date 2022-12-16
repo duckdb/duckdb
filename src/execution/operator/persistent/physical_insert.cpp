@@ -153,10 +153,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		auto error = table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+		bool should_throw = this->action_type == InsertConflictActionType::THROW;
+		auto error = table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
 		// FIXME: only throw on transaction exception
-		if (error.HasError()) {
-			error.Throw();
+		if (!error.AllSucceeded()) {
+			throw NotImplementedException("UPSERT not implemented yet");
 		}
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {

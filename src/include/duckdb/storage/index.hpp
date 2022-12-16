@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/execution_failure_vector.hpp"
 
 namespace duckdb {
 
@@ -71,11 +72,11 @@ public:
 	virtual bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
-	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	virtual void VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
-	virtual void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
-	virtual void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;

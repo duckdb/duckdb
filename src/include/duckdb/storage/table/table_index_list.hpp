@@ -38,7 +38,7 @@ public:
 
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
-	                      vector<string> &err_msg);
+	                      ExecutionFailureVector &failure_vector);
 
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
 	vector<BlockPointer> SerializeIndexes(duckdb::MetaBlockWriter &writer);

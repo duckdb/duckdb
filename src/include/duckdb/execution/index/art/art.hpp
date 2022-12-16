@@ -78,11 +78,11 @@ public:
 	//! Append entries to the index
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
-	void VerifyAppend(DataChunk &chunk) override;
+	void VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
 	//! Verify that data can be appended to the index for foreign key constraint
-	void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
+	void VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
 	//! Verify that data can be delete from the index for foreign key constraint
-	void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
+	void VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
@@ -123,7 +123,7 @@ private:
 	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
-	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
+	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, ExecutionFailureVector &failure_vector);
 
 private:
 	//! The estimated ART memory consumption

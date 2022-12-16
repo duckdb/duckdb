@@ -6,11 +6,11 @@ namespace duckdb {
 
 InsertConflictActionType TransformConflictAction(duckdb_libpgquery::PGOnConflictClause *on_conflict) {
 	if (!on_conflict) {
-		return InsertConflictActionType::NONE;
+		return InsertConflictActionType::THROW;
 	}
 	switch (on_conflict->action) {
 	case duckdb_libpgquery::PG_ONCONFLICT_NONE:
-		return InsertConflictActionType::NONE;
+		return InsertConflictActionType::THROW;
 	case duckdb_libpgquery::PG_ONCONFLICT_NOTHING:
 		return InsertConflictActionType::NOTHING;
 	case duckdb_libpgquery::PG_ONCONFLICT_UPDATE:
@@ -44,7 +44,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 
 	auto conflict_action = TransformConflictAction(stmt->onConflictClause);
 
-	if (conflict_action != InsertConflictActionType::NONE) {
+	if (conflict_action != InsertConflictActionType::THROW) {
 		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
 	}
 	if (!stmt->selectStmt) {

@@ -410,16 +410,16 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 	return Insert(lock, expression_result, row_identifiers);
 }
 
-void ART::VerifyAppend(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND);
+void ART::VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
+	VerifyExistence(chunk, VerifyExistenceType::APPEND, failure_vector);
 }
 
-void ART::VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK, err_msg_ptr);
+void ART::VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
+	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK, failure_vector);
 }
 
-void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
-	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK, err_msg_ptr);
+void ART::VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
+	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK, failure_vector);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -874,7 +874,7 @@ string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, bool is_p
 	}
 }
 
-void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr) {
+void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, ExecutionFailureVector &failure_vector) {
 	if (verify_type != VerifyExistenceType::DELETE_FK && !IsUnique()) {
 		return;
 	}
@@ -903,11 +903,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		}
 		string key_name = GenerateKeyName(expression_chunk, unbound_expressions, i);
 		auto exception_msg = GenerateConstraintErrorMessage(verify_type, IsPrimary(), move(key_name));
-		if (err_msg_ptr) {
-			err_msg_ptr[i] = exception_msg;
-		} else {
-			throw ConstraintException(exception_msg);
-		}
+		failure_vector.SetFailure(i, ConstraintException(exception_msg));
 	}
 }
 

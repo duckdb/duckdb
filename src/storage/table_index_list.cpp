@@ -47,7 +47,7 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
 }
 
 void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
-                                      vector<string> &err_msgs) {
+                                      ExecutionFailureVector &failure_vector) {
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
@@ -56,9 +56,9 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
 	}
 	if (is_append) {
-		index->VerifyAppendForeignKey(chunk, err_msgs.data());
+		index->VerifyAppendForeignKey(chunk, failure_vector);
 	} else {
-		index->VerifyDeleteForeignKey(chunk, err_msgs.data());
+		index->VerifyDeleteForeignKey(chunk, failure_vector);
 	}
 }
 

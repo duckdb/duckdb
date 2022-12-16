@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	auto right = CreatePlan(*op.children[1]);
 
 	if (left->GetTypes() != right->GetTypes()) {
-		throw Exception("Type mismatch for SET OPERATION");
+		throw InvalidInputException("Type mismatch for SET OPERATION");
 	}
 
 	switch (op.type) {

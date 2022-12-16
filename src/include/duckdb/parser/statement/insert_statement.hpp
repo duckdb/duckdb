@@ -16,7 +16,7 @@ namespace duckdb {
 class ExpressionListRef;
 
 // Which action should we perform when a insert conflict occurs
-enum class InsertConflictActionType : uint8_t { NONE, NOTHING, UPDATE };
+enum class InsertConflictActionType : uint8_t { THROW, NOTHING, UPDATE };
 
 class InsertStatement : public SQLStatement {
 public:

@@ -36,7 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 	// CreatePlan of a LogicalRecursiveCTE must have happened before.
 	auto cte = recursive_cte_tables.find(op.cte_index);
 	if (cte == recursive_cte_tables.end()) {
-		throw Exception("Referenced recursive CTE does not exist.");
+		throw InvalidInputException("Referenced recursive CTE does not exist.");
 	}
 	chunk_scan->collection = cte->second.get();
 	return move(chunk_scan);
