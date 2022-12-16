@@ -42,7 +42,15 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	}
 
 	if (!fs.FileExists(filename)) {
-		throw IOException("Extension \"%s\" not found", filename);
+		string extra_error;
+		for (idx_t i = 0, ext_count = ExtensionHelper::DefaultExtensionCount(); i < ext_count; i++) {
+			if (ExtensionHelper::GetDefaultExtension(i).name == extension) {
+				extra_error = "\nExtension \"" + extension +
+				              "\" is a known extension. Install it first using \"INSTALL " + extension + "\".";
+				break;
+			}
+		}
+		throw IOException("Extension \"%s\" not found%s", filename, extra_error);
 	}
 	{
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
@@ -118,6 +126,10 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	auto &db = DatabaseInstance::GetDatabase(context);
+	auto &loaded_extensions = db.LoadedExtensions();
+	if (loaded_extensions.find(extension) != loaded_extensions.end()) {
+		return;
+	}
 
 	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
 	auto init_fun_name = res.basename + "_init";
