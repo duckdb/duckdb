@@ -85,7 +85,6 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 		if (info.catalog == TEMP_CATALOG) {
 			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
-		properties.modified_databases.insert(info.catalog);
 	} else {
 		if (info.catalog != TEMP_CATALOG) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
@@ -95,6 +94,9 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	auto schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
 	D_ASSERT(schema_obj->type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj->name;
+	if (!info.temporary) {
+		properties.modified_databases.insert(schema_obj->catalog->GetName());
+	}
 	return schema_obj;
 }
 

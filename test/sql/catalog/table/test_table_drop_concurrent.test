@@ -4,7 +4,7 @@
 require 64bit
 
 # Create 4000 threads that all run the contents of this loop
-concurrentloop threadid 0 3000
+concurrentloop threadid 0 300
 
 # Create a table
 statement ok

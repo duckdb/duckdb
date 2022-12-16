@@ -375,14 +375,19 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
+	auto &transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
 	for (auto &modified_database : statement.properties.modified_databases) {
 		auto entry = manager.GetDatabase(*this, modified_database);
+		if (!entry) {
+			throw InternalException("Database \"%s\" not found", modified_database);
+		}
 		if (entry->IsReadOnly()) {
 			throw Exception(StringUtil::Format(
 			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
+		transaction.ModifyDatabase(entry);
 	}
 
 	// bind the bound values before execution

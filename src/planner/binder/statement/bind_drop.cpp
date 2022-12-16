@@ -16,10 +16,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		// it also does not require a valid transaction
 		properties.requires_valid_transaction = false;
 		break;
-	case CatalogType::SCHEMA_ENTRY:
+	case CatalogType::SCHEMA_ENTRY: {
 		// dropping a schema is never read-only because there are no temporary schemas
-		properties.modified_databases.insert(stmt.info->catalog);
+		auto &catalog = Catalog::GetCatalog(context, stmt.info->catalog);
+		properties.modified_databases.insert(catalog.GetName());
 		break;
+	}
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::MACRO_ENTRY:

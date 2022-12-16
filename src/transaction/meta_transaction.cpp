@@ -7,7 +7,7 @@ namespace duckdb {
 
 MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p, idx_t catalog_version_p)
     : context(context_p), start_timestamp(start_timestamp_p), catalog_version(catalog_version_p), read_only(true),
-      active_query(MAXIMUM_QUERY_ID) {
+      active_query(MAXIMUM_QUERY_ID), modified_database(nullptr) {
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
@@ -78,6 +78,23 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	active_query = query_number;
 	for (auto &entry : transactions) {
 		entry.second->active_query = query_number;
+	}
+}
+
+void MetaTransaction::ModifyDatabase(AttachedDatabase *db) {
+	if (db->IsSystem() || db->IsTemporary()) {
+		// we can always modify the system and temp databases
+		return;
+	}
+	if (!modified_database) {
+		modified_database = db;
+		return;
+	}
+	if (db != modified_database) {
+		throw TransactionException(
+		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
+		    "single transaction can only write to a single persistent database.",
+		    db->GetName(), modified_database->GetName());
 	}
 }
 

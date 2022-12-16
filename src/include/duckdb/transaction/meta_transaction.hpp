@@ -50,11 +50,15 @@ public:
 	idx_t GetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
+	void ModifyDatabase(AttachedDatabase *db);
+
 private:
 	//! The set of active transactions for each database
 	unordered_map<AttachedDatabase *, Transaction *> transactions;
 	//! The set of transactions in order of when they were started
 	vector<AttachedDatabase *> all_transactions;
+	//! The database we are modifying - we can only modify one database per transaction
+	AttachedDatabase *modified_database;
 };
 
 } // namespace duckdb

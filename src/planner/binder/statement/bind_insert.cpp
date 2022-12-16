@@ -35,7 +35,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.modified_databases.insert(stmt.catalog);
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
 	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
