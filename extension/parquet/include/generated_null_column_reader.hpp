@@ -21,13 +21,14 @@ namespace duckdb {
 class GeneratedNullColumnReader : public ColumnReader {
 public:
 	GeneratedNullColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-	                              idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p);
+	                          idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p);
+
 public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override;
 
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
-			return nullptr;
+		return nullptr;
 	};
 
 	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,

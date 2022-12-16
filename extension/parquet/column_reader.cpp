@@ -842,12 +842,12 @@ idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t 
 // Generated Null Column Reader
 //===--------------------------------------------------------------------===//
 GeneratedNullColumnReader::GeneratedNullColumnReader(ParquetReader &reader, LogicalType type_p,
-                                                             const SchemaElement &schema_p, idx_t schema_idx_p,
-                                                             idx_t max_define_p, idx_t max_repeat_p)
+                                                     const SchemaElement &schema_p, idx_t schema_idx_p,
+                                                     idx_t max_define_p, idx_t max_repeat_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 idx_t GeneratedNullColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
-                                          uint8_t *repeat_out, Vector &result) {										
+                                      uint8_t *repeat_out, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::SetNull(result, true);
 	return num_values;

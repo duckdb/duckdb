@@ -116,14 +116,14 @@ public:
 	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
 	unordered_map<column_t, column_t> union_column_map;
 	//! If the parquet file has union_cols5  union_cols[5] will be true.
-	//! some parquet files may not have all union cols. 
+	//! some parquet files may not have all union cols.
 	vector<bool> is_union_cols;
-	//! All union cols will cast to same type. 
-	vector<LogicalType>  union_types;
-	//! Since We will call ParquetReader::CreateReader multiple times. 
-	//!When we have all union names remap the child_readers. 
+	//! All union cols will cast to same type.
+	vector<LogicalType> union_types;
+	//! Since We will call ParquetReader::CreateReader multiple times.
+	//! When we have all union names remap the child_readers.
 	bool have_init_schema;
-	//! Last idx before the generated cols. 
+	//! Last idx before the generated cols.
 	idx_t last_parquet_col;
 
 public:
