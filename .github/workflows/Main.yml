@@ -346,39 +346,7 @@ jobs:
       shell: bash
       run: make debug
 
- jdbc:
-    name: JDBC Compliance
-    runs-on: ubuntu-18.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      BUILD_JDBC: 1
-      GEN: ninja
 
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/cwida/jdbccts.git
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-
-    - name: Build
-      shell: bash
-      run: make release
-
-    - name: Test
-      shell: bash
-      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
  odbc:
     name: ODBC

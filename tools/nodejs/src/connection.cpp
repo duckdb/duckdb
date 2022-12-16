@@ -1,7 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb_node.hpp"
 #include "napi.h"
-
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include <iostream>
 #include <thread>
 
@@ -242,6 +244,7 @@ struct RegisterUdfTask : public Task {
 			// here we can do only DuckDB stuff because we do not have a functioning env
 
 			// Flatten all args to simplify udfs
+			bool all_constant = args.AllConstant();
 			args.Flatten();
 
 			JSArgs jsargs;
@@ -256,6 +259,9 @@ struct RegisterUdfTask : public Task {
 			}
 			if (jsargs.error) {
 				jsargs.error.Throw();
+			}
+			if (all_constant) {
+				result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
 			}
 		};
 
