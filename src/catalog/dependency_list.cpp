@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
 
 namespace duckdb {
 

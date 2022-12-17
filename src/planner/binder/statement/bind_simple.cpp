@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"

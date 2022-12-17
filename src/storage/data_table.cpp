@@ -19,6 +19,7 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

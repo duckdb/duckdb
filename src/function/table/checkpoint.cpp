@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 
 	AttachedDatabase *db;
 	auto &db_manager = DatabaseManager::Get(context);
-	if (input.inputs.size() > 0) {
+	if (!input.inputs.empty()) {
 		db = db_manager.GetDatabase(context, StringValue::Get(input.inputs[0]));
 	} else {
 		db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));

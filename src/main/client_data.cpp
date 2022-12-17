@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

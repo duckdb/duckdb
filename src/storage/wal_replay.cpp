@@ -17,6 +17,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

@@ -6,6 +6,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 

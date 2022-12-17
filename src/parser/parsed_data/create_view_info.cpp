@@ -1,12 +1,13 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA) {
 }
-CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_name)
-    : CreateInfo(CatalogType::VIEW_ENTRY, move(schema_p), move(catalog_p)), view_name(view_name) {
+CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_name_p)
+    : CreateInfo(CatalogType::VIEW_ENTRY, move(schema_p), move(catalog_p)), view_name(move(view_name_p)) {
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry *schema, string view_name)

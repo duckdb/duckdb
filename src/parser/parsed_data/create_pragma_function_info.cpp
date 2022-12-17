@@ -8,9 +8,9 @@ CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
 	functions.AddFunction(move(function));
 	internal = true;
 }
-CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_)
-    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(functions_) {
-	this->name = name;
+CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_p)
+    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(move(functions_p)) {
+	this->name = move(name);
 	internal = true;
 }
 

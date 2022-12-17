@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 

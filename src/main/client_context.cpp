@@ -46,6 +46,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/http_stats.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
