@@ -56,6 +56,25 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	return local_path;
 }
 
+bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
+	vector<string> candidates;
+	for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
+		candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
+	}
+	for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
+		candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
+	}
+	auto closest_extensions = StringUtil::TopNLevenshtein(candidates, extension_name);
+	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
+	for (auto &closest : closest_extensions) {
+		if (closest == extension_name) {
+			message = "Extension \"" + extension_name + "\" is an existing extension.\n";
+			return true;
+		}
+	}
+	return false;
+}
+
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -133,21 +152,10 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 
 	if (!res || res->status != 200) {
 		// create suggestions
-		vector<string> candidates;
-		for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
-			candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
-		}
-		for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
-			candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
-		}
-		auto closest_extensions = StringUtil::TopNLevenshtein(candidates, extension_name);
-		auto message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
-		for (auto &closest : closest_extensions) {
-			if (closest == extension_name) {
-				message = "Extension \"" + extension_name + "\" is an existing extension.\n";
-				message += "Are you using a development build? In this case, extensions might not (yet) be uploaded.";
-				break;
-			}
+		string message;
+		auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
+		if (exact_match) {
+			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
 		throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name, url_base,
 		                  url_local_part, message);
