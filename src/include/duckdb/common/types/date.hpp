@@ -168,13 +168,11 @@ public:
 
 	//! Extract year of a date entry
 	DUCKDB_API static int32_t ExtractYear(date_t date);
-	DUCKDB_API static int32_t ExtractYear(timestamp_t ts);
 	//! Extract year of a date entry, but optimized to first try the last year found
 	DUCKDB_API static int32_t ExtractYear(date_t date, int32_t *last_year);
 	DUCKDB_API static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	DUCKDB_API static int32_t ExtractMonth(date_t date);
-	DUCKDB_API static int32_t ExtractMonth(timestamp_t ts);
 	//! Extract day of a date entry
 	DUCKDB_API static int32_t ExtractDay(date_t date);
 	//! Extract the day of the week (1-7)

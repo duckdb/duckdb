@@ -9,8 +9,11 @@ statement ok
 CREATE TABLE dates(w INTERVAL, d DATE, shift INTERVAL, origin DATE);
 
 statement ok
-INSERT INTO dates VALUES
-	('10 days', '-infinity', '0 days', '1970-01-05'),
+INSERT INTO dates VALUES ('10 days', '-infinity', '0 days', '1970-01-05'),
+	('10 days', '3000-07-02 (BC)', '3 days', '3000-07-01 (BC)'),
+	('2 months', '1024-07-10 (BC)', '10 days', '1024-05-01 (BC)'),
+	('10 days', '0044-03-15 (BC)', '6 days', '0044-03-01 (BC)'),
+	('10 days', '0794-11-15', '1 week', '0790-11-01'),
 	('10 days', '1701-12-02', '0 days', '1970-01-05'),
 	('1 week', '1832-12-03', '0 days', '1970-01-05'),
 	('10 days', '1897-12-05', '2 days', '1970-01-07'),
@@ -27,6 +30,10 @@ query I
 select time_bucket('3 days'::interval, d) from dates;
 ----
 -infinity
+3000-07-01 (BC)
+1024-07-09 (BC)
+0044-03-13 (BC)
+0794-11-15
 1701-11-30
 1832-12-03
 1897-12-04
@@ -42,6 +49,10 @@ query I
 select time_bucket('3 years'::interval, d) from dates;
 ----
 -infinity
+3002-01-01 (BC)
+1025-01-01 (BC)
+0044-01-01 (BC)
+0794-01-01
 1700-01-01
 1832-01-01
 1895-01-01
@@ -67,11 +78,19 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket(w, d) from dates;
 ----
 -infinity
+3000-06-29 (BC)
+1024-07-01 (BC)
+0044-03-14 (BC)
+0794-11-11
 1701-11-26
 1832-12-03
 1897-11-28
@@ -87,6 +106,10 @@ query I
 select time_bucket('4 days'::interval, d, '6 hours'::interval) from dates;
 ----
 -infinity
+3000-07-01 (BC)
+1024-07-09 (BC)
+0044-03-14 (BC)
+0794-11-13
 1701-11-30
 1832-12-01
 1897-12-04
@@ -102,6 +125,10 @@ query I
 select time_bucket('2 weeks'::interval, d, '6 days'::interval) from dates;
 ----
 -infinity
+3000-06-21 (BC)
+1024-06-29 (BC)
+0044-03-10 (BC)
+0794-11-13
 1701-11-20
 1832-11-25
 1897-11-28
@@ -117,6 +144,10 @@ query I
 select time_bucket('3 months'::interval, d, '6 days'::interval) from dates;
 ----
 -infinity
+3000-04-07 (BC)
+1024-07-07 (BC)
+0044-01-07 (BC)
+0794-10-07
 1701-10-07
 1832-10-07
 1897-10-07
@@ -131,6 +162,10 @@ infinity
 query I
 select time_bucket(null::interval, d, '6 days'::interval) from dates;
 ----
+NULL
+NULL
+NULL
+NULL
 NULL
 NULL
 NULL
@@ -157,10 +192,18 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket('3 months'::interval, d, null::interval) from dates;
 ----
+NULL
+NULL
+NULL
+NULL
 NULL
 NULL
 NULL
@@ -177,6 +220,10 @@ query I
 select time_bucket(w, d, shift) from dates;
 ----
 -infinity
+3000-07-02 (BC)
+1024-05-11 (BC)
+0044-03-10 (BC)
+0794-11-08
 1701-11-26
 1832-12-03
 1897-11-30
@@ -192,6 +239,10 @@ query I
 select time_bucket('5 days'::interval, d, '1970-01-04'::date) from dates;
 ----
 -infinity
+3000-06-28 (BC)
+1024-07-08 (BC)
+0044-03-13 (BC)
+0794-11-15
 1701-11-30
 1832-12-03
 1897-12-02
@@ -207,6 +258,10 @@ query I
 select time_bucket('3 months'::interval, d, '1970-01-04'::date) from dates;
 ----
 -infinity
+3000-07-01 (BC)
+1024-07-01 (BC)
+0044-01-01 (BC)
+0794-10-01
 1701-10-01
 1832-10-01
 1897-10-01
@@ -222,6 +277,10 @@ query I
 select time_bucket('3 years'::interval, d, '1970-01-04'::date) from dates;
 ----
 -infinity
+3002-01-01 (BC)
+1025-01-01 (BC)
+0044-01-01 (BC)
+0794-01-01
 1700-01-01
 1832-01-01
 1895-01-01
@@ -236,6 +295,10 @@ infinity
 query I
 select time_bucket(null::interval, d, '1970-01-04'::date) from dates;
 ----
+NULL
+NULL
+NULL
+NULL
 NULL
 NULL
 NULL
@@ -262,10 +325,18 @@ NULL
 NULL
 NULL
 NULL
+NULL
+NULL
+NULL
+NULL
 
 query I
 select time_bucket('3 years'::interval, d, null::date) from dates;
 ----
+NULL
+NULL
+NULL
+NULL
 NULL
 NULL
 NULL
@@ -282,6 +353,10 @@ query I
 select time_bucket(w, d, origin) from dates;
 ----
 -infinity
+3000-07-01 (BC)
+1024-07-01 (BC)
+0044-03-11 (BC)
+0794-11-10
 1701-12-01
 1832-12-03
 1897-12-05
@@ -340,3 +415,52 @@ select time_bucket('3 months'::interval, '2019-05-05'::date, '2000000000 months'
 
 statement error
 select time_bucket('3 months'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+
+statement error
+select time_bucket('1 month'::interval, '5877642-06-25 (BC)'::date);
+
+query I
+select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);
+----
+5877642-07-01 (BC)
+
+statement error
+select time_bucket('1 week'::interval, '5877642-07-01 (BC)'::date);
+
+statement error
+select time_bucket('1 month'::interval, '5881580-07-10'::date, '-1 day'::interval);
+
+query I
+select time_bucket('1 month'::interval, '5881580-07-10'::date);
+----
+5881580-07-01
+
+statement error
+select time_bucket('1 week'::interval, '290309-12-21 (BC)'::date);
+
+statement error
+select time_bucket('1 week'::interval, '290309-12-22 (BC)'::date);
+
+statement error
+select time_bucket('1 day'::interval, '290309-12-21 (BC)'::date);
+
+query I
+select time_bucket('1 day'::interval, '290309-12-22 (BC)'::date);
+----
+290309-12-22 (BC)
+
+statement error
+select time_bucket('1 week'::interval, '294247-01-11'::date);
+
+query I
+select time_bucket('1 week'::interval, '294247-01-10'::date);
+----
+294247-01-04
+
+statement error
+select time_bucket('1 day'::interval, '294247-01-11'::date);
+
+query I
+select time_bucket('1 day'::interval, '294247-01-10'::date);
+----
+294247-01-10

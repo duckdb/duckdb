@@ -458,18 +458,10 @@ int32_t Date::ExtractYear(date_t d) {
 	return year;
 }
 
-int32_t Date::ExtractYear(timestamp_t ts) {
-	return Date::ExtractYear(Timestamp::GetDate(ts));
-}
-
 int32_t Date::ExtractMonth(date_t date) {
 	int32_t out_year, out_month, out_day;
 	Date::Convert(date, out_year, out_month, out_day);
 	return out_month;
-}
-
-int32_t Date::ExtractMonth(timestamp_t ts) {
-	return Date::ExtractMonth(Timestamp::GetDate(ts));
 }
 
 int32_t Date::ExtractDay(date_t date) {

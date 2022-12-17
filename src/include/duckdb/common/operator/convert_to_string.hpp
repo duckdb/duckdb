@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct ConvertToString {
 	template <class SRC>
-	static inline string Operation(SRC input) {
+	DUCKDB_API static inline string Operation(SRC input) {
 		throw InternalException("Unrecognized type for ConvertToString %s", GetTypeId<SRC>());
 	}
 };
