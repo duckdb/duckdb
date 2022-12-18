@@ -413,7 +413,7 @@ DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	return df;
 }
 
-py::object DuckDBPyRelation::FetchOne() {
+py::tuple DuckDBPyRelation::FetchOne() {
 	if (!result) {
 		ExecuteOrThrow();
 	}
@@ -421,7 +421,7 @@ py::object DuckDBPyRelation::FetchOne() {
 	return result->Fetchone();
 }
 
-py::object DuckDBPyRelation::FetchMany(idx_t size) {
+py::list DuckDBPyRelation::FetchMany(idx_t size) {
 	if (!result) {
 		ExecuteOrThrow();
 	}
@@ -429,7 +429,7 @@ py::object DuckDBPyRelation::FetchMany(idx_t size) {
 	return result->Fetchmany(size);
 }
 
-py::object DuckDBPyRelation::FetchAll() {
+py::list DuckDBPyRelation::FetchAll() {
 	if (!result) {
 		ExecuteOrThrow();
 	}

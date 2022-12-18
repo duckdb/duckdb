@@ -30,7 +30,7 @@ enum PySQLTokenType {
 	PY_SQL_TOKEN_COMMENT
 };
 
-static py::object PyTokenize(const string &query) {
+static py::list PyTokenize(const string &query) {
 	auto tokens = Parser::Tokenize(query);
 	py::list result;
 	for (auto &token : tokens) {

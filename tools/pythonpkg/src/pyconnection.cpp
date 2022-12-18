@@ -602,7 +602,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	return shared_from_this();
 }
 
-py::object DuckDBPyConnection::GetDescription() {
+py::list DuckDBPyConnection::GetDescription() {
 	if (!result) {
 		return py::none();
 	}
@@ -640,7 +640,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 }
 
 // these should be functions on the result but well
-py::object DuckDBPyConnection::FetchOne() {
+py::tuple DuckDBPyConnection::FetchOne() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
@@ -840,7 +840,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::object config_options) {
+                                                           py::dict config_options) {
 	if (config_options.is_none()) {
 		config_options = py::dict();
 	}

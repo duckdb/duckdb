@@ -119,10 +119,10 @@ public:
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
 
-	py::object GetDescription();
+	py::list GetDescription();
 
 	// these should be functions on the result but well
-	py::object FetchOne();
+	py::tuple FetchOne();
 
 	py::list FetchMany(idx_t size);
 
@@ -137,7 +137,7 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::dict config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 

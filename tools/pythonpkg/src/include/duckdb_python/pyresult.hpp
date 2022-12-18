@@ -30,7 +30,7 @@ public:
 	explicit DuckDBPyResult() {};
 
 public:
-	py::object Fetchone();
+	py::tuple Fetchone();
 
 	py::list Fetchmany(idx_t size);
 
@@ -57,7 +57,7 @@ public:
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	py::object FetchAllArrowChunks(idx_t chunk_size);
+	py::list FetchAllArrowChunks(idx_t chunk_size);
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
 

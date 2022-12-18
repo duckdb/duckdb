@@ -181,11 +181,11 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	py::object FetchOne();
+	py::tuple FetchOne();
 
-	py::object FetchAll();
+	py::list FetchAll();
 
-	py::object FetchMany(idx_t size);
+	py::list FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
 

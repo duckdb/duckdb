@@ -82,9 +82,9 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static py::object GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static py::list GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static py::object FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static py::tuple FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
