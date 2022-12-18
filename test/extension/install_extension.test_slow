@@ -24,5 +24,5 @@ FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb
 statement ok
 LOAD 'loadable_extension_demo';
 
-statement error
+statement ok
 LOAD 'loadable_extension_demo';
