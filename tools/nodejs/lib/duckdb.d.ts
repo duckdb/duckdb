@@ -16,11 +16,14 @@ export type RowData = {
 
 export type TableData = RowData[];
 
+export type ArrowBuffer = Iterable<Uint8Array> | AsyncIterable<Uint8Array>;
+export type ArrowArray = Uint8Array[];
+
 export class Connection {
   constructor(db: Database, callback?: Callback<any>);
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): void;
-  arrowIPCAll(sql: string, ...args: [...any, Callback<TableData>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<ArrowArray>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): void;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
@@ -41,11 +44,22 @@ export class Connection {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
-  arrowIPCStream(sql: any, ...args: any[]): QueryResult;
+  arrowIPCStream(sql: any, ...args: any[]): IpcResultStreamIterator;
+
+  register_buffer(name: string, array: ArrowBuffer, force: boolean, callback?: Callback<void>): void;
+  unregister_buffer(name: string, callback?: Callback<void>): void;
 }
 
-export class QueryResult {
+export class QueryResult implements AsyncIterable<RowData> {
   [Symbol.asyncIterator](): AsyncIterator<RowData>;
+}
+
+export class IpcResultStreamIterator implements AsyncIterator<Uint8Array>, AsyncIterable<Uint8Array> {
+  [Symbol.asyncIterator](): this;
+
+  next(...args: [] | [undefined]): Promise<IteratorResult<Uint8Array, any>>;
+
+  toArray(): Promise<ArrowArray>;
 }
 
 export class Database {
@@ -57,7 +71,7 @@ export class Database {
   connect(): Connection;
 
   all(sql: string, ...args: [...any, Callback<TableData>] | []): this;
-  arrowIPCAll(sql: string, ...args: [...any, Callback<QueryResult>] | []): void;
+  arrowIPCAll(sql: string, ...args: [...any, Callback<ArrowArray>] | []): void;
   each(sql: string, ...args: [...any, Callback<RowData>] | []): this;
   exec(sql: string, ...args: [...any, Callback<void>] | []): void;
 
@@ -72,7 +86,7 @@ export class Database {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
-  arrowIPCStream(sql: any, ...args: any[]): Promise<QueryResult>;
+  arrowIPCStream(sql: any, ...args: any[]): Promise<IpcResultStreamIterator>;
 
   serialize(done?: Callback<void>): void;
   parallelize(done?: Callback<void>): void;
@@ -83,7 +97,7 @@ export class Database {
 
   interrupt(): void;
 
-  register_buffer(name: string, array: ArrayLike<any>, force: boolean, callback?: Callback<void>): void;
+  register_buffer(name: string, array: ArrowBuffer, force: boolean, callback?: Callback<void>): void;
 
   unregister_buffer(name: string, callback?: Callback<void>): void;
 }
@@ -95,7 +109,7 @@ export class Statement {
 
   all(...args: [...any, Callback<TableData>] | any[]): this;
 
-  arrowIPCAll(...args: [...any, Callback<TableData>] | any[]): void;
+  arrowIPCAll(...args: [...any, Callback<ArrowArray>] | any[]): void;
 
   each(...args: [...any, Callback<RowData>] | any[]): this;
 
