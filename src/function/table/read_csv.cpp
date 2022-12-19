@@ -439,7 +439,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 // Single-Threaded CSV Reader
 //===--------------------------------------------------------------------===//
 struct SingleThreadedCSVState : public GlobalTableFunctionState {
-	SingleThreadedCSVState(idx_t total_files) : total_files(total_files), next_file(0), total_size(0), bytes_read(0) {
+	explicit SingleThreadedCSVState(idx_t total_files) : total_files(total_files), next_file(0), total_size(0), bytes_read(0) {
 	}
 
 	mutex csv_lock;
