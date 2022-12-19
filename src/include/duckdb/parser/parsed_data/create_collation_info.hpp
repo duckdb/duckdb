@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreateCollationInfo : public CreateInfo {
-	DUCKDB_API CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p, bool not_required_for_equality_p);
+	DUCKDB_API CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p,
+	                               bool not_required_for_equality_p);
 
 	//! The name of the collation
 	string name;
