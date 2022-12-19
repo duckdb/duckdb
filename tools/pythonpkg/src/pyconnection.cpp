@@ -841,14 +841,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            py::dict config_options) {
-	if (config_options.is_none()) {
-		config_options = py::dict();
-	}
-	if (!py::isinstance<py::dict>(config_options)) {
-		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
-	}
-	py::dict py_config_dict = config_options;
-	auto config_dict = TransformPyConfigDict(py_config_dict);
+	auto config_dict = TransformPyConfigDict(config_options);
 	DBConfig config(config_dict, read_only);
 
 	auto res = FetchOrCreateInstance(database, config);
