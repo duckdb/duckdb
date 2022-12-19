@@ -22,6 +22,8 @@ else
 	export TAG='--tag next'
 fi
 
+npm pack --dry-run
+
 # upload to npm, maybe
 if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
 	npm config set //registry.npmjs.org/:_authToken $NODE_AUTH_TOKEN
