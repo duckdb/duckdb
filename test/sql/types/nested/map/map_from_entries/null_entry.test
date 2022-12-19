@@ -6,22 +6,22 @@ statement ok
 PRAGMA enable_verification
 
 # Some of the structs provided are NULL
-query I
+statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[NULL, (1, 'x'), NULL, (2, 'y')]);
 ----
-{1=x, 2=y}
+Invalid Input Error: Map keys can not be NULL
 
 # Coverage
 query I
-SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), NULL, NULL, (2, 'y')]);
+SELECT MAP_FROM_ENTRIES(NULL);
 ----
-{1=x, 2=y}
+NULL
 
 # Coverage
-query I
-SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), NULL, NULL, (2, 'y'), NULL]);
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (NULL, 'z'), (2, 'y')]);
 ----
-{1=x, 2=y}
+Invalid Input Error: Map keys can not be NULL
 
 # --- Multi row ---
 
@@ -29,7 +29,7 @@ statement ok
 CREATE TABLE tbl (
 	input STRUCT(a INTEGER, b INTEGER)[]
 );
-INSERT INTO tbl VALUES([(5,3), (6,4), NULL]);
+INSERT INTO tbl VALUES([(5,3), (6,4)]);
 INSERT INTO tbl VALUES([(5,3), (6,4), (7,3)]);
 INSERT INTO tbl VALUES([(5,3), (6,4), (7,3)]);
 

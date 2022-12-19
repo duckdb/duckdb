@@ -220,10 +220,10 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::VARCHAR:
 		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		StructLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
+	case PhysicalType::MAP:
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;

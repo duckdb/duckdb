@@ -172,6 +172,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = StructStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::LIST:
+    case PhysicalType::MAP:
 		result = ListStatistics::Deserialize(reader, move(type));
 		break;
 	case PhysicalType::INTERVAL:

@@ -445,12 +445,6 @@ string LogicalType::ToString() const {
 		}
 		auto &key_type = MapType::KeyType(*this);
         auto &value_type = MapType::ValueType(*this);
-//		if (child_types.empty()) {
-//			return "MAP(?)";
-//		}
-//		if (child_types.size() != 2) {
-//			throw InternalException("Map needs exactly two child elements");
-//		}
 		return "MAP(" + key_type.ToString() + ", " +
 		       value_type.ToString() + ")";
 	}
@@ -1209,7 +1203,6 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	//return ListType::GetChildType(StructType::GetChildTypes(type)[0].second);
     return StructType::GetChildTypes(ListType::GetChildType(type))[0].second;
 }
 

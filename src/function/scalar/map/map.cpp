@@ -105,8 +105,6 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
     ListVector::Reserve(result, key_count);
     ListVector::SetListSize(result, key_count);
 
-
-
 	for (idx_t i = 0; i < args.size() ; i++) {
 		list_data[i].offset = args_data[i].offset;
 		list_data[i].length = args_data[i].length;
@@ -143,7 +141,6 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 		child_types.push_back(make_pair("value", empty));
 	}
 
-//	bound_function.return_type = LogicalType::MAP(LogicalType::STRUCT(move(child_types)));
     bound_function.return_type = LogicalType::MAP(ListType::GetChildType(child_types[0].second), ListType::GetChildType(child_types[1].second));
 
 	return make_unique<VariableReturnBindData>(bound_function.return_type);

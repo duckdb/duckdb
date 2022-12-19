@@ -23,16 +23,10 @@ statement ok
 INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')]);
 
 statement ok
-INSERT INTO t1 VALUES (ARRAY[NULL, NULL]);
-
-statement ok
-INSERT INTO t1 VALUES (ARRAY[NULL, (7,'g')]);
-
-statement ok
-INSERT INTO t1 VALUES (ARRAY[NULL, NULL]);
-
-statement ok
 INSERT INTO t1 VALUES (NULL);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(5, NULL), (2, 'T')]);
 
 query I
 SELECT MAP_FROM_ENTRIES(list) FROM t1;
@@ -40,9 +34,7 @@ SELECT MAP_FROM_ENTRIES(list) FROM t1;
 {1=x, 2=y, 4=s}
 {2=a, 3=b}
 NULL
-{7=g}
-NULL
-NULL
+{5=NULL, 2=T}
 
 query I
 SELECT CARDINALITY(MAP_FROM_ENTRIES(list)) FROM t1;
@@ -50,8 +42,14 @@ SELECT CARDINALITY(MAP_FROM_ENTRIES(list)) FROM t1;
 3
 2
 NULL
-1
-NULL
-NULL
+2
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(7,'g'), (NULL, 'Y')]);
+
+statement error
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+Invalid Input Error: Map keys can not be NULL
 
 

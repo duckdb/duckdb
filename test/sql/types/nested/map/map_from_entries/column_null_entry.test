@@ -16,7 +16,7 @@ statement ok
 INSERT INTO t1 VALUES (ARRAY[(6, 'h'), (7,'g')])
 
 statement ok
-INSERT INTO t1 VALUES (ARRAY[NULL, (7,'g')])
+INSERT INTO t1 VALUES (ARRAY[(10, NULL), (7,'g')])
 
 query I
 SELECT MAP_FROM_ENTRIES(list) FROM t1;
@@ -24,16 +24,20 @@ SELECT MAP_FROM_ENTRIES(list) FROM t1;
 {1=x, 2=y, 4=s}
 {2=a, 3=b}
 {6=h, 7=g}
-{7=g}
+{10=NULL, 7=g}
+
+query I
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+{1=x, 2=y, 4=s}
+{2=a, 3=b}
+{6=h, 7=g}
+{10=NULL, 7=g}
 
 statement ok
 INSERT INTO t1 VALUES (ARRAY[NULL, NULL])
 
-query I
+statement error
 SELECT MAP_FROM_ENTRIES(list) FROM t1;
 ----
-{1=x, 2=y, 4=s}
-{2=a, 3=b}
-{6=h, 7=g}
-{7=g}
-NULL
+Invalid Input Error: Map keys can not be NULL
