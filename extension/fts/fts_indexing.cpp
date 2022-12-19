@@ -21,8 +21,7 @@ string drop_fts_index_query(ClientContext &context, const FunctionParameters &pa
 	}
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	if (!catalog.schemas->GetEntry(context, fts_schema)) {
+	if (!Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true)) {
 		throw CatalogException(
 		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
 		    qname.name);
