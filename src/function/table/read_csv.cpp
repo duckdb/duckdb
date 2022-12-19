@@ -379,12 +379,9 @@ public:
 	CSVBufferRead previous_buffer;
 };
 
-unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
-                                                     GlobalTableFunctionState *global_state_p) {
+unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                             GlobalTableFunctionState *global_state_p) {
 	auto &csv_data = (ReadCSVData &)*input.bind_data;
-	if (csv_data.single_threaded) {
-		return nullptr;
-	}
 	auto &global_state = (ParallelCSVGlobalState &)*global_state_p;
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
 	unique_ptr<ParallelCSVReader> csv_reader;
@@ -448,77 +445,125 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 // Single-Threaded CSV Reader
 //===--------------------------------------------------------------------===//
 struct SingleThreadedCSVState : public GlobalTableFunctionState {
-	//! The CSV reader
-	unique_ptr<BufferedCSVReader> csv_reader;
+	SingleThreadedCSVState(idx_t total_files) : total_files(total_files), next_file(0), total_size(0), bytes_read(0) {
+	}
+
+	mutex csv_lock;
+	unique_ptr<BufferedCSVReader> initial_reader;
+	//! The total number of files to read from
+	idx_t total_files;
 	//! The index of the next file to read (i.e. current file + 1)
-	idx_t file_index;
+	atomic<idx_t> next_file;
 	//! Total File Size
-	idx_t file_size;
+	atomic<idx_t> total_size;
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
+	//! The set of SQL types
+	vector<LogicalType> sql_types;
 
 	idx_t MaxThreads() const override {
-		return 1;
+		return total_files;
 	}
+
+	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data) {
+		lock_guard<mutex> l(csv_lock);
+		if (initial_reader) {
+			return move(initial_reader);
+		}
+		if (next_file >= total_files) {
+			return nullptr;
+		}
+		bind_data.options.file_path = bind_data.files[next_file];
+		auto result = make_unique<BufferedCSVReader>(context, bind_data.options, sql_types);
+		total_size += result->file_handle->FileSize();
+		next_file++;
+		return result;
+	}
+};
+
+struct SingleThreadedCSVLocalState : public LocalTableFunctionState {
+public:
+	explicit SingleThreadedCSVLocalState() : bytes_read(0) {
+	}
+
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+	//! The current amount of bytes read by this reader
+	idx_t bytes_read;
 };
 
 static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto result = make_unique<SingleThreadedCSVState>();
+	auto result = make_unique<SingleThreadedCSVState>(bind_data.files.size());
 	if (bind_data.initial_reader) {
-		result->csv_reader = move(bind_data.initial_reader);
+		result->initial_reader = move(bind_data.initial_reader);
 	} else if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
+		result->initial_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
-	result->file_size = result->csv_reader->file_handle->FileSize();
-	result->file_index = 1;
+	result->total_size = result->initial_reader->file_handle->FileSize();
+	result->next_file = 1;
+	if (result->initial_reader) {
+		result->sql_types = result->initial_reader->sql_types;
+	}
+	return move(result);
+}
+
+unique_ptr<LocalTableFunctionState> SingleThreadedReadCSVInitLocal(ExecutionContext &context,
+                                                                   TableFunctionInitInput &input,
+                                                                   GlobalTableFunctionState *global_state_p) {
+	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &data = (SingleThreadedCSVState &)*global_state_p;
+	auto result = make_unique<SingleThreadedCSVLocalState>();
+	result->csv_reader = data.GetCSVReader(context.client, bind_data);
 	return move(result);
 }
 
 static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
 	auto &data = (SingleThreadedCSVState &)*data_p.global_state;
-
-	if (!data.csv_reader) {
+	auto &lstate = (SingleThreadedCSVLocalState &)*data_p.local_state;
+	if (!lstate.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
 		return;
 	}
 
 	do {
-		data.csv_reader->ParseCSV(output);
-		data.bytes_read = data.csv_reader->bytes_in_chunk;
-		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
-			// exhausted this file, but we have more files we can read
-			// open the next file and increment the counter
-			bind_data.options.file_path = bind_data.files[data.file_index];
-			// reuse csv_readers was created during binding
-			if (bind_data.options.union_by_name) {
-				data.csv_reader = move(bind_data.union_readers[data.file_index]);
-			} else {
-				data.csv_reader =
-				    make_unique<BufferedCSVReader>(context, bind_data.options, data.csv_reader->sql_types);
+		lstate.csv_reader->ParseCSV(output);
+		// update the number of bytes read
+		D_ASSERT(lstate.bytes_read <= lstate.csv_reader->bytes_in_chunk);
+		auto bytes_read = lstate.csv_reader->bytes_in_chunk - lstate.bytes_read;
+		data.bytes_read += bytes_read;
+		D_ASSERT(data.bytes_read <= data.total_size);
+		lstate.bytes_read = lstate.csv_reader->bytes_in_chunk;
+		if (output.size() == 0) {
+			// exhausted this file, but we might have more files we can read
+			auto csv_reader = data.GetCSVReader(context, bind_data);
+			lstate.csv_reader = move(csv_reader);
+			if (!lstate.csv_reader) {
+				// no more files - we are done
+				break;
 			}
-			data.file_index++;
+			lstate.bytes_read = 0;
 		} else {
 			break;
 		}
 	} while (true);
 
 	if (bind_data.options.union_by_name) {
-		data.csv_reader->SetNullUnionCols(output);
+		lstate.csv_reader->SetNullUnionCols(output);
 	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];
-		col.SetValue(0, Value(data.csv_reader->options.file_path));
+		col.SetValue(0, Value(lstate.csv_reader->options.file_path));
 		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	if (bind_data.options.include_parsed_hive_partitions) {
-		auto partitions = HivePartitioning::Parse(data.csv_reader->options.file_path);
+		auto partitions = HivePartitioning::Parse(lstate.csv_reader->options.file_path);
 
 		idx_t i = bind_data.hive_partition_col_idx;
 
@@ -531,7 +576,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 		for (auto &part : partitions) {
 			if (bind_data.options.names[i] != part.first) {
 				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
-				                  "' but found '" + part.first + "' for file '" + data.csv_reader->options.file_path +
+				                  "' but found '" + part.first + "' for file '" + lstate.csv_reader->options.file_path +
 				                  "'");
 			}
 			auto &col = output.data[i++];
@@ -550,6 +595,16 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		return SingleThreadedCSVInit(context, input);
 	} else {
 		return ParallelCSVInitGlobal(context, input);
+	}
+}
+
+unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                     GlobalTableFunctionState *global_state_p) {
+	auto &csv_data = (ReadCSVData &)*input.bind_data;
+	if (csv_data.single_threaded) {
+		return SingleThreadedReadCSVInitLocal(context, input, global_state_p);
+	} else {
+		return ParallelReadCSVInitLocal(context, input, global_state_p);
 	}
 }
 
@@ -592,31 +647,39 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	idx_t file_size, bytes_read;
 	idx_t total_files = bind_data.files.size();
-	idx_t file_index;
 	if (bind_data.single_threaded) {
-		auto &data = (const SingleThreadedCSVState &)*global_state;
-		file_size = data.file_size;
-		bytes_read = data.bytes_read;
-		file_index = data.file_index;
+		auto &data = (SingleThreadedCSVState &)*global_state;
+		idx_t file_size = data.total_size;
+		idx_t bytes_read = data.bytes_read;
+		idx_t next_file = data.next_file;
+		D_ASSERT(next_file <= total_files);
+		D_ASSERT(bytes_read <= file_size);
+
+		// progress consists of two parts
+		// the total bytes read divided by the total file size of files encountered so far
+		// followed by what percentage of files we have opened (i.e. next_file / total_files)
+		auto percentage_of_files_opened = double(next_file) / double(total_files);
+		double progress_in_files = double(bytes_read) / double(file_size);
+		return percentage_of_files_opened * progress_in_files * 100.0;
 	} else {
 		auto &data = (const ParallelCSVGlobalState &)*global_state;
-		file_size = data.file_size;
-		bytes_read = data.bytes_read;
-		file_index = data.file_index;
+		idx_t file_size = data.file_size;
+		idx_t bytes_read = data.bytes_read;
+		idx_t file_index = data.file_index;
+
+		// get the progress WITHIN the current file
+		double progress;
+		if (file_size == 0) {
+			progress = 1.0;
+		} else {
+			progress = double(bytes_read) / double(file_size);
+		}
+		// now get the total percentage of files read
+		double percentage = double(file_index) / total_files;
+		percentage += (double(1) / double(total_files)) * progress;
+		return percentage * 100;
 	}
-	// get the progress WITHIN the current file
-	double progress;
-	if (file_size == 0) {
-		progress = 1.0;
-	} else {
-		progress = double(bytes_read) / double(file_size);
-	}
-	// now get the total percentage of files read
-	double percentage = double(file_index) / total_files;
-	percentage += (double(1) / double(total_files)) * progress;
-	return percentage * 100;
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
