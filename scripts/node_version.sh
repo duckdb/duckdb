@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -ex
+
 cd tools/nodejs
 ./configure
 
@@ -18,6 +21,8 @@ else
 	npm version prerelease --preid="dev"$DIST
 	export TAG='--tag next'
 fi
+
+npm pack --dry-run
 
 # upload to npm, maybe
 if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$1" = "upload" ]] ; then
