@@ -1,7 +1,6 @@
 import * as duckdb from '..';
 import * as assert from 'assert';
-import * as fs from 'fs';
-import {QueryResult} from "..";
+import {ArrowArray} from "..";
 
 describe('arrow IPC API fails neatly when extension not loaded', function() {
     // Note: arrow IPC api requires the arrow extension to be loaded. The tests for this functionality reside in:
@@ -25,7 +24,7 @@ describe('arrow IPC API fails neatly when extension not loaded', function() {
             }
         );
 
-        db.arrowIPCAll(`SELECT * FROM ipc_table`, function (err: null | Error, result: QueryResult) {
+        db.arrowIPCAll(`SELECT * FROM ipc_table`, function (err: null | Error, result: ArrowArray) {
             if (err) {
                 assert.ok(err.message.includes("Catalog Error: Function with name to_arrow_ipc is not on the catalog, but it exists in the arrow extension. To Install and Load the extension, run: INSTALL arrow; LOAD arrow;"))
             } else {
@@ -33,6 +32,7 @@ describe('arrow IPC API fails neatly when extension not loaded', function() {
             }
         });
 
+        // @ts-expect-error
         assert.throws(() => db.register_buffer("ipc_table", [1,'a',1], true), TypeError, "Incorrect parameters");
     });
 
