@@ -44,7 +44,7 @@ protected:
 	void SerializeInternal(Serializer &serializer) const override;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override;
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
 };

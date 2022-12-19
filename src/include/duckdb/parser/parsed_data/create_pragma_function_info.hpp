@@ -15,13 +15,13 @@
 namespace duckdb {
 
 struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
-	explicit CreatePragmaFunctionInfo(PragmaFunction function);
-	CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_);
+	DUCKDB_API explicit CreatePragmaFunctionInfo(PragmaFunction function);
+	DUCKDB_API CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_);
 
 	PragmaFunctionSet functions;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override;
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 };
 
 } // namespace duckdb

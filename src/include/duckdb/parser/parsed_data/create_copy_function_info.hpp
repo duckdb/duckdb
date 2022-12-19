@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct CreateCopyFunctionInfo : public CreateInfo {
-	explicit CreateCopyFunctionInfo(CopyFunction function);
+	DUCKDB_API explicit CreateCopyFunctionInfo(CopyFunction function);
 
 	//! Function name
 	string name;

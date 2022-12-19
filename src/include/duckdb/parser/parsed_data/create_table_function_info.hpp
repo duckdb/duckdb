@@ -14,14 +14,14 @@
 namespace duckdb {
 
 struct CreateTableFunctionInfo : public CreateFunctionInfo {
-	explicit CreateTableFunctionInfo(TableFunction function);
-	explicit CreateTableFunctionInfo(TableFunctionSet set);
+	DUCKDB_API explicit CreateTableFunctionInfo(TableFunction function);
+	DUCKDB_API explicit CreateTableFunctionInfo(TableFunctionSet set);
 
 	//! The table functions
 	TableFunctionSet functions;
 
 public:
-	unique_ptr<CreateInfo> Copy() const;
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const;
 };
 
 } // namespace duckdb
