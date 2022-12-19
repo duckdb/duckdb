@@ -301,11 +301,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 	}
 	lstate.current_index = lstate.batch_index;
 	bool should_throw = this->action_type == InsertConflictActionType::THROW;
-	auto error = table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
-	// FIXME: only throw on transaction exception
-	if (!error.AllSucceeded()) {
-		throw NotImplementedException("UPSERT not implemented yet");
-	}
+	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
+	// FIXME: call method that returns for which values the constraint check failed
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);

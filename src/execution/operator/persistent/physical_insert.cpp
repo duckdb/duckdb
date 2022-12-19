@@ -154,11 +154,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
 		bool should_throw = this->action_type == InsertConflictActionType::THROW;
-		auto error = table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
-		// FIXME: only throw on transaction exception
-		if (!error.AllSucceeded()) {
-			throw NotImplementedException("UPSERT not implemented yet");
-		}
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
+		// FIXME: call method that lets us know for which values the constraint check failed, so we can handle it here
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);

@@ -178,8 +178,7 @@ public:
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	ExecutionFailureVector VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                                               bool should_throw);
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

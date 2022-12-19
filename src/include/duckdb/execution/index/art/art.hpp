@@ -78,11 +78,11 @@ public:
 	//! Append entries to the index
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
-	void VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
+	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index for foreign key constraint
-	void VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
+	void VerifyAppendForeignKey(DataChunk &chunk) override;
 	//! Verify that data can be delete from the index for foreign key constraint
-	void VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) override;
+	void VerifyDeleteForeignKey(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
@@ -105,6 +105,9 @@ public:
 	//! Returns the string representation of an ART
 	string ToString() override;
 
+	string GenerateErrorKeyName(DataChunk &input, idx_t row);
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, string key_name);
+
 private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
@@ -114,6 +117,9 @@ private:
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
 
+	//! Perform 'Lookup' for an entire chunk, marking which succeeded
+	idx_t LookupValues(DataChunk &input, SelectionVector *matches, Vector *row_ids, idx_t &null_count) final override;
+
 	//! Find the node with a matching key, optimistic version
 	Leaf *Lookup(Node *node, Key &key, idx_t depth);
 
@@ -122,8 +128,6 @@ private:
 	                vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
-
-	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, ExecutionFailureVector &failure_vector);
 
 private:
 	//! The estimated ART memory consumption

@@ -6,26 +6,22 @@
 
 namespace duckdb {
 
-ExpressionExecutor::ExpressionExecutor(ClientContext &context, ExecutionFailureVector *failure_vector)
-    : context(&context), failure_vector(failure_vector) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
 }
 
-ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression,
-                                       ExecutionFailureVector *failure_vector)
-    : ExpressionExecutor(context, failure_vector) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
+    : ExpressionExecutor(context) {
 	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression &expression,
-                                       ExecutionFailureVector *failure_vector)
-    : ExpressionExecutor(context, failure_vector) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression &expression)
+    : ExpressionExecutor(context) {
 	AddExpression(expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs,
-                                       ExecutionFailureVector *failure_vector)
-    : ExpressionExecutor(context, failure_vector) {
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs)
+    : ExpressionExecutor(context) {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);

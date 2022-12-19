@@ -72,11 +72,11 @@ public:
 	virtual bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
-	virtual void VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
+	virtual void VerifyAppend(DataChunk &chunk) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
-	virtual void VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
+	virtual void VerifyAppendForeignKey(DataChunk &chunk) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
-	virtual void VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) = 0;
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
@@ -96,6 +96,12 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
+
+	//! Returns how many of the input values were found in the 'input' chunk, with the option to also record what those
+	//! matches were
+	//  what row_ids those matches have
+	//  for this purpose, nulls count as a match, and are returned in 'null_count'
+	virtual idx_t LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *row_ids_p, idx_t &null_count) = 0;
 
 	//! Returns unique flag
 	bool IsUnique() {

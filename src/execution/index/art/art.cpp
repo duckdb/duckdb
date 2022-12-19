@@ -410,16 +410,67 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 	return Insert(lock, expression_result, row_identifiers);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND, failure_vector);
+void ART::VerifyAppend(DataChunk &chunk) {
+	SelectionVector match_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE);
+	row_ids.Initialize(false, chunk.size());
+	idx_t null_count = 0;
+
+	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
+
+	if (count == 0 || count == null_count) {
+		// Succesful verification
+		return;
+	}
+	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(0));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND, move(key_name));
+	throw ConstraintException(exception_msg);
 }
 
-void ART::VerifyAppendForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK, failure_vector);
+void ART::VerifyAppendForeignKey(DataChunk &chunk) {
+	SelectionVector match_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE);
+	row_ids.Initialize(false, chunk.size());
+	idx_t null_count = 0;
+
+	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
+
+	if (count == chunk.size()) {
+		// Succesful verification
+		return;
+	}
+	idx_t first_missing_key = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < count; i++) {
+		if (i != match_vec.get_index(i)) {
+			first_missing_key = i;
+			break;
+		}
+	}
+	D_ASSERT(first_missing_key != DConstants::INVALID_INDEX);
+	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(first_missing_key));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND_FK, move(key_name));
+	throw ConstraintException(exception_msg);
 }
 
-void ART::VerifyDeleteForeignKey(DataChunk &chunk, ExecutionFailureVector &failure_vector) {
-	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK, failure_vector);
+void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
+	if (!IsUnique()) {
+		return;
+	}
+
+	SelectionVector match_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE);
+	row_ids.Initialize(false, chunk.size());
+	idx_t null_count = 0;
+
+	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
+
+	if (count == 0 || count == null_count) {
+		// No matches were found, or all the matches were NULL
+		return;
+	}
+	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(0));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::DELETE_FK, move(key_name));
+	throw ConstraintException(exception_msg);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -825,7 +876,12 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	return true;
 }
 
-string GenerateKeyName(DataChunk &expression_chunk, vector<unique_ptr<Expression>> &unbound_expressions, idx_t row) {
+string ART::GenerateErrorKeyName(DataChunk &input, idx_t row) {
+	// re-executing the expressions is not very fast, but we're going to throw anyways, so we don't care
+	DataChunk expression_chunk;
+	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	ExecuteExpressions(input, expression_chunk);
+
 	string key_name;
 	for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
 		if (k > 0) {
@@ -836,27 +892,11 @@ string GenerateKeyName(DataChunk &expression_chunk, vector<unique_ptr<Expression
 	return key_name;
 }
 
-bool SuccessfulVerification(Node *result, VerifyExistenceType type) {
-	switch (type) {
-	case VerifyExistenceType::APPEND:
-		// We expect this to not exist yet
-		return result == nullptr;
-	case VerifyExistenceType::APPEND_FK:
-		// We expect this to exist
-		return result != nullptr;
-	case VerifyExistenceType::DELETE_FK:
-		// We expect this to not exist anymore
-		return result == nullptr;
-	default:
-		throw NotImplementedException("Type not implemented for VerifyExistenceType");
-	}
-}
-
-string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, bool is_primary, string key_name) {
+string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, string key_name) {
 	switch (verify_type) {
 	case VerifyExistenceType::APPEND: {
 		// node already exists in tree
-		string type = is_primary ? "primary key" : "unique";
+		string type = IsPrimary() ? "primary key" : "unique";
 		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint", key_name, type);
 	}
 	case VerifyExistenceType::APPEND_FK: {
@@ -874,11 +914,8 @@ string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, bool is_p
 	}
 }
 
-void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, ExecutionFailureVector &failure_vector) {
-	if (verify_type != VerifyExistenceType::DELETE_FK && !IsUnique()) {
-		return;
-	}
-
+idx_t ART::LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *row_ids_p, idx_t &null_count) {
+	D_ASSERT(null_count == 0);
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
@@ -886,25 +923,46 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, Exe
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions for the index
-	ExecuteExpressions(chunk, expression_chunk);
+	ExecuteExpressions(input, expression_chunk);
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (keys[i].Empty()) {
-			continue;
-		}
-		Node *node_ptr = Lookup(tree, keys[i], 0);
-		if (SuccessfulVerification(node_ptr, verify_type)) {
-			continue;
-		}
-		string key_name = GenerateKeyName(expression_chunk, unbound_expressions, i);
-		auto exception_msg = GenerateConstraintErrorMessage(verify_type, IsPrimary(), move(key_name));
-		failure_vector.SetFailure(i, ConstraintException(exception_msg));
+	row_t *data = nullptr;
+	if (row_ids_p) {
+		auto &row_ids = *row_ids_p;
+		data = FlatVector::GetData<row_t>(row_ids);
 	}
+
+	OptionalSelection sel_vec(matches_p);
+	idx_t match_count = 0;
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			// Key is NULL, skip it
+			if (data) {
+				data[match_count] = DConstants::INVALID_INDEX;
+			}
+			sel_vec.Append(match_count, i);
+			null_count++;
+			continue;
+		}
+		Leaf *leaf_ptr = Lookup(tree, keys[i], 0);
+		if (leaf_ptr == nullptr) {
+			// No match found
+			continue;
+		}
+		// When we find a node, we need to update the 'matches' and 'row_ids'
+		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
+		D_ASSERT(leaf_ptr->count == 1);
+		auto row_id = leaf_ptr->GetRowId(0);
+		if (data) {
+			data[match_count] = row_id;
+		}
+		sel_vec.Append(match_count, i);
+	}
+	return match_count;
 }
 
 //===--------------------------------------------------------------------===//
