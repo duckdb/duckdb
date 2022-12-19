@@ -238,7 +238,7 @@ jobs:
       - name: Windows Build Tools
         shell: bash
         run: |
-          choco install python visualstudio2019-workload-vctools -y
+          choco install visualstudio2019-workload-vctools -y
 
       - name: Node Version
         shell: bash
