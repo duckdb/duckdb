@@ -300,8 +300,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
-	bool should_throw = this->action_type == InsertConflictActionType::THROW;
-	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
+	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 	// FIXME: call method that returns for which values the constraint check failed
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {

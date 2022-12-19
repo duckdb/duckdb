@@ -153,8 +153,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		bool should_throw = this->action_type == InsertConflictActionType::THROW;
-		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, should_throw);
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 		// FIXME: call method that lets us know for which values the constraint check failed, so we can handle it here
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {

@@ -536,25 +536,24 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	local_storage.InitializeAppend(state, this);
 }
 
-PreservedError DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
-                                      DataChunk &chunk) {
+void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+                            DataChunk &chunk) {
 	if (chunk.size() == 0) {
-		return PreservedError();
+		return;
 	}
 	D_ASSERT(chunk.ColumnCount() == table.columns.PhysicalColumnCount());
 	if (!is_root) {
-		return TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	VerifyAppendConstraints(table, context, chunk, true);
+	VerifyAppendConstraints(table, context, chunk);
 	// FIXME: call method that returns for which values the constraint check failed
 
 	// append to the transaction local data
 	LocalStorage::Append(state, chunk);
-	return PreservedError();
 }
 
 void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
