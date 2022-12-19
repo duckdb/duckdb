@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -ex
+
 cd tools/nodejs
 ./configure
 
