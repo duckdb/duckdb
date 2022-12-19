@@ -524,6 +524,12 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		sql_types.clear();
 		sql_types.assign(options.num_cols, LogicalType::VARCHAR);
 
+		column_ids.clear();
+		for (idx_t i = 0; i < options.num_cols; i++) {
+			column_ids.push_back(i);
+		}
+		SetProjectionMap(column_ids);
+
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
@@ -851,10 +857,13 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// type candidates, ordered by descending specificity (~ from high to low)
 	vector<LogicalType> type_candidates = {
-	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	    LogicalType::DATE,    LogicalType::TIME,
-	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::VARCHAR,
+	    LogicalType::TIMESTAMP,
+	    LogicalType::DATE,
+	    LogicalType::TIME,
+	    LogicalType::DOUBLE,
+	    /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    /*LogicalType::INTEGER,*/ /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
 	    LogicalType::SQLNULL};
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {

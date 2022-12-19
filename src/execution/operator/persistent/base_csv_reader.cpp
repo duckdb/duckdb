@@ -153,6 +153,21 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	}
 }
 
+void BaseCSVReader::SetProjectionMap(const vector<column_t> &column_ids) {
+	this->column_ids = column_ids;
+	D_ASSERT(!column_ids.empty());
+	projection_map.clear();
+	projection_map.resize(sql_types.size(), COLUMN_IDENTIFIER_ROW_ID);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i];
+		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		D_ASSERT(column_id < projection_map.size());
+		projection_map[column_id] = i;
+	}
+}
+
 void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
 	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
@@ -160,12 +175,18 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	} else {
 		row_empty = false;
 	}
-
 	if (!sql_types.empty() && column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
 	}
 	if (mode == ParserMode::SNIFFING_DIALECT) {
+		column++;
+		return;
+	}
+	D_ASSERT(column < projection_map.size());
+	auto column_index = projection_map[column];
+	if (column_index >= parse_chunk.data.size()) {
+		// this column does not need to be read
 		column++;
 		return;
 	}
@@ -186,9 +207,9 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	// test against null string, but only if the value was not quoted
 	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
 	    Equals::Operation(str_val, string_t(options.null_str))) {
-		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
+		FlatVector::SetNull(parse_chunk.data[column_index], row_entry, true);
 	} else {
-		auto &v = parse_chunk.data[column];
+		auto &v = parse_chunk.data[column_index];
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (!escape_positions.empty()) {
 			// remove escape characters (if any)
@@ -331,30 +352,32 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
-	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
-		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto base_col_idx = column_ids[col_idx];
+		if (base_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		//		auto insert_idx = insert_cols_idx[base_col_idx];
+		auto &type = sql_types[base_col_idx];
+		if (type.id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			VerifyUTF8(col_idx);
-			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
-			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success =
-				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
-				                      parse_chunk.size(), error_message);
-			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                            parse_chunk.size(), error_message);
+			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx],
-				                                 insert_chunk.data[insert_cols_idx[col_idx]], parse_chunk.size(),
-				                                 error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                                 parse_chunk.size(), error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx],
-				                                           insert_chunk.data[insert_cols_idx[col_idx]],
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
@@ -367,9 +390,9 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				conversion_error_ignored = true;
 				continue;
 			}
-			string col_name = to_string(col_idx);
+			string col_name = to_string(base_col_idx);
 			if (col_idx < col_names.size()) {
-				col_name = "\"" + col_names[col_idx] + "\"";
+				col_name = "\"" + col_names[base_col_idx] + "\"";
 			}
 
 			// figure out the exact line number
@@ -385,8 +408,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
 
 			if (options.auto_detect) {
-				throw InvalidInputException("%s in column %s, at line %llu. Parser "
-				                            "options: %s. Consider either increasing the sample size "
+				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
+				                            "options:\n%s.\n\nConsider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 				                            "or skipping column conversion (ALL_VARCHAR=1)",
 				                            error_message, col_name, error_line, options.ToString());

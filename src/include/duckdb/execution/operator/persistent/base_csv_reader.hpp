@@ -52,6 +52,11 @@ public:
 	vector<idx_t> insert_cols_idx;
 	vector<idx_t> insert_nulls_idx;
 
+	//! The set of column ids to read
+	vector<column_t> column_ids;
+	// map of CSV column to projection column
+	vector<column_t> projection_map;
+
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
 
@@ -73,6 +78,8 @@ public:
 public:
 	//! Fill nulls into the cols that mismtach union names
 	void SetNullUnionCols(DataChunk &insert_chunk);
+
+	void SetProjectionMap(const vector<column_t> &column_ids);
 
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
