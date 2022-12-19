@@ -418,7 +418,8 @@ void ART::VerifyAppend(DataChunk &chunk) {
 
 	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
 
-	if (count == 0 || count == null_count) {
+	if (count == null_count) {
+		// The only "matches" we got were on NULLs
 		// Succesful verification
 		return;
 	}
@@ -444,6 +445,9 @@ void ART::VerifyAppendForeignKey(DataChunk &chunk) {
 		if (i != match_vec.get_index(i)) {
 			first_missing_key = i;
 			break;
+		}
+		if (count == 0) {
+			first_missing_key = count;
 		}
 	}
 	D_ASSERT(first_missing_key != DConstants::INVALID_INDEX);
