@@ -245,6 +245,11 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		}
 	} else {
 		sql_types = requested_types;
+		column_ids.reserve(requested_types.size());
+		for (idx_t i = 0; i < requested_types.size(); i++) {
+			column_ids.push_back(i);
+		}
+		SetProjectionMap(column_ids);
 		ResetBuffer();
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
@@ -1389,7 +1394,14 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		cached_buffers.clear();
 	} else {
 		auto &chunk = cached_chunks.front();
-		parse_chunk.Move(*chunk);
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto column_id = column_ids[i];
+			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+				continue;
+			}
+			parse_chunk.data[i].Reference(chunk->data[column_id]);
+		}
+		parse_chunk.SetCardinality(*chunk);
 		cached_chunks.pop();
 		Flush(insert_chunk);
 		return;

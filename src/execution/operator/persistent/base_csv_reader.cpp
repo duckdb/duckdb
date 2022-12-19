@@ -185,7 +185,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	}
 	D_ASSERT(column < projection_map.size());
 	auto column_index = projection_map[column];
-	if (column_index >= parse_chunk.data.size()) {
+	if (column_index >= column_ids.size()) {
 		// this column does not need to be read
 		column++;
 		return;

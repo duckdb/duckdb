@@ -1,0 +1,51 @@
+# name: test/sql/copy/csv/test_csv_projection_pushdown_glob.test
+# description: Test CSV projection pushdown with file globs
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (SELECT DATE '1992-01-01' d, 42 i, 'hello' s) TO '__TEST_DIR__/projection_pushdown_f1.csv' (HEADER, DELIMITER '|')
+
+statement ok
+COPY (SELECT DATE '1993-01-01' d, 84 i, 'world' s) TO '__TEST_DIR__/projection_pushdown_f2.csv' (HEADER, DELIMITER '|')
+
+statement ok
+COPY (SELECT DATE '1994-01-01' d, 100 i, 'this is a long string' s) TO '__TEST_DIR__/projection_pushdown_f3.csv' (HEADER, DELIMITER '|')
+
+statement ok
+CREATE VIEW glob_view AS SELECT * FROM read_csv_auto('__TEST_DIR__/projection_pushdown_f*.csv')
+
+statement ok
+CREATE VIEW list_view AS SELECT * FROM read_csv_auto(['__TEST_DIR__/projection_pushdown_f1.csv', '__TEST_DIR__/projection_pushdown_f2.csv', '__TEST_DIR__/projection_pushdown_f3.csv'])
+
+foreach tbl glob_view list_view
+
+query I
+SELECT i FROM ${tbl} ORDER BY i
+----
+42
+84
+100
+
+query I
+SELECT d FROM ${tbl} ORDER BY d
+----
+1992-01-01
+1993-01-01
+1994-01-01
+
+query I
+SELECT s FROM ${tbl} ORDER BY s
+----
+hello
+this is a long string
+world
+
+query I
+SELECT COUNT(*) FROM ${tbl}
+----
+3
+
+endloop

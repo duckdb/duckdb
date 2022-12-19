@@ -143,6 +143,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
+		options.auto_detect = false;
 		result->sql_types = initial_reader->sql_types;
 		result->initial_reader = move(initial_reader);
 	} else {
@@ -487,11 +488,11 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		}
 		// reuse csv_readers was created during binding
 		unique_ptr<BufferedCSVReader> result;
-		if (bind_data.options.union_by_name) {
+		if (options.union_by_name) {
 			result = move(bind_data.union_readers[file_index]);
 		} else {
-			bind_data.options.file_path = bind_data.files[file_index];
-			result = make_unique<BufferedCSVReader>(context, bind_data.options, sql_types);
+			options.file_path = bind_data.files[file_index];
+			result = make_unique<BufferedCSVReader>(context, move(options), sql_types);
 			result->SetProjectionMap(column_ids);
 		}
 		total_size += result->file_handle->FileSize();
