@@ -271,6 +271,8 @@ public:
 	atomic<idx_t> bytes_read;
 	//! Size of current file
 	idx_t file_size;
+	//! The index of the next file to read (i.e. current file + 1)
+	idx_t file_index = 1;
 
 private:
 	//! File Handle for current file
@@ -278,8 +280,6 @@ private:
 
 	shared_ptr<CSVBuffer> current_buffer;
 	shared_ptr<CSVBuffer> next_buffer;
-	//! The index of the next file to read (i.e. current file + 1)
-	idx_t file_index = 1;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
@@ -593,20 +593,30 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
                          const GlobalTableFunctionState *global_state) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	idx_t file_size, bytes_read;
+	idx_t total_files = bind_data.files.size();
+	idx_t file_index;
 	if (bind_data.single_threaded) {
 		auto &data = (const SingleThreadedCSVState &)*global_state;
 		file_size = data.file_size;
 		bytes_read = data.bytes_read;
+		file_index = data.file_index;
 	} else {
 		auto &data = (const ParallelCSVGlobalState &)*global_state;
 		file_size = data.file_size;
 		bytes_read = data.bytes_read;
+		file_index = data.file_index;
 	}
+	// get the progress WITHIN the current file
+	double progress;
 	if (file_size == 0) {
-		return 100;
+		progress = 1.0;
+	} else {
+		progress = double(bytes_read) / double(file_size);
 	}
-	auto percentage = (bytes_read * 100.0) / file_size;
-	return percentage;
+	// now get the total percentage of files read
+	double percentage = double(file_index) / total_files;
+	percentage += (double(1) / double(total_files)) * progress;
+	return percentage * 100;
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
