@@ -31,8 +31,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 Transaction::Transaction(TransactionManager &manager_p, ClientContext &context_p, transaction_t start_time,
                          transaction_t transaction_id)
     : manager(manager_p), context(context_p.shared_from_this()), start_time(start_time), transaction_id(transaction_id),
-      commit_id(0), temporary_objects(context_p.client_data->temporary_objects), active_query(MAXIMUM_QUERY_ID),
-      highest_active_query(0), undo_buffer(context_p), storage(make_unique<LocalStorage>(context_p, *this)) {
+      commit_id(0), active_query(MAXIMUM_QUERY_ID), highest_active_query(0), undo_buffer(context_p),
+      storage(make_unique<LocalStorage>(context_p, *this)) {
 }
 
 Transaction::~Transaction() {
