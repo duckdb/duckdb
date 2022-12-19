@@ -435,16 +435,6 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 	}
 }
 
-static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	if (bind_data.single_threaded) {
-		return 0;
-	}
-	auto &data = (ParallelCSVLocalState &)*local_state;
-	return data.csv_reader->buffer->batch_index;
-}
-
 //===--------------------------------------------------------------------===//
 // Single-Threaded CSV Reader
 //===--------------------------------------------------------------------===//
@@ -471,9 +461,8 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		return total_files;
 	}
 
-	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data) {
+	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data, idx_t &file_index) {
 		BufferedCSVReaderOptions options;
-		idx_t file_index;
 		{
 			lock_guard<mutex> l(csv_lock);
 			if (initial_reader) {
@@ -502,13 +491,15 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 
 struct SingleThreadedCSVLocalState : public LocalTableFunctionState {
 public:
-	explicit SingleThreadedCSVLocalState() : bytes_read(0) {
+	explicit SingleThreadedCSVLocalState() : bytes_read(0), file_index(0) {
 	}
 
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
 	//! The current amount of bytes read by this reader
 	idx_t bytes_read;
+	//! The file index of this reader
+	idx_t file_index;
 };
 
 static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context,
@@ -540,7 +531,7 @@ unique_ptr<LocalTableFunctionState> SingleThreadedReadCSVInitLocal(ExecutionCont
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto &data = (SingleThreadedCSVState &)*global_state_p;
 	auto result = make_unique<SingleThreadedCSVLocalState>();
-	result->csv_reader = data.GetCSVReader(context.client, bind_data);
+	result->csv_reader = data.GetCSVReader(context.client, bind_data, result->file_index);
 	return move(result);
 }
 
@@ -563,7 +554,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 		lstate.bytes_read = lstate.csv_reader->bytes_in_chunk;
 		if (output.size() == 0) {
 			// exhausted this file, but we might have more files we can read
-			auto csv_reader = data.GetCSVReader(context, bind_data);
+			auto csv_reader = data.GetCSVReader(context, bind_data, lstate.file_index);
 			lstate.csv_reader = move(csv_reader);
 			if (!lstate.csv_reader) {
 				// no more files - we are done
@@ -636,6 +627,17 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} else {
 		ParallelReadCSVFunction(context, data_p, output);
 	}
+}
+
+static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	if (bind_data.single_threaded) {
+		auto &data = (SingleThreadedCSVLocalState &)*local_state;
+		return data.file_index;
+	}
+	auto &data = (ParallelCSVLocalState &)*local_state;
+	return data.csv_reader->buffer->batch_index;
 }
 
 static void ReadCSVAddNamedParameters(TableFunction &table_function) {
