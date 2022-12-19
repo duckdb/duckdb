@@ -274,8 +274,12 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		return Value::UUID(string_val);
 	}
 	case PythonObjectType::Datetime: {
-		auto isnull_result = py::module::import("pandas").attr("isnull")(ele);
-		bool is_nat = string(py::str(isnull_result)) == "True";
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		bool is_nat = false;
+		if (import_cache.pandas.isnull.IsLoaded()) {
+			auto isnull_result = import_cache.pandas.isnull()(ele);
+			is_nat = string(py::str(isnull_result)) == "True";
+		}
 		if (is_nat) {
 			return Value();
 		}

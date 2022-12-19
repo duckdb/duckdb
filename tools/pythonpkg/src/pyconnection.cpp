@@ -1,6 +1,5 @@
 #include "duckdb_python/pyconnection.hpp"
 
-#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
@@ -20,6 +19,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb_python/jupyter_progress_bar_display.hpp"
 
 #include <random>
 
@@ -28,6 +28,42 @@ namespace duckdb {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
+PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+
+void DuckDBPyConnection::DetectEnvironment() {
+	// If __main__ does not have a __file__ attribute, we are in interactive mode
+	auto main_module = py::module_::import("__main__");
+	if (py::hasattr(main_module, "__file__")) {
+		return;
+	}
+	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
+
+	// Check to see if we are in a Jupyter Notebook
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto get_ipython = import_cache.IPython.get_ipython();
+	if (get_ipython.ptr() == nullptr) {
+		// Could either not load the IPython module, or it has no 'get_ipython' attribute
+		return;
+	}
+	auto ipython = get_ipython();
+	if (!py::hasattr(ipython, "config")) {
+		return;
+	}
+	py::dict ipython_config = ipython.attr("config");
+	if (ipython_config.contains("IPKernelApp")) {
+		DuckDBPyConnection::environment = PythonEnvironmentType::JUPYTER;
+	}
+	return;
+}
+
+bool DuckDBPyConnection::DetectAndGetEnvironment() {
+	DuckDBPyConnection::DetectEnvironment();
+	return DuckDBPyConnection::IsInteractive();
+}
+
+bool DuckDBPyConnection::IsJupyter() {
+	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
+}
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -103,6 +139,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
 	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
+	    .def("from_substrait_json", &DuckDBPyConnection::FromSubstraitJSON,
+	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter)
@@ -113,19 +151,18 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 
-	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
 	if (params.is_none()) {
 		params = py::list();
 	}
 	Execute(query, std::move(params), true);
-	return this;
+	return shared_from_this();
 }
 
-static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
+unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	do {
 		execution_result = pending_query.ExecuteTask();
@@ -142,7 +179,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 	return pending_query.Execute();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -158,7 +195,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
-			return this;
+			return shared_from_this();
 		}
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
@@ -186,6 +223,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		params_set = params;
 	}
 
+	// For every entry of the argument list, execute the prepared statement with said arguments
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
@@ -205,18 +243,18 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		}
 
 		if (!many) {
-			result = move(res);
+			result = make_unique<DuckDBPyRelation>(move(res));
 		}
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -256,7 +294,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
-	return this;
+	return shared_from_this();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
@@ -465,6 +503,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	string name = "from_substrait_" + GenerateRandomName();
+	vector<Value> params;
+	params.emplace_back(json);
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait_json", params)->Alias(name));
+}
+
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
@@ -472,32 +520,32 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	return connection->GetTableNames(query);
 }
 
-DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
 	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Begin() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Begin() {
 	Execute("BEGIN TRANSACTION");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Commit() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
 	if (connection->context->transaction.IsAutoCommit()) {
-		return this;
+		return shared_from_this();
 	}
 	Execute("COMMIT");
-	return this;
+	return shared_from_this();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Rollback() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	Execute("ROLLBACK");
-	return this;
+	return shared_from_this();
 }
 
 py::object DuckDBPyConnection::GetDescription() {
@@ -527,6 +575,9 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
 	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_unique<Connection>(*res->database);
@@ -539,21 +590,21 @@ py::object DuckDBPyConnection::FetchOne() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchone();
+	return result->FetchOne();
 }
 
 py::list DuckDBPyConnection::FetchMany(idx_t size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchmany(size);
+	return result->FetchMany(size);
 }
 
 py::list DuckDBPyConnection::FetchAll() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchall();
+	return result->FetchAll();
 }
 
 py::dict DuckDBPyConnection::FetchNumpy() {
@@ -580,7 +631,7 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchArrowTable(chunk_size);
+	return result->ToArrowTable(chunk_size);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
@@ -691,26 +742,39 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	auto &db_config = res.database->instance->config;
 	db_config.AddExtensionOption("pandas_analyze_sample",
 	                             "The maximum number of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::UBIGINT);
-	db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
+	                             LogicalType::UBIGINT, Value::UBIGINT(1000));
 	if (db_config.options.enable_external_access) {
 		db_config.replacement_scans.emplace_back(ScanReplacement);
 	}
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::object config_options) {
-	if (config_options.is_none()) {
-		config_options = py::dict();
+static void SetDefaultConfigArguments(ClientContext &context) {
+	if (!DuckDBPyConnection::IsInteractive()) {
+		// Don't need to set any special default arguments
+		return;
 	}
-	auto res = make_shared<DuckDBPyConnection>();
-	if (!py::isinstance<py::dict>(config_options)) {
-		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
-	}
-	py::dict py_config_dict = config_options;
-	auto config_dict = TransformPyConfigDict(py_config_dict);
-	DBConfig config(config_dict, read_only);
 
+	// Get the options we want to set/override
+	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
+	D_ASSERT(progress_bar_time_opt);
+	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
+	D_ASSERT(enable_progress_bar_opt);
+	auto progress_bar_print_opt = DBConfig::GetOptionByName("enable_progress_bar_print");
+	D_ASSERT(progress_bar_print_opt);
+
+	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
+	// FIXME: nasty hardcoded default value check
+	if (progress_bar_time_opt->get_setting(context) == 2000) {
+		progress_bar_time_opt->set_local(context, Value(0));
+	}
+	if (DuckDBPyConnection::IsJupyter()) {
+		// Set the function used to create the display for the progress bar
+		context.config.display_create_func = JupyterProgressBarDisplay::Create;
+	}
+}
+
+static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
+	auto res = make_shared<DuckDBPyConnection>();
 	res->database = instance_cache.GetInstance(database, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
@@ -718,6 +782,24 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);
+	return res;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           py::object config_options) {
+	if (config_options.is_none()) {
+		config_options = py::dict();
+	}
+	if (!py::isinstance<py::dict>(config_options)) {
+		throw InvalidInputException("Type of object passed to parameter 'config' has to be <dict>");
+	}
+	py::dict py_config_dict = config_options;
+	auto config_dict = TransformPyConfigDict(py_config_dict);
+	DBConfig config(config_dict, read_only);
+
+	auto res = FetchOrCreateInstance(database, config);
+	auto &client_context = *res->connection->context;
+	SetDefaultConfigArguments(client_context);
 	return res;
 }
 
@@ -731,12 +813,12 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 	return args;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
-	return default_connection.get();
+	return default_connection;
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -746,8 +828,12 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 	return import_cache.get();
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Enter() {
-	return this;
+bool DuckDBPyConnection::IsInteractive() {
+	return DuckDBPyConnection::environment != PythonEnvironmentType::NORMAL;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
+	return shared_from_this();
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,

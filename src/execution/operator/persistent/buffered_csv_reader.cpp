@@ -867,7 +867,23 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	options.num_cols = best_num_cols;
 	DetectHeader(best_sql_types_candidates, best_header_row);
-
+	auto sql_types_per_column = options.sql_types_per_column;
+	for (idx_t i = 0; i < col_names.size(); i++) {
+		auto it = sql_types_per_column.find(col_names[i]);
+		if (it != sql_types_per_column.end()) {
+			best_sql_types_candidates[i] = {it->second};
+			sql_types_per_column.erase(col_names[i]);
+		}
+	}
+	if (!sql_types_per_column.empty()) {
+		string exception = "COLUMN_TYPES error: Columns with names: ";
+		for (auto &col : sql_types_per_column) {
+			exception += "\"" + col.first + "\",";
+		}
+		exception.pop_back();
+		exception += " do not exist in the CSV File";
+		throw BinderException(exception);
+	}
 	// #######
 	// ### type detection (refining)
 	// #######

@@ -35,6 +35,8 @@ class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
 class SetStatement;
+class SetVariableStatement;
+class ResetVariableStatement;
 class LoadStatement;
 class LogicalPlanStatement;
 

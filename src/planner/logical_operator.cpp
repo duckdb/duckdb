@@ -336,6 +336,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		result = LogicalReset::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_LOAD:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;

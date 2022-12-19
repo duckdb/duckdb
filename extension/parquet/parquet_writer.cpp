@@ -1,16 +1,16 @@
 #include "parquet_writer.hpp"
-#include "parquet_timestamp.hpp"
 
 #include "duckdb.hpp"
+#include "parquet_timestamp.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #endif
 
 namespace duckdb {
@@ -261,7 +261,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const unique_ptr<ColumnWriter> &col_writer = column_writers[col_idx];
-		auto write_state = col_writer->InitializeWriteState(row_group);
+		auto write_state = col_writer->InitializeWriteState(row_group, buffer.GetAllocator());
 		if (col_writer->HasAnalyze()) {
 			for (auto &chunk : buffer.Chunks()) {
 				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());

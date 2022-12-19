@@ -51,6 +51,14 @@ struct PendingQueryParameters {
 	bool allow_stream_result = false;
 };
 
+//! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
+//! e.g. caches that need to live as long as a ClientContext or Query.
+class ClientContextState {
+public:
+	virtual ~ClientContextState() {};
+	virtual void QueryEnd() = 0;
+};
+
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
@@ -70,7 +78,8 @@ public:
 	atomic<bool> interrupted;
 	//! External Objects (e.g., Python objects) that views depend of
 	unordered_map<string, vector<shared_ptr<ExternalDependency>>> external_dependencies;
-
+	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
+	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
