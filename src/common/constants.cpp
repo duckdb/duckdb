@@ -27,6 +27,14 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	return v;
 }
 
+bool IsInvalidSchema(const string &str) {
+	return str.empty();
+}
+
+bool IsInvalidCatalog(const string &str) {
+	return str.empty();
+}
+
 bool IsRowIdColumnId(column_t column_id) {
 	return column_id == COLUMN_IDENTIFIER_ROW_ID;
 }

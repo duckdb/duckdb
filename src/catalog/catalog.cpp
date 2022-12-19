@@ -93,7 +93,7 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 		return GetSystemCatalog(context);
 	}
 	auto entry = db_manager.GetDatabase(
-	    context, catalog_name == INVALID_CATALOG ? DatabaseManager::GetDefaultDatabase(context) : catalog_name);
+	    context, IsInvalidCatalog(catalog_name) ? DatabaseManager::GetDefaultDatabase(context) : catalog_name);
 	if (!entry) {
 		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
 	}
@@ -431,10 +431,10 @@ string FindExtension(const string &function_name) {
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = *context.client_data->catalog_search_path;
-	if (catalog == INVALID_CATALOG && schema == INVALID_SCHEMA) {
+	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
-	} else if (catalog == INVALID_CATALOG) {
+	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
@@ -442,7 +442,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 		if (entries.empty()) {
 			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 		}
-	} else if (schema == INVALID_SCHEMA) {
+	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
 			entries.emplace_back(catalog, schema_name);
@@ -550,7 +550,7 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
 	unordered_set<SchemaCatalogEntry *> schemas;
-	if (schema == INVALID_SCHEMA) {
+	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
 		auto catalog_name = GetName();
 		if (catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
@@ -625,6 +625,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
                                 const string &name, bool if_exists_p, QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
+	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
 		lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
 	}
@@ -672,7 +673,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
 
 vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
 	vector<Catalog *> catalogs;
-	if (catalog_name == INVALID_CATALOG) {
+	if (IsInvalidCatalog(catalog_name)) {
 		unordered_set<string> name;
 
 		auto &search_path = *context.client_data->catalog_search_path;

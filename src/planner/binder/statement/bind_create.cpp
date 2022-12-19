@@ -64,20 +64,20 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
-	if (info.catalog == INVALID_CATALOG && info.temporary) {
+	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (info.catalog == INVALID_CATALOG && info.schema == INVALID_SCHEMA) {
+	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
 		auto &default_entry = search_path->GetDefault();
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
-	} else if (info.schema == INVALID_SCHEMA) {
+	} else if (IsInvalidSchema(info.schema)) {
 		info.schema = search_path->GetDefaultSchema(info.catalog);
-	} else if (info.catalog == INVALID_CATALOG) {
+	} else if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = search_path->GetDefaultCatalog(info.schema);
 	}
-	if (info.catalog == INVALID_CATALOG) {
+	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
 	if (!info.temporary) {

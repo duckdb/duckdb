@@ -49,6 +49,9 @@ using std::make_shared;
 #define SYSTEM_CATALOG  "system"
 #define TEMP_CATALOG    "temp"
 
+DUCKDB_API bool IsInvalidSchema(const string &str);
+DUCKDB_API bool IsInvalidCatalog(const string &str);
+
 //! a saner size_t for loop indices etc
 typedef uint64_t idx_t;
 

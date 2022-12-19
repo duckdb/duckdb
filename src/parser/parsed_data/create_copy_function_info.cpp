@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-CreateCopyFunctionInfo::CreateCopyFunctionInfo(CopyFunction function)
-    : CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(function) {
+CreateCopyFunctionInfo::CreateCopyFunctionInfo(CopyFunction function_p)
+    : CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(move(function_p)) {
 	this->name = function.name;
 	internal = true;
 }

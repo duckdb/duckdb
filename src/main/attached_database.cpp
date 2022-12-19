@@ -18,12 +18,12 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	internal = true;
 }
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path,
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, move(name_p)), db(db),
       type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
-	storage = make_unique<SingleFileStorageManager>(*this, file_path, access_mode == AccessMode::READ_ONLY);
+	storage = make_unique<SingleFileStorageManager>(*this, move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	internal = true;

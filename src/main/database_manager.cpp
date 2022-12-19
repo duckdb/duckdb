@@ -69,7 +69,7 @@ AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, c
 const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (default_entry.catalog == INVALID_CATALOG) {
+	if (IsInvalidCatalog(default_entry.catalog)) {
 		auto &result = DatabaseManager::Get(context).default_database;
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");

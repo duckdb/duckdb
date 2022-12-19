@@ -5,10 +5,10 @@
 
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
                                  vector<LogicalType> types_p, vector<string> names_p)
-    : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
-      success(true) {
+    : type(type), statement_type(statement_type), properties(move(properties_p)), types(move(types_p)),
+      names(move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
@@ -53,7 +53,7 @@ idx_t BaseQueryResult::ColumnCount() {
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)),
+    : BaseQueryResult(type, statement_type, move(properties), move(types_p), move(names_p)),
       client_properties(move(client_properties_p)) {
 }
 
