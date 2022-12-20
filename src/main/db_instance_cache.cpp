@@ -1,5 +1,5 @@
 #include "duckdb/main/db_instance_cache.hpp"
-
+#include "duckdb/main/extension_helper.hpp"
 namespace duckdb {
 
 string GetDBAbsolutePath(const string &database) {
@@ -8,6 +8,10 @@ string GetDBAbsolutePath(const string &database) {
 	}
 	if (database.rfind(":memory:", 0) == 0) {
 		// this is a memory db, just return it.
+		return database;
+	}
+	if (!ExtensionHelper::ExtractExtensionPrefixFromPath(database).empty()){
+		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
 	if (FileSystem::IsPathAbsolute(database)) {

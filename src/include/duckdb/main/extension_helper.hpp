@@ -57,6 +57,8 @@ public:
 	static void ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
 	                                ReplacementOpenData *open_data);
 
+	static string ExtractExtensionPrefixFromPath(const string &path);
+
 private:
 	static const vector<string> PathComponents();
 	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);

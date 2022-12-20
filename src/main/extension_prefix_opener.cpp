@@ -16,17 +16,9 @@ struct ExtensionPrefixOpenData : public ReplacementOpenData {
 
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
 	auto path = config.options.database_path;
-	auto first_colon = path.find(':');
-	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
+	string extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
+	if(extension.empty()){
 		return nullptr;
-	}
-	auto extension = path.substr(0, first_colon);
-	D_ASSERT(extension.size() > 1);
-	// needs to be alphanumeric
-	for (auto &ch : extension) {
-		if (!isalnum(ch) && ch != '_') {
-			return nullptr;
-		}
 	}
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);
 	if (extension_data) {
