@@ -464,3 +464,43 @@ query I
 select time_bucket('1 day'::interval, '294247-01-10'::date);
 ----
 294247-01-10
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date, '2022-12-20'::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22'::date, null::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date, '2022-12-20'::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22'::date, null::date);
+----
+NULL

@@ -805,3 +805,43 @@ query I
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775806'::timestamp);
 ----
 294247-01-10 04:00:54.775806
+
+query I
+select time_bucket('1 month 1 day'::interval, null::timestamp);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::timestamp, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::timestamp, '2022-12-20 10:00:00'::timestamp);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::timestamp);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::timestamp, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22 10:00:00'::timestamp, null::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::timestamp, '2022-12-20 10:00:00'::timestamp);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22'::timestamp, null::timestamp);
+----
+NULL
