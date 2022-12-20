@@ -46,7 +46,7 @@ public:
 		if (bytes_written < 0) {
 			throw InternalException("Failed to write \"%lld\" bytes to socket: %s", write_size, strerror(errno));
 		}
-		if (bytes_written != write_size) {
+		if (idx_t(bytes_written) != write_size) {
 			throw InternalException("Failed to write \"%llu\" bytes from socket - wrote %llu instead", write_size, bytes_written);
 		}
 	}
@@ -55,7 +55,7 @@ public:
 		if (bytes_read < 0) {
 			throw InternalException("Failed to read \"%lld\" bytes from socket: %s", read_size, strerror(errno));
 		}
-		if (bytes_read != read_size) {
+		if (idx_t(bytes_read) != read_size) {
 			throw InternalException("Failed to read \"%llu\" bytes from socket - read %llu instead", read_size, bytes_read);
 		}
 	}
