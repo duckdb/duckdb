@@ -354,7 +354,7 @@ idx_t LocateErrorIndex(bool is_append, SelectionVector &sel, idx_t match_count, 
 	throw ConstraintException(exception_msg);
 }
 
-bool IsError(bool is_append, idx_t input_count, idx_t match_count, idx_t nulls) {
+bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, idx_t match_count, idx_t nulls) {
 	if (is_append) {
 		// We need to find a match for all of the values
 		return match_count != input_count;
@@ -409,7 +409,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &local_storage = LocalStorage::Get(context);
 
-	bool error = IsError(is_append, count, regular_match_count, reg_null_count);
+	bool error = IsForeignKeyConstraintError(is_append, count, regular_match_count, reg_null_count);
 	bool transaction_error = false;
 
 	bool transaction_check = local_storage.Find(data_table);
@@ -417,7 +417,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		auto &transact_index = local_storage.GetIndexes(data_table);
 		transaction_match_count = transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk,
 		                                                          &transaction_matches, trans_null_count);
-		transaction_error = IsError(is_append, count, transaction_match_count, trans_null_count);
+		transaction_error = IsForeignKeyConstraintError(is_append, count, transaction_match_count, trans_null_count);
 	}
 
 	if (!transaction_error && !error) {
