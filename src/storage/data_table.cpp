@@ -316,25 +316,27 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
-idx_t LocateErrorIndex(bool is_append, SelectionVector &sel, idx_t count) {
+idx_t LocateErrorIndex(bool is_append, SelectionVector &sel, idx_t match_count, idx_t count) {
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	if (!is_append) {
 		// We expected to find nothing, so the first error is the first match
 		failed_index = sel.get_index(0);
 	} else {
 		// We expected to find a match for all of them, so the first non-match is the first error
-		for (idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < match_count; i++) {
 			if (sel.get_index(i) != i) {
 				failed_index = i;
 				break;
 			}
 		}
-		if (count == 0) {
-			// There is only 1 entry, and it did not find a match
-			failed_index = 0;
-		}
 		if (failed_index == DConstants::INVALID_INDEX) {
-			failed_index = count;
+			if (match_count == 0) {
+				// No matches were found at all
+				failed_index = match_count;
+			} else if (match_count < count) {
+				// The last couple of values did not find a match
+				failed_index = match_count;
+			}
 		}
 	}
 	return failed_index;
@@ -438,16 +440,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	if (!transaction_check) {
 		// Only local state is checked, throw the error
 		D_ASSERT(error);
-		auto failed_index = LocateErrorIndex(is_append, regular_matches, regular_match_count);
+		auto failed_index = LocateErrorIndex(is_append, regular_matches, regular_match_count, count);
 		D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 		ThrowForeignKeyConstraintError(failed_index, is_append, index, dst_chunk);
 	}
 	if (transaction_error && error && is_append) {
 		// When we want to do an append, we only throw if the foreign key does not exist in both transaction and local
 		// storage
-
-		// TODO: we need to loop over both selection vectors, only when the value shows up in neither of them should we
-		// throw an error
 		idx_t failed_index = DConstants::INVALID_INDEX;
 		idx_t regular_idx = 0;
 		idx_t transaction_idx = 0;
@@ -473,21 +472,17 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 			// We don't throw, every value was present in either regular or transaction storage
 			return;
 		}
-		// FIXME: this is wrong, only when a value is not located in either the transaction index, or the regular index
-		// This currently throws an error in the case where:
-		// value 1 resides in local, but not in transaction
-		// value 2 resides in transaction, but not in local
 		ThrowForeignKeyConstraintError(failed_index, true, index, dst_chunk);
 	}
 	if (!is_append && transaction_check) {
 		if (error) {
-			auto failed_index = LocateErrorIndex(false, regular_matches, regular_match_count);
+			auto failed_index = LocateErrorIndex(false, regular_matches, regular_match_count, count);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 			ThrowForeignKeyConstraintError(failed_index, false, index, dst_chunk);
 		} else {
 			D_ASSERT(transaction_error);
 			D_ASSERT(transaction_match_count != DConstants::INVALID_INDEX);
-			auto failed_index = LocateErrorIndex(false, transaction_matches, transaction_match_count);
+			auto failed_index = LocateErrorIndex(false, transaction_matches, transaction_match_count, count);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 			ThrowForeignKeyConstraintError(failed_index, false, transaction_index, dst_chunk);
 		}

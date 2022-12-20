@@ -446,7 +446,13 @@ void ART::VerifyAppendForeignKey(DataChunk &chunk) {
 			first_missing_key = i;
 			break;
 		}
+	}
+	if (first_missing_key == DConstants::INVALID_INDEX) {
 		if (count == 0) {
+			// No matches were found at all
+			first_missing_key = count;
+		} else if (count < chunk.size()) {
+			// The last couple of values did not find a match
 			first_missing_key = count;
 		}
 	}
@@ -468,8 +474,8 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
 
 	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
 
-	if (count == 0 || count == null_count) {
-		// No matches were found, or all the matches were NULL
+	if (count == null_count) {
+		// The only "matches" we found were NULLs
 		return;
 	}
 	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(0));
