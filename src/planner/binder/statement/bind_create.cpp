@@ -570,8 +570,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto &catalog = Catalog::GetCatalog(context);
-			auto inner_type = catalog.GetType(context, "", UserType::GetTypeName(create_type_info.type));
+			auto inner_type = Catalog::GetType(context, schema->catalog->GetName(), schema->name,
+			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
 			LogicalType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);

@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -151,7 +152,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 	struct BindDataNow : public BindData {
 		explicit BindDataNow(ClientContext &context) : BindData(context) {
-			now = context.ActiveTransaction().start_timestamp;
+			now = MetaTransaction::Get(context).start_timestamp;
 		}
 
 		BindDataNow(const BindDataNow &other) : BindData(other), now(other.now) {
@@ -200,7 +201,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };
@@ -220,7 +221,7 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };

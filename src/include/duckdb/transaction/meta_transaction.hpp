@@ -22,7 +22,7 @@ class Transaction;
 //! The MetaTransaction manages multiple transactions for different attached databases
 class MetaTransaction {
 public:
-	MetaTransaction(ClientContext &context, timestamp_t start_timestamp, idx_t catalog_version);
+	DUCKDB_API MetaTransaction(ClientContext &context, timestamp_t start_timestamp, idx_t catalog_version);
 
 	ClientContext &context;
 	//! The timestamp when the transaction started
@@ -37,7 +37,7 @@ public:
 	transaction_t active_query;
 
 public:
-	static MetaTransaction &Get(ClientContext &context);
+	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
 	timestamp_t GetCurrentTransactionStartTimestamp() {
 		return start_timestamp;
 	}
