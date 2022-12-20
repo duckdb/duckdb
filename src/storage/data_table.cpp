@@ -359,8 +359,8 @@ bool IsError(bool is_append, idx_t input_count, idx_t match_count, idx_t nulls) 
 		// We need to find a match for all of the values
 		return match_count != input_count;
 	} else {
-		// We need to find a match for none of the values, or those matches need to be null
-		return match_count != 0 && match_count != nulls;
+		// The only "matches" we should find are NULLs
+		return match_count != nulls;
 	}
 }
 
@@ -397,6 +397,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		return;
 	}
 
+	// Contains all the indices that found a match with a foreign key
 	SelectionVector regular_matches(count);
 	SelectionVector transaction_matches(count);
 	idx_t reg_null_count = 0;
@@ -452,12 +453,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		idx_t transaction_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
 			// If the index matches with that of the selection vector, increase the selection vector index
-			bool in_regular = regular_idx < regular_match_count && regular_matches.get_index(regular_idx) == i;
+			bool regular_matches_left = regular_idx < regular_match_count bool in_regular =
+			                                regular_matches_left && regular_matches.get_index(regular_idx) == i;
 			if (in_regular) {
 				regular_idx++;
 			}
-			bool in_transaction =
-			    transaction_idx < transaction_match_count && transaction_matches.get_index(transaction_idx) == i;
+			bool transaction_matches_left = transaction_idx < transaction_match_count;
+			bool in_transaction = transaction_matches_left && transaction_matches.get_index(transaction_idx) == i;
 			if (in_transaction) {
 				transaction_idx++;
 			}
