@@ -17,7 +17,7 @@ struct ExtensionPrefixOpenData : public ReplacementOpenData {
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
 	auto path = config.options.database_path;
 	string extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
-	if(extension.empty()){
+	if (extension.empty()) {
 		return nullptr;
 	}
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);

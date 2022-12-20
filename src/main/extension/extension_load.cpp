@@ -176,7 +176,7 @@ void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &
 	}
 }
 
-string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path){
+string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
 	auto first_colon = path.find(':');
 	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
 		return "";

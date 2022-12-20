@@ -10,7 +10,7 @@ string GetDBAbsolutePath(const string &database) {
 		// this is a memory db, just return it.
 		return database;
 	}
-	if (!ExtensionHelper::ExtractExtensionPrefixFromPath(database).empty()){
+	if (!ExtensionHelper::ExtractExtensionPrefixFromPath(database).empty()) {
 		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
