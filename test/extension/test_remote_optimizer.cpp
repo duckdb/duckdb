@@ -60,6 +60,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(read(connfd, buffer, bytes) == bytes);
 
 			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
+			con2.BeginTransaction();
 			PlanDeserializationState state(*con2.context);
 			auto plan = LogicalOperator::Deserialize(deserializer, state);
 			plan->ResolveOperatorTypes();
