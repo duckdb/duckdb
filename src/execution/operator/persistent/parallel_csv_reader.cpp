@@ -48,7 +48,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	    start_buffer == buffer->buffer->GetStart()) {
 		// First buffer doesn't need any setting
 		// Unless we have a header
-		if (options.header) {
+		if (options.header && options.auto_detect) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					position_buffer++;

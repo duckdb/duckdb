@@ -143,12 +143,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
-		if (!options.union_by_name) {
-			// if we are reading multiple files - run auto-detect only on the first file
-			// UNLESS union by name is turned on - in that case we assume that different files have different schemas
-			// as such, we need to re-run the auto detection on each file
-			options.auto_detect = false;
-		}
 		result->sql_types = initial_reader->sql_types;
 		result->initial_reader = move(initial_reader);
 	} else {
@@ -530,6 +524,12 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_unique<SingleThreadedCSVState>(bind_data.files.size());
+	if (!bind_data.options.union_by_name) {
+		// if we are reading multiple files - run auto-detect only on the first file
+		// UNLESS union by name is turned on - in that case we assume that different files have different schemas
+		// as such, we need to re-run the auto detection on each file
+		bind_data.options.auto_detect = false;
+	}
 	if (bind_data.initial_reader) {
 		result->initial_reader = move(bind_data.initial_reader);
 	} else if (bind_data.files.empty()) {
