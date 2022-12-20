@@ -277,6 +277,22 @@ public:
 	//! The set of projection ids
 	vector<idx_t> column_ids;
 
+	double GetProgress(ReadCSVData &bind_data) const {
+		idx_t total_files = bind_data.files.size();
+
+		// get the progress WITHIN the current file
+		double progress;
+		if (file_size == 0) {
+			progress = 1.0;
+		} else {
+			progress = double(bytes_read) / double(file_size);
+		}
+		// now get the total percentage of files read
+		double percentage = double(file_index) / total_files;
+		percentage += (double(1) / double(total_files)) * progress;
+		return percentage * 100;
+	}
+
 private:
 	//! File Handle for current file
 	unique_ptr<CSVFileHandle> file_handle;
@@ -390,8 +406,7 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, move(next_local_buffer),
-		                                            csv_data.sql_types);
-		csv_reader->SetProjectionMap(input.column_ids);
+		                                            csv_data.sql_types, input.column_ids);
 	}
 	auto new_local_state = make_unique<ParallelCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
@@ -417,7 +432,6 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			if (!next_chunk) {
 				break;
 			}
-			//			csv_local_state.previous_buffer = csv_local_state.csv_reader->buffer;
 			csv_local_state.csv_reader->SetBufferRead(move(next_chunk));
 		}
 		csv_local_state.csv_reader->ParseCSV(output);
@@ -439,7 +453,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 // Single-Threaded CSV Reader
 //===--------------------------------------------------------------------===//
 struct SingleThreadedCSVState : public GlobalTableFunctionState {
-	explicit SingleThreadedCSVState(idx_t total_files) : total_files(total_files), next_file(0), total_size(0), bytes_read(0) {
+	explicit SingleThreadedCSVState(idx_t total_files) : total_files(total_files), next_file(0), progress_in_files(0) {
 	}
 
 	mutex csv_lock;
@@ -448,10 +462,9 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	idx_t total_files;
 	//! The index of the next file to read (i.e. current file + 1)
 	atomic<idx_t> next_file;
-	//! Total File Size
-	atomic<idx_t> total_size;
-	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
+	//! How far along we are in reading the current set of open files
+	//! This goes from [0...next_file] * 100
+	atomic<idx_t> progress_in_files;
 	//! The set of SQL types
 	vector<LogicalType> sql_types;
 	//! The set of projection ids
@@ -461,7 +474,14 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		return total_files;
 	}
 
-	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data, idx_t &file_index) {
+	double GetProgress(ReadCSVData &bind_data) const {
+		idx_t total_files = bind_data.files.size();
+		D_ASSERT(progress_in_files <= next_file);
+		return (double(progress_in_files) / double(total_files));
+	}
+
+	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data, idx_t &file_index,
+	                                           idx_t &total_size) {
 		BufferedCSVReaderOptions options;
 		{
 			lock_guard<mutex> l(csv_lock);
@@ -484,20 +504,24 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 			result = make_unique<BufferedCSVReader>(context, move(options), sql_types);
 			result->SetProjectionMap(column_ids);
 		}
-		total_size += result->file_handle->FileSize();
+		total_size = result->file_handle->FileSize();
 		return result;
 	}
 };
 
 struct SingleThreadedCSVLocalState : public LocalTableFunctionState {
 public:
-	explicit SingleThreadedCSVLocalState() : bytes_read(0), file_index(0) {
+	explicit SingleThreadedCSVLocalState() : bytes_read(0), total_size(0), current_progress(0), file_index(0) {
 	}
 
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
 	//! The current amount of bytes read by this reader
 	idx_t bytes_read;
+	//! The total amount of bytes in the file
+	idx_t total_size;
+	//! The current progress from 0..100
+	idx_t current_progress;
 	//! The file index of this reader
 	idx_t file_index;
 };
@@ -515,7 +539,6 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		bind_data.options.file_path = bind_data.files[0];
 		result->initial_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
-	result->total_size = result->initial_reader->file_handle->FileSize();
 	result->next_file = 1;
 	if (result->initial_reader) {
 		result->sql_types = result->initial_reader->sql_types;
@@ -531,7 +554,7 @@ unique_ptr<LocalTableFunctionState> SingleThreadedReadCSVInitLocal(ExecutionCont
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto &data = (SingleThreadedCSVState &)*global_state_p;
 	auto result = make_unique<SingleThreadedCSVLocalState>();
-	result->csv_reader = data.GetCSVReader(context.client, bind_data, result->file_index);
+	result->csv_reader = data.GetCSVReader(context.client, bind_data, result->file_index, result->total_size);
 	return move(result);
 }
 
@@ -548,13 +571,25 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 		lstate.csv_reader->ParseCSV(output);
 		// update the number of bytes read
 		D_ASSERT(lstate.bytes_read <= lstate.csv_reader->bytes_in_chunk);
-		auto bytes_read = lstate.csv_reader->bytes_in_chunk - lstate.bytes_read;
-		data.bytes_read += bytes_read;
-		D_ASSERT(data.bytes_read <= data.total_size);
-		lstate.bytes_read = lstate.csv_reader->bytes_in_chunk;
+		auto bytes_read = MinValue<idx_t>(lstate.total_size, lstate.csv_reader->bytes_in_chunk);
+		auto current_progress = lstate.total_size == 0 ? 100 : 100 * bytes_read / lstate.total_size;
+		if (current_progress > lstate.current_progress) {
+			if (current_progress > 100) {
+				throw InternalException("Progress should never exceed 100");
+			}
+			data.progress_in_files += current_progress - lstate.current_progress;
+			lstate.current_progress = current_progress;
+		}
 		if (output.size() == 0) {
 			// exhausted this file, but we might have more files we can read
-			auto csv_reader = data.GetCSVReader(context, bind_data, lstate.file_index);
+			auto csv_reader = data.GetCSVReader(context, bind_data, lstate.file_index, lstate.total_size);
+			// add any left-over progress for this file to the progress bar
+			if (lstate.current_progress < 100) {
+				data.progress_in_files += 100 - lstate.current_progress;
+			}
+			// reset the current progress
+			lstate.current_progress = 0;
+			lstate.bytes_read = 0;
 			lstate.csv_reader = move(csv_reader);
 			if (!lstate.csv_reader) {
 				// no more files - we are done
@@ -670,38 +705,12 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	idx_t total_files = bind_data.files.size();
 	if (bind_data.single_threaded) {
 		auto &data = (SingleThreadedCSVState &)*global_state;
-		idx_t file_size = data.total_size;
-		idx_t bytes_read = data.bytes_read;
-		idx_t next_file = data.next_file;
-		D_ASSERT(next_file <= total_files);
-		D_ASSERT(bytes_read <= file_size);
-
-		// progress consists of two parts
-		// the total bytes read divided by the total file size of files encountered so far
-		// followed by what percentage of files we have opened (i.e. next_file / total_files)
-		auto percentage_of_files_opened = double(next_file) / double(total_files);
-		double progress_in_files = double(bytes_read) / double(file_size);
-		return percentage_of_files_opened * progress_in_files * 100.0;
+		return data.GetProgress(bind_data);
 	} else {
 		auto &data = (const ParallelCSVGlobalState &)*global_state;
-		idx_t file_size = data.file_size;
-		idx_t bytes_read = data.bytes_read;
-		idx_t file_index = data.file_index;
-
-		// get the progress WITHIN the current file
-		double progress;
-		if (file_size == 0) {
-			progress = 1.0;
-		} else {
-			progress = double(bytes_read) / double(file_size);
-		}
-		// now get the total percentage of files read
-		double percentage = double(file_index) / total_files;
-		percentage += (double(1) / double(total_files)) * progress;
-		return percentage * 100;
+		return data.GetProgress(bind_data);
 	}
 }
 

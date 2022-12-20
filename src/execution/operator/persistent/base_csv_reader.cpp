@@ -156,6 +156,7 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 void BaseCSVReader::SetProjectionMap(const vector<column_t> &column_ids) {
 	this->column_ids = column_ids;
 	D_ASSERT(!column_ids.empty());
+	D_ASSERT(!sql_types.empty());
 	projection_map.clear();
 	projection_map.resize(sql_types.size(), COLUMN_IDENTIFIER_ROW_ID);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -183,13 +184,6 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		column++;
 		return;
 	}
-	D_ASSERT(column < projection_map.size());
-	auto column_index = projection_map[column];
-	if (column_index >= column_ids.size()) {
-		// this column does not need to be read
-		column++;
-		return;
-	}
 	if (column >= sql_types.size()) {
 		if (options.ignore_errors) {
 			error_column_overflow = true;
@@ -199,6 +193,13 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
 			    GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), options.ToString());
 		}
+	}
+	D_ASSERT(column < projection_map.size());
+	auto column_index = projection_map[column];
+	if (column_index >= column_ids.size()) {
+		// this column does not need to be read
+		column++;
+		return;
 	}
 
 	// insert the line number into the chunk
