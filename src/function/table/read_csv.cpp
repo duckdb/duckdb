@@ -274,8 +274,6 @@ public:
 	idx_t file_size;
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index = 1;
-	//! The set of projection ids
-	vector<idx_t> column_ids;
 
 	double GetProgress(ReadCSVData &bind_data) const {
 		idx_t total_files = bind_data.files.size();
@@ -406,7 +404,7 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, move(next_local_buffer),
-		                                            csv_data.sql_types, input.column_ids);
+		                                            csv_data.sql_types);
 	}
 	auto new_local_state = make_unique<ParallelCSVLocalState>(move(csv_reader));
 	return move(new_local_state);
@@ -467,8 +465,6 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	atomic<idx_t> progress_in_files;
 	//! The set of SQL types
 	vector<LogicalType> sql_types;
-	//! The set of projection ids
-	vector<idx_t> column_ids;
 
 	idx_t MaxThreads() const override {
 		return total_files;
@@ -502,7 +498,6 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		} else {
 			options.file_path = bind_data.files[file_index];
 			result = make_unique<BufferedCSVReader>(context, move(options), sql_types);
-			result->SetProjectionMap(column_ids);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -543,8 +538,6 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 	if (result->initial_reader) {
 		result->sql_types = result->initial_reader->sql_types;
 	}
-	result->column_ids = input.column_ids;
-	result->initial_reader->SetProjectionMap(result->column_ids);
 	return move(result);
 }
 
@@ -593,7 +586,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 			lstate.csv_reader = move(csv_reader);
 			if (!lstate.csv_reader) {
 				// no more files - we are done
-				break;
+				return;
 			}
 			lstate.bytes_read = 0;
 		} else {
@@ -844,7 +837,6 @@ TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 	read_csv.deserialize = CSVReaderDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
-	read_csv.projection_pushdown = true;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -861,7 +853,6 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
-	read_csv_auto.projection_pushdown = true;
 	return read_csv_auto;
 }
 

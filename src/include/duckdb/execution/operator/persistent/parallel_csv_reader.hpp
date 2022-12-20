@@ -95,7 +95,7 @@ struct CSVBufferRead {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  const vector<LogicalType> &requested_types, const vector<column_t> &column_ids);
+	                  const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
