@@ -470,8 +470,8 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	}
 
 	double GetProgress(ReadCSVData &bind_data) const {
-		idx_t total_files = bind_data.files.size();
-		D_ASSERT(progress_in_files <= next_file);
+		D_ASSERT(total_files == bind_data.files.size());
+		D_ASSERT(progress_in_files <= total_files * 100);
 		return (double(progress_in_files) / double(total_files));
 	}
 
