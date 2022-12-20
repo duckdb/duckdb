@@ -2,7 +2,7 @@
 # description: Test temporary catalog entry creation
 # group: [catalog]
 
-require skip_reload
+require noforcestorage
 
 # basic temp table creation works
 statement ok

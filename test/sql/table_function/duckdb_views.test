@@ -2,8 +2,7 @@
 # description: Test duckdb_views function
 # group: [table_function]
 
-require skip_reload
-
+require noforcestorage
 
 query I
 SELECT COUNT(*) FROM duckdb_views;

@@ -2,8 +2,7 @@
 # description: Test duckdb_constraints function
 # group: [table_function]
 
-require skip_reload
-
+require noforcestorage
 
 statement ok
 CREATE TABLE tf_1 (
