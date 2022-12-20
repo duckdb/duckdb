@@ -67,7 +67,7 @@ unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &conte
 void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (PragmaDatabaseSizeData &)*data_p.global_state;
 	idx_t row = 0;
-	for (; data.index < data.databases.size(); data.index++) {
+	for (; data.index < data.databases.size() && row < STANDARD_VECTOR_SIZE; data.index++) {
 		auto db = data.databases[data.index];
 		if (db->IsSystem() || db->IsTemporary()) {
 			continue;
