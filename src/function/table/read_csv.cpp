@@ -143,7 +143,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
-		options.auto_detect = false;
+		if (!options.union_by_name) {
+			// if we are reading multiple files - run auto-detect only on the first file
+			// UNLESS union by name is turned on - in that case we assume that different files have different schemas
+			// as such, we need to re-run the auto detection on each file
+			options.auto_detect = false;
+		}
 		result->sql_types = initial_reader->sql_types;
 		result->initial_reader = move(initial_reader);
 	} else {

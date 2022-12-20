@@ -337,7 +337,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			VerifyUTF8(col_idx);
-			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
