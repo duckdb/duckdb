@@ -19,7 +19,7 @@ bool StringUtil::Contains(const string &haystack, const string &needle) {
 
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
-	while (CharacterIsSpace(*it)) {
+	while (it != str.end() && CharacterIsSpace(*it)) {
 		it++;
 	}
 	str.erase(str.begin(), it);
