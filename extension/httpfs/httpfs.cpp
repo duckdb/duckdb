@@ -87,11 +87,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 	while (true) {
 		auto res = request();
 
-		// Connection level errors to retry
-		bool should_retry = res.error() == duckdb_httplib_openssl::Error::Read;
-		should_retry = should_retry || res.error() == duckdb_httplib_openssl::Error::Connection;
-		should_retry = should_retry || res.error() == duckdb_httplib_openssl::Error::Write;
-
+		// Note: all duckdb_httplib_openssl::Error types will be retried.
 		if (res.error() == duckdb_httplib_openssl::Error::Success) {
 			switch (res->status) {
 			case 408: // Request Timeout
@@ -99,7 +95,6 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			case 429: // Rate limiter hit
 			case 503: // Server has error
 			case 504: // Server has error
-				should_retry = true;
 				break;
 			default:
 				return make_unique<ResponseWrapper>(res.value());
@@ -108,7 +103,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 
 		tries += 1;
 
-		if (should_retry && tries <= params.retries) {
+		if (tries <= params.retries) {
 			if (tries > 1) {
 				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries - 2));
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));

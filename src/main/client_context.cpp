@@ -509,13 +509,15 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto n_param = statement->n_param;
+	auto named_param_map = move(statement->named_param_map);
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	RunFunctionInTransactionInternal(
 	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, move(statement)); }, false);
 	prepared_data->unbound_statement = move(unbound_statement);
-	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
+	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param,
+	                                      move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {

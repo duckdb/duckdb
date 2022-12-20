@@ -21,6 +21,8 @@ static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"->>", "json"},
     {"array_to_json", "json"},
     {"create_fts_index", "fts"},
+    {"current_localtime", "icu"},
+    {"current_localtimestamp", "icu"},
     {"dbgen", "tpch"},
     {"drop_fts_index", "fts"},
     {"dsdgen", "tpcds"},

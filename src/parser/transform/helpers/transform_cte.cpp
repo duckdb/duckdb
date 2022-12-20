@@ -44,7 +44,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, 
 		if (cte->cterecursive || de_with_clause->recursive) {
 			info->query = TransformRecursiveCTE(cte, *info);
 		} else {
-			info->query = TransformSelect(cte->ctequery);
+			Transformer cte_transformer(this);
+			info->query = cte_transformer.TransformSelect(cte->ctequery);
 		}
 		D_ASSERT(info->query);
 		auto cte_name = string(cte->ctename);

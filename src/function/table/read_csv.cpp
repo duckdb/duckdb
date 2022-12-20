@@ -65,9 +65,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	result->InitializeFiles(context, patterns);
 
+	bool explicitly_set_columns = false;
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "columns") {
+			explicitly_set_columns = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");
@@ -105,7 +107,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				}
 				options.sql_types_per_column[name] = def_type;
 			}
-
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
 		} else if (loption == "normalize_names") {
@@ -130,7 +131,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		if (names.empty()) {
 			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
 		} else {
-			D_ASSERT(return_types.size() == names.size());
+			if (explicitly_set_columns) {
+				// The user has influenced the names, can't assume they are valid anymore
+				if (return_types.size() != names.size()) {
+					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d) in "
+					                      "the file don't match",
+					                      names.size(), return_types.size());
+				}
+			} else {
+				D_ASSERT(return_types.size() == names.size());
+			}
 		}
 		options = initial_reader->options;
 		result->sql_types = initial_reader->sql_types;

@@ -19,6 +19,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
 
 #include <random>
@@ -65,9 +66,8 @@ bool DuckDBPyConnection::IsJupyter() {
 	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
-void DuckDBPyConnection::Initialize(py::handle &m) {
-	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
-	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
+	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -81,14 +81,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
-	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
-	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
-	         py::kw_only(), py::arg("date_as_object") = false)
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1,
 	         py::kw_only(), py::arg("date_as_object") = false)
-	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
@@ -143,14 +143,22 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter)
-	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
 
+void DuckDBPyConnection::Initialize(py::handle &m) {
+	auto connection_module =
+	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
+
+	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+
+	InitializeConnectionMethods(connection_module);
+	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
 
@@ -177,6 +185,39 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 		pending_query.ThrowError();
 	}
 	return pending_query.Execute();
+}
+
+py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_param_map, const py::dict &params) {
+	py::list new_params(params.size());
+
+	for (auto &item : params) {
+		const std::string &item_name = item.first.cast<std::string>();
+		auto entry = named_param_map.find(item_name);
+		if (entry == named_param_map.end()) {
+			throw InvalidInputException(
+			    "Named parameters could not be transformed, because query string is missing named parameter '%s'",
+			    item_name);
+		}
+		auto param_idx = entry->second;
+		// Add the value of the named parameter to the list
+		new_params[param_idx - 1] = item.second;
+	}
+
+	if (named_param_map.size() != params.size()) {
+		// One or more named parameters were expected, but not found
+		vector<string> missing_params;
+		missing_params.reserve(named_param_map.size());
+		for (auto &entry : named_param_map) {
+			auto &name = entry.first;
+			if (!params.contains(name)) {
+				missing_params.push_back(name);
+			}
+		}
+		auto message = StringUtil::Join(missing_params, ", ");
+		throw InvalidInputException("Not all named parameters have been located, missing: %s", message);
+	}
+
+	return new_params;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
@@ -212,6 +253,19 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		if (prep->HasError()) {
 			prep->error.Throw();
 		}
+	}
+
+	auto &named_param_map = prep->named_param_map;
+	if (py::isinstance<py::dict>(params)) {
+		if (named_param_map.empty()) {
+			throw InvalidInputException("Param is of type 'dict', but no named parameters were found in the query");
+		}
+		// Transform named parameters to regular positional parameters
+		params = TransformNamedParameters(named_param_map, params);
+		// Clear the map, we don't need it anymore
+		prep->named_param_map.clear();
+	} else if (!named_param_map.empty()) {
+		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
 	}
 
 	// this is a list of a list of parameters in executemany

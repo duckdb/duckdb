@@ -2327,6 +2327,10 @@ c_expr:		columnref								{ $$ = $1; }
 					else
 						$$ = (PGNode *) p;
 				}
+			| '$' named_param
+				{
+					$$ = makeNamedParamRef($2, @1);
+				}
 			| '(' a_expr ')' opt_indirection
 				{
 					if ($4)
@@ -3759,3 +3763,5 @@ ColLabel:	IDENT									{ $$ = $1; }
 ColLabelOrString:	ColLabel						{ $$ = $1; }
 					| SCONST						{ $$ = $1; }
 		;
+
+named_param: IDENT { $$ = $1; }

@@ -153,7 +153,7 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 			sample_chunks = 1;
 		} else {
 			sample_chunk_size = STANDARD_VECTOR_SIZE;
-			sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
+			sample_chunks = sample_size / STANDARD_VECTOR_SIZE + 1;
 		}
 	} else if (loption == "skip") {
 		skip_rows = ParseInteger(value, loption);
