@@ -43,10 +43,15 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 
 string MetaTransaction::Commit() {
 	string error;
-	for (auto &entry : transactions) {
-		auto db = entry.first;
+	// commit transactions in reverse order
+	for (idx_t i = all_transactions.size(); i > 0; i--) {
+		auto db = all_transactions[i - 1];
+		auto entry = transactions.find(db);
+		if (entry == transactions.end()) {
+			throw InternalException("Could not find transaction corresponding to database in MetaTransaction");
+		}
 		auto &transaction_manager = db->GetTransactionManager();
-		auto transaction = entry.second;
+		auto transaction = entry->second;
 		if (error.empty()) {
 			// commit
 			error = transaction_manager.CommitTransaction(context, transaction);
