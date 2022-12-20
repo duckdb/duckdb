@@ -46,8 +46,8 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
 	return result;
 }
 
-idx_t TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
-                                       SelectionVector *sel, idx_t &null_count) {
+void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
+                                      ManagedSelection *matches) {
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
@@ -56,7 +56,8 @@ idx_t TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, boo
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
 	}
 
-	return index->LookupValues(chunk, sel, nullptr, null_count);
+	bool ignore_nulls = is_append ? false : true;
+	index->LookupValues(chunk, matches, ignore_nulls, nullptr);
 }
 
 vector<column_t> TableIndexList::GetRequiredColumns() {

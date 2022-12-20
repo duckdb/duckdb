@@ -79,6 +79,8 @@ public:
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
+	//! Verify that data can be appended to the index
+	void VerifyAppend(DataChunk &chunk, UniqueConstraintConflictInfo &conflict_info) override;
 	//! Verify that data can be appended to the index for foreign key constraint
 	void VerifyAppendForeignKey(DataChunk &chunk) override;
 	//! Verify that data can be delete from the index for foreign key constraint
@@ -118,7 +120,8 @@ private:
 	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
 
 	//! Perform 'Lookup' for an entire chunk, marking which succeeded
-	idx_t LookupValues(DataChunk &input, SelectionVector *matches, Vector *row_ids, idx_t &null_count) final override;
+	void LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignore_nulls,
+	                  Vector *row_ids_p) final override;
 
 	//! Find the node with a matching key, optimistic version
 	Leaf *Lookup(Node *node, Key &key, idx_t depth);

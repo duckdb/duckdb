@@ -127,4 +127,39 @@ private:
 	SelectionVector vec;
 };
 
+// Contains a selection vector, combined with a count
+class ManagedSelection {
+public:
+	explicit inline ManagedSelection(idx_t size) : size(size), sel_vec(size), internal_opt_selvec(&sel_vec) {
+		count = 0;
+	}
+
+public:
+	inline idx_t operator[](idx_t index) const {
+		D_ASSERT(index < size);
+		return sel_vec.get_index(index);
+	}
+	inline bool IndexMapsToLocation(idx_t idx, idx_t location) const {
+		return idx < count && sel_vec.get_index(idx) == location;
+	}
+	inline void Append(const idx_t idx) {
+		internal_opt_selvec.Append(count, idx);
+	}
+	inline idx_t Count() const {
+		return count;
+	}
+	inline idx_t Size() const {
+		return size;
+	}
+	inline SelectionVector &Selection() {
+		return sel_vec;
+	}
+
+private:
+	idx_t count;
+	idx_t size;
+	SelectionVector sel_vec;
+	OptionalSelection internal_opt_selvec;
+};
+
 } // namespace duckdb

@@ -22,7 +22,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/execution/execution_failure_vector.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -177,7 +177,8 @@ public:
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	                             UniqueConstraintConflictInfo *conflict_info = nullptr);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

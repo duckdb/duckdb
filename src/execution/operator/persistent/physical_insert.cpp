@@ -128,6 +128,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
+	UniqueConstraintConflictInfo conflict_info(chunk.size());
 
 	if (!parallel) {
 		if (!gstate.initialized) {
@@ -153,8 +154,24 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
-		// FIXME: call method that lets us know for which values the constraint check failed, so we can handle it here
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
+		if (conflict_info.matches.Count() != 0) {
+			// Found conflicts in the to-be-inserted values
+			switch (action_type) {
+			case InsertConflictActionType::THROW: {
+				// throw the first error
+			}
+			case InsertConflictActionType::NOTHING: {
+				// Don't throw, just discard the problematic values
+			}
+			case InsertConflictActionType::UPDATE: {
+				// Don't throw, perform an Update on the conflicting row_ids instead
+			}
+			default:
+				throw NotImplementedException("Type not implemented for InsertConflictActionType");
+			}
+			return SinkResultType::NEED_MORE_INPUT;
+		}
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);

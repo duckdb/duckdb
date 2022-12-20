@@ -411,53 +411,37 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
-	SelectionVector match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE);
-	row_ids.Initialize(false, chunk.size());
-	idx_t null_count = 0;
+	ManagedSelection match_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
 
-	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
-
-	if (count == null_count) {
-		// The only "matches" we got were on NULLs
+	LookupValues(chunk, &match_vec, true, &row_ids);
+	if (match_vec.Count() == 0) {
 		// Succesful verification
 		return;
 	}
-	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(0));
+	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
 	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND, move(key_name));
 	throw ConstraintException(exception_msg);
 }
 
+void ART::VerifyAppend(DataChunk &chunk, UniqueConstraintConflictInfo &conflict_info) {
+	LookupValues(chunk, &conflict_info.matches, true, &conflict_info.row_ids);
+}
+
 void ART::VerifyAppendForeignKey(DataChunk &chunk) {
-	SelectionVector match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE);
-	row_ids.Initialize(false, chunk.size());
-	idx_t null_count = 0;
+	ManagedSelection match_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
 
-	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
+	LookupValues(chunk, &match_vec, false, &row_ids);
 
-	if (count == chunk.size()) {
+	// All values need to be present in the referenced table
+	if (match_vec.Count() == chunk.size()) {
 		// Succesful verification
 		return;
 	}
-	idx_t first_missing_key = DConstants::INVALID_INDEX;
-	for (idx_t i = 0; i < count; i++) {
-		if (i != match_vec.get_index(i)) {
-			first_missing_key = i;
-			break;
-		}
-	}
-	if (first_missing_key == DConstants::INVALID_INDEX) {
-		if (count == 0) {
-			// No matches were found at all
-			first_missing_key = count;
-		} else if (count < chunk.size()) {
-			// The last couple of values did not find a match
-			first_missing_key = count;
-		}
-	}
+	idx_t first_missing_key = UniqueConstraintConflictInfo::FirstMissingMatch(match_vec);
 	D_ASSERT(first_missing_key != DConstants::INVALID_INDEX);
-	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(first_missing_key));
+	auto key_name = GenerateErrorKeyName(chunk, match_vec[first_missing_key]);
 	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND_FK, move(key_name));
 	throw ConstraintException(exception_msg);
 }
@@ -467,18 +451,16 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
 		return;
 	}
 
-	SelectionVector match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE);
-	row_ids.Initialize(false, chunk.size());
-	idx_t null_count = 0;
+	ManagedSelection match_vec(chunk.size());
+	ManagedSelection null_vec(chunk.size());
+	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
 
-	auto count = LookupValues(chunk, &match_vec, &row_ids, null_count);
+	LookupValues(chunk, &match_vec, true, &row_ids);
 
-	if (count == null_count) {
-		// The only "matches" we found were NULLs
+	if (match_vec.Count() == 0) {
 		return;
 	}
-	auto key_name = GenerateErrorKeyName(chunk, match_vec.get_index(0));
+	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
 	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::DELETE_FK, move(key_name));
 	throw ConstraintException(exception_msg);
 }
@@ -924,8 +906,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, stri
 	}
 }
 
-idx_t ART::LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *row_ids_p, idx_t &null_count) {
-	D_ASSERT(null_count == 0);
+void ART::LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignore_nulls, Vector *row_ids_p) {
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
@@ -942,20 +923,23 @@ idx_t ART::LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *ro
 
 	row_t *data = nullptr;
 	if (row_ids_p) {
+		// recording row_ids only make sense when accompanied by matches
+		D_ASSERT(matches_p);
 		auto &row_ids = *row_ids_p;
 		data = FlatVector::GetData<row_t>(row_ids);
 	}
 
-	OptionalSelection sel_vec(matches_p);
-	idx_t match_count = 0;
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (keys[i].Empty()) {
 			// Key is NULL, skip it
-			if (data) {
-				data[match_count] = DConstants::INVALID_INDEX;
+			if (!ignore_nulls) {
+				if (row_ids_p) {
+					data[matches_p->Count()] = DConstants::INVALID_INDEX;
+				}
+				if (matches_p) {
+					matches_p->Append(i);
+				}
 			}
-			sel_vec.Append(match_count, i);
-			null_count++;
 			continue;
 		}
 		Leaf *leaf_ptr = Lookup(tree, keys[i], 0);
@@ -968,11 +952,12 @@ idx_t ART::LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *ro
 		D_ASSERT(leaf_ptr->count == 1);
 		auto row_id = leaf_ptr->GetRowId(0);
 		if (data) {
-			data[match_count] = row_id;
+			data[matches_p->Count()] = row_id;
 		}
-		sel_vec.Append(match_count, i);
+		if (matches_p) {
+			matches_p->Append(i);
+		}
 	}
-	return match_count;
 }
 
 //===--------------------------------------------------------------------===//

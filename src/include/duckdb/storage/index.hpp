@@ -17,7 +17,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/execution_failure_vector.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 
@@ -73,6 +73,8 @@ public:
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	//! Verify that data can be appended to the index
+	virtual void VerifyAppend(DataChunk &chunk, UniqueConstraintConflictInfo &conflict_info) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
 	virtual void VerifyAppendForeignKey(DataChunk &chunk) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
@@ -101,7 +103,7 @@ public:
 	//! matches were
 	//  what row_ids those matches have
 	//  for this purpose, nulls count as a match, and are returned in 'null_count'
-	virtual idx_t LookupValues(DataChunk &input, SelectionVector *matches_p, Vector *row_ids_p, idx_t &null_count) = 0;
+	virtual void LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignore_nulls, Vector *row_ids_p) = 0;
 
 	//! Returns unique flag
 	bool IsUnique() {

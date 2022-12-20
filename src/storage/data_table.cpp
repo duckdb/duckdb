@@ -316,28 +316,14 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
-idx_t LocateErrorIndex(bool is_append, SelectionVector &sel, idx_t match_count, idx_t count) {
+idx_t LocateErrorIndex(bool is_append, ManagedSelection &matches) {
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	if (!is_append) {
 		// We expected to find nothing, so the first error is the first match
-		failed_index = sel.get_index(0);
+		failed_index = matches[0];
 	} else {
-		// We expected to find a match for all of them, so the first non-match is the first error
-		for (idx_t i = 0; i < match_count; i++) {
-			if (sel.get_index(i) != i) {
-				failed_index = i;
-				break;
-			}
-		}
-		if (failed_index == DConstants::INVALID_INDEX) {
-			if (match_count == 0) {
-				// No matches were found at all
-				failed_index = match_count;
-			} else if (match_count < count) {
-				// The last couple of values did not find a match
-				failed_index = match_count;
-			}
-		}
+		// We expected to find matches for all of them, so the first missing match is the first error
+		return UniqueConstraintConflictInfo::FirstMissingMatch(matches);
 	}
 	return failed_index;
 }
@@ -354,13 +340,13 @@ idx_t LocateErrorIndex(bool is_append, SelectionVector &sel, idx_t match_count, 
 	throw ConstraintException(exception_msg);
 }
 
-bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, idx_t match_count, idx_t nulls) {
+bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, ManagedSelection &matches) {
 	if (is_append) {
 		// We need to find a match for all of the values
-		return match_count != input_count;
+		return matches.Count() != input_count;
 	} else {
-		// The only "matches" we should find are NULLs
-		return match_count != nulls;
+		// We should not find any matches
+		return matches.Count() != 0;
 	}
 }
 
@@ -398,26 +384,21 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	}
 
 	// Contains all the indices that found a match with a foreign key
-	SelectionVector regular_matches(count);
-	SelectionVector transaction_matches(count);
-	idx_t reg_null_count = 0;
-	idx_t trans_null_count = 0;
+	ManagedSelection regular_matches(count);
+	ManagedSelection transaction_matches(count);
 
-	auto regular_match_count = data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk,
-	                                                                      &regular_matches, reg_null_count);
-	idx_t transaction_match_count = DConstants::INVALID_INDEX;
+	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, &regular_matches);
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &local_storage = LocalStorage::Get(context);
 
-	bool error = IsForeignKeyConstraintError(is_append, count, regular_match_count, reg_null_count);
+	bool error = IsForeignKeyConstraintError(is_append, count, regular_matches);
 	bool transaction_error = false;
 
 	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
-		transaction_match_count = transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk,
-		                                                          &transaction_matches, trans_null_count);
-		transaction_error = IsForeignKeyConstraintError(is_append, count, transaction_match_count, trans_null_count);
+		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, &transaction_matches);
+		transaction_error = IsForeignKeyConstraintError(is_append, count, transaction_matches);
 	}
 
 	if (!transaction_error && !error) {
@@ -441,7 +422,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	if (!transaction_check) {
 		// Only local state is checked, throw the error
 		D_ASSERT(error);
-		auto failed_index = LocateErrorIndex(is_append, regular_matches, regular_match_count, count);
+		auto failed_index = LocateErrorIndex(is_append, regular_matches);
 		D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 		ThrowForeignKeyConstraintError(failed_index, is_append, index, dst_chunk);
 	}
@@ -451,18 +432,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		idx_t failed_index = DConstants::INVALID_INDEX;
 		idx_t regular_idx = 0;
 		idx_t transaction_idx = 0;
+		idx_t null_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
-			// If the index matches with that of the selection vector, increase the selection vector index
-			bool regular_matches_left = regular_idx < regular_match_count bool in_regular =
-			                                regular_matches_left && regular_matches.get_index(regular_idx) == i;
-			if (in_regular) {
-				regular_idx++;
-			}
-			bool transaction_matches_left = transaction_idx < transaction_match_count;
-			bool in_transaction = transaction_matches_left && transaction_matches.get_index(transaction_idx) == i;
-			if (in_transaction) {
-				transaction_idx++;
-			}
+			bool in_regular = regular_matches.IndexMapsToLocation(regular_idx, i);
+			regular_idx += in_regular;
+			bool in_transaction = transaction_matches.IndexMapsToLocation(transaction_idx, i);
+			transaction_idx += in_transaction;
+
 			if (!in_regular && !in_transaction) {
 				// We need to find a match for all of the input values
 				// The failed index is i, it does not show up in either regular or transaction storage
@@ -478,13 +454,13 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	}
 	if (!is_append && transaction_check) {
 		if (error) {
-			auto failed_index = LocateErrorIndex(false, regular_matches, regular_match_count, count);
+			auto failed_index = LocateErrorIndex(false, regular_matches);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 			ThrowForeignKeyConstraintError(failed_index, false, index, dst_chunk);
 		} else {
 			D_ASSERT(transaction_error);
-			D_ASSERT(transaction_match_count != DConstants::INVALID_INDEX);
-			auto failed_index = LocateErrorIndex(false, transaction_matches, transaction_match_count, count);
+			D_ASSERT(transaction_matches.Count() != DConstants::INVALID_INDEX);
+			auto failed_index = LocateErrorIndex(false, transaction_matches);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 			ThrowForeignKeyConstraintError(failed_index, false, transaction_index, dst_chunk);
 		}
@@ -511,7 +487,8 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
-void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                                        UniqueConstraintConflictInfo *conflict_info) {
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
@@ -547,7 +524,16 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
 			info->indexes.Scan([&](Index &index) {
-				index.VerifyAppend(chunk);
+				if (conflict_info) {
+					UniqueConstraintConflictInfo info(chunk.size());
+					index.VerifyAppend(chunk, info);
+					if (info.matches.Count() != 0) {
+						// Found actual conflicts, merge it into the conflict_info
+						conflict_info->AddConflicts(move(info));
+					}
+				} else {
+					index.VerifyAppend(chunk);
+				}
 				return false;
 			});
 			break;
