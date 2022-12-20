@@ -248,7 +248,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 				return false;
 			} else {
 				throw InvalidInputException(
-				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d. (%s)",
+				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
 				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
 				    options.ToString());
 			}
@@ -308,7 +308,7 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, i
 		int64_t error_line = linenr - (chunk.size() - row_idx) + 1 + offset;
 		D_ASSERT(error_line >= 0);
 		throw InvalidInputException("Error in file \"%s\" at line %llu in column \"%s\": "
-		                            "%s. Parser options: %s",
+		                            "%s. Parser options:\n%s",
 		                            options.file_path, error_line, col_name,
 		                            ErrorManager::InvalidUnicodeError(s.GetString(), "CSV file"), options.ToString());
 	}
@@ -388,7 +388,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				                            "or skipping column conversion (ALL_VARCHAR=1)",
 				                            error_message, col_name, error_line, options.ToString());
 			} else {
-				throw InvalidInputException("%s at line %llu in column %s. Parser options: %s ", error_message,
+				throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ", error_message,
 				                            error_line, col_name, options.ToString());
 			}
 		}
