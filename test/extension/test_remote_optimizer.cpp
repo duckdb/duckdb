@@ -24,6 +24,8 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 	pid_t pid = fork();
 
+	int port = 4242;
+
 	if (pid == 0) { // child process
 		// sockets, man, how do they work?!
 		struct sockaddr_in servaddr, cli;
@@ -34,7 +36,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 		servaddr.sin_family = AF_INET;
 		servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-		servaddr.sin_port = htons(4242);
+		servaddr.sin_port = htons(port);
 		REQUIRE(::bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) == 0);
 		REQUIRE((listen(sockfd, 5)) == 0);
 

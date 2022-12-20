@@ -41,6 +41,25 @@ public:
 		return false;
 	}
 
+	static void WriteChecked(int sockfd, void *data, idx_t write_size) {
+		auto bytes_written = write(sockfd, data, write_size);
+		if (bytes_written < 0) {
+			throw InternalException("Failed to write \"%lld\" bytes to socket: %s", write_size, strerror(errno));
+		}
+		if (bytes_written != write_size) {
+			throw InternalException("Failed to write \"%llu\" bytes from socket - wrote %llu instead", write_size, bytes_written);
+		}
+	}
+	static void ReadChecked(int sockfd, void *data, idx_t read_size) {
+		auto bytes_read = read(sockfd, data, read_size);
+		if (bytes_read < 0) {
+			throw InternalException("Failed to read \"%lld\" bytes from socket: %s", read_size, strerror(errno));
+		}
+		if (bytes_read != read_size) {
+			throw InternalException("Failed to read \"%llu\" bytes from socket - read %llu instead", read_size, bytes_read);
+		}
+	}
+
 	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
 	                                   unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
@@ -78,18 +97,18 @@ public:
 		auto data = serializer.GetData();
 
 		ssize_t len = data.size;
-		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-		D_ASSERT(write(sockfd, data.data.get(), len) == len);
+		WriteChecked(sockfd, &len, sizeof(idx_t));
+		WriteChecked(sockfd, data.data.get(), len);
 
 		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
-		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
+		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
 			ssize_t chunk_len;
-			D_ASSERT(read(sockfd, &chunk_len, sizeof(idx_t)) == sizeof(idx_t));
+			ReadChecked(sockfd, &chunk_len, sizeof(idx_t));
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
-			D_ASSERT(read(sockfd, buffer, chunk_len) == chunk_len);
+			ReadChecked(sockfd, buffer, chunk_len);
 			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
 			DataChunk chunk;
 
@@ -104,7 +123,7 @@ public:
 
 		len = 0;
 		(void)len;
-		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+		WriteChecked(sockfd, &len, sizeof(idx_t));
 		// close the socket
 		close(sockfd);
 	}
