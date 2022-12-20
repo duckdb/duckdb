@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/catalog/mapping_value.hpp"
 
 namespace duckdb {
 
@@ -16,12 +17,11 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
                                   unordered_set<CatalogEntry *> &dependencies) {
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dependency : dependencies) {
-		idx_t entry_index;
 		CatalogEntry *catalog_entry;
 		if (!dependency->set) {
 			throw InternalException("Dependency has no set");
 		}
-		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) {
+		if (!dependency->set->GetEntryInternal(context, dependency->name, nullptr, catalog_entry)) {
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
@@ -49,10 +49,9 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 		if (mapping_value == nullptr) {
 			continue;
 		}
-		idx_t entry_index = mapping_value->index;
 		CatalogEntry *dependency_entry;
 
-		if (!catalog_set.GetEntryInternal(context, entry_index, dependency_entry)) {
+		if (!catalog_set.GetEntryInternal(context, mapping_value->index, dependency_entry)) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
@@ -60,7 +59,7 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 		if (cascade || dep.dependency_type == DependencyType::DEPENDENCY_AUTOMATIC ||
 		    dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
 			// cascade: drop the dependent object
-			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade);
+			catalog_set.DropEntryInternal(context, mapping_value->index.Copy(), *dependency_entry, cascade);
 		} else {
 			// no cascade and there are objects that depend on this object: throw error
 			throw DependencyException("Cannot drop entry \"%s\" because there are entries that "
@@ -80,9 +79,8 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
 		auto &catalog_set = *dep.entry->set;
-		idx_t entry_index;
 		CatalogEntry *dependency_entry;
-		if (!catalog_set.GetEntryInternal(context, dep.entry->name, entry_index, dependency_entry)) {
+		if (!catalog_set.GetEntryInternal(context, dep.entry->name, nullptr, dependency_entry)) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}

@@ -23,12 +23,19 @@ struct OperatorExtensionInfo {
 typedef BoundStatement (*bind_function_t)(ClientContext &context, Binder &binder, OperatorExtensionInfo *info,
                                           SQLStatement &statement);
 
+// forward declaration to avoid circular reference
+struct LogicalExtensionOperator;
+
 class OperatorExtension {
 public:
 	bind_function_t Bind;
 
 	//! Additional info passed to the CreatePlan & Bind functions
 	shared_ptr<OperatorExtensionInfo> operator_info;
+
+	virtual std::string GetName() = 0;
+	virtual std::unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state,
+	                                                              FieldReader &reader) = 0;
 
 	DUCKDB_API virtual ~OperatorExtension() {
 	}

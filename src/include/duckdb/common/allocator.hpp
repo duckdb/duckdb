@@ -96,8 +96,8 @@ public:
 		return private_data.get();
 	}
 
-	static Allocator &DefaultAllocator();
-	static shared_ptr<Allocator> &DefaultAllocatorReference();
+	DUCKDB_API static Allocator &DefaultAllocator();
+	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -136,6 +136,7 @@ void DestroyObject(T *ptr) {
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
 };
 
 } // namespace duckdb

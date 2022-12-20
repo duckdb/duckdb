@@ -94,11 +94,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
-		if (!expr->IsFoldable()) {
+		if (!expr->IsScalar()) {
 			error = "Table function requires a constant parameter";
 			return false;
 		}
-		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr);
+		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (!named_parameters.empty()) {

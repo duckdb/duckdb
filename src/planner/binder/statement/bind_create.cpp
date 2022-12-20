@@ -70,6 +70,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
 	// fill up the aliases with the remaining names of the bound query
+	base.aliases.reserve(query_node.names.size());
 	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
 		base.aliases.push_back(query_node.names[i]);
 	}
@@ -511,6 +512,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(move(query));
+		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
+			// two cases:
+			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
+			// 2: create a type alias with a custom type.
+			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
+			// We set b to be an alias for the underlying type of a
+			auto &catalog = Catalog::GetCatalog(context);
+			auto inner_type = catalog.GetType(context, "", UserType::GetTypeName(create_type_info.type));
+			// clear to nullptr, we don't need this
+			LogicalType::SetCatalog(inner_type, nullptr);
+			inner_type.SetAlias(create_type_info.name);
+			create_type_info.type = inner_type;
 		}
 		break;
 	}

@@ -36,11 +36,15 @@ public:
 				new_string = !LookupString(data[idx]);
 			}
 
-			bool fits = HasEnoughSpace(new_string, string_size);
+			bool fits = CalculateSpaceRequirements(new_string, string_size);
 			if (!fits) {
 				Flush();
 				new_string = true;
-				D_ASSERT(HasEnoughSpace(new_string, string_size));
+
+				fits = CalculateSpaceRequirements(new_string, string_size);
+				if (!fits) {
+					throw InternalException("Dictionary compression could not write to new segment");
+				}
 			}
 
 			if (!row_is_valid) {
@@ -68,8 +72,8 @@ protected:
 	virtual void AddNewString(string_t str) = 0;
 	// Add a null value to the compression state
 	virtual void AddNull() = 0;
-	// Check if we have enough space to add a string
-	virtual bool HasEnoughSpace(bool new_string, size_t string_size) = 0;
+	// Needs to be called before adding a value. Will return false if a flush is required first.
+	virtual bool CalculateSpaceRequirements(bool new_string, size_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
 };
@@ -126,7 +130,8 @@ struct DictionaryCompressionStorage {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
-	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
+	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer)
+	    : checkpointer(checkpointer), heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		auto &db = checkpointer.GetDatabase();
 		auto &config = DBConfig::GetConfig(db);
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
@@ -232,7 +237,7 @@ public:
 		current_segment->count++;
 	}
 
-	bool HasEnoughSpace(bool new_string, size_t string_size) override {
+	bool CalculateSpaceRequirements(bool new_string, size_t string_size) override {
 		if (new_string) {
 			next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1,
@@ -353,7 +358,7 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 		current_tuple_count++;
 	}
 
-	bool HasEnoughSpace(bool new_string, size_t string_size) override {
+	bool CalculateSpaceRequirements(bool new_string, size_t string_size) override {
 		if (new_string) {
 			next_width =
 			    BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string

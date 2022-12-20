@@ -1,8 +1,8 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/python_objects.hpp"
 
-#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
@@ -16,152 +16,6 @@
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
-
-void DuckDBPyResult::Initialize(py::handle &m) {
-	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
-	    .def("description", &DuckDBPyResult::Description)
-	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
-	    .def("fetchmany", &DuckDBPyResult::Fetchmany, "Fetch the next set of rows as a list of tuples",
-	         py::arg("size") = 1)
-	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
-	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
-	         py::arg("num_of_vectors") = 1, py::kw_only(), py::arg("date_as_object") = false)
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
-	         py::arg("chunk_size") = 1000000)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
-	         py::arg("chunk_size") = 1000000)
-	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
-
-	PyDateTime_IMPORT;
-}
-
-py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (val.IsNull()) {
-		return py::none();
-	}
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return py::cast(val.GetValue<bool>());
-	case LogicalTypeId::TINYINT:
-		return py::cast(val.GetValue<int8_t>());
-	case LogicalTypeId::SMALLINT:
-		return py::cast(val.GetValue<int16_t>());
-	case LogicalTypeId::INTEGER:
-		return py::cast(val.GetValue<int32_t>());
-	case LogicalTypeId::BIGINT:
-		return py::cast(val.GetValue<int64_t>());
-	case LogicalTypeId::UTINYINT:
-		return py::cast(val.GetValue<uint8_t>());
-	case LogicalTypeId::USMALLINT:
-		return py::cast(val.GetValue<uint16_t>());
-	case LogicalTypeId::UINTEGER:
-		return py::cast(val.GetValue<uint32_t>());
-	case LogicalTypeId::UBIGINT:
-		return py::cast(val.GetValue<uint64_t>());
-	case LogicalTypeId::HUGEINT:
-		return py::cast<py::object>(PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
-	case LogicalTypeId::FLOAT:
-		return py::cast(val.GetValue<float>());
-	case LogicalTypeId::DOUBLE:
-		return py::cast(val.GetValue<double>());
-	case LogicalTypeId::DECIMAL: {
-		return import_cache.decimal.Decimal()(val.ToString());
-	}
-	case LogicalTypeId::ENUM:
-		return py::cast(EnumType::GetValue(val));
-	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR:
-		return py::cast(StringValue::Get(val));
-	case LogicalTypeId::BLOB:
-		return py::bytes(StringValue::Get(val));
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-		auto timestamp = val.GetValueUnsafe<timestamp_t>();
-		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
-			timestamp = Timestamp::FromEpochMs(timestamp.value);
-		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
-			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
-		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
-			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
-		}
-		int32_t year, month, day, hour, min, sec, micros;
-		date_t date;
-		dtime_t time;
-		Timestamp::Convert(timestamp, date, time);
-		Date::Convert(date, year, month, day);
-		Time::Convert(time, hour, min, sec, micros);
-		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
-	}
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ: {
-		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-
-		int32_t hour, min, sec, microsec;
-		auto time = val.GetValueUnsafe<dtime_t>();
-		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
-	}
-	case LogicalTypeId::DATE: {
-		D_ASSERT(type.InternalType() == PhysicalType::INT32);
-
-		auto date = val.GetValueUnsafe<date_t>();
-		int32_t year, month, day;
-		duckdb::Date::Convert(date, year, month, day);
-		return py::cast<py::object>(PyDate_FromDate(year, month, day));
-	}
-	case LogicalTypeId::LIST: {
-		auto &list_values = ListValue::GetChildren(val);
-
-		py::list list;
-		for (auto &list_elem : list_values) {
-			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
-		}
-		return std::move(list);
-	}
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::STRUCT: {
-		auto &struct_values = StructValue::GetChildren(val);
-
-		py::dict py_struct;
-		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < struct_values.size(); i++) {
-			auto &child_entry = child_types[i];
-			auto &child_name = child_entry.first;
-			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = GetValueToPython(struct_values[i], child_type);
-		}
-		return std::move(py_struct);
-	}
-	case LogicalTypeId::UUID: {
-		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
-	}
-	case LogicalTypeId::INTERVAL: {
-		auto interval_value = val.GetValueUnsafe<interval_t>();
-		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return py::cast<py::object>(
-		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
-	}
-
-	default:
-		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
-	}
-}
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
@@ -211,7 +65,7 @@ py::object DuckDBPyResult::Fetchone() {
 			continue;
 		}
 		auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-		res[col_idx] = GetValueToPython(val, result->types[col_idx]);
+		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx]);
 	}
 	chunk_offset++;
 	return move(res);
@@ -342,6 +196,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
+// TODO: unify these with an enum/flag to indicate which conversions to do
 void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
@@ -352,6 +207,7 @@ void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	}
 }
 
+// TODO: unify these with an enum/flag to indicate which conversions to perform
 void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::DATE) {
@@ -520,6 +376,10 @@ py::list DuckDBPyResult::Description() {
 
 void DuckDBPyResult::Close() {
 	result = nullptr;
+}
+
+bool DuckDBPyResult::IsClosed() const {
+	return result_closed;
 }
 
 } // namespace duckdb

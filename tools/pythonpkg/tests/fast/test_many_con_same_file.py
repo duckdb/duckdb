@@ -48,14 +48,8 @@ def test_multiple_writes_named_memory():
 
 def test_diff_config():
     con1 = duckdb.connect("test.db",False)
-    with pytest.raises(duckdb.Error, match="Can't open a connection to same database file with a different configuration than existing connections"):
+    with pytest.raises(duckdb.ConnectionException, match="Can't open a connection to same database file with a different configuration than existing connections"):
         con2 = duckdb.connect("test.db",True)
     con1.close()
     del con1
 
-
-
-    
-
-
-    

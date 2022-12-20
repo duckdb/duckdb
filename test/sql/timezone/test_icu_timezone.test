@@ -147,6 +147,21 @@ NULL	NULL
 NULL	NULL
 
 #
+# Verify local time functions are implemented.
+#
+statement ok
+select localtimestamp;
+
+statement ok
+select localtime;
+
+statement ok
+select current_localtimestamp();
+
+statement ok
+select current_localtime();
+
+#
 # ICU time zone list
 #
 query III
@@ -252,6 +267,7 @@ America/Cayenne	America/Cayenne	-03:00:00
 America/Cayman	America/Cayman	-05:00:00
 America/Chicago	CST	-06:00:00
 America/Chihuahua	America/Chihuahua	-06:00:00
+America/Ciudad_Juarez	America/Ciudad_Juarez	-07:00:00
 America/Coral_Harbour	America/Coral_Harbour	-05:00:00
 America/Cordoba	America/Cordoba	-03:00:00
 America/Costa_Rica	America/Costa_Rica	-06:00:00
@@ -816,3 +832,13 @@ query I
 SELECT '2022-11-01 00:00:00+00'::TIMESTAMPTZ;
 ----
 2022-10-31 18:00:00-06
+
+# 2022g
+# The northern edge of Chihuahua changes to US timekeeping (DST).
+statement ok
+SET TimeZone = 'America/Ciudad_Juarez';
+
+query I
+SELECT '2023-05-01 12:00:00+00'::TIMESTAMPTZ;
+----
+2023-05-01 06:00:00-06

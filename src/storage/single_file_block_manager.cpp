@@ -238,6 +238,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
+	D_ASSERT(block_id < max_block);
 	D_ASSERT(free_list.find(block_id) == free_list.end());
 	multi_use_blocks.erase(block_id);
 	free_list.insert(block_id);
@@ -246,6 +247,7 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
+	D_ASSERT(block_id < max_block);
 
 	// check if the block is a multi-use block
 	auto entry = multi_use_blocks.find(block_id);
@@ -268,6 +270,8 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 
 void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	D_ASSERT(block_id < max_block);
 	D_ASSERT(free_list.find(block_id) == free_list.end());
 	auto entry = multi_use_blocks.find(block_id);
 	if (entry != multi_use_blocks.end()) {

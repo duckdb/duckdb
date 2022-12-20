@@ -9,6 +9,10 @@
 namespace duckdb {
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context_p) {
+	Reset();
+}
+
+void CatalogSearchPath::Reset() {
 	SetPaths(ParsePaths(""));
 }
 

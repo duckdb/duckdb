@@ -10,6 +10,7 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField(use_tmp_file);
 	writer.WriteField(is_file_and_exists);
+	writer.WriteField(per_thread_output);
 
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
@@ -26,6 +27,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
 	auto is_file_and_exists = reader.ReadRequired<bool>();
+	auto per_thread_output = reader.ReadRequired<bool>();
 
 	auto copy_func_name = reader.ReadRequired<string>();
 
@@ -52,6 +54,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->is_file_and_exists = is_file_and_exists;
+	result->per_thread_output = per_thread_output;
 	return move(result);
 }
 

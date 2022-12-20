@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 using namespace duckdb;
@@ -75,16 +74,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		break;
 	}
 	case LogicalTypeId::JSON:
-	case LogicalTypeId::VARCHAR: {
-		auto wrapper = new DuckDBAltrepStringWrapper();
-		wrapper->length = nrows;
-		wrapper->string_data = std::unique_ptr<string_t[]>(new string_t[nrows]);
-		wrapper->mask_data = std::unique_ptr<bool[]>(new bool[nrows]);
-
-		cpp11::external_pointer<DuckDBAltrepStringWrapper> ptr(wrapper);
-		varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
-		break;
-	}
+	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
 		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
 		break;
@@ -219,6 +209,19 @@ void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
 		cpp11::stop("rapi_execute: Unknown column type for convert: %s", type.ToString().c_str());
 		break;
 	}
+}
+
+SEXP ToRString(const string_t &input) {
+	auto data = input.GetDataUnsafe();
+	auto len = input.GetSize();
+	idx_t has_null_byte = 0;
+	for (idx_t c = 0; c < len; c++) {
+		has_null_byte += data[c] == 0;
+	}
+	if (has_null_byte) {
+		cpp11::stop("String contains null byte");
+	}
+	return Rf_mkCharLenCE(data, len, CE_UTF8);
 }
 
 void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
@@ -382,16 +385,13 @@ void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n,
 		break;
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
-		auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
-		auto src_data = FlatVector::GetData<string_t>(src_vec);
+		auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);
 		for (size_t row_idx = 0; row_idx < n; row_idx++) {
-			auto valid = mask.RowIsValid(row_idx);
-			auto dest_idx = dest_offset + row_idx;
-			wrapper->mask_data[dest_idx] = valid;
-			if (valid) {
-				wrapper->string_data[dest_idx] =
-				    src_data[row_idx].IsInlined() ? src_data[row_idx] : wrapper->heap.AddString(src_data[row_idx]);
+			if (!mask.RowIsValid(row_idx)) {
+				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+			} else {
+				SET_STRING_ELT(dest, dest_offset + row_idx, ToRString(src_ptr[row_idx]));
 			}
 		}
 		break;

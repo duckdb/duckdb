@@ -122,3 +122,59 @@ test_that("we can get the relation object back from an altrep df", {
   rel2 <- rel_from_altrep_df(df)
   expect_true(TRUE)
 })
+
+test_that("Union all does not immediately materialize", {
+    test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b <- rel_from_df(con, data.frame(a=c('5', '6'), b=c('7', '8')))
+    rel <- rel_union_all(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+})
+
+test_that("Union all has the correct values", {
+    test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b <- rel_from_df(con, data.frame(a=c('5', '6'), b=c('7', '8')))
+    rel <- rel_union_all(test_df_a, test_df_b)
+    rel_df <- rel_to_altrep(rel)
+    expect_false(df_is_materialized(rel_df))
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+    expected_result <- data.frame(a=c('1', '2', '5', '6'), b=c('3', '4', '7', '8'))
+    expect_equal(rel_df, expected_result)
+})
+
+test_that("Union all keeps duplicates", {
+    test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    rel <- rel_union_all(test_df_a2, test_df_b2)
+    rel_df <- rel_to_altrep(rel)
+    dim(rel_df)
+    expect_true(df_is_materialized(rel_df))
+    expected_result <- data.frame(a=c('1', '2', '1', '2'), b=c('3', '4', '3', '4'))
+    expect_equal(rel_df, expected_result)
+})
+
+# nobody should do this in reality. It's a pretty dumb idea
+test_that("we can union the same relation to itself", {
+     test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+     rel <- rel_union_all(test_df_a2, test_df_a2)
+     rel_df <- rel_to_altrep(rel)
+     expected_result <- data.frame(a=c('1', '2', '1', '2'), b=c('3', '4', '3', '4'))
+     expect_equal(rel_df, expected_result)
+})
+
+test_that("we throw an error when attempting to union all relations that are not compatible", {
+    test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
+    test_df_b2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4'), c=c('5', '6')))
+    # The two data frames have different dimensions, therefore you get a binding error.
+    expect_error(rel_union_all(test_df_a2, test_df_b2), "Binder Error")
+})
+
+test_that("A union with different column types throws an error", {
+     test_df_a1 <- rel_from_df(con, data.frame(a=c(1)))
+     test_df_a2 <- rel_from_df(con, data.frame(a=c('1')))
+     rel <- rel_union_all(test_df_a1, test_df_a2)
+     expect_error(rapi_rel_to_df(rel), "Invalid Error: Result mismatch in query!")
+})

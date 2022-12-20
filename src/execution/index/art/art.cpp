@@ -17,6 +17,9 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          DatabaseInstance &db, idx_t block_id, idx_t block_offset)
     : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
       estimated_art_size(0), estimated_key_size(16) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("ART indexes are not supported on big endian architectures");
+	}
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -300,7 +303,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
-	ArenaAllocator arena_allocator(allocator);
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(STANDARD_VECTOR_SIZE);
 
 	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
@@ -357,7 +360,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(input.size());
 	GenerateKeys(arena_allocator, input, keys);
 
@@ -517,7 +520,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	estimated_art_size -= released_memory;
 
 	// then generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
@@ -761,7 +764,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	// FIXME: the key directly owning the data for a single key might be more efficient
 	D_ASSERT(state->values[0].type().InternalType() == types[0]);
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(Allocator::Get(db));
 	auto key = CreateKey(arena_allocator, types[0], state->values[0]);
 
 	if (state->values[1].IsNull()) {
@@ -836,7 +839,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 

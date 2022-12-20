@@ -30,8 +30,6 @@ public:
 	explicit DuckDBPyResult() {};
 
 public:
-	static void Initialize(py::handle &m);
-
 	py::object Fetchone();
 
 	py::list Fetchmany(idx_t size);
@@ -54,7 +52,7 @@ public:
 
 	void Close();
 
-	static py::object GetValueToPython(const Value &val, const LogicalType &type);
+	bool IsClosed() const;
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
