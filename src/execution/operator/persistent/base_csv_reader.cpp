@@ -217,7 +217,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	column++;
 }
 
-bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
+bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message) {
 	linenr++;
 
 	if (row_empty) {
@@ -244,9 +244,15 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 			column = 0;
 			return false;
 		} else {
-			throw InvalidInputException(
-			    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column, options.ToString());
+			if (mode == ParserMode::SNIFFING_DATATYPES) {
+				error_message = "Error when adding line";
+				return false;
+			} else {
+				throw InvalidInputException(
+				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d. (%s)",
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+				    options.ToString());
+			}
 		}
 	}
 

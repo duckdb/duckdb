@@ -63,6 +63,8 @@ jobs:
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh upload
+        env:
+          DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
 
       - name: Validate Docs
         run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
@@ -236,7 +238,7 @@ jobs:
       - name: Windows Build Tools
         shell: bash
         run: |
-          choco install python visualstudio2019-workload-vctools -y
+          choco install visualstudio2019-workload-vctools -y
 
       - name: Node Version
         shell: bash
