@@ -26,7 +26,9 @@ public:
 	~TransactionContext();
 
 	MetaTransaction &ActiveTransaction() {
-		D_ASSERT(current_transaction);
+		if (!current_transaction) {
+			throw InternalException("TransactionContext::ActiveTransaction called without active transaction");
+		}
 		return *current_transaction;
 	}
 
