@@ -10,7 +10,7 @@
 
 using namespace std;
 
-static void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func) { // NOLINT
+static void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func) {
 	switch (ret) {
 	case SQL_SUCCESS:
 		REQUIRE(1 == 1);
