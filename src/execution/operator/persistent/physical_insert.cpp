@@ -10,22 +10,24 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
 
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table,
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
-                               bool return_chunk, bool parallel)
+                               bool return_chunk, bool parallel, InsertConflictActionType action_type)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel) {
+      bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type) {
 }
 
 PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel) {
+      return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel),
+      action_type(InsertConflictActionType::THROW) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -128,7 +130,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
-	UniqueConstraintConflictInfo conflict_info(chunk.size());
 
 	if (!parallel) {
 		if (!gstate.initialized) {
@@ -154,23 +155,59 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
-		if (conflict_info.matches.Count() != 0) {
-			// Found conflicts in the to-be-inserted values
-			switch (action_type) {
-			case InsertConflictActionType::THROW: {
-				// throw the first error
+		if (action_type == InsertConflictActionType::THROW) {
+			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+		} else {
+			// We either want to do nothing, or perform an update when conflicts arise
+			UniqueConstraintConflictInfo conflict_info(lstate.insert_chunk.size());
+			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
+			if (conflict_info.matches.Count() != 0) {
+				// Found conflicts in the to-be-inserted values
+				// Collect all of the column ids of the indexes
+				unordered_set<column_t> to_filter_columns;
+				auto &indexes = table->storage->info->indexes.Indexes();
+				for (auto &index : indexes) {
+					for (auto &column_id : index->column_id_set) {
+						to_filter_columns.insert(column_id);
+					}
+				}
+				DataChunk filtered_chunk;
+				if (action_type == InsertConflictActionType::NOTHING ||
+				    to_filter_columns.size() == lstate.insert_chunk.ColumnCount()) {
+					// DO NOTHING or DO UPDATE, but all columns are indexed on, so we can't update anything
+				} else {
+					// Create a selection vector over the remaining columns
+					vector<LogicalType> filtered_types;
+					vector<column_t> filtered_ids;
+					vector<PhysicalIndex> filtered_physical_ids;
+					for (column_t i = 0; i < lstate.insert_chunk.ColumnCount(); i++) {
+						if (to_filter_columns.count(i)) {
+							continue;
+						}
+						filtered_types.push_back(lstate.insert_chunk.data[i].GetType());
+						filtered_ids.push_back(i);
+						filtered_physical_ids.push_back(PhysicalIndex(i));
+					}
+
+					// Filter out the columns that the constraints are on
+					filtered_chunk.Initialize(Allocator::DefaultAllocator(), filtered_types);
+					filtered_chunk.ReferenceColumns(lstate.insert_chunk, filtered_ids);
+
+					// Now filter out everything but the conflicting columns
+					filtered_chunk.Slice(conflict_info.matches.Selection(), conflict_info.matches.Count());
+					filtered_chunk.SetCardinality(conflict_info.matches.Count());
+
+					auto &data_table = table->storage;
+					data_table->Update(*table, context.client, conflict_info.row_ids, filtered_physical_ids,
+					                   filtered_chunk);
+				}
+				// Cut out the conflicting columns from the insert chunk
+				SelectionVector sel_vec(lstate.insert_chunk.size());
+				idx_t new_size = SelectionVector::Inverted(conflict_info.matches.Selection(), sel_vec,
+				                                           conflict_info.matches.Count(), lstate.insert_chunk.size());
+				lstate.insert_chunk.Slice(sel_vec, new_size);
+				lstate.insert_chunk.SetCardinality(new_size);
 			}
-			case InsertConflictActionType::NOTHING: {
-				// Don't throw, just discard the problematic values
-			}
-			case InsertConflictActionType::UPDATE: {
-				// Don't throw, perform an Update on the conflicting row_ids instead
-			}
-			default:
-				throw NotImplementedException("Type not implemented for InsertConflictActionType");
-			}
-			return SinkResultType::NEED_MORE_INPUT;
 		}
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {

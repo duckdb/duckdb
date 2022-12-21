@@ -22,7 +22,7 @@ public:
 	//! INSERT INTO
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk,
-	               bool parallel);
+	               bool parallel, InsertConflictActionType action_type);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);

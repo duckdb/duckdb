@@ -44,12 +44,16 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 
 	auto conflict_action = TransformConflictAction(stmt->onConflictClause);
 
-	if (conflict_action != InsertConflictActionType::THROW) {
-		throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
-	}
+	// if (conflict_action != InsertConflictActionType::THROW) {
+	//	throw ParserException("ON CONFLICT IGNORE/UPDATE clauses are not supported");
+	// }
 	if (!stmt->selectStmt) {
 		// FIXME: default values is not supported, but in the binder we do BindDefaultValues ?
 		throw ParserException("DEFAULT VALUES clause is not supported!");
+	}
+
+	if (conflict_action == InsertConflictActionType::UPDATE) {
+		(void)node;
 	}
 
 	auto result = make_unique<InsertStatement>();

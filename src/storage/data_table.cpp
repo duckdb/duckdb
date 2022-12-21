@@ -432,7 +432,6 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 		idx_t failed_index = DConstants::INVALID_INDEX;
 		idx_t regular_idx = 0;
 		idx_t transaction_idx = 0;
-		idx_t null_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
 			bool in_regular = regular_matches.IndexMapsToLocation(regular_idx, i);
 			regular_idx += in_regular;
@@ -529,7 +528,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 					index.VerifyAppend(chunk, info);
 					if (info.matches.Count() != 0) {
 						// Found actual conflicts, merge it into the conflict_info
-						conflict_info->AddConflicts(move(info));
+						conflict_info->AddConflicts(info);
 					}
 				} else {
 					index.VerifyAppend(chunk);
@@ -946,6 +945,9 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
+	// FIXME: this is fine when we're doing UPSERT, as we have made sure that none of the columns targeted
+	// are part of the index
+
 	info->indexes.Scan([&](Index &index) {
 		D_ASSERT(!index.IndexIsUpdated(column_ids));
 		return false;

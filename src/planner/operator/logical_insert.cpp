@@ -17,6 +17,7 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
+	writer.WriteField(action_type);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -33,6 +34,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	auto action_type = reader.ReadRequired<InsertConflictActionType>();
 
 	auto &catalog = Catalog::GetCatalog(context);
 
@@ -42,7 +44,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 		throw InternalException("Cant find catalog entry for table %s", info->table);
 	}
 
-	auto result = make_unique<LogicalInsert>(table_catalog_entry, table_index);
+	auto result = make_unique<LogicalInsert>(table_catalog_entry, table_index, action_type);
 	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->return_chunk = return_chunk;

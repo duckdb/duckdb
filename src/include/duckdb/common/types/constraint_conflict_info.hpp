@@ -2,8 +2,11 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
+
+class Index;
 
 struct UniqueConstraintConflictInfo {
 public:
@@ -27,7 +30,7 @@ public:
 	}
 
 public:
-	void AddConflicts(UniqueConstraintConflictInfo &&info) {
+	void AddConflicts(UniqueConstraintConflictInfo &info) {
 		D_ASSERT(info.count == count);
 		if (info.matches.Count() == 0) {
 			// No additional matches (conflicts) to record
@@ -51,9 +54,7 @@ public:
 		idx_t rhs_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto in_this = matches.IndexMapsToLocation(lhs_idx, i);
-			lhs_idx += in_this;
 			auto in_other = info.matches.IndexMapsToLocation(rhs_idx, i);
-			rhs_idx += in_other;
 			if (!in_this && !in_other) {
 				continue;
 			}
@@ -61,15 +62,18 @@ public:
 			// Conflict found, add from this or other
 			row_t row_id = DConstants::INVALID_INDEX;
 			if (in_this) {
-				auto row_id = lhs_rowid_data[lhs_idx];
+				row_id = lhs_rowid_data[lhs_idx];
 				// This conflict should either not be in the other
 				// or their rowid should be the same
 				D_ASSERT(!in_other || (rhs_rowid_data[rhs_idx] == row_id));
 			} else {
-				auto row_id = rhs_rowid_data[rhs_idx];
+				row_id = rhs_rowid_data[rhs_idx];
 			}
 			new_rowid_data[new_sel.Count()] = row_id;
 			new_sel.Append(i);
+
+			lhs_idx += in_this;
+			rhs_idx += in_other;
 		}
 		matches = move(new_sel);
 		row_ids.Reference(new_rowids);

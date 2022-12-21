@@ -44,6 +44,21 @@ struct SelectionVector {
 	}
 
 public:
+	static idx_t Inverted(SelectionVector &src, SelectionVector &dst, idx_t source_size, idx_t count) {
+		idx_t src_idx = 0;
+		idx_t dst_idx = 0;
+		for (idx_t i = 0; i < count; i++) {
+			if (src_idx < source_size && src.get_index(src_idx) == i) {
+				src_idx++;
+				// This index is selected by 'src', skip it in 'dst'
+				continue;
+			}
+			// This index does not exist in 'src', add it to the selection of 'dst'
+			dst.set_index(dst_idx++, i);
+		}
+		return dst_idx;
+	}
+
 	void Initialize(sel_t *sel) {
 		selection_data.reset();
 		sel_vector = sel;

@@ -26,6 +26,10 @@ public:
 		}
 	}
 
+	const vector<unique_ptr<Index>> &Indexes() const {
+		return indexes;
+	}
+
 	void AddIndex(unique_ptr<Index> index);
 
 	void RemoveIndex(Index *index);
