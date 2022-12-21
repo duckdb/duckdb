@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
