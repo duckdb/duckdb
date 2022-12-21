@@ -1,4 +1,4 @@
-# name: benchmark/micro/map/lookup.benchmark
+# name: benchmark/micro/map/map_lookup.benchmark
 # description: lookup speed of map
 # group: [map]
 

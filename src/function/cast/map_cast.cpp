@@ -4,11 +4,11 @@
 namespace duckdb {
 
 static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-    auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	Vector varchar_map(varchar_type, count);
 
-    //since map's physical type is a list, the ListCast can be utilized
+	// since map's physical type is a list, the ListCast can be utilized
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
 	varchar_map.Flatten(count);
@@ -16,15 +16,15 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 
-    key_str.Flatten(ListVector::GetListSize(source));
-    val_str.Flatten(ListVector::GetListSize(source));
+	key_str.Flatten(ListVector::GetListSize(source));
+	val_str.Flatten(ListVector::GetListSize(source));
 
 	auto list_data = ListVector::GetData(varchar_map);
-    auto key_data = FlatVector::GetData<string_t>(key_str);
+	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
 	auto &key_validity = FlatVector::Validity(key_str);
 	auto &val_validity = FlatVector::Validity(val_str);
-    auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
+	auto &struct_validity = FlatVector::Validity(ListVector::GetEntry(varchar_map));
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -40,14 +40,14 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 			}
 			auto idx = list.offset + list_idx;
 
-            if (!struct_validity.RowIsValid(idx)) {
-                ret += "NULL";
-                continue;
-            }
+			if (!struct_validity.RowIsValid(idx)) {
+				ret += "NULL";
+				continue;
+			}
 			if (!key_validity.RowIsValid(idx)) {
-				//throw InternalException("Error in map: key validity invalid?!");
-                ret += "invalid";
-                continue;
+				// throw InternalException("Error in map: key validity invalid?!");
+				ret += "invalid";
+				continue;
 			}
 			ret += key_data[idx].GetString();
 			ret += "=";

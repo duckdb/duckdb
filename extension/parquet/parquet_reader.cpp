@@ -303,14 +303,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			}
 			result_type = LogicalType::MAP(move(child_types[0].second), move(child_types[1].second));
 
-			auto struct_reader = make_unique<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx, max_define - 1,
-			                                         max_repeat - 1, move(child_readers));
-            return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-                                                   move(struct_reader));
+			auto struct_reader =
+			    make_unique<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
+			                                    max_define - 1, max_repeat - 1, move(child_readers));
+			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(struct_reader));
 		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(move(child_types));
-            result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up

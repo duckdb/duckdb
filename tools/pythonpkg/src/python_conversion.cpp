@@ -14,7 +14,7 @@ namespace duckdb {
 Value TransformListValue(py::handle ele);
 
 static Value EmptyMapValue() {
-	//return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
+	// return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
 	auto map_type = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
 	return Value::MAP(ListType::GetChildType(map_type), std::vector<Value>());
 }
@@ -83,27 +83,27 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	// auto values = TransformListValue(dict.values);
 	// return Value::MAP(move(keys), move(values));
 
-    auto size = py::len(dict.keys);
+	auto size = py::len(dict.keys);
 	D_ASSERT(size == py::len(dict.values));
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
 
-    vector<Value> elements;
-    for (idx_t i = 0; i < size; i++) {
-		
-        Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i));
+	vector<Value> elements;
+	for (idx_t i = 0; i < size; i++) {
+
+		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i));
 		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i));
 
 		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
 		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
-		
+
 		child_list_t<Value> struct_values;
 		struct_values.emplace_back(make_pair("key", move(new_key)));
 		struct_values.emplace_back(make_pair("value", move(new_value)));
 
-        elements.push_back(Value::STRUCT(move(struct_values)));
-    }
+		elements.push_back(Value::STRUCT(move(struct_values)));
+	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
 

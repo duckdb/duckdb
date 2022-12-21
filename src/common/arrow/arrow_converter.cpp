@@ -73,10 +73,10 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0]);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
-//	child_list_t<LogicalType> struct_child_types;
-//	struct_child_types.push_back(std::make_pair("key", MapType::KeyType(type)));
-//	struct_child_types.push_back(std::make_pair("value", MapType::ValueType(type)));
-//	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
+	//	child_list_t<LogicalType> struct_child_types;
+	//	struct_child_types.push_back(std::make_pair("key", MapType::KeyType(type)));
+	//	struct_child_types.push_back(std::make_pair("value", MapType::ValueType(type)));
+	//	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
 	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), config_timezone);
 }
 

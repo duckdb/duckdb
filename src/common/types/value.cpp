@@ -529,15 +529,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 }
 
 Value Value::MAP(LogicalType child_type, vector<Value> values) {
-    Value result;
+	Value result;
 
-    result.type_ = LogicalType::MAP(move(child_type));
-    result.is_null = false;
-    if (values.empty()){
-        return result;
-    }
-    result.list_value = move(values);
-    return result;
+	result.type_ = LogicalType::MAP(move(child_type));
+	result.is_null = false;
+	if (values.empty()) {
+		return result;
+	}
+	result.list_value = move(values);
+	return result;
 }
 
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {

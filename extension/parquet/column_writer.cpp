@@ -1902,19 +1902,19 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		vector<string> kv_names {"key", "value"};
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);
-        for (idx_t i = 0; i < 2; i++) {
-            // key needs to be marked as REQUIRED
-            bool is_key = i == 0;
-            auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
-                                                      max_repeat + 1, max_define + 2, !is_key);
+		for (idx_t i = 0; i < 2; i++) {
+			// key needs to be marked as REQUIRED
+			bool is_key = i == 0;
+			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
+			                                          max_repeat + 1, max_define + 2, !is_key);
 
-            child_writers.push_back(move(child_writer));
-        }
-        auto struct_writer = make_unique<StructColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
-                                               move(child_writers), can_have_nulls);
-        return make_unique<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
-                                                         move(struct_writer), can_have_nulls);
-    }
+			child_writers.push_back(move(child_writer));
+		}
+		auto struct_writer = make_unique<StructColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
+		                                                     move(child_writers), can_have_nulls);
+		return make_unique<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
+		                                     move(struct_writer), can_have_nulls);
+	}
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
 	schema_element.repetition_type = null_type;

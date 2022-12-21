@@ -444,9 +444,8 @@ string LogicalType::ToString() const {
 			return "MAP";
 		}
 		auto &key_type = MapType::KeyType(*this);
-        auto &value_type = MapType::ValueType(*this);
-		return "MAP(" + key_type.ToString() + ", " +
-		       value_type.ToString() + ")";
+		auto &value_type = MapType::ValueType(*this);
+		return "MAP(" + key_type.ToString() + ", " + value_type.ToString() + ")";
 	}
 	case LogicalTypeId::UNION: {
 		if (!type_info_) {
@@ -737,12 +736,12 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		}
 		return LogicalType::DECIMAL(width, scale);
 	}
-	if (type_id == LogicalTypeId::LIST ) {
+	if (type_id == LogicalTypeId::LIST) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(move(new_child));
 	}
-	if (type_id == LogicalTypeId::MAP ) {
+	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::MAP(move(new_child));
@@ -1203,7 +1202,7 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-    return StructType::GetChildTypes(ListType::GetChildType(type))[0].second;
+	return StructType::GetChildTypes(ListType::GetChildType(type))[0].second;
 }
 
 const LogicalType &MapType::ValueType(const LogicalType &type) {

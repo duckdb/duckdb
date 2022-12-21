@@ -15,11 +15,11 @@ MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVecto
 	map.ToUnifiedFormat(count, map_vdata);
 	auto &map_validity = map_vdata.validity;
 
-    auto list_data = ListVector::GetData(map);
-    auto &keys = MapVector::GetKeys(map);
-    UnifiedVectorFormat key_vdata;
-    keys.ToUnifiedFormat(count, key_vdata);
-    auto &key_validity = key_vdata.validity;
+	auto list_data = ListVector::GetData(map);
+	auto &keys = MapVector::GetKeys(map);
+	UnifiedVectorFormat key_vdata;
+	keys.ToUnifiedFormat(count, key_vdata);
+	auto &key_validity = key_vdata.validity;
 
 	for (idx_t row = 0; row < count; row++) {
 		auto mapped_row = sel.get_index(row);
@@ -79,17 +79,17 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	auto &key_vector = MapVector::GetKeys(result);
 	auto &value_vector = MapVector::GetValues(result);
-    auto list_data = ListVector::GetData(result);
+	auto list_data = ListVector::GetData(result);
 
 	if (args.data.empty()) {
 		ListVector::SetListSize(result, 0);
-        list_data->offset = 0;
-        list_data->length = 0;
+		list_data->offset = 0;
+		list_data->length = 0;
 		result.Verify(args.size());
 		return;
 	}
 
-    auto args_data = ListVector::GetData(args.data[0]);
+	auto args_data = ListVector::GetData(args.data[0]);
 	auto key_count = ListVector::GetListSize(args.data[0]);
 	auto value_count = ListVector::GetListSize(args.data[1]);
 	if (key_count != value_count) {
@@ -97,10 +97,10 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		    "Error in MAP creation: key list has a different size from value list (%lld keys, %lld values)", key_count,
 		    value_count);
 	}
-    ListVector::Reserve(result, key_count);
-    ListVector::SetListSize(result, key_count);
+	ListVector::Reserve(result, key_count);
+	ListVector::SetListSize(result, key_count);
 
-	for (idx_t i = 0; i < args.size() ; i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		list_data[i] = args_data[i];
 	}
 
@@ -134,7 +134,8 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 		child_types.push_back(make_pair("value", empty));
 	}
 
-    bound_function.return_type = LogicalType::MAP(ListType::GetChildType(child_types[0].second), ListType::GetChildType(child_types[1].second));
+	bound_function.return_type =
+	    LogicalType::MAP(ListType::GetChildType(child_types[0].second), ListType::GetChildType(child_types[1].second));
 
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }

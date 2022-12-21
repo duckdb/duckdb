@@ -124,7 +124,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		return LogicalType::STRUCT(move(child_types));
 
 	} else if (format == "+m") {
-        arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);

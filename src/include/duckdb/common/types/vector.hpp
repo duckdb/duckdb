@@ -304,8 +304,8 @@ struct FlatVector {
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
-    static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
-    static Value GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets);
+	static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
+	static Value GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets);
 };
 
 struct ListVector {

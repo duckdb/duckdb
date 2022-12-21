@@ -129,13 +129,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, schema);
 		auto alias = type.GetAlias();
-		if (type.id() == LogicalTypeId::LIST){
+		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
 		} else {
 			D_ASSERT(child_type.id() == LogicalTypeId::STRUCT); // map must be list of structs
 			type = LogicalType::MAP(child_type);
 		}
-		
+
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);

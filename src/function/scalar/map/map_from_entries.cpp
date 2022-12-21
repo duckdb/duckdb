@@ -13,23 +13,23 @@ struct VectorInfo {
 };
 
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto count = args.size();
+	auto count = args.size();
 
-    auto &input_list = args.data[0];
-    result.Reinterpret(input_list);
+	auto &input_list = args.data[0];
+	result.Reinterpret(input_list);
 
-    UnifiedVectorFormat struct_vector;
-    ListVector::GetEntry(result).ToUnifiedFormat(count, struct_vector);
+	UnifiedVectorFormat struct_vector;
+	ListVector::GetEntry(result).ToUnifiedFormat(count, struct_vector);
 
-    UnifiedVectorFormat key_vector;
-    MapVector::GetKeys(result).ToUnifiedFormat(count, key_vector);
+	UnifiedVectorFormat key_vector;
+	MapVector::GetKeys(result).ToUnifiedFormat(count, key_vector);
 
-    MapConversionVerify(result, count);
-    result.Verify(count);
+	MapConversionVerify(result, count);
+	result.Verify(count);
 
-    if (args.AllConstant()) {
-        result.SetVectorType(VectorType::CONSTANT_VECTOR);
-    }
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, ScalarFunction &bound_function,
