@@ -27,8 +27,7 @@ DBConfig::DBConfig() {
 	error_manager = make_unique<ErrorManager>();
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
-	compression_functions = make_unique<CompressionFunctionSet>();
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
