@@ -559,7 +559,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 }
 
 static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url) {
-	string full_url = parsed_url.http_proto + parsed_url.host + parsed_url.path;
+	string full_url = parsed_url.http_proto + parsed_url.host + S3FileSystem::UrlEncode(parsed_url.path);
 
 	if (!parsed_url.query_param.empty()) {
 		full_url += "?" + parsed_url.query_param;

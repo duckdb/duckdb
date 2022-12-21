@@ -171,7 +171,7 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
 	auto table_info = TableInfo(schema_name, table_name);
 	if (!table_info) {
-		throw Exception("Table does not exist!");
+		throw CatalogException("Table '%s' does not exist!", table_name);
 	}
 	return make_shared<TableRelation>(context, move(table_info));
 }

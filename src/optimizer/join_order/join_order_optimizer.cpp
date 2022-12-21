@@ -2,7 +2,6 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -275,6 +274,10 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	return result;
 }
 
+bool JoinOrderOptimizer::NodeInFullPlan(JoinNode *node) {
+	return join_nodes_in_full_plan.find(node->set->ToString()) != join_nodes_in_full_plan.end();
+}
+
 void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 	if (!node) {
 		return;
@@ -505,7 +508,7 @@ static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> cu
 }
 
 // works by first creating all sets with cardinality 1
-// then iterates over each previously create group of subsets and will only add a neighbor if the neighbor
+// then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
 // is greater than all relations in the set.
 static vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set, unordered_set<idx_t> &exclusion_set,
                                                        vector<idx_t> neighbors) {
@@ -541,6 +544,11 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(JoinRelationSet *new_set,
 }
 
 void JoinOrderOptimizer::UpdateDPTree(JoinNode *new_plan) {
+	if (!NodeInFullPlan(new_plan)) {
+		// if the new node is not in the full plan, feel free to return
+		// because you won't be updating the full plan.
+		return;
+	}
 	auto new_set = new_plan->set;
 	// now update every plan that uses this plan
 	unordered_set<idx_t> exclusion_set;
@@ -602,6 +610,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					// update the DP tree in case a plan created by the DP algorithm uses the node
 					// that was potentially just updated by EmitPair. You will get a use-after-free
 					// error if future plans rely on the old node that was just replaced.
+					// if node in FullPath, then updateDP tree.
 					UpdateDPTree(node);
 
 					if (!best_connection || node->GetCost() < best_connection->GetCost()) {

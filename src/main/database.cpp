@@ -27,8 +27,7 @@ DBConfig::DBConfig() {
 	error_manager = make_unique<ErrorManager>();
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
-	compression_functions = make_unique<CompressionFunctionSet>();
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
@@ -252,17 +251,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
-		auto memory = FileSystem::GetAvailableMemory();
-		if (memory != DConstants::INVALID_INDEX) {
-			config.options.maximum_memory = memory * 8 / 10;
-		}
+		config.SetDefaultMaxMemory();
 	}
 	if (new_config.options.maximum_threads == (idx_t)-1) {
-#ifndef DUCKDB_NO_THREADS
-		config.options.maximum_threads = std::thread::hardware_concurrency();
-#else
-		config.options.maximum_threads = 1;
-#endif
+		config.SetDefaultMaxThreads();
 	}
 	config.allocator = move(new_config.allocator);
 	if (!config.allocator) {

@@ -42,7 +42,12 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	}
 
 	if (!fs.FileExists(filename)) {
-		throw IOException("Extension \"%s\" not found", filename);
+		string message;
+		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
+		if (exact_match) {
+			message += "\nInstall it first using \"INSTALL " + extension + "\".";
+		}
+		throw IOException("Extension \"%s\" not found.\n%s", filename, message);
 	}
 	{
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
@@ -118,6 +123,10 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	auto &db = DatabaseInstance::GetDatabase(context);
+	auto &loaded_extensions = db.LoadedExtensions();
+	if (loaded_extensions.find(extension) != loaded_extensions.end()) {
+		return;
+	}
 
 	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
 	auto init_fun_name = res.basename + "_init";
@@ -165,6 +174,22 @@ void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, e.what());
 	}
+}
+
+string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
+	auto first_colon = path.find(':');
+	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
+		return "";
+	}
+	auto extension = path.substr(0, first_colon);
+	D_ASSERT(extension.size() > 1);
+	// needs to be alphanumeric
+	for (auto &ch : extension) {
+		if (!isalnum(ch) && ch != '_') {
+			return "";
+		}
+	}
+	return extension;
 }
 
 } // namespace duckdb

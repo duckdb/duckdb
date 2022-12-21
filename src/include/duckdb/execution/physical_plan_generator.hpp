@@ -79,6 +79,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPragma &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSample &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalReset &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalShow &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);

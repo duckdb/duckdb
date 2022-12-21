@@ -23,16 +23,16 @@
 #include "dbgen/rng64.h"
 
 #define LEAP_ADJ(yr, mnth) ((LEAP(yr) && (mnth) >= 2) ? 1 : 0)
-#define JDAY_BASE 8035        /* start from 1/1/70 a la unix */
-#define JMNTH_BASE (-70 * 12) /* start from 1/1/70 a la unix */
-#define JDAY(date) ((date)-STARTDATE + JDAY_BASE + 1)
+#define JDAY_BASE          8035       /* start from 1/1/70 a la unix */
+#define JMNTH_BASE         (-70 * 12) /* start from 1/1/70 a la unix */
+#define JDAY(date)         ((date)-STARTDATE + JDAY_BASE + 1)
 #define PART_SUPP_BRIDGE(tgt, p, s)                                                                                    \
 	{                                                                                                                  \
-		DSS_HUGE tot_scnt = ctx->tdefs[SUPP].base * ctx->scale_factor;                                                       \
+		DSS_HUGE tot_scnt = ctx->tdefs[SUPP].base * ctx->scale_factor;                                                 \
 		tgt = (p + s * (tot_scnt / SUPP_PER_PART + (long)((p - 1) / tot_scnt))) % tot_scnt + 1;                        \
 	}
 #define V_STR(avg, seed, tgt) tpch_a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), seed, tgt)
-#define TEXT(avg, seed, tgt) dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), seed)
+#define TEXT(avg, seed, tgt)  dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), seed)
 static void gen_phone PROTO((DSS_HUGE ind, char *target, seed_t *seed));
 
 DSS_HUGE

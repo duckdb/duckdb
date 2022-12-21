@@ -215,6 +215,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
+			if (!get.function.projection_pushdown) {
+				return;
+			}
 
 			// Create "selection vector" of all column ids
 			vector<idx_t> proj_sel;

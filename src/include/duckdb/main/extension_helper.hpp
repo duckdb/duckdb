@@ -57,6 +57,9 @@ public:
 	static void ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
 	                                ReplacementOpenData *open_data);
 
+	// Returns extension name, or empty string if not a replacement open path
+	static string ExtractExtensionPrefixFromPath(const string &path);
+
 private:
 	static const vector<string> PathComponents();
 	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);
@@ -67,6 +70,7 @@ private:
 	static bool IsRelease(const string &version_tag);
 	//! Apply any known extension aliases
 	static string ApplyExtensionAlias(string extension_name);
+	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

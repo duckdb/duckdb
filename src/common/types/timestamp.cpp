@@ -20,9 +20,6 @@ static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
 // T may be a space
 // Z is optional
 // ISO 8601
-static inline bool CharacterIsTimeZone(char c) {
-	return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/';
-}
 
 bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz) {
 	idx_t pos;

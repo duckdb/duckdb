@@ -487,11 +487,11 @@ DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
 extern const PhysicalType ROW_TYPE;
 
 DUCKDB_API string TypeIdToString(PhysicalType type);
-idx_t GetTypeIdSize(PhysicalType type);
-bool TypeIsConstantSize(PhysicalType type);
-bool TypeIsIntegral(PhysicalType type);
-bool TypeIsNumeric(PhysicalType type);
-bool TypeIsInteger(PhysicalType type);
+DUCKDB_API idx_t GetTypeIdSize(PhysicalType type);
+DUCKDB_API bool TypeIsConstantSize(PhysicalType type);
+DUCKDB_API bool TypeIsIntegral(PhysicalType type);
+DUCKDB_API bool TypeIsNumeric(PhysicalType type);
+DUCKDB_API bool TypeIsInteger(PhysicalType type);
 
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);

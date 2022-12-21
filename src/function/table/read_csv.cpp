@@ -65,9 +65,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	result->InitializeFiles(context, patterns);
 
+	bool explicitly_set_columns = false;
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "columns") {
+			explicitly_set_columns = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");
@@ -85,6 +87,25 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		} else if (loption == "column_types") {
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("read_csv_auto column_types requires a struct as input");
+			}
+			auto &struct_children = StructValue::GetChildren(kv.second);
+			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				auto &name = StructType::GetChildName(child_type, i);
+				auto &val = struct_children[i];
+				if (val.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("read_csv_auto requires a type specification as string");
+				}
+				auto def_type = TransformStringToLogicalType(StringValue::Get(val));
+				if (def_type.id() == LogicalTypeId::USER) {
+					throw BinderException("Unrecognized type for read_csv_auto column_types definition");
+				}
+				options.sql_types_per_column[name] = def_type;
 			}
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
@@ -110,7 +131,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		if (names.empty()) {
 			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
 		} else {
-			D_ASSERT(return_types.size() == names.size());
+			if (explicitly_set_columns) {
+				// The user has influenced the names, can't assume they are valid anymore
+				if (return_types.size() != names.size()) {
+					throw BinderException("The amount of names specified (%d) and the observed amount of types (%d) in "
+					                      "the file don't match",
+					                      names.size(), return_types.size());
+				}
+			} else {
+				D_ASSERT(return_types.size() == names.size());
+			}
 		}
 		options = initial_reader->options;
 		result->sql_types = initial_reader->sql_types;
@@ -724,6 +754,7 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
+	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
 	return read_csv_auto;
 }
 
