@@ -282,8 +282,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	case_insensitive_map_t<string>::iterator etag_lookup;
 
 	try {
-		res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {}, (char *)write_buffer->Ptr(),
-							  write_buffer->idx);
+		res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
+		                      (char *)write_buffer->Ptr(), write_buffer->idx);
 
 		if (res->code != 200) {
 			throw IOException("Unable to connect  to URL " + file_handle.path + " " + res->error + " (HTTP code " +
@@ -295,10 +295,10 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			throw IOException("Unexpected response when uploading part to S3");
 		}
 
-	} catch(IOException& ex) {
+	} catch (IOException &ex) {
 		// Ensure only one thread sets the exception
 		bool f = false;
-		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong( f, true );
+		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong(f, true);
 		if (exchanged) {
 			file_handle.upload_exception = std::current_exception();
 		}
@@ -388,8 +388,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 		}
 	}
 	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-	file_handle.uploads_in_progress_cv.wait(lck,
-	                                        [&file_handle] { return file_handle.uploads_in_progress == 0; });
+	file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
 
 	file_handle.RethrowIOError();
 }
@@ -433,9 +432,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 
 	// Wait for a buffer to become available
 	if (buffers_in_use + threads_waiting_for_memory >= max_threads) {
-		buffers_available_cv.wait(lck, [&] {
-			return buffers_in_use + threads_waiting_for_memory < max_threads;
-		});
+		buffers_available_cv.wait(lck, [&] { return buffers_in_use + threads_waiting_for_memory < max_threads; });
 	}
 	buffers_in_use++;
 
@@ -463,10 +460,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 				throw e;
 			} else {
 				// Wait for more buffers to become available before trying again
-				buffers_available_cv.wait(
-					lck, [&] {
-						return buffers_in_use < currently_in_use;
-					});
+				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
 			}
 		}
 	}
@@ -488,8 +482,7 @@ shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
 	}
 
 	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
-	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size,
-	                                                   move(buffer_handle));
+	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, move(buffer_handle));
 	{
 		unique_lock<mutex> lck(write_buffers_lock);
 		auto lookup_result = write_buffers.find(write_buffer_idx);

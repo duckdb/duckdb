@@ -12,6 +12,7 @@
 #include "httplib.hpp"
 
 #include <condition_variable>
+#include <exception>
 #include <iostream>
 
 namespace duckdb {
