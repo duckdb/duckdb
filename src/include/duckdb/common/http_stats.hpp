@@ -41,6 +41,11 @@ public:
 		}
 		return nullptr;
 	}
+
+	bool IsEmpty() {
+		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
+		       total_bytes_sent == 0;
+	}
 };
 
 } // namespace duckdb

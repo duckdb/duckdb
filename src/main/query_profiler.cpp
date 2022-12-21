@@ -377,7 +377,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	if (context.client_data->http_stats) {
+	if (context.client_data->http_stats && !context.client_data->http_stats->IsEmpty()) {
 		string read =
 		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
 		string written =
