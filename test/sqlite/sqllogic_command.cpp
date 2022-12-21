@@ -263,7 +263,9 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 
 	runner.con->context->config = client_config;
 
+	runner.con->BeginTransaction();
 	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
 		runner.con->context->client_data->log_query_writer =
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,

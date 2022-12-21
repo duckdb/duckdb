@@ -2,6 +2,8 @@
 # description: Test attaching of a read-only database
 # group: [attach]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 

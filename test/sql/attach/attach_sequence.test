@@ -2,6 +2,8 @@
 # description: Test attach mixed with sequences and default values
 # group: [attach]
 
+require skip_reload
+
 statement ok
 ATTACH DATABASE ':memory:' AS db1;
 
