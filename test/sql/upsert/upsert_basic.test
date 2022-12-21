@@ -1,0 +1,59 @@
+# name: test/sql/upsert/upsert_basic.test
+# group: [upsert]
+
+#statement ok
+#pragma enable_verification;
+
+# Use parallel insert
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+create table tbl(
+	i integer PRIMARY KEY,
+	j integer UNIQUE,
+	k integer
+);
+
+statement ok
+insert into tbl VALUES (1, 10, 1), (2, 20, 1), (3, 30, 2);
+
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	2
+
+statement ok
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = excluded.k;
+
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	1
+
+statement ok
+insert into tbl VALUES (4,2,3), (3,5,10) ON CONFLICT (i) DO NOTHING;
+
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	1
+4	2	3
+
+# I verify in the UPSERT that no conflict is caused by the inserted values on 'j'
+# Then, because a conflict arises on 'i', we transform it into an update instead
+# Since this is a unique/primary key constraint, there is only ever one tuple that contains this conflicting value
+
+# But we can make no assumptions about this in the inserted VALUES
+# For example there could be a conflict on '5', and our inserted values has 2 tuples containing '5'
+
+# If we transform this into an update, we can guarantee no order of operations if this insert happens multi-threaded
+
+# We assert in VerifyUpdateConstraints on debug that none of the columns that are updated are part of an index
+# But we have already verified that this value does not cause a conflict in this index, so we can safely insert it
