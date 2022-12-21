@@ -262,6 +262,12 @@ struct SortedAggregateFunction {
 		target->Combine(*order_bind, other);
 	}
 
+	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
+	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
+	                   Vector &result, idx_t rid, idx_t bias) {
+		throw InternalException("Sorted aggregates should not be generated for window clauses");
+	}
+
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
@@ -370,11 +376,9 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, SortedAggregateFunction::SimpleUpdate, nullptr,
-	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>);
-	ordered_aggregate.serialize = SortedAggregateFunction::Serialize;
-	ordered_aggregate.deserialize = SortedAggregateFunction::Deserialize;
-	ordered_aggregate.null_handling = bound_function.null_handling;
+	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
+	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Window, SortedAggregateFunction::Serialize, SortedAggregateFunction::Deserialize);
 
 	bound_function = move(ordered_aggregate);
 

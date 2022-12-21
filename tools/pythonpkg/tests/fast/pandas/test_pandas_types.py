@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import numpy
 import string
+from packaging import version
 
 def round_trip(data,pandas_type):
     df_in = pd.DataFrame({
@@ -37,11 +38,15 @@ class TestPandasTypes(object):
             "int64",
             "Int64",
             "float32",
-            "Float32",
             "float64",
-            "Float64"
         ]
 
+        if version.parse(pd.__version__) >= version.parse('1.2.0'):
+	        # These DTypes where added in 1.2.0
+            data_types.extend([
+                "Float32",
+                "Float64"
+            ])
         # Generate a dataframe with all the types, in the form of:
         # b=type1,
         # c=type2

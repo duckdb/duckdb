@@ -3,32 +3,6 @@
 
 namespace duckdb {
 
-struct MapBoundCastData : public BoundCastData {
-	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
-	    : key_cast(move(key_cast)), value_cast(move(value_cast)) {
-	}
-
-	BoundCastInfo key_cast;
-	BoundCastInfo value_cast;
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
-	}
-};
-
-//unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-//	vector<BoundCastInfo> child_cast_info;
-//	auto source_key = MapType::KeyType(source);
-//	auto target_key = MapType::KeyType(target);
-//	auto source_val = MapType::ValueType(source);
-//	auto target_val = MapType::ValueType(target);
-//	auto key_cast = input.GetCastFunction(source_key, target_key);
-//	auto value_cast = input.GetCastFunction(source_val, target_val);
-//	return make_unique<MapBoundCastData>(move(key_cast), move(value_cast));
-//
-//}
-
 static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
     auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);

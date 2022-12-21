@@ -3,7 +3,8 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
-
+#include "duckdb/common/radix.hpp"
+#include <algorithm>
 #include <numeric>
 
 namespace duckdb {
@@ -150,6 +151,9 @@ SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
 }
 
 LocalSortState::LocalSortState() : initialized(false) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("Sorting is not supported on big endian architectures");
+	}
 }
 
 void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {

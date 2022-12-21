@@ -553,11 +553,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
             children.push_back(child_vec.GetValue(i));
         }
         return Value::MAP(ListType::GetChildType(type), move(children));
-
-//        auto &child_entries = StructVector::GetEntries(*vector);
-//		Value key = child_entries[0]->GetValue(index);
-//		Value value = child_entries[1]->GetValue(index);
-//		return Value::MAP(move(key), move(value));
 	}
 	case LogicalTypeId::UNION: {
 		auto tag = UnionVector::GetTag(*vector, index);

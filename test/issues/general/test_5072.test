@@ -48,7 +48,7 @@ statement ok
 INSERT INTO t1 VALUES (ARRAY[(7,'g'), (NULL, 'Y')]);
 
 statement error
-SELECT MAP_FROM_ENTRIES(list) FROM t1;
+SELECT CARDINALITY(MAP_FROM_ENTRIES(list)) FROM t1;
 ----
 Invalid Input Error: Map keys can not be NULL
 

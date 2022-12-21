@@ -225,6 +225,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 
 			// encodings, LogicalType::VARCHAR
 			vector<string> encoding_string;
+			encoding_string.reserve(col_meta.encodings.size());
 			for (auto &encoding : col_meta.encodings) {
 				encoding_string.push_back(ConvertParquetElementToString(encoding));
 			}

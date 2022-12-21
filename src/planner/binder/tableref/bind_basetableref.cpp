@@ -13,6 +13,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -69,14 +70,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto table_name = ref.schema_name.empty() ? ref.table_name : (ref.schema_name + "." + ref.table_name);
 		// table could not be found: try to bind a replacement scan
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &scan : config.replacement_scans) {
-			auto replacement_function = scan.function(context, table_name, scan.data.get());
-			if (replacement_function) {
-				replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				replacement_function->column_name_alias = ref.column_name_alias;
-				return Bind(*replacement_function);
+		if (context.config.use_replacement_scans) {
+			for (auto &scan : config.replacement_scans) {
+				auto replacement_function = scan.function(context, table_name, scan.data.get());
+				if (replacement_function) {
+					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
+					replacement_function->column_name_alias = ref.column_name_alias;
+					return Bind(*replacement_function);
+				}
 			}
 		}
+
 		// we still didn't find the table
 		if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 			// if we are in EXTRACT_NAMES, we create a dummy table ref

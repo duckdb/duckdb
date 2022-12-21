@@ -2,14 +2,12 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
-// TODO: this doesn't recursively verify maps if maps are nested
 MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	UnifiedVectorFormat map_vdata;
@@ -79,17 +77,14 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
-    auto &child_entries = StructVector::GetEntries(ListVector::GetEntry(result));
-	D_ASSERT(child_entries.size() == 2);
-	auto &key_vector = *child_entries[0];
-	auto &value_vector = *child_entries[1];
+	auto &key_vector = MapVector::GetKeys(result);
+	auto &value_vector = MapVector::GetValues(result);
     auto list_data = ListVector::GetData(result);
 
 	if (args.data.empty()) {
 		ListVector::SetListSize(result, 0);
         list_data->offset = 0;
         list_data->length = 0;
-
 		result.Verify(args.size());
 		return;
 	}
@@ -106,14 +101,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
     ListVector::SetListSize(result, key_count);
 
 	for (idx_t i = 0; i < args.size() ; i++) {
-		list_data[i].offset = args_data[i].offset;
-		list_data[i].length = args_data[i].length;
+		list_data[i] = args_data[i];
 	}
 
 	key_vector.Reference(ListVector::GetEntry(args.data[0]));
 	value_vector.Reference(ListVector::GetEntry(args.data[1]));
 	MapConversionVerify(result, args.size());
-
 	result.Verify(args.size());
 }
 

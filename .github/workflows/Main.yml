@@ -152,7 +152,7 @@ jobs:
       run: build/reldebug/test/unittest --force-reload --force-storage
 
  no-string-inline:
-    name: No String Inline
+    name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -169,6 +169,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -191,53 +192,6 @@ jobs:
     - name: Test
       shell: bash
       run: build/debug/test/unittest
-
- destroy-unpinned-blocks:
-   name: Destroy Unpinned Blocks
-   runs-on: ubuntu-20.04
-   needs: linux-debug
-   env:
-     CC: gcc-10
-     CXX: g++-10
-     GEN: ninja
-     BUILD_ICU: 1
-     BUILD_INET: 1
-     BUILD_PARQUET: 1
-     BUILD_TPCH: 1
-     BUILD_TPCDS: 1
-     BUILD_FTS: 1
-     BUILD_VISUALIZER: 1
-     BUILD_JSON: 1
-     BUILD_EXCEL: 1
-     DESTROY_UNPINNED_BLOCKS: 1
-
-   steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v2
-       with:
-         python-version: '3.7'
-
-     - name: Install
-       shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-
-     - name: Build
-       shell: bash
-       run: make reldebug
-
-     - name: Test
-       shell: bash
-       run: | 
-        build/reldebug/test/unittest
-        python3.7 tools/shell/shell-test.py build/reldebug/duckdb
 
  threadsan:
     name: Thread Sanitizer
@@ -392,39 +346,7 @@ jobs:
       shell: bash
       run: make debug
 
- jdbc:
-    name: JDBC Compliance
-    runs-on: ubuntu-18.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      BUILD_JDBC: 1
-      GEN: ninja
 
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/cwida/jdbccts.git
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-
-    - name: Build
-      shell: bash
-      run: make release
-
-    - name: Test
-      shell: bash
-      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
  odbc:
     name: ODBC

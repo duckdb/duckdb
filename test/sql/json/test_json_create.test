@@ -19,6 +19,21 @@ select to_json({n: 42})
 {"n":42}
 
 query T
+select to_json(union_value(n := 42))
+----
+{"n":42}
+
+query T
+SELECT to_json(union_value(a := NULL)::UNION(a INTEGER, b VARCHAR))
+----
+{"a":null}
+
+query T
+SELECT to_json(union_value(b := 'abc')::UNION(a INTEGER, b VARCHAR, c FLOAT))
+----
+{"b":"abc"}
+
+query T
 select json_object('duck', 42)
 ----
 {"duck":42}

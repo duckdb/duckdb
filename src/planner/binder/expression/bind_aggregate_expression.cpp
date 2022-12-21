@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -16,17 +17,44 @@
 
 namespace duckdb {
 
-static Value ValidatePercentileFraction(const Value &element_val, const bool desc) {
-	if (element_val.IsNull()) {
-		return element_val;
+static Value NegatePercentileValue(const Value &v, const bool desc) {
+	if (v.IsNull()) {
+		return v;
 	}
 
-	const auto frac = element_val.GetValue<double>();
+	const auto frac = v.GetValue<double>();
 	if (frac < 0 || frac > 1) {
 		throw BinderException("PERCENTILEs can only take parameters in the range [0, 1]");
 	}
 
-	return desc ? Value::DOUBLE(-frac) : element_val;
+	if (!desc) {
+		return v;
+	}
+
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		// Negate DECIMALs as DECIMAL.
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(-integral), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(-integral), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(-integral), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(-integral, width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		// Everything else can just be a DOUBLE
+		return Value::DOUBLE(-v.GetValue<double>());
+	}
 }
 
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
@@ -42,11 +70,11 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
-			values.push_back(ValidatePercentileFraction(element_val, desc));
+			values.push_back(NegatePercentileValue(element_val, desc));
 		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_unique<BoundConstantExpression>(ValidatePercentileFraction(value, desc));
+		bound.expr = make_unique<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 

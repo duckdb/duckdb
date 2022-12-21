@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/queue.hpp"
@@ -279,8 +280,9 @@ struct QuantileCompare {
 // Continuous interpolation
 template <bool DISCRETE>
 struct Interpolator {
-	Interpolator(const double q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
+	Interpolator(const Value &q, const idx_t n_p, const bool desc_p)
+	    : desc(desc_p), RN((double)(n_p - 1) * q.GetValue<double>()), FRN(floor(RN)), CRN(ceil(RN)), begin(0),
+	      end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -323,9 +325,30 @@ struct Interpolator {
 // Discrete "interpolation"
 template <>
 struct Interpolator<true> {
-	Interpolator(const double q, const idx_t n_p, bool desc_p)
-	    : desc(desc_p), RN((double)(n_p * q)), FRN(MaxValue<idx_t>(1, n_p - floor(n_p - RN)) - 1), CRN(FRN), begin(0),
-	      end(n_p) {
+	static inline idx_t Index(const Value &q, const idx_t n) {
+		idx_t floored;
+		const auto &type = q.type();
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL: {
+			//	Integer arithmetic for accuracy
+			const auto integral = IntegralValue::Get(q);
+			const auto scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
+			const auto scaled_q = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, integral);
+			const auto scaled_n = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, scaling);
+			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
+			break;
+		}
+		default:
+			const auto scaled_q = (double)(n * q.GetValue<double>());
+			floored = floor(n - scaled_q);
+			break;
+		}
+
+		return MaxValue<idx_t>(1, n - floored) - 1;
+	}
+
+	Interpolator(const Value &q, const idx_t n_p, bool desc_p)
+	    : desc(desc_p), FRN(Index(q, n_p)), CRN(FRN), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -343,7 +366,6 @@ struct Interpolator<true> {
 	}
 
 	const bool desc;
-	const double RN;
 	const idx_t FRN;
 	const idx_t CRN;
 
@@ -351,23 +373,51 @@ struct Interpolator<true> {
 	idx_t end;
 };
 
+template <typename T>
+static inline T QuantileAbs(const T &t) {
+	return AbsOperator::Operation<T, T>(t);
+}
+
+template <>
+inline Value QuantileAbs(const Value &v) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileAbs<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileAbs<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileAbs<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileAbs<hugeint_t>(integral), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileAbs<double>(v.GetValue<double>()));
+	}
+}
+
 struct QuantileBindData : public FunctionData {
-	template <typename T>
-	static inline T Abs(const T &t) {
-		return AbsOperator::Operation<T, T>(t);
+
+	explicit QuantileBindData(const Value &quantile_p)
+	    : quantiles(1, QuantileAbs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
 	}
 
-	explicit QuantileBindData(double quantile_p) : quantiles(1, Abs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
-	}
-
-	explicit QuantileBindData(const vector<double> &quantiles_p) {
+	explicit QuantileBindData(const vector<Value> &quantiles_p) {
 		size_t pos = 0;
 		size_t neg = 0;
 		for (idx_t i = 0; i < quantiles_p.size(); ++i) {
 			const auto q = quantiles_p[i];
 			pos += (q > 0);
 			neg += (q < 0);
-			quantiles.push_back(Abs(q));
+			quantiles.emplace_back(QuantileAbs(q));
 			order.push_back(i);
 		}
 		if (pos && neg) {
@@ -375,16 +425,18 @@ struct QuantileBindData : public FunctionData {
 		}
 		desc = (neg > 0);
 
-		IndirectLess<double> lt(quantiles.data());
+		IndirectLess<Value> lt(quantiles.data());
 		std::sort(order.begin(), order.end(), lt);
 	}
 
-	unique_ptr<FunctionData> Copy() const override {
-		vector<double> copies;
-		for (const auto &q : quantiles) {
-			copies.emplace_back(desc ? -q : q);
+	QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+		for (const auto &q : other.quantiles) {
+			quantiles.emplace_back(q);
 		}
-		return make_unique<QuantileBindData>(copies);
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<QuantileBindData>(*this);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -392,7 +444,7 @@ struct QuantileBindData : public FunctionData {
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
 	}
 
-	vector<double> quantiles;
+	vector<Value> quantiles;
 	vector<idx_t> order;
 	bool desc;
 };
@@ -1124,18 +1176,18 @@ static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data
 	throw NotImplementedException("FIXME: serializing quantiles is not supported right now");
 	//
 	//	auto bind_data = (QuantileBindData *)bind_data_p;
-	//	writer.WriteList<double>(bind_data->quantiles);
+	//	writer.WriteList<Value>(bind_data->quantiles);
 }
 
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
                                              AggregateFunction &bound_function) {
-	auto quantiles = reader.ReadRequiredList<double>();
+	auto quantiles = reader.ReadRequiredList<Value>();
 	return make_unique<QuantileBindData>(move(quantiles));
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<QuantileBindData>(0.5);
+	return make_unique<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
 unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
@@ -1156,7 +1208,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 	return nullptr;
 }
 
-static double CheckQuantile(const Value &quantile_val) {
+static const Value &CheckQuantile(const Value &quantile_val) {
 	if (quantile_val.IsNull()) {
 		throw BinderException("QUANTILE parameter cannot be NULL");
 	}
@@ -1165,7 +1217,7 @@ static double CheckQuantile(const Value &quantile_val) {
 		throw BinderException("QUANTILE can only take parameters in the range [-1, 1]");
 	}
 
-	return quantile;
+	return quantile_val;
 }
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
@@ -1177,7 +1229,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	vector<double> quantiles;
+	vector<Value> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {

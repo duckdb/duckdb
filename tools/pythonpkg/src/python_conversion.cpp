@@ -268,6 +268,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Dict;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
+	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
+		return PythonObjectType::NdDatetime;
 	} else {
 		return PythonObjectType::Other;
 	}
@@ -302,8 +304,12 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		return Value::UUID(string_val);
 	}
 	case PythonObjectType::Datetime: {
-		auto isnull_result = py::module::import("pandas").attr("isnull")(ele);
-		bool is_nat = string(py::str(isnull_result)) == "True";
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		bool is_nat = false;
+		if (import_cache.pandas.isnull.IsLoaded()) {
+			auto isnull_result = import_cache.pandas.isnull()(ele);
+			is_nat = string(py::str(isnull_result)) == "True";
+		}
 		if (is_nat) {
 			return Value();
 		}
@@ -354,7 +360,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		}
 	}
 	case PythonObjectType::NdArray:
-		return TransformPythonValue(ele.attr("tolist")());
+	case PythonObjectType::NdDatetime:
+		return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
 	case PythonObjectType::Other:
 		throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
 		                              py::str(ele.get_type()).cast<string>());
