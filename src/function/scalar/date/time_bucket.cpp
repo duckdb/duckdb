@@ -14,7 +14,7 @@ namespace duckdb {
 
 struct TimeBucket {
 
-	constexpr static const int64_t DEFAULT_ORIGIN_DAYS = 10959;
+	constexpr static const int64_t DEFAULT_ORIGIN_MICROS = 10959 * Interval::MICROS_PER_DAY;
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
 	template <typename T>
@@ -23,15 +23,7 @@ struct TimeBucket {
 		return (Date::ExtractYear(ts_date) - 1970) * 12 + Date::ExtractMonth(ts_date) - 1;
 	}
 
-	static int32_t ExtractYearFromEpochMonths(int32_t epoch_months) {
-		return (epoch_months < 0 && epoch_months % 12 != 0) ? 1970 + epoch_months / 12 - 1 : 1970 + epoch_months / 12;
-	}
-
-	static int32_t ExtractMonthFromEpochMonths(int32_t epoch_months) {
-		return (epoch_months < 0 && epoch_months % 12 != 0) ? epoch_months % 12 + 13 : epoch_months % 12 + 1;
-	}
-
-	static int64_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros, int64_t origin_micros) {
+	static timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros, int64_t origin_micros) {
 		origin_micros %= bucket_width_micros;
 		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
 			throw OutOfRangeException("Timestamp out of range");
@@ -51,10 +43,10 @@ struct TimeBucket {
 		}
 		result_micros += origin_micros;
 
-		return result_micros;
+		return Timestamp::FromEpochMicroSeconds(result_micros);
 	}
 
-	static int32_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months, int32_t origin_months) {
+	static date_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months, int32_t origin_months) {
 		origin_months %= bucket_width_months;
 		if (origin_months > 0 && ts_months < NumericLimits<int32_t>::Minimum() + origin_months) {
 			throw NotImplementedException("Timestamp out of range");
@@ -73,7 +65,12 @@ struct TimeBucket {
 		}
 		result_months += origin_months;
 
-		return result_months;
+		int32_t year =
+		    (result_months < 0 && result_months % 12 != 0) ? 1970 + result_months / 12 - 1 : 1970 + result_months / 12;
+		int32_t month =
+		    (result_months < 0 && result_months % 12 != 0) ? result_months % 12 + 13 : result_months % 12 + 1;
+
+		return Date::FromDate(year, month, 1);
 	}
 
 	struct WidthLessThanDaysBinaryOperator {
@@ -86,10 +83,10 @@ struct TimeBucket {
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
 			// set origin 2000-01-03 00:00:00 (Monday) for TimescaleDB compatibility
 			// there are 10959 days between 1970-01-01 00:00:00 and 2000-01-03 00:00:00
-			int64_t origin_micros = DEFAULT_ORIGIN_DAYS * Interval::MICROS_PER_DAY;
+			int64_t origin_micros = DEFAULT_ORIGIN_MICROS;
 
-			return Cast::template Operation<timestamp_t, TR>(Timestamp::FromEpochMicroSeconds(
-			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros)));
+			return Cast::template Operation<timestamp_t, TR>(
+			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros));
 		}
 	};
 
@@ -104,10 +101,8 @@ struct TimeBucket {
 			// there are 360 months between 1970-01-01 00:00:00 and 2000-01-01 00:00:00
 			int32_t origin_months = DEFAULT_ORIGIN_MONTHS;
 
-			int32_t result_months = WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months);
-			int32_t year = ExtractYearFromEpochMonths(result_months);
-			int32_t month = ExtractMonthFromEpochMonths(result_months);
-			return Cast::template Operation<date_t, TR>(Date::FromDate(year, month, 1));
+			return Cast::template Operation<date_t, TR>(
+			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months));
 		}
 	};
 
@@ -142,12 +137,10 @@ struct TimeBucket {
 			    Interval::Add(Cast::template Operation<TB, timestamp_t>(ts), Interval::Invert(offset)));
 			// set origin 2000-01-03 00:00:00 (Monday) for TimescaleDB compatibility
 			// there are 10959 days between 1970-01-01 00:00:00 and 2000-01-03 00:00:00
-			int64_t origin_micros = DEFAULT_ORIGIN_DAYS * Interval::MICROS_PER_DAY;
+			int64_t origin_micros = DEFAULT_ORIGIN_MICROS;
 
 			return Cast::template Operation<timestamp_t, TR>(
-			    Interval::Add(Timestamp::FromEpochMicroSeconds(
-			                      WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros)),
-			                  offset));
+			    Interval::Add(WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros), offset));
 		}
 	};
 
@@ -162,10 +155,9 @@ struct TimeBucket {
 			// there are 360 months between 1970-01-01 00:00:00 and 2000-01-01 00:00:00
 			int32_t origin_months = DEFAULT_ORIGIN_MONTHS;
 
-			int32_t result_months = WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months);
-			int32_t year = ExtractYearFromEpochMonths(result_months);
-			int32_t month = ExtractMonthFromEpochMonths(result_months);
-			return Interval::Add(Cast::template Operation<date_t, TR>(Date::FromDate(year, month, 1)), offset);
+			return Interval::Add(Cast::template Operation<date_t, TR>(
+			                         WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months)),
+			                     offset);
 		}
 	};
 
@@ -199,8 +191,8 @@ struct TimeBucket {
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
 			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(origin));
 
-			return Cast::template Operation<timestamp_t, TR>(Timestamp::FromEpochMicroSeconds(
-			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros)));
+			return Cast::template Operation<timestamp_t, TR>(
+			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros));
 		}
 	};
 
@@ -213,10 +205,8 @@ struct TimeBucket {
 			int32_t ts_months = EpochMonths(ts);
 			int32_t origin_months = EpochMonths(origin);
 
-			int32_t result_months = WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months);
-			int32_t year = ExtractYearFromEpochMonths(result_months);
-			int32_t month = ExtractMonthFromEpochMonths(result_months);
-			return Cast::template Operation<date_t, TR>(Date::FromDate(year, month, 1));
+			return Cast::template Operation<date_t, TR>(
+			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months));
 		}
 	};
 
