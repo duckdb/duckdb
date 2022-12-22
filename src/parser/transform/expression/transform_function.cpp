@@ -96,15 +96,24 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_sp
 
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
 	auto name = root->funcname;
-	string schema, function_name;
-	if (name->length == 2) {
+	string catalog, schema, function_name;
+	if (name->length == 3) {
+		// catalog + schema + name
+		catalog = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
+		schema = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->next->data.ptr_value)->val.str;
+	} else if (name->length == 2) {
 		// schema + name
+		catalog = INVALID_CATALOG;
 		schema = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
-	} else {
+	} else if (name->length == 1) {
 		// unqualified name
+		catalog = INVALID_CATALOG;
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
+	} else {
+		throw InternalException("TransformFuncCall - Expected 1, 2 or 3 qualifications");
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
@@ -134,7 +143,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
+		auto expr = make_unique<WindowExpression>(win_fun_type, move(catalog), move(schema), lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
 
 		if (root->agg_filter) {
@@ -282,8 +291,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                move(order_bys), root->agg_distinct, false, root->export_state);
+	auto function = make_unique<FunctionExpression>(move(catalog), move(schema), lowercase_name.c_str(), move(children),
+	                                                move(filter_expr), move(order_bys), root->agg_distinct, false,
+	                                                root->export_state);
 	function->query_location = root->location;
 
 	return move(function);
@@ -330,7 +340,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpg
 	D_ASSERT(node);
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, move(children));
+	return make_unique<FunctionExpression>(fname, move(children));
 }
 
 } // namespace duckdb

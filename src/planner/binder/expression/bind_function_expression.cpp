@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// have unnest live in catalog, too
 		return BindUnnest(function, depth);
 	}
-	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, INVALID_CATALOG, function.schema,
+	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                              function.function_name, false, error_context);
 
 	switch (func->type) {

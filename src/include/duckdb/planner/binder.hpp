@@ -100,6 +100,7 @@ public:
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);

@@ -534,7 +534,6 @@ Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // File Search Path
 //===--------------------------------------------------------------------===//
-
 void FileSearchPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	client_data.file_search_path.clear();
@@ -863,7 +862,6 @@ Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-
 void SchemaSetting::ResetLocal(ClientContext &context) {
 	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
 	auto &client_data = ClientData::Get(context);
@@ -883,7 +881,6 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Search Path
 //===--------------------------------------------------------------------===//
-
 void SearchPathSetting::ResetLocal(ClientContext &context) {
 	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
 	auto &client_data = ClientData::Get(context);

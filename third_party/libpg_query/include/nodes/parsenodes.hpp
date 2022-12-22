@@ -2077,7 +2077,7 @@ typedef struct PGAttachStmt
 
 typedef struct PGUseStmt {
 	PGNodeTag type;
-	char *name;    /* variable to be set */
+	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
 

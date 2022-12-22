@@ -261,6 +261,7 @@ void Binder::AddBoundView(ViewCatalogEntry *view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
+	D_ASSERT(parent.get() != this);
 	if (parent) {
 		return parent->GenerateTableIndex();
 	}

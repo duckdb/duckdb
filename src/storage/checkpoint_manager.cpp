@@ -304,7 +304,6 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view) {
 
 void CheckpointReader::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader, context);
-
 	catalog.CreateView(context, info.get());
 }
 
@@ -317,7 +316,6 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq) {
 
 void CheckpointReader::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
-
 	catalog.CreateSequence(context, info.get());
 }
 
@@ -402,7 +400,6 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &table) {
 
 void CheckpointReader::ReadType(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TypeCatalogEntry::Deserialize(reader);
-
 	catalog.CreateType(context, info.get());
 }
 
@@ -444,7 +441,8 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	auto info = TableCatalogEntry::Deserialize(reader, context);
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto schema = catalog.GetSchema(context, info->schema);
+	auto bound_info = binder->BindCreateTableInfo(move(info), schema);
 
 	// now read the actual table data and place it into the create table info
 	ReadTableData(context, reader, *bound_info);

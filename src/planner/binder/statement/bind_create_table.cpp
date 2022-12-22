@@ -241,12 +241,10 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
-
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
 	auto &base = (CreateTableInfo &)*info;
-
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
-	result->schema = BindCreateSchema(*result->base);
+	result->schema = schema;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -294,6 +292,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 	properties.allow_stream_result = false;
 	return result;
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+	auto &base = (CreateTableInfo &)*info;
+	auto schema = BindCreateSchema(base);
+	return BindCreateTableInfo(move(info), schema);
 }
 
 } // namespace duckdb

@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type, string schema, const string &function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), schema(move(schema)),
+WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
+    : ParsedExpression(type, ExpressionClass::WINDOW), catalog(move(catalog_name)), schema(move(schema)),
       function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
@@ -86,7 +86,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_unique<WindowExpression>(type, schema, function_name);
+	auto new_window = make_unique<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -118,6 +118,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	auto &serializer = writer.GetSerializer();
 
 	writer.WriteString(function_name);
+	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteSerializableList(children);
 	writer.WriteSerializableList(partitions);
@@ -140,8 +141,9 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
+	auto catalog = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, schema, function_name);
+	auto expr = make_unique<WindowExpression>(type, move(catalog), move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
