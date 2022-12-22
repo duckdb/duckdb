@@ -17,7 +17,7 @@ namespace duckdb {
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
 public:
-	LogicalInsert(TableCatalogEntry *table, idx_t table_index, InsertConflictActionType action_type)
+	LogicalInsert(TableCatalogEntry *table, idx_t table_index, OnConflictAction action_type)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
 	      return_chunk(false), action_type(action_type) {
 	}
@@ -34,8 +34,14 @@ public:
 	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
-	// Which action to take on conflict
-	InsertConflictActionType action_type;
+	//! Which action to take on conflict
+	OnConflictAction action_type;
+	// The types that the DO UPDATE .. SET (expressions) are cast to
+	vector<LogicalType> expected_set_types;
+	// The column ids to apply the ON CONFLICT on
+	vector<column_t> on_conflict_filter;
+	// The Index name to apply the ON CONFLICT on
+	string constraint_name;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

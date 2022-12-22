@@ -140,7 +140,7 @@ set_clause:
 
 
 opt_on_conflict:
-			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list_opt_comma	where_clause
+			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list_opt_comma where_clause
 				{
 					$$ = makeNode(PGOnConflictClause);
 					$$->action = PG_ONCONFLICT_UPDATE;

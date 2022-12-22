@@ -1,8 +1,22 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 
 namespace duckdb {
+
+OnConflictInfo::OnConflictInfo(const OnConflictInfo &other) : action_type(other.action_type) {
+	if (other.set_info) {
+		set_info = other.set_info->Copy();
+	}
+	for (auto &expr : other.indexed_columns) {
+		indexed_columns.emplace_back(expr->Copy());
+	}
+}
+
+unique_ptr<OnConflictInfo> OnConflictInfo::Copy() const {
+	return unique_ptr<OnConflictInfo>(new OnConflictInfo(*this));
+}
 
 InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA) {
 }
@@ -12,9 +26,12 @@ InsertStatement::InsertStatement(const InsertStatement &other)
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema) {
 	cte_map = other.cte_map.Copy();
-	action_type = other.action_type;
+	if (other.on_conflict_info) {
+		on_conflict_info = other.on_conflict_info->Copy();
+	}
 }
 
+// TODO: add ON CONFLICT ... to this
 string InsertStatement::ToString() const {
 	string result;
 	result = cte_map.ToString();

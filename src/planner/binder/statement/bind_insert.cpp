@@ -11,6 +11,15 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -23,6 +32,154 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 		                                tname, expected_columns, result_columns);
 		throw BinderException(msg);
 	}
+}
+
+unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOperator> &root,
+                                                           unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table,
+                                                           InsertStatement &stmt) {
+	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_INSERT);
+	if (!stmt.on_conflict_info) {
+		insert->action_type = OnConflictAction::THROW;
+		return nullptr;
+	}
+	auto &on_conflict = *stmt.on_conflict_info;
+	insert->action_type = on_conflict.action_type;
+
+	// Bind the indexed columns
+	if (!on_conflict.constraint_name.empty()) {
+		// Bind the ON CONFLICT ON CONSTRAINT <constraint name>
+		insert->constraint_name = on_conflict.constraint_name;
+		// FIXME: do we need to grab a lock on the indexes here?
+		auto &catalog = Catalog::GetCatalog(context);
+		auto catalog_entry =
+		    catalog.GetEntry<IndexCatalogEntry>(context, insert->table->schema->name, insert->constraint_name, true);
+		if (!catalog_entry) {
+			throw BinderException("No INDEX by the name '%s' exists in the schema '%s'", insert->constraint_name,
+			                      insert->table->schema->name);
+		}
+		// Verify that this index is part of the table
+		auto &found_index = catalog_entry->index;
+		bool index_located = false;
+		for (auto &index : table->storage->info->indexes.Indexes()) {
+			if (index.get() == found_index) {
+				index_located = true;
+				break;
+			}
+		}
+		if (!index_located) {
+			throw BinderException("INDEX '%s' is not part of the table '%s'", insert->constraint_name, table->name);
+		}
+		// Lastly, verify that at least one of the columns of the table is referenced by this Index
+		bool index_references_table = false;
+		auto &indexed_columns = found_index->column_id_set;
+		for (auto &column : table->columns.Physical()) {
+			if (indexed_columns.count(column.Physical().index)) {
+				index_references_table = true;
+				break;
+			}
+		}
+		if (!index_references_table) {
+			// The index does not reference this table at all, do we just turn it into a DO THROW
+			// or should we throw because the conflict target makes no sense?
+			throw BinderException("The specified INDEX does not apply to this table");
+		}
+	} else if (!on_conflict.indexed_columns.empty()) {
+		// Bind the ON CONFLICT (<columns>)
+
+		// create a mapping of (list index) -> (column index)x
+		case_insensitive_map_t<idx_t> specified_columns;
+		for (idx_t i = 0; i < on_conflict.indexed_columns.size(); i++) {
+			specified_columns[on_conflict.indexed_columns[i]] = i;
+			auto column_index = table->GetColumnIndex(on_conflict.indexed_columns[i]);
+			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot specify ROWID as ON CONFLICT target");
+			}
+			auto &col = table->columns.GetColumn(column_index);
+			if (col.Generated()) {
+				throw BinderException("Cannot specify a generated column as ON CONFLICT target");
+			}
+		}
+		for (auto &col : table->columns.Physical()) {
+			auto entry = specified_columns.find(col.Name());
+			if (entry != specified_columns.end()) {
+				// column was specified, set to the index
+				insert->on_conflict_filter.push_back(entry->second);
+			}
+		}
+		auto &indexes = table->storage->info->indexes;
+		bool index_references_columns;
+		indexes.Scan([&](Index &index) {
+			if (index.IsUnique()) {
+				return false;
+			}
+			auto &column_ids = index.column_id_set;
+			for (auto &column_id : insert->on_conflict_filter) {
+				if (column_ids.count(column_id)) {
+					// We got a hit
+					index_references_columns = true;
+					return true;
+				}
+			}
+			return false;
+		});
+		if (!index_references_columns) {
+			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
+			// But since this makes no logical sense, it's probably better to throw
+			throw BinderException(
+			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT/INDEX");
+		}
+	} else {
+		// The ON CONFLICT applies to every UNIQUE index on the table
+
+		// We check if there are any indexes on the table, without it the ON CONFLICT clause
+		// makes no sense, so we can transform this into a DO THROW (so we can avoid doing a bunch of extra wasted work)
+		// or just throw a binder exception because this query should logically not have ON CONFLICT
+		bool index_references_table = false;
+		auto &indexes = table->storage->info->indexes;
+		indexes.Scan([&](Index &index) {
+			if (!index.IsUnique()) {
+				return false;
+			}
+			auto &indexed_columns = index.column_id_set;
+			for (auto &column : table->columns.Physical()) {
+				if (indexed_columns.count(column.Physical().index)) {
+					index_references_table = true;
+					return true;
+				}
+			}
+			return false;
+		});
+		if (!index_references_table) {
+			throw BinderException(
+			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
+		}
+	}
+
+	if (insert->action_type != OnConflictAction::UPDATE) {
+		return nullptr;
+	}
+	D_ASSERT(on_conflict.set_info);
+	auto &set_info = *on_conflict.set_info;
+	D_ASSERT(!set_info.columns.empty());
+	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
+
+	// Bind the SET columns and expressions
+	auto proj_index = GenerateTableIndex();
+	vector<unique_ptr<Expression>> projection_expressions;
+
+	if (set_info.condition) {
+		// Bind the SET .. WHERE clause
+		WhereBinder where_binder(*this, context);
+		auto condition = where_binder.Bind(set_info.condition);
+
+		PlanSubqueries(&condition, &root);
+		auto filter = make_unique<LogicalFilter>(move(condition));
+		filter->AddChild(move(root));
+		root = move(filter);
+	}
+
+	vector<PhysicalIndex> set_columns;
+	return BindUpdateSet(insert.get(), root, set_info, table, set_columns);
 }
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
@@ -38,7 +195,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		properties.read_only = false;
 	}
 
-	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex(), stmt.action_type);
+	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
@@ -73,6 +230,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		}
 	} else {
 		// No columns specified, assume insertion into all columns
+		// Intentionally don't populate 'column_index_map' as an indication of this
 		for (auto &col : table->columns.Physical()) {
 			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
@@ -103,7 +261,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
 			D_ASSERT(named_column_map.size() >= col_idx);
-			auto table_col_idx = named_column_map[col_idx];
+			auto &table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table->columns.GetColumn(table_col_idx);
@@ -134,7 +292,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
 
-	insert->AddChild(move(root));
+	auto root = unique_ptr_cast<LogicalInsert, LogicalOperator>(move(insert));
+	auto proj = BindOnConflictClause(root, insert, table, stmt);
+	if (proj) {
+		// We have a DO UPDATE on conflict action, created a projection and moved root into it
+		insert->AddChild(move(proj));
+	} else {
+		insert->AddChild(move(root));
+	}
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;

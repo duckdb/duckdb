@@ -35,7 +35,7 @@ public:
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
 	// Which action to perform on conflict
-	InsertConflictActionType action_type;
+	OnConflictAction action_type;
 
 public:
 	// Source interface

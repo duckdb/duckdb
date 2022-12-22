@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto action_type = reader.ReadRequired<InsertConflictActionType>();
+	auto action_type = reader.ReadRequired<OnConflictAction>();
 
 	auto &catalog = Catalog::GetCatalog(context);
 

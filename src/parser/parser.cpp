@@ -187,8 +187,8 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = (UpdateStatement &)*parser.statements[0];
-	update_columns = move(update.columns);
-	expressions = move(update.expressions);
+	update_columns = move(update.set_info->columns);
+	expressions = move(update.set_info->expressions);
 }
 
 vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list, ParserOptions options) {

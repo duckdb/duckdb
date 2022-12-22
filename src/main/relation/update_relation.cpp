@@ -21,11 +21,13 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	basetable->table_name = table_name;
 
 	UpdateStatement stmt;
-	stmt.condition = condition ? condition->Copy() : nullptr;
+	stmt.set_info = make_unique<UpdateSetInfo>();
+
+	stmt.set_info->condition = condition ? condition->Copy() : nullptr;
 	stmt.table = move(basetable);
-	stmt.columns = update_columns;
+	stmt.set_info->columns = update_columns;
 	for (auto &expr : expressions) {
-		stmt.expressions.push_back(expr->Copy());
+		stmt.set_info->expressions.push_back(expr->Copy());
 	}
 	return binder.Bind((SQLStatement &)stmt);
 }

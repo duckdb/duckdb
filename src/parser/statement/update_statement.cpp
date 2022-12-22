@@ -3,24 +3,36 @@
 
 namespace duckdb {
 
+UpdateSetInfo::UpdateSetInfo(const UpdateSetInfo &other) : columns(other.columns) {
+	if (other.condition) {
+		condition = other.condition->Copy();
+	}
+	for (auto &expr : other.expressions) {
+		expressions.emplace_back(expr->Copy());
+	}
+}
+
+unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
+	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
+}
+
 UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT) {
 }
 
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
-    : SQLStatement(other), table(other.table->Copy()), columns(other.columns) {
-	if (other.condition) {
-		condition = other.condition->Copy();
-	}
+    : SQLStatement(other), table(other.table->Copy()), set_info(other.set_info->Copy()) {
 	if (other.from_table) {
 		from_table = other.from_table->Copy();
-	}
-	for (auto &expr : other.expressions) {
-		expressions.emplace_back(expr->Copy());
 	}
 	cte_map = other.cte_map.Copy();
 }
 
 string UpdateStatement::ToString() const {
+	D_ASSERT(set_info);
+	auto &condition = set_info->condition;
+	auto &columns = set_info->columns;
+	auto &expressions = set_info->expressions;
+
 	string result;
 	result = cte_map.ToString();
 	result += "UPDATE ";

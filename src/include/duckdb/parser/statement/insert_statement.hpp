@@ -14,9 +14,31 @@
 
 namespace duckdb {
 class ExpressionListRef;
+class UpdateSetInfo;
 
-// Which action should we perform when a insert conflict occurs
-enum class InsertConflictActionType : uint8_t { THROW, NOTHING, UPDATE };
+enum class OnConflictAction { THROW, NOTHING, UPDATE };
+
+class OnConflictInfo {
+public:
+	OnConflictInfo() : action_type(OnConflictAction::THROW) {
+	}
+
+public:
+	unique_ptr<OnConflictInfo> Copy() const;
+
+public:
+	OnConflictAction action_type;
+
+	string constraint_name;
+	vector<string> indexed_columns;
+	//! The SET information (if action_type == UPDATE)
+	unique_ptr<UpdateSetInfo> set_info;
+	//! The condition determining whether we apply the DO .. for conflicts that arise
+	unique_ptr<ParsedExpression> condition;
+
+protected:
+	OnConflictInfo(const OnConflictInfo &other);
+};
 
 class InsertStatement : public SQLStatement {
 public:
@@ -35,8 +57,7 @@ public:
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
 
-	//! Action to perform if the insert statement fails because of a conflict
-	InsertConflictActionType action_type;
+	unique_ptr<OnConflictInfo> on_conflict_info;
 
 	//! CTEs
 	CommonTableExpressionMap cte_map;

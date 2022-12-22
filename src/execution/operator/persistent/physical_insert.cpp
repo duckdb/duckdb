@@ -17,7 +17,7 @@ namespace duckdb {
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table,
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
-                               bool return_chunk, bool parallel, InsertConflictActionType action_type)
+                               bool return_chunk, bool parallel, OnConflictAction action_type)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type) {
@@ -27,7 +27,7 @@ PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, 
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
       return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel),
-      action_type(InsertConflictActionType::THROW) {
+      action_type(OnConflictAction::THROW) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -155,7 +155,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		if (action_type == InsertConflictActionType::THROW) {
+		if (action_type == OnConflictAction::THROW) {
 			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
 		} else {
 			// We either want to do nothing, or perform an update when conflicts arise
@@ -172,7 +172,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 					}
 				}
 				DataChunk filtered_chunk;
-				if (action_type == InsertConflictActionType::NOTHING ||
+				if (action_type == OnConflictAction::NOTHING ||
 				    to_filter_columns.size() == lstate.insert_chunk.ColumnCount()) {
 					// DO NOTHING or DO UPDATE, but all columns are indexed on, so we can't update anything
 				} else {

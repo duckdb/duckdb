@@ -16,17 +16,32 @@
 
 namespace duckdb {
 
+class UpdateSetInfo {
+public:
+	UpdateSetInfo() {
+	}
+
+public:
+	unique_ptr<UpdateSetInfo> Copy() const;
+
+public:
+	unique_ptr<ParsedExpression> condition;
+	vector<string> columns;
+	vector<unique_ptr<ParsedExpression>> expressions;
+
+protected:
+	UpdateSetInfo(const UpdateSetInfo &other);
+};
+
 class UpdateStatement : public SQLStatement {
 public:
 	UpdateStatement();
 
-	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
 	unique_ptr<TableRef> from_table;
-	vector<string> columns;
-	vector<unique_ptr<ParsedExpression>> expressions;
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
+	unique_ptr<UpdateSetInfo> set_info;
 	//! CTEs
 	CommonTableExpressionMap cte_map;
 

@@ -251,27 +251,32 @@ void StatementSimplifier::Simplify(DeleteStatement &stmt) {
 	SimplifyList(stmt.returning_list);
 }
 
+void StatementSimplifier::Simplify(UpdateSetInfo &info) {
+	SimplifyOptional(info.condition);
+	SimplifyExpression(info.condition);
+	if (info.columns.size() > 1) {
+		for (idx_t i = 0; i < info.columns.size(); i++) {
+			auto col = move(info.columns[i]);
+			auto expr = move(info.expressions[i]);
+			info.columns.erase(info.columns.begin() + i);
+			info.expressions.erase(info.expressions.begin() + i);
+			Simplification();
+			info.columns.insert(info.columns.begin() + i, move(col));
+			info.expressions.insert(info.expressions.begin() + i, move(expr));
+		}
+	}
+	for (auto &expr : info.expressions) {
+		SimplifyExpression(expr);
+	}
+}
+
 void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 	Simplify(stmt.cte_map);
 	if (stmt.from_table) {
 		Simplify(*stmt.from_table);
 	}
-	SimplifyOptional(stmt.condition);
-	SimplifyExpression(stmt.condition);
-	if (stmt.columns.size() > 1) {
-		for (idx_t i = 0; i < stmt.columns.size(); i++) {
-			auto col = move(stmt.columns[i]);
-			auto expr = move(stmt.expressions[i]);
-			stmt.columns.erase(stmt.columns.begin() + i);
-			stmt.expressions.erase(stmt.expressions.begin() + i);
-			Simplification();
-			stmt.columns.insert(stmt.columns.begin() + i, move(col));
-			stmt.expressions.insert(stmt.expressions.begin() + i, move(expr));
-		}
-	}
-	for (auto &expr : stmt.expressions) {
-		SimplifyExpression(expr);
-	}
+	D_ASSERT(stmt.set_info);
+	Simplify(*stmt.set_info);
 	SimplifyList(stmt.returning_list);
 }
 
