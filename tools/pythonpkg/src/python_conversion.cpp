@@ -14,7 +14,6 @@ namespace duckdb {
 Value TransformListValue(py::handle ele);
 
 static Value EmptyMapValue() {
-	// return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
 	auto map_type = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
 	return Value::MAP(ListType::GetChildType(map_type), std::vector<Value>());
 }
@@ -79,9 +78,6 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	if (dict.len == 0) {
 		return EmptyMapValue();
 	}
-	// auto keys = TransformListValue(dict.keys);
-	// auto values = TransformListValue(dict.values);
-	// return Value::MAP(move(keys), move(values));
 
 	auto size = py::len(dict.keys);
 	D_ASSERT(size == py::len(dict.values));
