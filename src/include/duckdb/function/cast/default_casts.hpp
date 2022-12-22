@@ -108,6 +108,23 @@ public:
 	}
 };
 
+struct MapBoundCastData : public BoundCastData {
+	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
+	    : key_cast(move(key_cast)), value_cast(move(value_cast)) {
+	}
+
+	BoundCastInfo key_cast;
+	BoundCastInfo value_cast;
+
+	static unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source,
+	                                                  const LogicalType &target);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_unique<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
+	}
+};
+
 struct DefaultCasts {
 	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
 	                                            const LogicalType &target);

@@ -32,13 +32,17 @@ static idx_t StringTrim(const char *buf, idx_t &start_pos, idx_t pos) {
 struct CountPartOperation {
 	idx_t count = 0;
 
+	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
+		count++;
+		return true;
+	}
 	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
 		count++;
 	}
 };
 
-struct SplitStringOperation {
-	SplitStringOperation(string_t *child_data, idx_t &child_start, Vector &child)
+struct SplitStringListOperation {
+	SplitStringListOperation(string_t *child_data, idx_t &child_start, Vector &child)
 	    : child_data(child_data), child_start(child_start), child(child) {
 	}
 
@@ -52,6 +56,37 @@ struct SplitStringOperation {
 			return;
 		}
 		child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
+		child_start++;
+	}
+};
+
+struct SplitStringMapOperation {
+	SplitStringMapOperation(string_t *child_key_data, string_t *child_val_data, idx_t &child_start, Vector &varchar_key,
+	                        Vector &varchar_val)
+	    : child_key_data(child_key_data), child_val_data(child_val_data), child_start(child_start),
+	      varchar_key(varchar_key), varchar_val(varchar_val) {
+	}
+
+	string_t *child_key_data;
+	string_t *child_val_data;
+	idx_t &child_start;
+	Vector &varchar_key;
+	Vector &varchar_val;
+
+	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
+		if ((pos - start_pos) == 4 && IsNull(buf, start_pos, varchar_key, child_start)) {
+			return false;
+		}
+		child_key_data[child_start] = StringVector::AddString(varchar_key, buf + start_pos, pos - start_pos);
+		return true;
+	}
+
+	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
+		if ((pos - start_pos) == 4 && IsNull(buf, start_pos, varchar_val, child_start)) {
+			child_start++;
+			return;
+		}
+		child_val_data[child_start] = StringVector::AddString(varchar_val, buf + start_pos, pos - start_pos);
 		child_start++;
 	}
 };
@@ -98,7 +133,7 @@ static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, cha
 }
 
 template <class OP>
-static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
+static bool SplitStringListInternal(const string_t &input, OP &state) {
 	const char *buf = input.GetDataUnsafe();
 	idx_t len = input.GetSize();
 	idx_t lvl = 1;
@@ -143,15 +178,15 @@ static bool SplitStringifiedListInternal(const string_t &input, OP &state) {
 	return (pos == len && lvl == 0);
 }
 
-bool VectorStringToList::SplitStringifiedList(const string_t &input, string_t *child_data, idx_t &child_start,
-                                              Vector &child) {
-	SplitStringOperation state(child_data, child_start, child);
-	return SplitStringifiedListInternal<SplitStringOperation>(input, state);
+bool VectorStringToList::SplitStringList(const string_t &input, string_t *child_data, idx_t &child_start,
+                                         Vector &child) {
+	SplitStringListOperation state(child_data, child_start, child);
+	return SplitStringListInternal<SplitStringListOperation>(input, state);
 }
 
-idx_t VectorStringToList::CountParts(const string_t &input) {
+idx_t VectorStringToList::CountPartsList(const string_t &input) {
 	CountPartOperation state;
-	SplitStringifiedListInternal<CountPartOperation>(input, state);
+	SplitStringListInternal<CountPartOperation>(input, state);
 	return state.count;
 }
 
@@ -229,6 +264,72 @@ bool VectorStringToStruct::SplitStruct(string_t &input, std::vector<std::unique_
 	}
 	SkipWhitespace(buf, pos, len);
 	return (pos == len);
+}
+
+//------------------- Map parsing
+
+template <class OP>
+static bool FindKeyValue(const char *buf, idx_t len, idx_t &pos, OP &state, bool key) {
+	auto start_pos = pos;
+	idx_t lvl = 0;
+	while (pos < len) {
+		if (buf[pos] == '"' || buf[pos] == '\'') {
+			SkipToCloseQuotes(pos, buf, len);
+		} else if (buf[pos] == '{') {
+			SkipToClose(pos, buf, len, lvl, '}');
+		} else if (buf[pos] == '[') {
+			SkipToClose(pos, buf, len, lvl, ']');
+		} else if (key && buf[pos] == '=') {
+			idx_t end_pos = StringTrim(buf, start_pos, pos);
+			return state.HandleKey(buf, start_pos, end_pos); // put string in KEY_child_vector
+		} else if (!key && (buf[pos] == ',' || buf[pos] == '}')) {
+			idx_t end_pos = StringTrim(buf, start_pos, pos);
+			state.HandleValue(buf, start_pos, end_pos); // put string in VALUE_child_vector
+			return true;
+		}
+		pos++;
+	}
+	return false;
+}
+
+template <class OP>
+static bool SplitStringMapInternal(const string_t &input, OP &state) {
+	const char *buf = input.GetDataUnsafe();
+	idx_t len = input.GetSize();
+	idx_t pos = 0;
+
+	SkipWhitespace(buf, pos, len);
+	if (pos == len || buf[pos] != '{') {
+		return false;
+	}
+	SkipWhitespace(buf, ++pos, len);
+	if (buf[pos] == '}') {
+		pos++;
+	} else {
+		while (pos < len) {
+			if (!FindKeyValue(buf, len, pos, state, true)) {
+				return false;
+			}
+			SkipWhitespace(buf, ++pos, len);
+			if (!FindKeyValue(buf, len, pos, state, false)) {
+				return false;
+			}
+			SkipWhitespace(buf, ++pos, len);
+		}
+	}
+	return true;
+}
+
+bool VectorStringToMap::SplitStringMap(const string_t &input, string_t *child_key_data, string_t *child_val_data,
+                                       idx_t &child_start, Vector &varchar_key, Vector &varchar_val) {
+	SplitStringMapOperation state(child_key_data, child_val_data, child_start, varchar_key, varchar_val);
+	return SplitStringMapInternal<SplitStringMapOperation>(input, state);
+}
+
+idx_t VectorStringToMap::CountPartsMap(const string_t &input) {
+	CountPartOperation state;
+	SplitStringMapInternal<CountPartOperation>(input, state);
+	return state.count;
 }
 
 } // namespace duckdb

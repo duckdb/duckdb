@@ -411,7 +411,6 @@ SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
 ----
 [{'a': 7, 'b': Duck}, {'a': 7000, 'b': 🦆🦆🦆🦆🦆🦆}]
 
-
 #               CSV reader
 # ---------------------------------------------------
 statement ok
