@@ -75,34 +75,34 @@ public:
 	DUCKDB_API static interval_t FromMicro(int64_t micros);
 
 	//! Get Interval in milliseconds
-	DUCKDB_API static int64_t GetMilli(const interval_t &val);
+	static int64_t GetMilli(const interval_t &val);
 
 	//! Get Interval in microseconds
 	DUCKDB_API static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds
-	DUCKDB_API static int64_t GetNanoseconds(const interval_t &val);
+	static int64_t GetNanoseconds(const interval_t &val);
 
 	//! Returns the age between two timestamps (including 30 day months)
-	DUCKDB_API static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
+	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
 
 	//! Returns the exact difference between two timestamps (days and seconds)
-	DUCKDB_API static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
+	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
 
 	//! Returns the inverted interval
-	DUCKDB_API static interval_t Invert(interval_t interval);
+	static interval_t Invert(interval_t interval);
 
 	//! Add an interval to a date
-	DUCKDB_API static date_t Add(date_t left, interval_t right);
+	static date_t Add(date_t left, interval_t right);
 	//! Add an interval to a timestamp
-	DUCKDB_API static timestamp_t Add(timestamp_t left, interval_t right);
+	static timestamp_t Add(timestamp_t left, interval_t right);
 	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
 	//! For example if we go from 23:00 to 02:00, we add a day to the date
-	DUCKDB_API static dtime_t Add(dtime_t left, interval_t right, date_t &date);
+	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
-	DUCKDB_API static bool Equals(interval_t left, interval_t right);
-	DUCKDB_API static bool GreaterThan(interval_t left, interval_t right);
-	DUCKDB_API static bool GreaterThanEquals(interval_t left, interval_t right);
+	static bool Equals(interval_t left, interval_t right);
+	static bool GreaterThan(interval_t left, interval_t right);
+	static bool GreaterThanEquals(interval_t left, interval_t right);
 };
 } // namespace duckdb
