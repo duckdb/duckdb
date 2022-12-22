@@ -249,18 +249,17 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
-	lock_guard<mutex> glock(lock);
 
 	// set up a new row group for this chunk collection
 	ParquetRowGroup row_group;
 	row_group.num_rows = buffer.Count();
-	row_group.file_offset = writer->GetTotalWritten();
 	row_group.__isset.file_offset = true;
 
+	vector<unique_ptr<ColumnWriterState>> states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		const unique_ptr<ColumnWriter> &col_writer = column_writers[col_idx];
+		const auto &col_writer = column_writers[col_idx];
 		auto write_state = col_writer->InitializeWriteState(row_group, buffer.GetAllocator());
 		if (col_writer->HasAnalyze()) {
 			for (auto &chunk : buffer.Chunks()) {
@@ -275,6 +274,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		for (auto &chunk : buffer.Chunks()) {
 			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
 		}
+		states.push_back(move(write_state));
+	}
+
+	lock_guard<mutex> glock(lock);
+	row_group.file_offset = writer->GetTotalWritten();
+	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
+		const auto &col_writer = column_writers[col_idx];
+		auto write_state = move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
 	}
 
