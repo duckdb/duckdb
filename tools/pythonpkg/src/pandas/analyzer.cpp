@@ -104,10 +104,7 @@ static bool SatisfiesMapConstraints(const LogicalType &left, const LogicalType &
 }
 
 static LogicalType ConvertStructToMap(LogicalType &map_value_type) {
-	// child_list_t<LogicalType> children;
-	// // TODO: find a way to figure out actual type of the keys, not just the converted one
-	// children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
-	// children.push_back(make_pair("value", LogicalType::LIST(map_value_type)));
+	// TODO: find a way to figure out actual type of the keys, not just the converted one
 	return LogicalType::MAP(LogicalType::VARCHAR, map_value_type);
 }
 
@@ -159,10 +156,6 @@ LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
 }
 
 static LogicalType EmptyMap() {
-	// child_list_t<LogicalType> child_types;
-	// auto empty = LogicalType::LIST(LogicalTypeId::SQLNULL);
-	// child_types.push_back(make_pair("key", empty));
-	// child_types.push_back(make_pair("value", empty));
 	return LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
 }
 
@@ -217,7 +210,6 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 	auto keys = dict.values.attr("__getitem__")(0);
 	auto values = dict.values.attr("__getitem__")(1);
 
-	// child_list_t<LogicalType> child_types;
 	auto key_type = GetListType(keys, can_convert);
 	if (!can_convert) {
 		return EmptyMap();
@@ -227,8 +219,6 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 		return EmptyMap();
 	}
 
-	// child_types.push_back(make_pair("key", key_type));
-	// child_types.push_back(make_pair("value", value_type));
 	return LogicalType::MAP(key_type, value_type);
 }
 

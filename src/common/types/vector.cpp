@@ -1681,56 +1681,6 @@ vector<idx_t> FlatVector::Search(Vector &keys, idx_t count, const Value &key, li
 	return offsets;
 }
 
-// vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
-//	vector<idx_t> offsets;
-//
-//	auto &list_vector = ListVector::GetEntry(list);
-//	auto &entry = ListVector::GetData(list)[row];
-//
-//	switch (list_vector.GetType().InternalType()) {
-//	case PhysicalType::BOOL:
-//	case PhysicalType::INT8:
-//		TemplatedSearchInMap<int8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::INT16:
-//		TemplatedSearchInMap<int16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::INT32:
-//		TemplatedSearchInMap<int32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::INT64:
-//		TemplatedSearchInMap<int64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::INT128:
-//		TemplatedSearchInMap<hugeint_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::UINT8:
-//		TemplatedSearchInMap<uint8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::UINT16:
-//		TemplatedSearchInMap<uint16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::UINT32:
-//		TemplatedSearchInMap<uint32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::UINT64:
-//		TemplatedSearchInMap<uint64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::FLOAT:
-//		TemplatedSearchInMap<float>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::DOUBLE:
-//		TemplatedSearchInMap<double>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	case PhysicalType::VARCHAR:
-//		SearchStringInMap(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
-//		break;
-//	default:
-//		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");
-//	}
-//	return offsets;
-// }
-
 Value FlatVector::GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets) {
 	vector<Value> list_values;
 	list_values.reserve(offsets.size());
@@ -1738,16 +1688,6 @@ Value FlatVector::GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets) {
 		list_values.push_back(values.GetValue(offset));
 	}
 	return Value::LIST(values.GetType(), move(list_values));
-}
-
-Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	auto &child_vec = ListVector::GetEntry(list);
-	vector<Value> list_values;
-	list_values.reserve(offsets.size());
-	for (auto &offset : offsets) {
-		list_values.push_back(child_vec.GetValue(offset));
-	}
-	return Value::LIST(ListType::GetChildType(list.GetType()), move(list_values));
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {

@@ -469,20 +469,9 @@ struct ArrowMapData {
 		input.ToUnifiedFormat(size, format);
 
 		AppendValidity(append_data, format, size);
-		// maps exist as a struct of two lists, e.g. STRUCT(key VARCHAR[], value VARCHAR[])
-		// since both lists are the same, arrow tries to be smart by storing the offsets only once
-		// we can append the offsets from any of the two children
-
-		//		auto &children = StructVector::GetEntries(input);
-		//
-		//		UnifiedVectorFormat child_format;
-		//		children[0]->ToUnifiedFormat(size, child_format);
 		vector<sel_t> child_indices;
 		AppendListOffsets(append_data, format, size, child_indices);
 
-		// now we can append the children to the lists
-		//		auto &struct_entries = StructVector::GetEntries(input);
-		//		D_ASSERT(struct_entries.size() == 2);
 		SelectionVector child_sel(child_indices.data());
 		auto &key_vector = MapVector::GetKeys(input);
 		auto &value_vector = MapVector::GetKeys(input);
@@ -490,7 +479,6 @@ struct ArrowMapData {
 		key_vector.Slice(child_sel, list_size);
 		value_vector.Slice(child_sel, list_size);
 
-		// perform the append
 		auto &struct_data = *append_data.child_data[0];
 		auto &key_data = *struct_data.child_data[0];
 		auto &value_data = *struct_data.child_data[1];
