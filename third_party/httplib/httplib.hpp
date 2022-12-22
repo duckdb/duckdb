@@ -104,11 +104,9 @@
 #define CPPHTTPLIB_RECV_FLAGS 0
 #endif
 
-#if !defined MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
-#endif
-
-#ifndef CPPHTTPLIB_SEND_FLAGS
+#ifndef MSG_NOSIGNAL
+#define CPPHTTPLIB_SEND_FLAGS 0
+#else
 #define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
 #endif
 
