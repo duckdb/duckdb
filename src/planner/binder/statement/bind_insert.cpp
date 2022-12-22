@@ -51,8 +51,8 @@ unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOpe
 		insert->constraint_name = on_conflict.constraint_name;
 		// FIXME: do we need to grab a lock on the indexes here?
 		auto &catalog = Catalog::GetCatalog(context);
-		auto catalog_entry =
-		    catalog.GetEntry<IndexCatalogEntry>(context, insert->table->schema->name, insert->constraint_name, true);
+		auto catalog_entry = (IndexCatalogEntry *)catalog.GetEntry(
+		    context, CatalogType::INDEX_ENTRY, insert->table->schema->name, insert->constraint_name, true);
 		if (!catalog_entry) {
 			throw BinderException("No INDEX by the name '%s' exists in the schema '%s'", insert->constraint_name,
 			                      insert->table->schema->name);
@@ -291,8 +291,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-
-	auto root = unique_ptr_cast<LogicalInsert, LogicalOperator>(move(insert));
 	auto proj = BindOnConflictClause(root, insert, table, stmt);
 	if (proj) {
 		// We have a DO UPDATE on conflict action, created a projection and moved root into it

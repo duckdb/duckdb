@@ -20,8 +20,7 @@ enum class OnConflictAction { THROW, NOTHING, UPDATE };
 
 class OnConflictInfo {
 public:
-	OnConflictInfo() : action_type(OnConflictAction::THROW) {
-	}
+	OnConflictInfo();
 
 public:
 	unique_ptr<OnConflictInfo> Copy() const;

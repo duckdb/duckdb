@@ -44,7 +44,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 		throw InternalException("Cant find catalog entry for table %s", info->table);
 	}
 
-	auto result = make_unique<LogicalInsert>(table_catalog_entry, table_index, action_type);
+	auto result = make_unique<LogicalInsert>(table_catalog_entry, table_index);
 	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->return_chunk = return_chunk;
@@ -52,6 +52,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
 	result->bound_defaults = move(bound_defaults);
+	result->action_type = action_type;
 	return move(result);
 }
 

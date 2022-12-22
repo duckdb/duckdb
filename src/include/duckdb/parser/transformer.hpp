@@ -31,6 +31,7 @@ struct CopyInfo;
 struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
 class OnConflictInfo;
+class UpdateSetInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation

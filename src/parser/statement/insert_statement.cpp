@@ -5,12 +5,13 @@
 
 namespace duckdb {
 
-OnConflictInfo::OnConflictInfo(const OnConflictInfo &other) : action_type(other.action_type) {
+OnConflictInfo::OnConflictInfo() : action_type(OnConflictAction::THROW) {
+}
+
+OnConflictInfo::OnConflictInfo(const OnConflictInfo &other)
+    : action_type(other.action_type), indexed_columns(other.indexed_columns) {
 	if (other.set_info) {
 		set_info = other.set_info->Copy();
-	}
-	for (auto &expr : other.indexed_columns) {
-		indexed_columns.emplace_back(expr->Copy());
 	}
 }
 
