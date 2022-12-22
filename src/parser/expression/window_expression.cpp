@@ -160,7 +160,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	expr->catalog = reader.ReadField(INVALID_CATALOG);
+	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
 	return move(expr);
 }
 
