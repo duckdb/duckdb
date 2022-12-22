@@ -1,0 +1,7 @@
+# name: benchmark/imdb/27b.benchmark
+# description: Run query 27b from the imdb benchmark (single-threaded)
+# group: [imdb]
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=27b
+QUERY_NUMBER_PADDED=27b

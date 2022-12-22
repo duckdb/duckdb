@@ -35,6 +35,7 @@ jobs:
         - 'tpch'
         - 'tpcds'
         - 'h2oai'
+        - 'imdb'
   env:
     CC: gcc-10
     CXX: g++-10
