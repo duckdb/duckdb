@@ -145,7 +145,7 @@ protected:
 	//! Rethrow IO Exception originating from an upload thread
 	void RethrowIOError() {
 		if (uploader_has_error) {
-			rethrow_exception(upload_exception);
+			std::rethrow_exception(upload_exception);
 		}
 	}
 };
