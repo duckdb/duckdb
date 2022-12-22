@@ -14,7 +14,11 @@ namespace duckdb {
 
 struct TimeBucket {
 
+	// Use 2000-01-03 00:00:00 (Monday) as origin when bucket_width is days, hours, ... for TimescaleDB compatibility
+	// There are 10959 days between 1970-01-01 and 2000-01-03
 	constexpr static const int64_t DEFAULT_ORIGIN_MICROS = 10959 * Interval::MICROS_PER_DAY;
+	// Use 2000-01-01 as origin when bucket_width is months, years, ... for TimescaleDB compatibility
+	// There are 360 months between 1970-01-01 and 2000-01-01
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
 	template <typename T>
@@ -81,12 +85,8 @@ struct TimeBucket {
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
-			// set origin 2000-01-03 00:00:00 (Monday) for TimescaleDB compatibility
-			// there are 10959 days between 1970-01-01 00:00:00 and 2000-01-03 00:00:00
-			int64_t origin_micros = DEFAULT_ORIGIN_MICROS;
-
 			return Cast::template Operation<timestamp_t, TR>(
-			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros));
+			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS));
 		}
 	};
 
@@ -97,12 +97,8 @@ struct TimeBucket {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int32_t ts_months = EpochMonths(ts);
-			// set origin 2000-01-01 00:00:00 for TimescaleDB compatibility
-			// there are 360 months between 1970-01-01 00:00:00 and 2000-01-01 00:00:00
-			int32_t origin_months = DEFAULT_ORIGIN_MONTHS;
-
 			return Cast::template Operation<date_t, TR>(
-			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months));
+			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS));
 		}
 	};
 
@@ -135,12 +131,8 @@ struct TimeBucket {
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(
 			    Interval::Add(Cast::template Operation<TB, timestamp_t>(ts), Interval::Invert(offset)));
-			// set origin 2000-01-03 00:00:00 (Monday) for TimescaleDB compatibility
-			// there are 10959 days between 1970-01-01 00:00:00 and 2000-01-03 00:00:00
-			int64_t origin_micros = DEFAULT_ORIGIN_MICROS;
-
 			return Cast::template Operation<timestamp_t, TR>(
-			    Interval::Add(WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros), offset));
+			    Interval::Add(WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS), offset));
 		}
 	};
 
@@ -151,12 +143,8 @@ struct TimeBucket {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int32_t ts_months = EpochMonths(Interval::Add(ts, Interval::Invert(offset)));
-			// set origin 2000-01-01 00:00:00 for TimescaleDB compatibility
-			// there are 360 months between 1970-01-01 00:00:00 and 2000-01-01 00:00:00
-			int32_t origin_months = DEFAULT_ORIGIN_MONTHS;
-
 			return Interval::Add(Cast::template Operation<date_t, TR>(
-			                         WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months)),
+			                         WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS)),
 			                     offset);
 		}
 	};
