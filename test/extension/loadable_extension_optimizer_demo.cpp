@@ -98,7 +98,7 @@ public:
 		plan->Serialize(serializer);
 		auto data = serializer.GetData();
 
-		ssize_t len = data.size;
+		idx_t len = data.size;
 		WriteChecked(sockfd, &len, sizeof(idx_t));
 		WriteChecked(sockfd, data.data.get(), len);
 
@@ -106,7 +106,7 @@ public:
 		idx_t n_chunks;
 		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
-			ssize_t chunk_len;
+			idx_t chunk_len;
 			ReadChecked(sockfd, &chunk_len, sizeof(idx_t));
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);

@@ -48,7 +48,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		Connection con2(db2);
 
 		while (true) {
-			ssize_t bytes;
+			idx_t bytes;
 			REQUIRE(read(connfd, &bytes, sizeof(idx_t)) == sizeof(idx_t));
 
 			if (bytes == 0) {
@@ -74,7 +74,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 				BufferedSerializer serializer;
 				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
-				ssize_t len = data.size;
+				idx_t len = data.size;
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 				REQUIRE(write(connfd, data.data.get(), len) == len);
 			}
