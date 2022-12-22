@@ -6,6 +6,7 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -1015,6 +1016,10 @@ Allocator &BufferAllocator::Get(ClientContext &context) {
 
 Allocator &BufferAllocator::Get(DatabaseInstance &db) {
 	return BufferManager::GetBufferManager(db).GetBufferAllocator();
+}
+
+Allocator &BufferAllocator::Get(AttachedDatabase &db) {
+	return BufferAllocator::Get(db.GetDatabase());
 }
 
 Allocator &BufferManager::GetBufferAllocator() {

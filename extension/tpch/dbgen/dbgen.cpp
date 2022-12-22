@@ -422,7 +422,7 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
 	}
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 	catalog.CreateTable(context, move(info));
 }
 
@@ -496,7 +496,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);

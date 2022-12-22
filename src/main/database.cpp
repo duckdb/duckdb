@@ -1,6 +1,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -50,43 +52,41 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		auto &storage = StorageManager::GetStorageManager(*this);
-		if (!storage.InMemory()) {
-			auto &config = storage.db.config;
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
-			}
-			storage.CreateCheckpoint(true);
-		}
-	} catch (...) {
-	}
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().buffer_manager;
+	return db.GetBufferManager();
+}
+
+BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
+	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }
 
-StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
-	return db.GetStorageManager();
+DatabaseManager &DatabaseInstance::GetDatabaseManager() {
+	if (!db_manager) {
+		throw InternalException("Missing DB manager");
+	}
+	return *db_manager;
 }
 
-Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
+Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
+	return db.GetDatabaseManager().GetSystemCatalog();
+}
+
+Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+FileSystem &FileSystem::Get(AttachedDatabase &db) {
+	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
@@ -97,6 +97,10 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+DBConfig &DBConfig::Get(AttachedDatabase &db) {
+	return DBConfig::GetConfig(db.GetDatabase());
+}
+
 const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
 	return db.config;
 }
@@ -105,11 +109,7 @@ const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
 	return context.config;
 }
 
-TransactionManager &TransactionManager::Get(ClientContext &context) {
-	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
-}
-
-TransactionManager &TransactionManager::Get(DatabaseInstance &db) {
+TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
 	return db.GetTransactionManager();
 }
 
@@ -159,19 +159,29 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	// TODO: Support an extension here, to generate different storage managers
-	// depending on the DB path structure/prefix.
-	const string dbPath = config.options.database_path;
-	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
-
-	catalog = make_unique<Catalog>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
+	auto &config = DBConfig::GetConfig(*this);
+	db_manager = make_unique<DatabaseManager>(*this);
+	buffer_manager =
+	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
+	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	auto attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
+	                                                       config.options.database_path, config.options.access_mode);
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, move(attached_database));
+		con.Commit();
+	}
+
+	// initialize the system catalog
+	db_manager->InitializeSystemCatalog();
 	// initialize the database
-	storage->Initialize();
+	initial_database->Initialize();
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
@@ -200,16 +210,16 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 DuckDB::~DuckDB() {
 }
 
-StorageManager &DatabaseInstance::GetStorageManager() {
-	return *storage;
+BufferManager &DatabaseInstance::GetBufferManager() {
+	return *buffer_manager;
 }
 
-Catalog &DatabaseInstance::GetCatalog() {
-	return *catalog;
+DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
+	return db.GetDatabaseManager();
 }
 
-TransactionManager &DatabaseInstance::GetTransactionManager() {
-	return *transaction_manager;
+DatabaseManager &DatabaseManager::Get(ClientContext &db) {
+	return DatabaseManager::Get(*db.db);
 }
 
 TaskScheduler &DatabaseInstance::GetScheduler() {
@@ -238,6 +248,10 @@ Allocator &Allocator::Get(ClientContext &context) {
 
 Allocator &Allocator::Get(DatabaseInstance &db) {
 	return *db.config.allocator;
+}
+
+Allocator &Allocator::Get(AttachedDatabase &db) {
+	return Allocator::Get(db.GetDatabase());
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {

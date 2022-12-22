@@ -782,7 +782,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	auto i1 = con.TableFunction("duckdb_tables");
 	result = i1->Execute();
-	REQUIRE(CHECK_COLUMN(result, 0, {"main"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"main"}));
 
 	// function with parameters
 	auto i2 = con.TableFunction("pragma_table_info", {"integers"});

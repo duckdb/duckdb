@@ -17,7 +17,7 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 

@@ -476,7 +476,7 @@ SELECT 42;
 
 
 
-test('.databases', out='main:')
+test('.databases', out='memory')
 
 # .dump test
 test('''

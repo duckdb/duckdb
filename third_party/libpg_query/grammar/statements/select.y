@@ -3530,6 +3530,7 @@ qualified_name:
 							$$->schemaname = strVal(linitial($2));
 							$$->relname = strVal(lsecond($2));
 							break;
+						case 3:
 						default:
 							ereport(ERROR,
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),

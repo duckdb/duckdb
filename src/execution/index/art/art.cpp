@@ -14,7 +14,7 @@ namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-         DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+         AttachedDatabase &db, idx_t block_id, idx_t block_offset)
     : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
       estimated_art_size(0), estimated_key_size(16) {
 	if (!Radix::IsLittleEndian()) {

@@ -4,6 +4,8 @@
 
 require skip_reload
 
+statement ok
+SET immediate_transaction_mode=true
 
 # case one: prepared statement is created outside of transaction and committed
 statement ok con1

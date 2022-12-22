@@ -147,7 +147,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 void TPCHExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;

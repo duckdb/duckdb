@@ -899,7 +899,7 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
-	auto &config = DBConfig::GetConfig(context);
+	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }
 
