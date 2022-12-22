@@ -249,7 +249,7 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_mem
 BufferManager::~BufferManager() {
 }
 
-shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
+shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
 	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
@@ -263,9 +263,17 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	}
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(*this, block_id);
+	// for meta block, cache the handle in meta_blocks
+	if (is_meta_block) {
+		meta_blocks[block_id] = result;
+	}
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
+}
+
+void BlockManager::ClearMetaBlockHandles() {
+	meta_blocks.clear();
 }
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
