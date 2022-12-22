@@ -3,26 +3,13 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
-
-struct VectorInfo {
-	Vector &container;
-	list_entry_t &data;
-};
 
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	auto &input_list = args.data[0];
-	result.Reinterpret(input_list);
-
-	UnifiedVectorFormat struct_vector;
-	ListVector::GetEntry(result).ToUnifiedFormat(count, struct_vector);
-
-	UnifiedVectorFormat key_vector;
-	MapVector::GetKeys(result).ToUnifiedFormat(count, key_vector);
+	result.Reinterpret(args.data[0]);
 
 	MapConversionVerify(result, count);
 	result.Verify(count);
