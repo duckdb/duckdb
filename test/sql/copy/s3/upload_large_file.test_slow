@@ -20,7 +20,7 @@ statement ok
 SET s3_uploader_thread_limit = 5;
 
 statement ok
-CALL DBGEN(sf=10)
+CALL DBGEN(sf=1)
 
 query I
 SELECT
@@ -34,9 +34,9 @@ WHERE
     AND 0.07
     AND l_quantity < 24;
 ----
-1230113636.0101
+123141078.2283
 
-# Parquet file # CSV file: ~3GB
+# Parquet file # CSV file: ~300MB
 statement ok
 COPY lineitem TO 's3://test-bucket/multipart/export_large.parquet' (FORMAT 'parquet');
 
@@ -52,9 +52,9 @@ WHERE
     AND 0.07
     AND l_quantity < 24;
 ----
-1230113636.0101
+123141078.2283
 
-# CSV file: ~7GB
+# CSV file: 700MB
 statement ok
 COPY lineitem TO 's3://test-bucket/multipart/export_large.csv' WITH (HEADER 1, DELIMITER '|');
 
@@ -70,4 +70,4 @@ WHERE
     AND 0.07
     AND l_quantity < 24;
 ----
-1230113636.0101
+123141078.2283
