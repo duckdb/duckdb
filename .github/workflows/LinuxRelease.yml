@@ -608,7 +608,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
+        python3 scripts/get_test_list.py --file-contains 'require-env S3_TEST_SERVER_AVAILABLE 1' --list '"*"' > test.list
         build/release/test/unittest -f test.list
 
  amalgamation-tests:
