@@ -159,7 +159,7 @@ public:
 	mutex buffers_available_lock;
 	std::condition_variable buffers_available_cv;
 	uint16_t buffers_in_use = 0;
-	atomic<uint16_t> threads_waiting_for_memory = {0};
+	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
 
