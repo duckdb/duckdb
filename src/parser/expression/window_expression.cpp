@@ -118,7 +118,6 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	auto &serializer = writer.GetSerializer();
 
 	writer.WriteString(function_name);
-	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteSerializableList(children);
 	writer.WriteSerializableList(partitions);
@@ -137,13 +136,13 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(default_expr);
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
+	writer.WriteString(catalog);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
-	auto catalog = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, move(catalog), move(schema), function_name);
+	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
@@ -161,6 +160,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
+	expr->catalog = reader.ReadField(INVALID_CATALOG);
 	return move(expr);
 }
 

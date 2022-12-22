@@ -90,7 +90,6 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 
 void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(function_name);
-	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteSerializableList(children);
 	writer.WriteOptional(filter);
@@ -98,11 +97,11 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(distinct);
 	writer.WriteField<bool>(is_operator);
 	writer.WriteField<bool>(export_state);
+	writer.WriteString(catalog);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
-	auto catalog = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
 	auto children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto filter = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -110,6 +109,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
 	auto export_state = reader.ReadField<bool>(false);
+	auto catalog = reader.ReadField<string>(INVALID_CATALOG);
 
 	unique_ptr<FunctionExpression> function;
 	function = make_unique<FunctionExpression>(catalog, schema, function_name, move(children), move(filter),
