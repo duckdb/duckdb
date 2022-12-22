@@ -567,7 +567,7 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
-    needs: linux-release-64
+#    needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
@@ -608,7 +608,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/get_test_list.py --file-contains "require httpfs" > test.list
+        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
         build/release/test/unittest -f test.list
 
  amalgamation-tests:
