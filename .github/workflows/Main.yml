@@ -392,6 +392,10 @@ jobs:
       shell: bash
       run: DISABLE_SANITIZER=1 make debug
 
+    - name: Test Standard ODBC tests
+      shell: bash
+      run: build/debug/tools/odbc/test/test_odbc
+
     - name: Test nanodbc
       shell: bash
       run: ./tools/odbc/test/run_nanodbc_tests.sh

@@ -44,13 +44,14 @@ typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(ClientContext &context
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
                                                      vector<string> &expected_names,
                                                      vector<LogicalType> &expected_types);
+typedef bool (*copy_to_is_parallel_t)(ClientContext &context, FunctionData &bind_data);
 
 class CopyFunction : public Function {
 public:
 	explicit CopyFunction(string name)
 	    : Function(name), copy_to_bind(nullptr), copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
-	      copy_to_sink(nullptr), copy_to_combine(nullptr), copy_to_finalize(nullptr), serialize(nullptr),
-	      deserialize(nullptr), copy_from_bind(nullptr) {
+	      copy_to_sink(nullptr), copy_to_combine(nullptr), copy_to_finalize(nullptr), parallel(nullptr),
+	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
 	}
 
 	copy_to_bind_t copy_to_bind;
@@ -59,6 +60,7 @@ public:
 	copy_to_sink_t copy_to_sink;
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
+	copy_to_is_parallel_t parallel;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;

@@ -733,6 +733,17 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
+//===--------------------------------------------------------------------===//
+// Parallel
+//===--------------------------------------------------------------------===//
+bool ParquetWriteIsParallel(ClientContext &context, FunctionData &bind_data) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.preserve_insertion_order) {
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                                     ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
@@ -769,6 +780,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
+	function.parallel = ParquetWriteIsParallel;
 	function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
 	function.copy_from_function = scan_fun.functions[0];
 

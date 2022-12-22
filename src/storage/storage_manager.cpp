@@ -117,6 +117,8 @@ void SingleFileStorageManager::LoadDatabase() {
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
 		checkpointer.LoadFromStorage();
+		// finish load checkpoint, clear the cached handles of meta blocks
+		block_manager->ClearMetaBlockHandles();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL

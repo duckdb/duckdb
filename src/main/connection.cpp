@@ -136,7 +136,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(DEFAULT_SCHEMA, table_name);
+	return TableInfo(INVALID_SCHEMA, table_name);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
