@@ -129,11 +129,11 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw IOException("Request returned HTTP " + to_string(status) + " for HTTP " + method + " to '" + url + "'");
+				throw IOException("Request returned HTTP " + to_string(status) + " for HTTP " + method + " to '" + url +
+				                  "'");
 			} else {
 				throw IOException(to_string(err) + " error for " + "HTTP " + method + " to '" + url + "'");
 			}
-
 		}
 	}
 }
