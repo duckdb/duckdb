@@ -171,9 +171,7 @@ Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, Upd
 			projection_expressions.push_back(move(bound_expr));
 		}
 	}
-	if (projection_expressions.empty()) {
-		// FIXME: in BindUpdate we always push ROWID into the logical projections expressions,
-		//  and it still expects this function to return a projection even if the expressions are empty
+	if (op->type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
 		return move(root);
 	}
 	// now create the projection
