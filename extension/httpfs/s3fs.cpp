@@ -814,6 +814,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Parse pattern
 	auto parsed_url = S3UrlParse(glob_pattern, s3_auth_params);
 
+	ReadQueryParams(parsed_url.query_param, s3_auth_params);
+
 	// Do main listobjectsv2 request
 	vector<string> s3_keys;
 	string main_continuation_token = "";
@@ -854,10 +856,9 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_url.bucket.length() + 1);
 	}
 
-	// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
-	if (parsed_url.query_param != "") {
-		pattern_trimmed += '?' + parsed_url.query_param;
-	}
+	//	if (parsed_url.query_param != "") {
+	//		pattern_trimmed += '?' + parsed_url.query_param;
+	//	}
 
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
@@ -866,6 +867,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_url.bucket + "/" + s3_key;
+			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
+			if (parsed_url.query_param != "") {
+				result_full_url += '?' + parsed_url.query_param;
+			}
 			result.push_back(result_full_url);
 		}
 	}
