@@ -34,10 +34,9 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 	}
 }
 
-unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOperator> &root,
-                                                           unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table,
-                                                           InsertStatement &stmt) {
-	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_INSERT);
+unique_ptr<LogicalOperator> Binder::BindOnConflictClause(unique_ptr<LogicalOperator> &root,
+                                                         unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table,
+                                                         InsertStatement &stmt) {
 	if (!stmt.on_conflict_info) {
 		insert->action_type = OnConflictAction::THROW;
 		return nullptr;
@@ -107,9 +106,9 @@ unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOpe
 			}
 		}
 		auto &indexes = table->storage->info->indexes;
-		bool index_references_columns;
+		bool index_references_columns = false;
 		indexes.Scan([&](Index &index) {
-			if (index.IsUnique()) {
+			if (!index.IsUnique()) {
 				return false;
 			}
 			auto &column_ids = index.column_id_set;
@@ -163,12 +162,19 @@ unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOpe
 	D_ASSERT(!set_info.columns.empty());
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
-	// Bind the SET columns and expressions
-	auto proj_index = GenerateTableIndex();
-	vector<unique_ptr<Expression>> projection_expressions;
+	if (on_conflict.condition) {
+		// Bind the ON CONFLICT ... WHERE clause
+		WhereBinder where_binder(*this, context);
+		auto condition = where_binder.Bind(on_conflict.condition);
+
+		PlanSubqueries(&condition, &root);
+		auto filter = make_unique<LogicalFilter>(move(condition));
+		filter->AddChild(move(root));
+		root = move(filter);
+	}
 
 	if (set_info.condition) {
-		// Bind the SET .. WHERE clause
+		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(set_info.condition);
 
@@ -178,8 +184,33 @@ unique_ptr<LogicalProjection> Binder::BindOnConflictClause(unique_ptr<LogicalOpe
 		root = move(filter);
 	}
 
-	vector<PhysicalIndex> set_columns;
-	return BindUpdateSet(insert.get(), root, set_info, table, set_columns);
+	auto proj = BindUpdateSet(insert.get(), move(root), set_info, table, nullptr,
+	                          [&](unique_ptr<ParsedExpression> &expr) -> bool {
+		                          if (expr->type != ExpressionType::COLUMN_REF) {
+			                          return false;
+		                          }
+		                          // check if the expression is qualified as 'excluded', in which case this refers
+		                          // to the inserted values, not the current values of the table
+		                          auto &column = (ColumnRefExpression &)*expr;
+		                          auto &names = column.column_names;
+		                          if (names.size() == 1) {
+			                          return false;
+		                          }
+		                          auto &table_name = column.GetTableName();
+		                          if (table_name == "excluded") {
+			                          return true;
+		                          }
+		                          return false;
+	                          });
+	// Check the SET expressions for expressions qualified as 'excluded.'
+	// FIXME: do we need to check for 'excluded' here? it only really matters when we execute the expression
+	// we need to use the inserted columns as input chunk..
+	// .. if we can reference both 'excluded.' and the regular table in an expression, then
+	// we need to fill a datachunk with the original values, and splice them together, altering the storage_t of the
+	// expression...
+
+	// TODO: check for multiple assignments
+	return proj;
 }
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {

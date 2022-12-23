@@ -128,10 +128,24 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	}
 }
 
+void VerifySingleAssignment(vector<PhysicalIndex> *columns_p, const string &colname, ColumnDefinition &column) {
+	if (!columns_p) {
+		// We don't verify this in BindUpdateSet, this is checked elsewhere
+		return;
+	}
+	auto &columns = *columns_p;
+	if (std::find(columns.begin(), columns.end(), column.Physical()) == columns.end()) {
+		throw BinderException("Multiple assignments to same column \"%s\"", colname);
+	}
+	columns.push_back(column.Physical());
+}
+
 // This creates a LogicalProjection and moves 'root' into it as a child
-unique_ptr<LogicalProjection> Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> &root,
-                                                    UpdateSetInfo &set_info, TableCatalogEntry *table,
-                                                    vector<PhysicalIndex> &columns) {
+// unless there are no expressions to project, in which case it just returns 'root'
+unique_ptr<LogicalOperator>
+Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, UpdateSetInfo &set_info,
+                      TableCatalogEntry *table, vector<PhysicalIndex> *columns,
+                      const std::function<bool(unique_ptr<ParsedExpression> &expr)> &skip_predicate) {
 	auto proj_index = GenerateTableIndex();
 
 	vector<unique_ptr<Expression>> projection_expressions;
@@ -145,16 +159,15 @@ unique_ptr<LogicalProjection> Binder::BindUpdateSet(LogicalOperator *op, unique_
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(columns.begin(), columns.end(), column.Physical()) == columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname);
-		}
-		columns.push_back(column.Physical());
-
+		VerifySingleAssignment(columns, colname, column);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			op->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
+			if (skip_predicate(expr)) {
+				continue;
+			}
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 
@@ -163,7 +176,9 @@ unique_ptr<LogicalProjection> Binder::BindUpdateSet(LogicalOperator *op, unique_
 			projection_expressions.push_back(move(bound_expr));
 		}
 	}
-
+	if (projection_expressions.empty()) {
+		return move(root);
+	}
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
 	proj->AddChild(move(root));
@@ -223,11 +238,14 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	D_ASSERT(stmt.set_info);
 	D_ASSERT(stmt.set_info->columns.size() == stmt.set_info->expressions.size());
-	auto proj = BindUpdateSet(update.get(), root, *stmt.set_info, table, update->columns);
+
+	auto proj_tmp = BindUpdateSet(update.get(), move(root), *stmt.set_info, table, &update->columns,
+	                              [&](unique_ptr<ParsedExpression> &expr) -> bool { return false; });
+	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
+	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(move(proj_tmp));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
 	BindUpdateConstraints(*table, *get, *proj, *update);
-
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
 	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
