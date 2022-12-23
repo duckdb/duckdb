@@ -405,7 +405,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
 		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
-		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10Z')");
 
 		PreparedStatement ps = conn.prepareStatement("INSERT INTO T (id, t1) VALUES (?, ?)");
 
