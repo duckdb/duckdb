@@ -7,6 +7,8 @@
 
 %type <node> opt_collate_clause
 
+%type <node> indirection_expr
+
 
 
 
