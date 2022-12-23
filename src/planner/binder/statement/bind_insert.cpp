@@ -184,7 +184,8 @@ unique_ptr<LogicalOperator> Binder::BindOnConflictClause(unique_ptr<LogicalOpera
 		root = move(filter);
 	}
 
-	auto proj = BindUpdateSet(insert.get(), move(root), set_info, table, nullptr,
+	vector<PhysicalIndex> set_columns;
+	auto proj = BindUpdateSet(insert.get(), move(root), set_info, table, set_columns,
 	                          [&](unique_ptr<ParsedExpression> &expr) -> bool {
 		                          if (expr->type != ExpressionType::COLUMN_REF) {
 			                          return false;

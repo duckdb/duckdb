@@ -128,13 +128,8 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	}
 }
 
-void VerifySingleAssignment(vector<PhysicalIndex> *columns_p, const string &colname, ColumnDefinition &column) {
-	if (!columns_p) {
-		// We don't verify this in BindUpdateSet, this is checked elsewhere
-		return;
-	}
-	auto &columns = *columns_p;
-	if (std::find(columns.begin(), columns.end(), column.Physical()) == columns.end()) {
+void VerifySingleAssignment(vector<PhysicalIndex> &columns, const string &colname, ColumnDefinition &column) {
+	if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
 		throw BinderException("Multiple assignments to same column \"%s\"", colname);
 	}
 	columns.push_back(column.Physical());
@@ -144,7 +139,7 @@ void VerifySingleAssignment(vector<PhysicalIndex> *columns_p, const string &coln
 // unless there are no expressions to project, in which case it just returns 'root'
 unique_ptr<LogicalOperator>
 Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, UpdateSetInfo &set_info,
-                      TableCatalogEntry *table, vector<PhysicalIndex> *columns,
+                      TableCatalogEntry *table, vector<PhysicalIndex> &columns,
                       const std::function<bool(unique_ptr<ParsedExpression> &expr)> &skip_predicate) {
 	auto proj_index = GenerateTableIndex();
 
@@ -177,6 +172,8 @@ Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, Upd
 		}
 	}
 	if (projection_expressions.empty()) {
+		// FIXME: in BindUpdate we always push ROWID into the logical projections expressions,
+		//  and it still expects this function to return a projection even if the expressions are empty
 		return move(root);
 	}
 	// now create the projection
@@ -239,7 +236,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	D_ASSERT(stmt.set_info);
 	D_ASSERT(stmt.set_info->columns.size() == stmt.set_info->expressions.size());
 
-	auto proj_tmp = BindUpdateSet(update.get(), move(root), *stmt.set_info, table, &update->columns,
+	auto proj_tmp = BindUpdateSet(update.get(), move(root), *stmt.set_info, table, update->columns,
 	                              [&](unique_ptr<ParsedExpression> &expr) -> bool { return false; });
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(move(proj_tmp));

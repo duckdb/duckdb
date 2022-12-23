@@ -157,7 +157,7 @@ public:
 
 	unique_ptr<LogicalOperator>
 	BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, UpdateSetInfo &set_info,
-	              TableCatalogEntry *table, vector<PhysicalIndex> *columns,
+	              TableCatalogEntry *table, vector<PhysicalIndex> &columns,
 	              const std::function<bool(unique_ptr<ParsedExpression> &expr)> &skip_predicate);
 	unique_ptr<LogicalOperator> BindOnConflictClause(unique_ptr<LogicalOperator> &root,
 	                                                 unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table,
