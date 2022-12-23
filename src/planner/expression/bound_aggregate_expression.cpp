@@ -65,6 +65,7 @@ bool BoundAggregateExpression::PropagatesNullValues() const {
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	vector<unique_ptr<Expression>> new_children;
+	new_children.reserve(children.size());
 	for (auto &child : children) {
 		new_children.push_back(child->Copy());
 	}

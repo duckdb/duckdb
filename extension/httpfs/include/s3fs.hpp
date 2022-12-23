@@ -4,6 +4,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
 
@@ -14,6 +15,20 @@
 #include <iostream>
 
 namespace duckdb {
+
+struct AWSEnvironmentCredentialsProvider {
+	static constexpr const char *REGION_ENV_VAR = "AWS_DEFAULT_REGION";
+	static constexpr const char *ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY_ID";
+	static constexpr const char *SECRET_KEY_ENV_VAR = "AWS_SECRET_ACCESS_KEY";
+	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
+
+	explicit AWSEnvironmentCredentialsProvider(DBConfig &config) : config(config) {};
+
+	DBConfig &config;
+
+	void SetExtensionOptionValue(string key, const char *env_var);
+	void SetAll();
+};
 
 struct S3AuthParams {
 	string region;
@@ -95,7 +110,7 @@ public:
 
 public:
 	void Close() override;
-	unique_ptr<ResponseWrapper> Initialize() override;
+	void Initialize(FileOpener *opener) override;
 
 protected:
 	string multipart_upload_id;
@@ -122,8 +137,6 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
-
-	constexpr static int MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS = 1000;
 
 	// Global limits to write buffers
 	mutex buffers_available_lock;
@@ -189,7 +202,7 @@ protected:
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 struct AWSListObjectV2 {
 	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-	                      string &continuation_token, bool use_delimiter = false);
+	                      string &continuation_token, HTTPStats *stats, bool use_delimiter = false);
 	static void ParseKey(string &aws_response, vector<string> &result);
 	static vector<string> ParseCommonPrefix(string &aws_response);
 	static string ParseContinuationToken(string &aws_response);

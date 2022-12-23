@@ -8,23 +8,51 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
 statement ok
 CREATE TABLE test (id VARCHAR, col INTEGER)
 
+# Insert various data to ensure theres something compressible for all bitpacking modes
 statement ok
 INSERT INTO test SELECT i::VARCHAR id, i b FROM range(10000) tbl(i)
 
 statement ok
+INSERT INTO test SELECT i::VARCHAR id, 1337 FROM range(20000, 30000) tbl(i)
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, i b FROM range(30000,40000) tbl(i)
+
+statement ok
 CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test') where segment_type = 'INTEGER' and compression != 'BitPacking'
+----
+
 
 # filter on the bitpacking column
 query IIII
-SELECT SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 5000
+SELECT SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE col=1337
 ----
-37497500	5000	9999	5000
+13371337	1337	1337	10001
 
 # filter on non-bitpacking column
 query IIIIII
 SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
 ----
 5000	5000	5000	5000	5000	1
+
+# filter on non-bitpacking column
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id::INT64%1000=0;
+----
+0	9000	403370	0	39000	30
+
+statement ok
+drop table test
+
+endloop

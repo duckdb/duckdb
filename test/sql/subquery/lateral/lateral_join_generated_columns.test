@@ -1,0 +1,23 @@
+# name: test/sql/subquery/lateral/lateral_join_generated_columns.test
+# description: Test lateral joins with generated columns
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl (
+	x INTEGER,
+	gen_x AS (x + 5)
+);
+
+statement ok
+INSERT INTO tbl VALUES (1), (2), (3), (NULL);
+
+query III
+SELECT * FROM tbl, (SELECT gen_x + 10) ORDER BY x NULLS LAST
+----
+1	6	16
+2	7	17
+3	8	18
+NULL	NULL	NULL

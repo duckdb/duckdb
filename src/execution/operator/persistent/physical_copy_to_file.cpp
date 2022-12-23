@@ -9,10 +9,11 @@ namespace duckdb {
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), global_state(move(global_state)) {
+	    : rows_copied(0), last_file_offset(0), global_state(move(global_state)) {
 	}
-
+	mutex lock;
 	idx_t rows_copied;
+	idx_t last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
 };
 
@@ -20,6 +21,7 @@ class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(move(local_state)) {
 	}
+	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
 };
 
@@ -38,7 +40,7 @@ void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality),
-      function(move(function_p)), bind_data(move(bind_data)) {
+      function(move(function_p)), bind_data(move(bind_data)), parallel(false) {
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -46,8 +48,12 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
-	g.rows_copied += input.size();
-	function.copy_to_sink(context, *bind_data, *g.global_state, *l.local_state, input);
+	{
+		lock_guard<mutex> glock(g.lock);
+		g.rows_copied += input.size();
+	}
+	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state,
+	                      input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -56,17 +62,26 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	if (function.copy_to_combine) {
-		function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
+		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state,
+		                         *l.local_state);
+		if (per_thread_output) {
+			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
+		}
 	}
 }
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
+	if (per_thread_output) {
+		// already happened in combine
+		return SinkFinalizeType::READY;
+	}
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
 		if (use_tmp_file) {
+			D_ASSERT(!per_thread_output); // FIXME
 			MoveTmpFile(context, file_path);
 		}
 	}
@@ -74,10 +89,46 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	if (per_thread_output) {
+		idx_t this_file_offset;
+		{
+			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			lock_guard<mutex> glock(g.lock);
+			this_file_offset = g.last_file_offset++;
+		}
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
+		if (fs.FileExists(output_path)) {
+			throw IOException("%s exists", output_path);
+		}
+		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
+	}
+	return move(res);
 }
+
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	if (per_thread_output) {
+		auto &fs = FileSystem::GetFileSystem(context);
+
+		if (fs.FileExists(file_path)) {
+			throw IOException("%s exists", file_path);
+		}
+		if (!fs.DirectoryExists(file_path)) {
+			fs.CreateDirectory(file_path);
+		} else {
+			idx_t n_files = 0;
+			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
+			if (n_files > 0) {
+				throw IOException("Directory %s is not empty", file_path);
+			}
+		}
+
+		return make_unique<CopyToFunctionGlobalState>(nullptr);
+	} else {
+		return make_unique<CopyToFunctionGlobalState>(
+		    function.copy_to_initialize_global(context, *bind_data, file_path));
+	}
 }
 
 //===--------------------------------------------------------------------===//

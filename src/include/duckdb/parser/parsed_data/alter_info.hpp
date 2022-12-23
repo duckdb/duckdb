@@ -23,17 +23,34 @@ enum class AlterType : uint8_t {
 	ALTER_FUNCTION = 5
 };
 
+struct AlterEntryData {
+	AlterEntryData() {
+	}
+	AlterEntryData(string catalog_p, string schema_p, string name_p, bool if_exists)
+	    : catalog(move(catalog_p)), schema(move(schema_p)), name(move(name_p)), if_exists(if_exists) {
+	}
+
+	string catalog;
+	string schema;
+	string name;
+	bool if_exists;
+};
+
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type, string schema, string name, bool if_exists);
+	AlterInfo(AlterType type, string catalog, string schema, string name, bool if_exists);
 	virtual ~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
 	bool if_exists;
+	//! Catalog name to alter
+	string catalog;
 	//! Schema name to alter
 	string schema;
 	//! Entry name to alter
 	string name;
+	//! Allow altering internal entries
+	bool allow_internal;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
@@ -41,6 +58,8 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+
+	AlterEntryData GetAlterEntryData() const;
 };
 
 } // namespace duckdb

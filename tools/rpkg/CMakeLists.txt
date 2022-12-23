@@ -33,7 +33,6 @@ add_library(
   src/scan.cpp
   src/transform.cpp
   src/utils.cpp
-  src/altrep.cpp
   src/reltoaltrep.cpp
   src/relational.cpp
   src/types.cpp)

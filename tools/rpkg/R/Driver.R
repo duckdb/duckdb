@@ -25,12 +25,12 @@ drv_to_string <- function(drv) {
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint="numeric", config = list()) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint = "numeric", config = list()) {
   check_flag(read_only)
 
   switch(bigint,
     numeric = {
-        # fine
+      # fine
     },
     integer64 = {
       if (!is_installed("bit64")) {

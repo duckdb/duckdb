@@ -20,6 +20,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -99,6 +100,7 @@ public:
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
@@ -152,11 +154,15 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
-	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema = "");
+	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
+	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,
+	                            const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
 	                        string &error_message);
+	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
+	                        const string &column_name, string &error_message);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -222,8 +228,11 @@ private:
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
+	BoundStatement Bind(SetVariableStatement &stmt);
+	BoundStatement Bind(ResetVariableStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
 	BoundStatement Bind(LogicalPlanStatement &stmt);
+	BoundStatement Bind(AttachStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
 	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
@@ -287,6 +296,10 @@ private:
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
+	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                                            vector<CorrelatedColumnInfo> &correlated_columns,
+	                                            JoinType join_type = JoinType::INNER,
+	                                            unique_ptr<Expression> condition = nullptr);
 
 	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
 	                                                       vector<LogicalType> &target_types,
@@ -306,6 +319,10 @@ private:
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	bool FindStarExpression(ParsedExpression &expr, StarExpression **star);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
+
+	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
+	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	SchemaCatalogEntry *BindCreateSchema(CreateInfo &info);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

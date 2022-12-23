@@ -13,20 +13,21 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
-RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
+RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
                    idx_t count)
     : SegmentBase(start, count), db(db), block_manager(block_manager), table_info(table_info) {
 
 	Verify();
 }
 
-RowGroup::RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info,
                    const vector<LogicalType> &types, RowGroupPointer &&pointer)
     : SegmentBase(pointer.row_start, pointer.tuple_count), db(db), block_manager(block_manager),
       table_info(table_info) {
@@ -75,6 +76,10 @@ void VersionNode::SetStart(idx_t start) {
 }
 
 RowGroup::~RowGroup() {
+}
+
+DatabaseInstance &RowGroup::GetDatabase() {
+	return db.GetDatabase();
 }
 
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {

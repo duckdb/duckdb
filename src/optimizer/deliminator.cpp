@@ -233,6 +233,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 
 		// Create a vector of all exprs in the agg
 		vector<Expression *> all_agg_exprs;
+		all_agg_exprs.reserve(agg.groups.size() + agg.expressions.size());
 		for (auto &expr : agg.groups) {
 			all_agg_exprs.push_back(expr.get());
 		}

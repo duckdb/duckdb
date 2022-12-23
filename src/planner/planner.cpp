@@ -8,8 +8,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -57,7 +57,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->plan = nullptr;
 		for (auto &extension_op : config.operator_extensions) {
 			auto bound_statement =
-			    extension_op.Bind(context, *this->binder, extension_op.operator_info.get(), statement);
+			    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
 			if (bound_statement.plan != nullptr) {
 				this->names = bound_statement.names;
 				this->types = bound_statement.types;
@@ -103,7 +103,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->types = types;
 	prepared_data->value_map = move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
+	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 
@@ -132,6 +132,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE_STATEMENT:
 	case StatementType::EXECUTE_STATEMENT:
 	case StatementType::LOGICAL_PLAN_STATEMENT:
+	case StatementType::ATTACH_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

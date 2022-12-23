@@ -1,0 +1,9 @@
+# name: test/sql/pg_catalog/pg_database.test
+# description: Test pg_database function
+# group: [pg_catalog]
+
+query II nosort pg_dbase
+SELECT * FROM pg_database
+
+query II nosort pg_dbase
+SELECT * FROM pg_catalog.pg_database

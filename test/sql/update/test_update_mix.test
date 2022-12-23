@@ -2,6 +2,9 @@
 # description: Test mix of updates inserts and deletes
 # group: [update]
 
+statement ok
+SET immediate_transaction_mode=true
+
 statement ok con1
 CREATE TABLE test (a INTEGER);
 

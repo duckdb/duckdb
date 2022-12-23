@@ -61,6 +61,10 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
 	auto result = TransformStatementInternal(stmt);
 	result->n_param = ParamCount();
+	if (!named_param_map.empty()) {
+		// Avoid overriding a previous move with nothing
+		result->named_param_map = move(named_param_map);
+	}
 	return result;
 }
 
@@ -139,6 +143,10 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCreateType(stmt);
 	case duckdb_libpgquery::T_PGAlterSeqStmt:
 		return TransformAlterSequence(stmt);
+	case duckdb_libpgquery::T_PGAttachStmt:
+		return TransformAttach(stmt);
+	case duckdb_libpgquery::T_PGUseStmt:
+		return TransformUse(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

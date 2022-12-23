@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
 #include <R_ext/Utils.h>
 
@@ -98,6 +97,24 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	auto stmt = conn->conn->Prepare(move(relation_stmt));
 	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.Message().c_str());
+	}
+
+	return construct_retlist(move(stmt), "", 0);
+}
+
+[[cpp11::register]] cpp11::list rapi_prepare_substrait_json(duckdb::conn_eptr_t conn, std::string json) {
+	if (!conn || !conn.get() || !conn->conn) {
+		cpp11::stop("rapi_prepare_substrait_json: Invalid connection");
+	}
+
+	auto rel = conn->conn->TableFunction("from_substrait_json", {Value(json)});
+	auto relation_stmt = make_unique<RelationStatement>(rel);
+	relation_stmt->n_param = 0;
+	relation_stmt->query = "";
+	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	if (stmt->HasError()) {
+		cpp11::stop("rapi_prepare_substrait_json: Failed to prepare query %s\nError: %s",
+		            stmt->error.Message().c_str());
 	}
 
 	return construct_retlist(move(stmt), "", 0);
@@ -309,7 +326,6 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (!stmt || !stmt.get() || !stmt->stmt) {
 		cpp11::stop("rapi_execute: Invalid statement");
 	}
-
 	auto pending_query = stmt->stmt->PendingQuery(stmt->parameters, arrow);
 	duckdb::PendingExecutionResult execution_result;
 	do {

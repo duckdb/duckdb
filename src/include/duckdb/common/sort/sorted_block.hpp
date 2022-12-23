@@ -134,7 +134,7 @@ public:
 	explicit PayloadScanner(GlobalSortState &global_sort_state, bool flush = true);
 
 	//! Scan a single block
-	PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx);
+	PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx, bool flush = false);
 
 	//! The type layout of the payload
 	inline const vector<LogicalType> &GetPayloadTypes() const {

@@ -23,7 +23,7 @@ test_that("duckdb_register() works", {
   # re-registering under same name is an error by default, see issue #967
   expect_error(duckdb_register(con, "my_df1", iris))
   # can force an overwrite
-  duckdb_register(con, "my_df1", iris, overwrite=TRUE)
+  duckdb_register(con, "my_df1", iris, overwrite = TRUE)
   res <- dbReadTable(con, "my_df1")
   res$Species <- as.factor(res$Species)
   expect_true(identical(res, iris))
@@ -65,4 +65,17 @@ test_that("uppercase data frames are queryable", {
   row.names(res) <- row.names(mtcars)
   expect_true(identical(res, mtcars))
   duckdb_unregister(con, "My_Mtcars")
+})
+
+
+
+test_that("experimental string handling works", {
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  df <- data.frame(a=c(NA, as.character(1:10000)))
+
+ duckdb_register(con, "df", df, experimental=TRUE)
+
+  expect_equal(df, dbGetQuery(con, "SELECT a::STRING a FROM df"))
+  expect_equal(df, dbGetQuery(con, "SELECT a FROM df"))
 })

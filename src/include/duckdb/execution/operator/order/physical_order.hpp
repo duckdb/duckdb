@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class OrderGlobalState;
+class OrderGlobalSinkState;
 
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalOperator {
@@ -29,18 +29,30 @@ public:
 
 public:
 	// Source interface
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                    LocalSourceState &lstate) const override;
 
-	bool IsOrderPreserving() const override {
+	bool IsSource() const override {
 		return false;
 	}
 
+	bool ParallelSource() const override {
+		return true;
+	}
+
+	bool SupportsBatchIndex() const override {
+		return true;
+	}
+
 public:
+	// Sink interface
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
 	                    DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
@@ -54,10 +66,11 @@ public:
 		return true;
 	}
 
+public:
 	string ParamsToString() const override;
 
 	//! Schedules tasks to merge the data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalState &state);
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalSinkState &state);
 };
 
 } // namespace duckdb

@@ -30,6 +30,10 @@ struct SequenceValue {
 //! A sequence catalog entry
 class SequenceCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::SEQUENCE_ENTRY;
+	static constexpr const char *Name = "sequence";
+
+public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
 

@@ -66,6 +66,12 @@ SEXP StringsToSexp(vector<std::string> s);
 
 SEXP ToUtf8(SEXP string_sexp);
 
+static constexpr char R_STRING_TYPE_NAME[] = "r_string";
+
+struct RStringsType {
+	static LogicalType Get();
+};
+
 struct RProtector {
 	RProtector() : protect_count(0) {
 	}

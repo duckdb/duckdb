@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -12,7 +13,7 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
-#include "duckdb/optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
