@@ -1,0 +1,114 @@
+# name: test/sql/attach/reattach_schema.test
+# description: Re-attach a database with a non-standard schema and re-name the database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/reattach_schema.db' AS new_db;
+
+statement ok
+CREATE SCHEMA new_db.my_schema;
+
+statement ok
+CREATE TABLE new_db.my_schema.my_table(col INTEGER);
+
+statement ok
+INSERT INTO new_db.my_schema.my_table VALUES (42);
+
+statement ok
+CREATE VIEW new_db.my_schema.my_view AS SELECT 84
+
+statement ok
+CREATE SEQUENCE new_db.my_schema.my_sequence;
+
+statement ok
+CREATE MACRO new_db.my_schema.one() AS (SELECT 1);
+
+statement ok
+CREATE MACRO new_db.my_schema.range(a) as TABLE SELECT * FROM range(a)
+
+query I
+SELECT new_db.my_schema.one()
+----
+1
+
+query I
+SELECT * FROM new_db.my_schema.range(3)
+----
+0
+1
+2
+
+statement ok
+DETACH new_db
+
+statement ok
+ATTACH '__TEST_DIR__/reattach_schema.db' AS new_name;
+
+query I
+SELECT * FROM new_name.my_schema.my_table
+----
+42
+
+query I
+SELECT * FROM new_name.my_schema.my_view
+----
+84
+
+query I
+SELECT nextval('new_name.my_schema.my_sequence')
+----
+1
+
+query I
+SELECT new_name.my_schema.one()
+----
+1
+
+query I
+SELECT * FROM new_name.my_schema.range(3)
+----
+0
+1
+2
+
+statement ok
+USE new_name.my_schema
+
+statement error
+USE new_name.my_schema.my_table
+----
+USE database
+
+query I
+SELECT * FROM my_table
+----
+42
+
+query I
+SELECT * FROM my_view
+----
+84
+
+query I
+SELECT nextval('my_sequence')
+----
+2
+
+query I
+SELECT one()
+----
+1
+
+# FIXME - this leads to infinite recursion
+mode skip
+
+query I
+SELECT * FROM range(3)
+----
+0
+1
+2
+
+mode unskip

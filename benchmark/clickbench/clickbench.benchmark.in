@@ -9,7 +9,7 @@ require parquet
 name Q${QUERY_NUMBER_PADDED}
 group Clickbench
 
-cache clickbench
+cache clickbench.duckdb
 
 load benchmark/clickbench/queries/load.sql
 

@@ -1,0 +1,49 @@
+# name: test/sql/attach/attach_modify_multiple_databases.test
+# description: Modify multiple databases in one transaction
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# attach a new database
+statement ok
+ATTACH DATABASE ':memory:' AS database;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE database.integers(i INTEGER);
+
+statement error
+CREATE TABLE integers(i INTEGER);
+----
+a single transaction can only write to a single attached database
+
+statement ok
+ROLLBACK
+
+statement ok
+CREATE TABLE database.integers(i INTEGER);
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO database.integers SELECT * FROM range(10);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10);
+
+statement error
+INSERT INTO database.integers SELECT * FROM range(10);
+----
+a single transaction can only write to a single attached database
+
+statement ok
+ROLLBACK

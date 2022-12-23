@@ -408,7 +408,7 @@ struct MapVector {
 	DUCKDB_API static const Vector &GetValues(const Vector &vector);
 	DUCKDB_API static Vector &GetKeys(Vector &vector);
 	DUCKDB_API static Vector &GetValues(Vector &vector);
-    static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
+	static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
 };
 
 struct StructVector {

@@ -2,14 +2,9 @@
 # description: The error messages that suggests extension to be installed
 # group: [catalog]
 
-require test_helper
-
 require skip_reload
 
 statement error
 SELECT get_substrait("select 1");
-
-query I
-SELECT test_helper_last_error() LIKE '%Catalog Error: Function with name get_substrait is not on the catalog, but it exists in the substrait extension. To Install and Load the extension, run: INSTALL substrait; LOAD substrait;%'
 ----
-true
+it exists in the substrait extension

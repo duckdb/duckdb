@@ -788,7 +788,7 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	CreateTableFunctionInfo scan_info(scan_fun);
 	MapFunction map_fun;
 	CreateTableFunctionInfo map_info(map_fun);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	catalog.CreateTableFunction(context, &scan_info);
 	catalog.CreateTableFunction(context, &map_info);
