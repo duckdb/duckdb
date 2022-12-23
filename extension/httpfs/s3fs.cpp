@@ -856,10 +856,6 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_url.bucket.length() + 1);
 	}
 
-	//	if (parsed_url.query_param != "") {
-	//		pattern_trimmed += '?' + parsed_url.query_param;
-	//	}
-
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
 
