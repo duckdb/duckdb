@@ -94,7 +94,6 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	case PhysicalType::VARCHAR:
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::LIST:
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	default:

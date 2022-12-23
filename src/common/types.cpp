@@ -257,8 +257,6 @@ string TypeIdToString(PhysicalType type) {
 		return "INVALID";
 	case PhysicalType::BIT:
 		return "BIT";
-	case PhysicalType::MAP:
-		return "MAP";
 	case PhysicalType::UNKNOWN:
 		return "UNKNOWN";
 	}

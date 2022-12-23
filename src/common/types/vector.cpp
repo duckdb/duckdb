@@ -1634,7 +1634,7 @@ void SearchStringInMap(Vector &keys, idx_t count, const string &key, vector<idx_
 	}
 }
 
-vector<idx_t> FlatVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
+vector<idx_t> MapVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
 	vector<idx_t> offsets;
 
 	switch (keys.GetType().InternalType()) {
