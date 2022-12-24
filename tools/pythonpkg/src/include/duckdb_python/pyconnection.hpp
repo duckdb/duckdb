@@ -14,12 +14,14 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb_python/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
-#include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pyrelation.hpp"
 
 namespace duckdb {
+
+enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
 
 struct DuckDBPyRelation;
 
@@ -35,7 +37,7 @@ struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnecti
 public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	unique_ptr<DuckDBPyResult> result;
+	unique_ptr<DuckDBPyRelation> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
@@ -53,8 +55,11 @@ public:
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
+	static bool DetectAndGetEnvironment();
+	static bool IsJupyter();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static PythonImportCache *ImportCache();
+	static bool IsInteractive();
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
@@ -146,6 +151,9 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
+	unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
+	static PythonEnvironmentType environment;
+	static void DetectEnvironment();
 };
 
 } // namespace duckdb

@@ -102,6 +102,7 @@ private:
 	void UpdateDPTree(JoinNode *new_plan);
 
 	void UpdateJoinNodesInFullPlan(JoinNode *node);
+	bool NodeInFullPlan(JoinNode *node);
 
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);

@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
+#include "duckdb/execution/operator/schema/physical_attach.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
@@ -33,6 +34,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	}
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return make_unique<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(move(op.info)), op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_ATTACH:
+		return make_unique<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(move(op.info)),
+		                                   op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

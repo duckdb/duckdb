@@ -1,5 +1,4 @@
 #include "sqllogic_command.hpp"
-#include "test_helper_extension.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -86,15 +85,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
-	auto result = connection->Query(context.sql_query);
-
-	if (result->HasError()) {
-		TestHelperExtension::SetLastError(result->GetError());
-	} else {
-		TestHelperExtension::ClearLastError();
-	}
-
-	return result;
+	return connection->Query(context.sql_query);
 }
 
 void Command::Execute(ExecuteContext &context) const {
@@ -272,7 +263,9 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 
 	runner.con->context->config = client_config;
 
+	runner.con->BeginTransaction();
 	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
 		runner.con->context->client_data->log_query_writer =
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,

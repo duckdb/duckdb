@@ -670,3 +670,9 @@ Statement.prototype.finalize
  * @yield callback
  */
 Statement.prototype.stream;
+
+/**
+ * @field
+ * @returns sql contained in statement
+ */
+Statement.prototype.sql;

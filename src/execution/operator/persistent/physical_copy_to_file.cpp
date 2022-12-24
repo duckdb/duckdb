@@ -40,7 +40,7 @@ void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality),
-      function(move(function_p)), bind_data(move(bind_data)) {
+      function(move(function_p)), bind_data(move(bind_data)), parallel(false) {
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,

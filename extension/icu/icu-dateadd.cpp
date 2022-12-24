@@ -181,7 +181,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                            LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 
@@ -206,7 +206,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                               LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 
@@ -218,7 +218,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };

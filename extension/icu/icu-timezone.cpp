@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -84,7 +85,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 	output.SetCardinality(index);
 }
 
-struct ICUFromLocalTime : public ICUDateFunc {
+struct ICUFromLocalTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t local) {
 		// Extract the parts from the "instant"
 		date_t local_date;
@@ -117,7 +118,7 @@ struct ICUFromLocalTime : public ICUDateFunc {
 	}
 };
 
-struct ICUToLocalTime : public ICUDateFunc {
+struct ICUToLocalTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t instant) {
 		// Extract the time zone parts
 		auto micros = SetTime(calendar, instant);
@@ -144,6 +145,84 @@ struct ICUToLocalTime : public ICUDateFunc {
 		}
 
 		return result;
+	}
+};
+
+struct ICULocalTimestampFunc : public ICUDateFunc {
+
+	struct BindDataNow : public BindData {
+		explicit BindDataNow(ClientContext &context) : BindData(context) {
+			now = MetaTransaction::Get(context).start_timestamp;
+		}
+
+		BindDataNow(const BindDataNow &other) : BindData(other), now(other.now) {
+		}
+
+		bool Equals(const FunctionData &other_p) const override {
+			auto &other = (const BindDataNow &)other_p;
+			if (now != other.now) {
+				return false;
+			}
+
+			return BindData::Equals(other_p);
+		}
+
+		unique_ptr<FunctionData> Copy() const override {
+			return make_unique<BindDataNow>(*this);
+		}
+
+		timestamp_t now;
+	};
+
+	static unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
+	                                        vector<unique_ptr<Expression>> &arguments) {
+		return make_unique<BindDataNow>(context);
+	}
+
+	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindDataNow &)*func_expr.bind_info;
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
+
+		const auto now = info.now;
+		return ICUToLocalTimestamp::Operation(calendar, now);
+	}
+
+	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
+		D_ASSERT(input.ColumnCount() == 0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto rdata = ConstantVector::GetData<timestamp_t>(result);
+		rdata[0] = GetLocalTimestamp(state);
+	}
+
+	static void AddFunction(const string &name, ClientContext &context) {
+		ScalarFunctionSet set(name);
+		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
+
+		CreateScalarFunctionInfo func_info(set);
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		catalog.AddFunction(context, &func_info);
+	}
+};
+
+struct ICULocalTimeFunc : public ICUDateFunc {
+
+	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
+		D_ASSERT(input.ColumnCount() == 0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto rdata = ConstantVector::GetData<dtime_t>(result);
+		const auto local = ICULocalTimestampFunc::GetLocalTimestamp(state);
+		rdata[0] = Timestamp::GetTime(local);
+	}
+
+	static void AddFunction(const string &name, ClientContext &context) {
+		ScalarFunctionSet set(name);
+		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
+
+		CreateScalarFunctionInfo func_info(set);
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		catalog.AddFunction(context, &func_info);
 	}
 };
 
@@ -189,23 +268,25 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 	static void AddFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
-		                               Execute<ICUFromLocalTime>, Bind));
+		                               Execute<ICUFromLocalTimestamp>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,
-		                               Execute<ICUToLocalTime>, Bind));
+		                               Execute<ICUToLocalTimestamp>, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 };
 
 void RegisterICUTimeZoneFunctions(ClientContext &context) {
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(context, &tz_names_info);
 
 	ICUTimeZoneFunc::AddFunction("timezone", context);
+	ICULocalTimestampFunc::AddFunction("current_localtimestamp", context);
+	ICULocalTimeFunc::AddFunction("current_localtime", context);
 }
 
 } // namespace duckdb

@@ -17,32 +17,6 @@
 
 namespace duckdb {
 
-void DuckDBPyResult::Initialize(py::handle &m) {
-	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
-	    .def("description", &DuckDBPyResult::Description)
-	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
-	    .def("fetchmany", &DuckDBPyResult::Fetchmany, "Fetch the next set of rows as a list of tuples",
-	         py::arg("size") = 1)
-	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
-	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
-	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
-	         py::arg("num_of_vectors") = 1, py::kw_only(), py::arg("date_as_object") = false)
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
-	         py::arg("chunk_size") = 1000000)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
-	         py::arg("chunk_size") = 1000000)
-	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
-}
-
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
 		result_closed = true;
@@ -402,6 +376,10 @@ py::list DuckDBPyResult::Description() {
 
 void DuckDBPyResult::Close() {
 	result = nullptr;
+}
+
+bool DuckDBPyResult::IsClosed() const {
+	return result_closed;
 }
 
 } // namespace duckdb

@@ -41,7 +41,7 @@ statement ok
 CREATE TEMPORARY TABLE reals (f FLOAT PRIMARY KEY, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE NOT NULL)
 
 query T
-SELECT table_type FROM information_schema.tables WHERE table_schema='temp' AND table_name='reals'
+SELECT table_type FROM information_schema.tables WHERE table_catalog='temp' AND table_name='reals'
 ----
 LOCAL TEMPORARY
 

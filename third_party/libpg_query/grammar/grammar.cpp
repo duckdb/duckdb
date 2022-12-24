@@ -343,6 +343,17 @@ static PGNode* makeParamRef(int number, int location)
 	PGParamRef *p = makeNode(PGParamRef);
 	p->number = number;
 	p->location = location;
+	p->name = NULL;
+	return (PGNode *) p;
+}
+
+/* makeNamedParamRef
+ * Creates a new PGParamRef node
+ */
+static PGNode* makeNamedParamRef(char *name, int location)
+{
+	PGParamRef *p = (PGParamRef *)makeParamRef(0, location);
+	p->name = name;
 	return (PGNode *) p;
 }
 

@@ -312,6 +312,9 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return DictToStruct(dict, can_convert);
 	}
+	case PythonObjectType::NdDatetime: {
+		return GetItemType(ele.attr("tolist")(), can_convert);
+	}
 	case PythonObjectType::NdArray: {
 		auto extended_type = ConvertPandasType(ele.attr("dtype"));
 		LogicalType ltype;
