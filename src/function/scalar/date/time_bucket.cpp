@@ -21,6 +21,35 @@ struct TimeBucket {
 	// There are 360 months between 1970-01-01 and 2000-01-01
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
+	enum struct BucketWidthType { LessThanDays, MoreThanMonths, Unclassified };
+
+	static inline BucketWidthType ClassifyBucketWidth(const interval_t bucket_width) {
+		if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
+			return BucketWidthType::LessThanDays;
+		} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+			return BucketWidthType::MoreThanMonths;
+		} else {
+			return BucketWidthType::Unclassified;
+		}
+	}
+
+	static inline BucketWidthType ClassifyBucketWidthWithThrowingError(const interval_t bucket_width) {
+		if (bucket_width.months == 0) {
+			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
+			if (bucket_width_micros <= 0) {
+				throw NotImplementedException("Period must be greater than 0");
+			}
+			return BucketWidthType::LessThanDays;
+		} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+			if (bucket_width.months < 0) {
+				throw NotImplementedException("Period must be greater than 0");
+			}
+			return BucketWidthType::MoreThanMonths;
+		} else {
+			throw NotImplementedException("Month intervals cannot have day or time component");
+		}
+	}
+
 	template <typename T>
 	static int32_t EpochMonths(T ts) {
 		date_t ts_date = Cast::template Operation<T, date_t>(ts);
@@ -38,7 +67,6 @@ struct TimeBucket {
 		ts_micros -= origin_micros;
 
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
-		ts_micros -= result_micros;
 		if (ts_micros < 0 && ts_micros % bucket_width_micros != 0) {
 			if (result_micros < NumericLimits<int64_t>::Minimum() + bucket_width_micros) {
 				throw OutOfRangeException("Timestamp out of range");
@@ -105,19 +133,12 @@ struct TimeBucket {
 	struct BinaryOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA bucket_width, TB ts) {
-			if (bucket_width.months == 0) {
-				int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-				if (bucket_width_micros <= 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			switch (bucket_width_type) {
+			case BucketWidthType::LessThanDays:
 				return WidthLessThanDaysBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
-			} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-				if (bucket_width.months < 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			default:
 				return WidthMoreThanMonthsBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
-			} else {
-				throw NotImplementedException("Month intervals cannot have day or time component");
 			}
 		}
 	};
@@ -152,19 +173,12 @@ struct TimeBucket {
 	struct OffsetTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
-			if (bucket_width.months == 0) {
-				int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-				if (bucket_width_micros <= 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			switch (bucket_width_type) {
+			case BucketWidthType::LessThanDays:
 				return OffsetWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
-			} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-				if (bucket_width.months < 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			default:
 				return OffsetWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
-			} else {
-				throw NotImplementedException("Month intervals cannot have day or time component");
 			}
 		}
 	};
@@ -205,19 +219,12 @@ struct TimeBucket {
 				mask.SetInvalid(idx);
 				return TR();
 			}
-			if (bucket_width.months == 0) {
-				int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-				if (bucket_width_micros <= 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			switch (bucket_width_type) {
+			case BucketWidthType::LessThanDays:
 				return OriginWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
-			} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-				if (bucket_width.months < 0) {
-					throw NotImplementedException("Period must be greater than 0");
-				}
+			default:
 				return OriginWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
-			} else {
-				throw NotImplementedException("Month intervals cannot have day or time component");
 			}
 		}
 	};
@@ -236,17 +243,22 @@ static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &
 			ConstantVector::SetNull(result, true);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
+			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
+			switch (bucket_width_type) {
+			case TimeBucket::BucketWidthType::LessThanDays:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
 				    TimeBucket::WidthLessThanDaysBinaryOperator::Operation<interval_t, T, T>);
-			} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+				break;
+			case TimeBucket::BucketWidthType::MoreThanMonths:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
 				    TimeBucket::WidthMoreThanMonthsBinaryOperator::Operation<interval_t, T, T>);
-			} else {
+				break;
+			default:
 				BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result, args.size(),
 				                                          TimeBucket::BinaryOperator::Operation<interval_t, T, T>);
+				break;
 			}
 		}
 	} else {
@@ -269,18 +281,23 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 			ConstantVector::SetNull(result, true);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
+			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
+			switch (bucket_width_type) {
+			case TimeBucket::BucketWidthType::LessThanDays:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, T, interval_t, T>);
-			} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+				break;
+			case TimeBucket::BucketWidthType::MoreThanMonths:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
-			} else {
+				break;
+			default:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetTernaryOperator::Operation<interval_t, T, interval_t, T>);
+				break;
 			}
 		}
 	} else {
@@ -306,18 +323,23 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 			ConstantVector::SetNull(result, true);
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
-			if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
+			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
+			switch (bucket_width_type) {
+			case TimeBucket::BucketWidthType::LessThanDays:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginWidthLessThanDaysTernaryOperator::Operation<interval_t, T, T, T>);
-			} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
+				break;
+			case TimeBucket::BucketWidthType::MoreThanMonths:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, T, T>);
-			} else {
+				break;
+			default:
 				TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
+				break;
 			}
 		}
 	} else {
