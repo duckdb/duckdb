@@ -10,10 +10,12 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
 class ClientContext;
+class MetaTransaction;
 class Transaction;
 class TransactionManager;
 
@@ -21,13 +23,13 @@ class TransactionManager;
 //! current transaction
 class TransactionContext {
 public:
-	TransactionContext(TransactionManager &transaction_manager, ClientContext &context)
-	    : transaction_manager(transaction_manager), context(context), auto_commit(true), current_transaction(nullptr) {
-	}
+	TransactionContext(ClientContext &context);
 	~TransactionContext();
 
-	Transaction &ActiveTransaction() {
-		D_ASSERT(current_transaction);
+	MetaTransaction &ActiveTransaction() {
+		if (!current_transaction) {
+			throw InternalException("TransactionContext::ActiveTransaction called without active transaction");
+		}
 		return *current_transaction;
 	}
 
@@ -35,7 +37,6 @@ public:
 		return !!current_transaction;
 	}
 
-	void RecordQuery(string query);
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
@@ -46,12 +47,15 @@ public:
 		return auto_commit;
 	}
 
+	idx_t GetActiveQuery();
+	void ResetActiveQuery();
+	void SetActiveQuery(transaction_t query_number);
+
 private:
-	TransactionManager &transaction_manager;
 	ClientContext &context;
 	bool auto_commit;
 
-	Transaction *current_transaction;
+	unique_ptr<MetaTransaction> current_transaction;
 
 	TransactionContext(const TransactionContext &) = delete;
 };

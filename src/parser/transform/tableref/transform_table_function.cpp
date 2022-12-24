@@ -5,9 +5,6 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRangeFunction *root) {
-	if (root->lateral) {
-		throw NotImplementedException("LATERAL not implemented");
-	}
 	if (root->ordinality) {
 		throw NotImplementedException("WITH ORDINALITY not implemented");
 	}

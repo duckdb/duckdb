@@ -13,6 +13,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 	auto result = make_unique<AlterStatement>();
 
 	auto qname = TransformQualifiedName(stmt->sequence);
+	auto sequence_catalog = qname.catalog;
 	auto sequence_schema = qname.schema;
 	auto sequence_name = qname.name;
 
@@ -48,8 +49,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				opt_values.emplace_back(target->name);
 			}
 			D_ASSERT(!opt_values.empty());
-			string owner_schema = "";
-			string owner_name = "";
+			string owner_schema = INVALID_SCHEMA;
+			string owner_name;
 			if (opt_values.size() == 2) {
 				owner_schema = opt_values[0];
 				owner_name = opt_values[1];
@@ -59,8 +60,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			} else {
 				throw InternalException("Wrong argument for %s. Expected either <schema>.<name> or <name>", opt_name);
 			}
-			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name,
-			                                             owner_schema, owner_name, stmt->missing_ok);
+			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_catalog, sequence_schema,
+			                                             sequence_name, owner_schema, owner_name, stmt->missing_ok);
 			result->info = move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");

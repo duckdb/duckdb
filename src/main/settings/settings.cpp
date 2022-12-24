@@ -11,6 +11,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -532,7 +534,6 @@ Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // File Search Path
 //===--------------------------------------------------------------------===//
-
 void FileSearchPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	client_data.file_search_path.clear();
@@ -645,6 +646,22 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Immediate Transaction Mode
+//===--------------------------------------------------------------------===//
+void ImmediateTransactionModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.immediate_transaction_mode = BooleanValue::Get(input);
+}
+
+void ImmediateTransactionModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.immediate_transaction_mode = DBConfig().options.immediate_transaction_mode;
+}
+
+Value ImmediateTransactionModeSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.immediate_transaction_mode);
 }
 
 //===--------------------------------------------------------------------===//
@@ -845,7 +862,6 @@ Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-
 void SchemaSetting::ResetLocal(ClientContext &context) {
 	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
 	auto &client_data = ClientData::Get(context);
@@ -855,7 +871,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(parameter, true);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), true);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -865,7 +881,6 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Search Path
 //===--------------------------------------------------------------------===//
-
 void SearchPathSetting::ResetLocal(ClientContext &context) {
 	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
 	auto &client_data = ClientData::Get(context);
@@ -875,12 +890,13 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(parameter, false);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), false);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	return Value(StringUtil::Join(client_data.catalog_search_path->GetSetPaths(), ","));
+	auto &set_paths = client_data.catalog_search_path->GetSetPaths();
+	return Value(CatalogSearchEntry::ListToString(set_paths));
 }
 
 //===--------------------------------------------------------------------===//

@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 

@@ -205,7 +205,6 @@ public:
 		ParserExtensionPlanResult result;
 		result.function = QuackFunction();
 		result.parameters.push_back(Value::BIGINT(quack_data.number_of_quacks));
-		result.read_only = true;
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
@@ -223,7 +222,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	// create a scalar function
 	Connection con(db);
 	auto &client_context = *con.context;
-	auto &catalog = Catalog::GetCatalog(client_context);
+	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
 	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
 	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
@@ -236,6 +235,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	child_types.push_back(make_pair("x", LogicalType::INTEGER));
 	child_types.push_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_unique<CreateTypeInfo>();
+	alias_info->internal = true;
 	alias_info->name = alias_name;
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);

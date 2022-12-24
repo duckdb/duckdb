@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -38,14 +39,13 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-
 	auto state = make_unique<CreateIndexGlobalSinkState>();
 
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, *context.db);
+		                                       info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, *context.client.db);
+		                                      info->constraint_type, table.storage->db);
 		break;
 	}
 	default:

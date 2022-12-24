@@ -75,8 +75,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = Catalog::GetCatalog(context);
-		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
+		auto &catalog = *schema->catalog;
+		result->table =
+		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
 		result->table = insert_table;
@@ -188,7 +189,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		gstate.insert_count += append_count;
 		auto table = gstate.table;
 		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = Transaction::GetTransaction(context.client);
+		auto &transaction = Transaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;

@@ -8,6 +8,7 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -302,7 +303,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEn
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	if (db_ref) {
 		std::lock_guard<std::mutex> lock(db_map_lock);
-		D_ASSERT(db_map.find(db_ref) != db_map.end());
 		db_map.erase(db_ref);
 	}
 }
@@ -326,9 +326,24 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 		return nullptr;
 	}
 
-	auto schema = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
+	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
 
-	return env->NewStringUTF(schema.c_str());
+	return env->NewStringUTF(entry.schema.c_str());
+}
+
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
+                                                                                  jobject conn_ref_buf) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return nullptr;
+	}
+
+	auto entry = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
+	if (entry.catalog == INVALID_CATALOG) {
+		entry.catalog = DatabaseManager::GetDefaultDatabase(*conn_ref->context);
+	}
+
+	return env->NewStringUTF(entry.catalog.c_str());
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,

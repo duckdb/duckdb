@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, move(op.bind_data), op.info->column_ids,
 	                                   op.info->names, move(table_filters), op.estimated_cardinality);
 
-	dependencies.insert(&op.table);
+	dependencies.AddDependency(&op.table);
 	op.info->column_ids.pop_back();
 
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
