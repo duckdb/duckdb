@@ -93,7 +93,7 @@ struct TimeBucket {
 			if (result_months < NumericLimits<int32_t>::Minimum() + bucket_width_months) {
 				throw OutOfRangeException("Timestamp out of range");
 			}
-			result_months = result_months - bucket_width_months;
+			result_months -= bucket_width_months;
 		}
 		result_months += origin_months;
 
