@@ -7,6 +7,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datefunc.hpp"
@@ -23,15 +24,15 @@ struct ICUTimeBucket : public ICUDateFunc {
 	// There are 10957 days between 1970-01-01 and 2000-01-01
 	constexpr static const int64_t DEFAULT_ORIGIN_MICROS_2 = 10957 * Interval::MICROS_PER_DAY;
 
-	enum struct BucketWidthType { LessThanDays, MoreThanMonths, Unclassified };
+	enum struct BucketWidthType { LESS_THAN_DAYS, MORE_THAN_MONTHS, UNCLASSIFIED };
 
 	static inline BucketWidthType ClassifyBucketWidth(const interval_t bucket_width) {
 		if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
-			return BucketWidthType::LessThanDays;
+			return BucketWidthType::LESS_THAN_DAYS;
 		} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-			return BucketWidthType::MoreThanMonths;
+			return BucketWidthType::MORE_THAN_MONTHS;
 		} else {
-			return BucketWidthType::Unclassified;
+			return BucketWidthType::UNCLASSIFIED;
 		}
 	}
 
@@ -41,12 +42,12 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (bucket_width_micros <= 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::LessThanDays;
+			return BucketWidthType::LESS_THAN_DAYS;
 		} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
 			if (bucket_width.months < 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::MoreThanMonths;
+			return BucketWidthType::MORE_THAN_MONTHS;
 		} else {
 			throw NotImplementedException("Month intervals cannot have day or time component");
 		}
@@ -261,7 +262,7 @@ template <>
 timestamp_t ICUTimeBucket::BinaryOperator::Operation(interval_t bucket_width, timestamp_t ts, icu::Calendar *calendar) {
 	BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 	switch (bucket_width_type) {
-	case BucketWidthType::LessThanDays:
+	case BucketWidthType::LESS_THAN_DAYS:
 		return WidthLessThanDaysBinaryOperator::Operation<interval_t, timestamp_t, timestamp_t>(bucket_width, ts,
 		                                                                                        calendar);
 	default:
@@ -304,7 +305,7 @@ timestamp_t ICUTimeBucket::OffsetTernaryOperator::Operation(interval_t bucket_wi
                                                             icu::Calendar *calendar) {
 	BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 	switch (bucket_width_type) {
-	case BucketWidthType::LessThanDays:
+	case BucketWidthType::LESS_THAN_DAYS:
 		return OffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, timestamp_t, interval_t, timestamp_t>(
 		    bucket_width, ts, offset, calendar);
 	default:
@@ -345,7 +346,7 @@ timestamp_t ICUTimeBucket::OriginTernaryOperator::Operation(interval_t bucket_wi
 	}
 	BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 	switch (bucket_width_type) {
-	case BucketWidthType::LessThanDays:
+	case BucketWidthType::LESS_THAN_DAYS:
 		return OriginWidthLessThanDaysTernaryOperator::Operation<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 		    bucket_width, ts, origin, calendar);
 	default:
@@ -383,7 +384,7 @@ timestamp_t ICUTimeBucket::TimeZoneTernaryOperator::Operation(interval_t bucket_
 	SetTimeZone(calendar, tz);
 	BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 	switch (bucket_width_type) {
-	case BucketWidthType::LessThanDays:
+	case BucketWidthType::LESS_THAN_DAYS:
 		return TimeZoneWidthLessThanDaysBinaryOperator::Operation<interval_t, timestamp_t, timestamp_t>(bucket_width,
 		                                                                                                ts, calendar);
 	default:
@@ -411,14 +412,14 @@ void ICUTimeBucket::ICUTimeBucketFunction(DataChunk &args, ExpressionState &stat
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 					    return WidthLessThanDaysBinaryOperator::Operation<interval_t, timestamp_t, timestamp_t>(
 					        bucket_width, ts, calendar);
 				    });
 				break;
-			case BucketWidthType::MoreThanMonths:
+			case BucketWidthType::MORE_THAN_MONTHS:
 				BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 					    return WidthMoreThanMonthsBinaryOperator::Operation<interval_t, timestamp_t, timestamp_t>(
@@ -462,7 +463,7 @@ void ICUTimeBucket::ICUTimeBucketOffsetFunction(DataChunk &args, ExpressionState
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				TernaryExecutor::Execute<interval_t, timestamp_t, interval_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    [&](interval_t bucket_width, timestamp_t ts, interval_t offset) {
@@ -471,7 +472,7 @@ void ICUTimeBucket::ICUTimeBucketOffsetFunction(DataChunk &args, ExpressionState
 					                                                                          calendar);
 				    });
 				break;
-			case BucketWidthType::MoreThanMonths:
+			case BucketWidthType::MORE_THAN_MONTHS:
 				TernaryExecutor::Execute<interval_t, timestamp_t, interval_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    [&](interval_t bucket_width, timestamp_t ts, interval_t offset) {
@@ -522,7 +523,7 @@ void ICUTimeBucket::ICUTimeBucketOriginFunction(DataChunk &args, ExpressionState
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) {
@@ -531,7 +532,7 @@ void ICUTimeBucket::ICUTimeBucketOriginFunction(DataChunk &args, ExpressionState
 					                                                                          calendar);
 				    });
 				break;
-			case BucketWidthType::MoreThanMonths:
+			case BucketWidthType::MORE_THAN_MONTHS:
 				TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) {
@@ -582,14 +583,14 @@ void ICUTimeBucket::ICUTimeBucketTimeZoneFunction(DataChunk &args, ExpressionSta
 			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_arg));
 			BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 					    return TimeZoneWidthLessThanDaysBinaryOperator::Operation<interval_t, timestamp_t, timestamp_t>(
 					        bucket_width, ts, calendar);
 				    });
 				break;
-			case BucketWidthType::MoreThanMonths:
+			case BucketWidthType::MORE_THAN_MONTHS:
 				BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 				    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 					    return TimeZoneWidthMoreThanMonthsBinaryOperator::Operation<interval_t, timestamp_t,
@@ -629,7 +630,7 @@ void ICUTimeBucket::AddTimeBucketFunction(const string &name, ClientContext &con
 	                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 
 	CreateScalarFunctionInfo func_info(set);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	catalog.AddFunction(context, &func_info);
 }
 
