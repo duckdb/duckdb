@@ -21,15 +21,15 @@ struct TimeBucket {
 	// There are 360 months between 1970-01-01 and 2000-01-01
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
-	enum struct BucketWidthType { LessThanDays, MoreThanMonths, Unclassified };
+	enum struct BucketWidthType { LESS_THAN_DAYS, MORE_THAN_MONTHS, UNCLASSIFIED };
 
 	static inline BucketWidthType ClassifyBucketWidth(const interval_t bucket_width) {
 		if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
-			return BucketWidthType::LessThanDays;
+			return BucketWidthType::LESS_THAN_DAYS;
 		} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-			return BucketWidthType::MoreThanMonths;
+			return BucketWidthType::MORE_THAN_MONTHS;
 		} else {
-			return BucketWidthType::Unclassified;
+			return BucketWidthType::UNCLASSIFIED;
 		}
 	}
 
@@ -39,12 +39,12 @@ struct TimeBucket {
 			if (bucket_width_micros <= 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::LessThanDays;
+			return BucketWidthType::LESS_THAN_DAYS;
 		} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
 			if (bucket_width.months < 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::MoreThanMonths;
+			return BucketWidthType::MORE_THAN_MONTHS;
 		} else {
 			throw NotImplementedException("Month intervals cannot have day or time component");
 		}
@@ -135,7 +135,7 @@ struct TimeBucket {
 		static inline TR Operation(TA bucket_width, TB ts) {
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				return WidthLessThanDaysBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
 			default:
 				return WidthMoreThanMonthsBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
@@ -175,7 +175,7 @@ struct TimeBucket {
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				return OffsetWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
 			default:
 				return OffsetWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
@@ -221,7 +221,7 @@ struct TimeBucket {
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LessThanDays:
+			case BucketWidthType::LESS_THAN_DAYS:
 				return OriginWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
 			default:
 				return OriginWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
@@ -245,12 +245,12 @@ static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LessThanDays:
+			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
 				    TimeBucket::WidthLessThanDaysBinaryOperator::Operation<interval_t, T, T>);
 				break;
-			case TimeBucket::BucketWidthType::MoreThanMonths:
+			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
 				    TimeBucket::WidthMoreThanMonthsBinaryOperator::Operation<interval_t, T, T>);
@@ -283,12 +283,12 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LessThanDays:
+			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, T, interval_t, T>);
 				break;
-			case TimeBucket::BucketWidthType::MoreThanMonths:
+			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
@@ -325,12 +325,12 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LessThanDays:
+			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginWidthLessThanDaysTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
-			case TimeBucket::BucketWidthType::MoreThanMonths:
+			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, T, T>);
