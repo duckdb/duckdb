@@ -688,10 +688,10 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	}
 
 	@Override
-	public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
+	public ResultSet getColumns(String catalogPattern, String schemaPattern, String tableNamePattern, String columnNamePattern)
 			throws SQLException {
-		if (catalog != null && !catalog.isEmpty()) {
-			throw new SQLException("catalog argument is not supported");
+		if (catalogPattern == null) {
+			catalogPattern = "%";
 		}
 		if (schemaPattern == null) {
 			schemaPattern = "%";
@@ -720,10 +720,11 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		PreparedStatement ps = conn.prepareStatement(
 				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema.columns c JOIN ("
 						+ values_str
-						+ ") t(type_name, type_id) ON c.data_type = t.type_name WHERE table_schema LIKE ? AND table_name LIKE ? AND column_name LIKE ? ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
-		ps.setString(1, schemaPattern);
-		ps.setString(2, tableNamePattern);
-		ps.setString(3, columnNamePattern);
+						+ ") t(type_name, type_id) ON c.data_type = t.type_name WHERE table_catalog LIKE ? AND table_schema LIKE ? AND table_name LIKE ? AND column_name LIKE ? ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
+		ps.setString(1, catalogPattern);
+		ps.setString(2, schemaPattern);
+		ps.setString(3, tableNamePattern);
+		ps.setString(4, columnNamePattern);
 		return ps.executeQuery();
 
 	}

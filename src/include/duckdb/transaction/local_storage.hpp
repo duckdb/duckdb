@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class DataTable;
 class WriteAheadLog;
 struct TableAppendState;
@@ -123,7 +124,8 @@ public:
 	explicit LocalStorage(ClientContext &context, Transaction &transaction);
 
 	static LocalStorage &Get(Transaction &transaction);
-	static LocalStorage &Get(ClientContext &context);
+	static LocalStorage &Get(ClientContext &context, AttachedDatabase &db);
+	static LocalStorage &Get(ClientContext &context, Catalog &catalog);
 
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters);

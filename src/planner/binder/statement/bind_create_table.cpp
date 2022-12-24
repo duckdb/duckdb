@@ -217,7 +217,7 @@ void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = (BoundFunctionExpression &)expr;
 		if (function.function.dependency) {
@@ -241,12 +241,10 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
-
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
 	auto &base = (CreateTableInfo &)*info;
-
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
-	result->schema = BindSchema(*result->base);
+	result->schema = schema;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -284,16 +282,22 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable());
+		BindLogicalType(context, column.TypeMutable(), result->schema->catalog->GetName());
 		// We add a catalog dependency
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
-			result->dependencies.insert(type_dependency);
+			result->dependencies.AddDependency(type_dependency);
 		}
 	}
 	properties.allow_stream_result = false;
 	return result;
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+	auto &base = (CreateTableInfo &)*info;
+	auto schema = BindCreateSchema(base);
+	return BindCreateTableInfo(move(info), schema);
 }
 
 } // namespace duckdb

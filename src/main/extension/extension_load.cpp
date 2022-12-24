@@ -49,7 +49,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		}
 		throw IOException("Extension \"%s\" not found.\n%s", filename, message);
 	}
-	{
+	if (!config.options.allow_unsigned_extensions) {
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
 
 		// signature is the last 265 bytes of the file
@@ -75,7 +75,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 				break;
 			}
 		}
-		if (!any_valid && !config.options.allow_unsigned_extensions) {
+		if (!any_valid) {
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}

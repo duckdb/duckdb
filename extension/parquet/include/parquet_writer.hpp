@@ -26,11 +26,6 @@ class FileSystem;
 class FileOpener;
 
 class ParquetWriter {
-	friend class ColumnWriter;
-	friend class BasicColumnWriter;
-	friend class ListColumnWriter;
-	friend class StructColumnWriter;
-
 public:
 	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
@@ -41,6 +36,19 @@ public:
 
 	static duckdb_parquet::format::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::format::SchemaElement &schema_ele);
+
+	duckdb_apache::thrift::protocol::TProtocol *GetProtocol() {
+		return protocol.get();
+	}
+	duckdb_parquet::format::CompressionCodec::type GetCodec() {
+		return codec;
+	}
+	duckdb_parquet::format::Type::type GetType(idx_t schema_idx) {
+		return file_meta_data.schema[schema_idx].type;
+	}
+	BufferedFileWriter &GetWriter() {
+		return *writer;
+	}
 
 private:
 	string file_name;

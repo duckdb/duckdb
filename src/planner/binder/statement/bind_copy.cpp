@@ -34,8 +34,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto select_node = Bind(*stmt.select_statement);
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto copy_function =
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -94,6 +94,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	InsertStatement insert;
 	insert.table = stmt.info->table;
 	insert.schema = stmt.info->schema;
+	insert.catalog = stmt.info->catalog;
 	insert.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
@@ -103,13 +104,14 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	// lookup the table to copy into
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
+	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
@@ -143,6 +145,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_unique<BaseTableRef>();
+		ref->catalog_name = stmt.info->catalog;
 		ref->schema_name = stmt.info->schema;
 		ref->table_name = stmt.info->table;
 

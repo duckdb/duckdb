@@ -50,7 +50,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		D_ASSERT(op.children.size() == 1);
 		plan = CreatePlan(*op.children[0]);
 	}
-	dependencies.insert(op.table);
+	dependencies.AddDependency(op.table);
 
 	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
 	bool use_batch_index = UseBatchIndex(*plan);

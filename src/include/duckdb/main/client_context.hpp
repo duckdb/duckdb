@@ -72,8 +72,6 @@ public:
 
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
-	//! Data for the currently running transaction
-	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! External Objects (e.g., Python objects) that views depend of
@@ -84,9 +82,11 @@ public:
 	ClientConfig config;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
+	//! Data for the currently running transaction
+	TransactionContext transaction;
 
 public:
-	DUCKDB_API Transaction &ActiveTransaction() {
+	DUCKDB_API MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
