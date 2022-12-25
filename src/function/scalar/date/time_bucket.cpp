@@ -51,12 +51,12 @@ struct TimeBucket {
 	}
 
 	template <typename T>
-	static int32_t EpochMonths(T ts) {
+	static inline int32_t EpochMonths(T ts) {
 		date_t ts_date = Cast::template Operation<T, date_t>(ts);
 		return (Date::ExtractYear(ts_date) - 1970) * 12 + Date::ExtractMonth(ts_date) - 1;
 	}
 
-	static timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros, int64_t origin_micros) {
+	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros, int64_t origin_micros) {
 		origin_micros %= bucket_width_micros;
 		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
 			throw OutOfRangeException("Timestamp out of range");
@@ -78,7 +78,7 @@ struct TimeBucket {
 		return Timestamp::FromEpochMicroSeconds(result_micros);
 	}
 
-	static date_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months, int32_t origin_months) {
+	static inline date_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months, int32_t origin_months) {
 		origin_months %= bucket_width_months;
 		if (origin_months > 0 && ts_months < NumericLimits<int32_t>::Minimum() + origin_months) {
 			throw NotImplementedException("Timestamp out of range");
@@ -192,7 +192,6 @@ struct TimeBucket {
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
 			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(origin));
-
 			return Cast::template Operation<timestamp_t, TR>(
 			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros));
 		}
@@ -206,7 +205,6 @@ struct TimeBucket {
 			}
 			int32_t ts_months = EpochMonths(ts);
 			int32_t origin_months = EpochMonths(origin);
-
 			return Cast::template Operation<date_t, TR>(
 			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months));
 		}
