@@ -58,8 +58,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 		return (ExtractField(calendar, UCAL_YEAR) - 1970) * 12 + ExtractField(calendar, UCAL_MONTH);
 	}
 
-	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros, int64_t origin_micros,
-	                                           icu::Calendar *calendar) {
+	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros,
+	                                                  int64_t origin_micros, icu::Calendar *calendar) {
 		origin_micros %= bucket_width_micros;
 		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
 			throw OutOfRangeException("Timestamp out of range");
@@ -78,12 +78,11 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 		result_micros += origin_micros;
 
-		return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(
-		    timestamp_t::epoch(), Interval::FromMicro(result_micros), calendar);
+		return Add(calendar, timestamp_t::epoch(), Interval::FromMicro(result_micros));
 	}
 
-	static inline timestamp_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months, int32_t origin_months,
-	                                             icu::Calendar *calendar) {
+	static inline timestamp_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months,
+	                                                    int32_t origin_months, icu::Calendar *calendar) {
 		origin_months %= bucket_width_months;
 		if (origin_months > 0 && ts_months < NumericLimits<int32_t>::Minimum() + origin_months) {
 			throw NotImplementedException("Timestamp out of range");
@@ -275,10 +274,9 @@ timestamp_t ICUTimeBucket::OffsetWidthLessThanDaysTernaryOperator::Operation(int
 		return ts;
 	}
 	int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-	int64_t ts_micros = Timestamp::GetEpochMicroSeconds(
-	    ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(ts, offset, calendar));
-	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(
-	    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS, calendar), offset, calendar);
+	int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Sub(calendar, ts, offset));
+	return Add(calendar, WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS, calendar),
+	           offset);
 }
 
 template <>
@@ -288,10 +286,9 @@ timestamp_t ICUTimeBucket::OffsetWidthMoreThanMonthsTernaryOperator::Operation(i
 	if (!Value::IsFinite(ts)) {
 		return ts;
 	}
-	int32_t ts_months =
-	    EpochMonths(ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(ts, offset, calendar), calendar);
-	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(
-	    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS, calendar), offset, calendar);
+	int32_t ts_months = EpochMonths(Sub(calendar, ts, offset), calendar);
+	return Add(calendar, WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS, calendar),
+	           offset);
 }
 
 template <>

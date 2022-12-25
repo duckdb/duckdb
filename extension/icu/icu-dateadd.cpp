@@ -1,14 +1,28 @@
 #include "include/icu-dateadd.hpp"
-#include "include/icu-datefunc.hpp"
 
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "include/icu-datefunc.hpp"
 
 namespace duckdb {
+
+struct ICUCalendarAdd {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+		throw InternalException("Unimplemented type for ICUCalendarAdd");
+	}
+};
+
+struct ICUCalendarSub : public ICUDateFunc {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+		throw InternalException("Unimplemented type for ICUCalendarSub");
+	}
+};
 
 struct ICUCalendarAge : public ICUDateFunc {
 	template <class TA, class TB, class TR>
@@ -222,6 +236,22 @@ struct ICUDateAdd : public ICUDateFunc {
 		catalog.AddFunction(context, &func_info);
 	}
 };
+
+timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
+}
+
+timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, interval_t interval, timestamp_t timestamp) {
+	return ICUCalendarAdd::Operation<interval_t, timestamp_t, timestamp_t>(interval, timestamp, calendar);
+}
+
+timestamp_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+	return ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
+}
+
+interval_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date) {
+	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
+}
 
 void RegisterICUDateAddFunctions(ClientContext &context) {
 	ICUDateAdd::AddDateAddOperators("+", context);
