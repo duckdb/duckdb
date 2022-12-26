@@ -20,6 +20,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/union_by_name.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -343,33 +344,9 @@ public:
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
-		idx_t union_names_index = 0;
-
-		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
-			auto reader = make_shared<ParquetReader>(context, result->files[file_idx], parquet_options);
-			auto &col_names = reader->names;
-			auto &sql_types = reader->return_types;
-			D_ASSERT(col_names.size() == sql_types.size());
-
-			// union_col_names will exclude generated columns
-			// like filename, hivepartition etc.
-			for (idx_t col = 0; col <= reader->last_parquet_col; ++col) {
-				auto union_find = union_names_map.find(col_names[col]);
-
-				if (union_find != union_names_map.end()) {
-					LogicalType compatible_type;
-					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
-					union_col_types[union_find->second] = compatible_type;
-				} else {
-					union_names_map[col_names[col]] = union_names_index;
-					union_names_index++;
-
-					union_col_names.emplace_back(col_names[col]);
-					union_col_types.emplace_back(sql_types[col]);
-				}
-			}
-			result->union_readers.push_back(move(reader));
-		}
+		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(context, result->files, union_col_types, 
+															 union_col_names, union_names_map, parquet_options);
+		move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
 
 		for (auto &reader : result->union_readers) {
 			reader->have_init_schema = true;
@@ -395,12 +372,12 @@ public:
 
 		// Add Generated cols (filename, hive_partitioning etc)
 		result->SetInitialReader(result->union_readers[0]);
-		auto first_generated_col = result->initial_reader->last_parquet_col + 1;
-		auto last_generated_col = result->initial_reader->names.size() - 1;
-		for (idx_t col = first_generated_col; col <= last_generated_col; ++col) {
-			names.push_back(result->initial_reader->names[col]);
-			return_types.push_back(result->initial_reader->return_types[col]);
-		}
+		// auto first_generated_col = result->initial_reader->last_parquet_col + 1;
+		// auto last_generated_col = result->initial_reader->names.size() - 1;
+		// for (idx_t col = first_generated_col; col <= last_generated_col; ++col) {
+		// 	names.push_back(result->initial_reader->names[col]);
+		// 	return_types.push_back(result->initial_reader->return_types[col]);
+		// }
 		D_ASSERT(names.size() == return_types.size());
 
 		return move(result);
