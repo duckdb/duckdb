@@ -58,7 +58,7 @@ public:
 	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options,
-                      const vector<LogicalType> &requested_types = vector<LogicalType>());
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	unique_ptr<char[]> buffer;

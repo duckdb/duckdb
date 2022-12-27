@@ -344,11 +344,11 @@ public:
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
-		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(context, result->files, union_col_types, 
-															 union_col_names, union_names_map, parquet_options);
+		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(
+		    context, result->files, union_col_types, union_col_names, union_names_map, parquet_options);
 
-		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(move(dummy_readers), union_col_types, 
-										 			 		union_col_names, union_names_map);	
+		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(move(dummy_readers), union_col_types,
+		                                                                           union_col_names, union_names_map);
 
 		move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
 		names.assign(union_col_names.begin(), union_col_names.end());

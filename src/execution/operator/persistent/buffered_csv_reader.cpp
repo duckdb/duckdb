@@ -39,14 +39,13 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context), 
-	move(options_p), requested_types), buffer_size(0), position(0), start(0) {
-		options.file_path = move(filename);
-		file_handle = OpenCSV(options);
-		Initialize(requested_types);
+    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
+                    move(options_p), requested_types),
+      buffer_size(0), position(0), start(0) {
+	options.file_path = move(filename);
+	file_handle = OpenCSV(options);
+	Initialize(requested_types);
 }
-
-
 
 BufferedCSVReader::~BufferedCSVReader() {
 }
@@ -247,7 +246,7 @@ static string NormalizeColumnName(const string &col_name) {
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	PrepareComplexParser();
 	if (options.auto_detect) {
-		return_types= SniffCSV(requested_types);
+		return_types = SniffCSV(requested_types);
 		if (return_types.empty()) {
 			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}

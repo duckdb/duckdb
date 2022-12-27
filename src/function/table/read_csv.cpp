@@ -147,17 +147,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
 
-		auto dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::UnionCols(context, result->files, union_col_types, 
-															 union_col_names, union_names_map, options);
-		
-		dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::CreateUnionMap(move(dummy_readers), union_col_types, 
-										 			 		union_col_names, union_names_map);	
+		auto dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::UnionCols(
+		    context, result->files, union_col_types, union_col_names, union_names_map, options);
+
+		dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::CreateUnionMap(
+		    move(dummy_readers), union_col_types, union_col_names, union_names_map);
 
 		move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
-		for(auto &reader : result->union_readers){
+		for (auto &reader : result->union_readers) {
 			reader->insert_cols_idx = reader->union_idx_map;
 		}
-		
+
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		const idx_t first_file_index = 0;

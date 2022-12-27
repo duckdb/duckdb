@@ -702,7 +702,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
 	state.root_reader = CreateReader(GetFileMetadata());
-	if(parquet_options.union_by_name){
+	if (parquet_options.union_by_name) {
 		RearrangeRootReader(state.root_reader);
 	}
 
@@ -710,18 +710,18 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::RearrangeRootReader(unique_ptr<duckdb::ColumnReader>& root_reader){
+void ParquetReader::RearrangeRootReader(unique_ptr<duckdb::ColumnReader> &root_reader) {
 	auto &root_struct_reader = (StructColumnReader &)*root_reader;
 	const auto meta_data = metadata->metadata.get();
 	const idx_t next_file_idx = meta_data->row_groups[0].columns.size();
 
 	vector<unique_ptr<ColumnReader>> union_child_readers(union_col_types.size());
 	for (idx_t col = 0; col < union_col_types.size(); ++col) {
-			auto null_reader = make_unique<GeneratedNullColumnReader>(*this, LogicalTypeId::SQLNULL,
-																	SchemaElement(), next_file_idx, 0, 0);
-			union_child_readers[col] = move(null_reader);
-	}	
-	for(idx_t col = 0; col < union_idx_map.size(); ++col){
+		auto null_reader =
+		    make_unique<GeneratedNullColumnReader>(*this, LogicalTypeId::SQLNULL, SchemaElement(), next_file_idx, 0, 0);
+		union_child_readers[col] = move(null_reader);
+	}
+	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
 		auto child_reader = move(root_struct_reader.child_readers[col]);
 		auto union_reader = make_unique<CastColumnReader>(move(child_reader), union_col_types[union_idx_map[col]]);
 		union_child_readers[union_idx_map[col]] = move(union_reader);

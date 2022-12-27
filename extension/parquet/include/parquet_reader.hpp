@@ -120,7 +120,7 @@ public:
 	vector<bool> union_null_cols;
 	//! All union cols will cast to same type.
 	vector<LogicalType> union_col_types;
-	
+
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
 	                    TableFilterSet *table_filters);
@@ -151,7 +151,7 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
-	void RearrangeRootReader(unique_ptr<duckdb::ColumnReader>& root_reader);
+	void RearrangeRootReader(unique_ptr<duckdb::ColumnReader> &root_reader);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

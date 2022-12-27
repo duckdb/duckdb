@@ -279,7 +279,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 
 void BaseCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
 	for (idx_t col = 0; col < union_null_cols.size(); ++col) {
-		if(union_null_cols[col]){
+		if (union_null_cols[col]) {
 			insert_chunk.data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(insert_chunk.data[col], true);
 		}
