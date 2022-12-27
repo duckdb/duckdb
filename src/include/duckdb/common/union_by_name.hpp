@@ -53,7 +53,7 @@ public:
 			}
 			union_readers.push_back(move(reader));
 		}
-		return move(union_readers);
+		return union_readers;
 	}
 
 	//! Create information for reader's col mapping to union cols
@@ -76,7 +76,7 @@ public:
 			reader->union_idx_map = move(union_idx_map);
 			reader->union_null_cols = move(union_null_cols);
 		}
-		return move(union_readers);
+		return union_readers;
 	}
 };
 
