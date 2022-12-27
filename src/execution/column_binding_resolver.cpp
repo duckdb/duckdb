@@ -90,8 +90,8 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	}
 	bound_columns += "]";
 
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
-	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
+	throw BinderException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
+	                      expr.binding.table_index, expr.binding.column_index, bound_columns);
 	// LCOV_EXCL_STOP
 }
 

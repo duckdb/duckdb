@@ -34,6 +34,7 @@ public:
 	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
+
 	//! Which action to take on conflict
 	OnConflictAction action_type;
 	// The types that the DO UPDATE .. SET (expressions) are cast to
@@ -42,6 +43,18 @@ public:
 	vector<column_t> on_conflict_filter;
 	// The Index name to apply the ON CONFLICT on
 	string constraint_name;
+	// The WHERE clause of the conflict_target (ON CONFLICT .. WHERE <condition>)
+	unique_ptr<Expression> on_conflict_condition;
+	// The WHERE clause of the DO UPDATE clause
+	unique_ptr<Expression> do_update_condition;
+	// The table_index for the 'excluded' qualified columns
+	idx_t excluded_table_index;
+	// The table_index for the regular columns
+	idx_t non_excluded_table_index;
+	// The DO UPDATE SET expressions
+	vector<unique_ptr<Expression>> set_expressions;
+	// The binding for the 'excluded' table
+	unique_ptr<TableRef> excluded_table_ref;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

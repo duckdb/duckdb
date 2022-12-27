@@ -26,6 +26,7 @@ void LogicalAggregate::ResolveTypes() {
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
 	vector<ColumnBinding> result;
+	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
 		result.emplace_back(group_index, i);
 	}

@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 
@@ -34,13 +36,65 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 	}
 }
 
-unique_ptr<LogicalOperator> Binder::BindOnConflictClause(unique_ptr<LogicalOperator> &root,
-                                                         unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table,
-                                                         InsertStatement &stmt) {
+void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table,
+                                        vector<PhysicalIndex> &columns) {
+	insert->excluded_table_index = GenerateTableIndex();
+	insert->non_excluded_table_index = GenerateTableIndex();
+
+	// TODO: need to register which columnref expressions are 'excluded'
+	//  and then later change the BoundReferenceExpression index of these later
+	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
+	for (idx_t i = 0; i < set_info.columns.size(); i++) {
+		auto &colname = set_info.columns[i];
+		auto &expr = set_info.expressions[i];
+		if (!table->ColumnExists(colname)) {
+			throw BinderException("Referenced update column %s not found in table!", colname);
+		}
+		auto &column = table->GetColumn(colname);
+		if (column.Generated()) {
+			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+		}
+		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
+			throw BinderException("Multiple assignments to same column \"%s\"", colname);
+		}
+		columns.push_back(column.Physical());
+		if (expr->type == ExpressionType::VALUE_DEFAULT) {
+			insert->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
+		} else {
+			UpdateBinder binder(*this, context);
+			binder.target_type = column.Type();
+			// TODO: temporarily remove the 'excluded' qualification before binding
+			D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
+			auto &column_ref = (ColumnRefExpression &)*expr;
+			auto bound_expr = binder.Bind(expr);
+			D_ASSERT(bound_expr);
+			if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+				throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
+			}
+			insert->expressions.push_back(make_unique<BoundColumnRefExpression>(
+			    bound_expr->return_type, ColumnBinding(insert->excluded_table_index, insert->set_expressions.size())));
+			insert->set_expressions.push_back(move(bound_expr));
+		}
+	}
+}
+
+void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt) {
+	LogicalGet *get;
+
 	if (!stmt.on_conflict_info) {
 		insert->action_type = OnConflictAction::THROW;
-		return nullptr;
+		return;
 	}
+	insert->excluded_table_ref = stmt.table_ref->Copy();
+	D_ASSERT(stmt.table_ref->type == TableReferenceType::BASE_TABLE);
+	((BaseTableRef &)*insert->excluded_table_ref).alias = "excluded";
+	// visit the table reference
+	auto bound_table = Bind(*stmt.table_ref);
+	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+		throw BinderException("Can only update base table!");
+	}
+	auto bound_excluded_table = Bind(*insert->excluded_table_ref);
+
 	auto &on_conflict = *stmt.on_conflict_info;
 	insert->action_type = on_conflict.action_type;
 
@@ -155,7 +209,7 @@ unique_ptr<LogicalOperator> Binder::BindOnConflictClause(unique_ptr<LogicalOpera
 	}
 
 	if (insert->action_type != OnConflictAction::UPDATE) {
-		return nullptr;
+		return;
 	}
 	D_ASSERT(on_conflict.set_info);
 	auto &set_info = *on_conflict.set_info;
@@ -166,52 +220,26 @@ unique_ptr<LogicalOperator> Binder::BindOnConflictClause(unique_ptr<LogicalOpera
 		// Bind the ON CONFLICT ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(on_conflict.condition);
-
-		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(move(condition));
-		filter->AddChild(move(root));
-		root = move(filter);
+		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+			throw BinderException("conflict_target WHERE clause can not be a subquery");
+		}
+		insert->on_conflict_condition = move(condition);
 	}
 
 	if (set_info.condition) {
 		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(set_info.condition);
-
-		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(move(condition));
-		filter->AddChild(move(root));
-		root = move(filter);
+		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+			throw BinderException("conflict_target WHERE clause can not be a subquery");
+		}
+		insert->do_update_condition = move(condition);
 	}
 
+	// Instead of this, it should probably be a DummyTableRef
+	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
 	vector<PhysicalIndex> set_columns;
-	auto proj = BindUpdateSet(insert.get(), move(root), set_info, table, set_columns,
-	                          [&](unique_ptr<ParsedExpression> &expr) -> bool {
-		                          if (expr->type != ExpressionType::COLUMN_REF) {
-			                          return false;
-		                          }
-		                          // check if the expression is qualified as 'excluded', in which case this refers
-		                          // to the inserted values, not the current values of the table
-		                          auto &column = (ColumnRefExpression &)*expr;
-		                          auto &names = column.column_names;
-		                          if (names.size() == 1) {
-			                          return false;
-		                          }
-		                          auto &table_name = column.GetTableName();
-		                          if (table_name == "excluded") {
-			                          return true;
-		                          }
-		                          return false;
-	                          });
-	// Check the SET expressions for expressions qualified as 'excluded.'
-	// FIXME: do we need to check for 'excluded' here? it only really matters when we execute the expression
-	// we need to use the inserted columns as input chunk..
-	// .. if we can reference both 'excluded.' and the regular table in an expression, then
-	// we need to fill a datachunk with the original values, and splice them together, altering the storage_t of the
-	// expression...
-
-	// TODO: check for multiple assignments
-	return proj;
+	BindDoUpdateSetExpressions(insert.get(), set_info, table, set_columns);
 }
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
@@ -322,14 +350,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
+	// FIXME: this creates a projection, with a child LogicalExpressionGet
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-	auto proj = BindOnConflictClause(root, insert, table, stmt);
-	if (proj) {
-		// We have a DO UPDATE on conflict action, created a projection and moved root into it
-		insert->AddChild(move(proj));
-	} else {
-		insert->AddChild(move(root));
-	}
+	BindOnConflictClause(insert, table, stmt);
+	insert->AddChild(move(root));
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;

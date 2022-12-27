@@ -57,6 +57,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> returning_list;
 
 	unique_ptr<OnConflictInfo> on_conflict_info;
+	unique_ptr<TableRef> table_ref;
 
 	//! CTEs
 	CommonTableExpressionMap cte_map;

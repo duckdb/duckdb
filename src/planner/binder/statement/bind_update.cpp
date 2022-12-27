@@ -128,22 +128,15 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	}
 }
 
-void VerifySingleAssignment(vector<PhysicalIndex> &columns, const string &colname, ColumnDefinition &column) {
-	if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
-		throw BinderException("Multiple assignments to same column \"%s\"", colname);
-	}
-	columns.push_back(column.Physical());
-}
-
 // This creates a LogicalProjection and moves 'root' into it as a child
 // unless there are no expressions to project, in which case it just returns 'root'
-unique_ptr<LogicalOperator>
-Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, UpdateSetInfo &set_info,
-                      TableCatalogEntry *table, vector<PhysicalIndex> &columns,
-                      const std::function<bool(unique_ptr<ParsedExpression> &expr)> &skip_predicate) {
+unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root,
+                                                  UpdateSetInfo &set_info, TableCatalogEntry *table,
+                                                  vector<PhysicalIndex> &columns) {
 	auto proj_index = GenerateTableIndex();
 
 	vector<unique_ptr<Expression>> projection_expressions;
+	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -154,15 +147,15 @@ Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root, Upd
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		VerifySingleAssignment(columns, colname, column);
+		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
+			throw BinderException("Multiple assignments to same column \"%s\"", colname);
+		}
+		columns.push_back(column.Physical());
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			op->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
-			if (skip_predicate(expr)) {
-				continue;
-			}
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 
@@ -234,8 +227,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	D_ASSERT(stmt.set_info);
 	D_ASSERT(stmt.set_info->columns.size() == stmt.set_info->expressions.size());
 
-	auto proj_tmp = BindUpdateSet(update.get(), move(root), *stmt.set_info, table, update->columns,
-	                              [&](unique_ptr<ParsedExpression> &expr) -> bool { return false; });
+	auto proj_tmp = BindUpdateSet(update.get(), move(root), *stmt.set_info, table, update->columns);
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(move(proj_tmp));
 

@@ -52,6 +52,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 	}
 	dependencies.insert(op.table);
 
+	// FIXME: should this not assert `plan` is not nullptr?
 	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
 	bool use_batch_index = UseBatchIndex(*plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -70,6 +71,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		                                     parallel_streaming_insert && num_threads > 1, op.action_type);
 	}
 	if (plan) {
+		// FIXME: same as above
 		insert->children.push_back(move(plan));
 	}
 	return insert;
