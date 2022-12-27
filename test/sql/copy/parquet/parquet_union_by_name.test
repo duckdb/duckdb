@@ -37,8 +37,9 @@ COPY ubn2 TO '__TEST_DIR__/ubn2.parquet' WITH (FORMAT PARQUET);
 statement ok
 COPY ubn3 TO '__TEST_DIR__/ubn3.parquet' WITH (FORMAT PARQUET);
 
+# If use SELECT * some filesystem may surprisingly success
 statement error
-SELECT * FROM parquet_scan('__TEST_DIR__/ubn*.parquet')
+SELECT a,b,c FROM parquet_scan('__TEST_DIR__/ubn*.parquet')
 
 query III
 SELECT a,b,c 
@@ -57,7 +58,7 @@ ORDER BY a;
 # without union by name, parquet reader will use the first parquet files's type
 statement error
 SELECT a 
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet') 
+FROM parquet_scan(['__TEST_DIR__/ubn2.parquet', '__TEST_DIR__/ubn1.parquet', '__TEST_DIR__/ubn3.parquet']) 
 ORDER BY a;
 
 # with union by name, parquet readers will use max logical type
