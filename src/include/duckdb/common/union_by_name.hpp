@@ -20,7 +20,7 @@ template <class READER_TYPE, class OPTION_TYPE>
 class UnionByName {
 
 public:
-	//! Union all files by their col names
+	//! Union all files(readers) by their col names
 	DUCKDB_API static vector<unique_ptr<READER_TYPE>> UnionCols(ClientContext &context, const vector<string> &files, 
 									vector<LogicalType> &union_col_types, vector<string> &union_col_names,
 									case_insensitive_map_t<idx_t> &union_names_map, OPTION_TYPE options) {
@@ -56,7 +56,7 @@ public:
 		return move(union_readers);
 	}
 
-	//! 
+	//! Create information for reader's col mapping to union cols 
 	DUCKDB_API static vector<unique_ptr<READER_TYPE>> CreateUnionMap(vector<unique_ptr<READER_TYPE>> union_readers, vector<LogicalType> &union_col_types, 
 										  vector<string> &union_col_names, case_insensitive_map_t<idx_t> &union_names_map){
 		for (auto &reader : union_readers) {

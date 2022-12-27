@@ -224,8 +224,8 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	options.auto_detect = true;
 	BufferedCSVReader reader(*context, options);
 	vector<ColumnDefinition> column_list;
-	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
-		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
+	for (idx_t i = 0; i < reader.return_types.size(); i++) {
+		column_list.emplace_back(reader.names[i], reader.return_types[i]);
 	}
 	return make_shared<ReadCSVRelation>(context, csv_file, move(column_list), true);
 }

@@ -44,13 +44,15 @@ public:
 	Allocator &allocator;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
-	vector<LogicalType> sql_types;
-	vector<string> col_names;
+	vector<LogicalType> return_types;
+	vector<string> names;
 
 	//! remap parse_chunk col to insert_chunk col, because when
 	//! union_by_name option on insert_chunk may have more cols
 	vector<idx_t> insert_cols_idx;
-	vector<idx_t> insert_nulls_idx;
+	vector<idx_t> union_idx_map;
+	vector<bool> union_null_cols;
+	vector<LogicalType> union_col_types;
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
@@ -100,7 +102,7 @@ protected:
 	static string GetLineNumberStr(idx_t linenr, bool linenr_estimated);
 
 protected:
-	//! Whether or not the current row's columns have overflown sql_types.size()
+	//! Whether or not the current row's columns have overflown return_types.size()
 	bool error_column_overflow = false;
 	//! Number of sniffed columns - only used when auto-detecting
 	vector<idx_t> sniffed_column_counts;
