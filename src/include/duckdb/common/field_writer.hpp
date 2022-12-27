@@ -204,6 +204,21 @@ public:
 	}
 
 	template <class T, class CONTAINER_TYPE = vector<T>>
+	bool ReadList(CONTAINER_TYPE &result) {
+		if (field_count >= max_field_count) {
+			// field is not there, return false and leave the result empty
+			return false;
+		}
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+		result.reserve(result_count);
+		for (idx_t i = 0; i < result_count; i++) {
+			result.push_back(source.Read<T>());
+		}
+		return true;
+	}
+
+	template <class T, class CONTAINER_TYPE = vector<T>>
 	CONTAINER_TYPE ReadRequiredList() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception

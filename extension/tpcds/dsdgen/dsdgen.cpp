@@ -34,7 +34,7 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 		}
 		info->constraints.push_back(make_unique<UniqueConstraint>(move(pk_columns), true));
 	}
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 	catalog.CreateTable(context, move(info));
 }
 
@@ -76,7 +76,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	// populate append info
 	vector<unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 

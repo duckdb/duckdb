@@ -91,7 +91,7 @@ protected:
 	//! Adds a value to the current row
 	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
-	bool AddRow(DataChunk &insert_chunk, idx_t &column);
+	bool AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	bool Flush(DataChunk &insert_chunk, bool try_add_line = false);
 

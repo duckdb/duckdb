@@ -7,6 +7,8 @@
 
 %type <node> opt_collate_clause
 
+%type <node> indirection_expr
+
 
 
 
@@ -125,3 +127,4 @@
 %type <windef>	window_definition over_clause window_specification
 				opt_frame_clause frame_extent frame_bound
 %type <str>		opt_existing_window_name
+%type <str>		named_param

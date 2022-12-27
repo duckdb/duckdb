@@ -444,8 +444,13 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
-
-					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
+					idx_t num_buffers = 0;
+					bool parsing_success = true;
+					while (num_buffers < options.sample_chunks && !end_of_file_reached) {
+						parsing_success = parsing_success && TryParseCSV(ParserMode::SNIFFING_DIALECT);
+						num_buffers++;
+					}
+					if (!parsing_success) {
 						continue;
 					}
 
@@ -540,8 +545,10 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		}
 
 		// init parse chunk and read csv with info candidate
-		InitParseChunk(return_types.size());
-		ParseCSV(ParserMode::SNIFFING_DATATYPES);
+		InitParseChunk(sql_types.size());
+		if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
+			continue;
+		}
 		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
 			bool is_header_row = row_idx == 0;
 			idx_t row = row_idx - 1;
@@ -854,10 +861,13 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// type candidates, ordered by descending specificity (~ from high to low)
 	vector<LogicalType> type_candidates = {
-	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	    LogicalType::DATE,    LogicalType::TIME,
-	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::VARCHAR,
+	    LogicalType::TIMESTAMP,
+	    LogicalType::DATE,
+	    LogicalType::TIME,
+	    LogicalType::DOUBLE,
+	    /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    /*LogicalType::INTEGER,*/ /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
 	    LogicalType::SQLNULL};
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -982,7 +992,10 @@ add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	finished_chunk = AddRow(insert_chunk, column);
+	finished_chunk = AddRow(insert_chunk, column, error_message);
+	if (!error_message.empty()) {
+		return false;
+	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1120,7 +1133,10 @@ final_state:
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
+		if (!error_message.empty()) {
+			return false;
+		}
 	}
 	// final stage, only reached after parsing the file is finished
 	// flush the parsed chunk and finalize parsing
@@ -1193,7 +1209,13 @@ add_row : {
 	// check type of newline (\r or \n)
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	finished_chunk = AddRow(insert_chunk, column);
+	if (!error_message.empty()) {
+		return false;
+	}
+	finished_chunk = AddRow(insert_chunk, column, error_message);
+	if (!error_message.empty()) {
+		return false;
+	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -1304,7 +1326,10 @@ final_state:
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
+		if (!error_message.empty()) {
+			return false;
+		}
 	}
 
 	// final stage, only reached after parsing the file is finished

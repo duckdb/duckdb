@@ -87,6 +87,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExecuteStatement &)statement);
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 		return Bind((LogicalPlanStatement &)statement);
+	case StatementType::ATTACH_STATEMENT:
+		return Bind((AttachStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -259,6 +261,7 @@ void Binder::AddBoundView(ViewCatalogEntry *view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
+	D_ASSERT(parent.get() != this);
 	if (parent) {
 		return parent->GenerateTableIndex();
 	}
@@ -327,6 +330,12 @@ bool Binder::HasMatchingBinding(const string &table_name, const string &column_n
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
                                 string &error_message) {
+	string empty_catalog;
+	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error_message);
+}
+
+bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
+                                const string &column_name, string &error_message) {
 	Binding *binding = nullptr;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
@@ -338,12 +347,18 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 	if (!binding) {
 		return false;
 	}
-	if (!schema_name.empty()) {
+	if (!catalog_name.empty() || !schema_name.empty()) {
 		auto catalog_entry = binding->GetStandardEntry();
 		if (!catalog_entry) {
 			return false;
 		}
-		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
+		if (!catalog_name.empty() && catalog_entry->catalog->GetName() != catalog_name) {
+			return false;
+		}
+		if (!schema_name.empty() && catalog_entry->schema->name != schema_name) {
+			return false;
+		}
+		if (catalog_entry->name != table_name) {
 			return false;
 		}
 	}

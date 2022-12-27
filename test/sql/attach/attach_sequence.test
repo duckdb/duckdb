@@ -1,0 +1,37 @@
+# name: test/sql/attach/attach_sequence.test
+# description: Test attach mixed with sequences and default values
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement error
+CREATE TABLE db1.integers(i INTEGER DEFAULT nextval('seq'))
+----
+Cross catalog dependencies are not supported
+
+statement ok
+CREATE SEQUENCE db1.seq
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER DEFAULT nextval('db1.seq'))
+
+query I
+SELECT nextval('db1.seq')
+----
+1
+
+query I
+SELECT nextval('seq')
+----
+1
+
+statement error
+CREATE TABLE integers(i INTEGER DEFAULT nextval('db1.seq'))
+----
+Cross catalog dependencies are not supported

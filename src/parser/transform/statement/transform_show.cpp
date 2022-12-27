@@ -10,7 +10,9 @@ namespace duckdb {
 static void TransformShowName(unique_ptr<PragmaStatement> &result, const string &name) {
 	auto &info = *result->info;
 
-	if (name == "\"tables\"") {
+	if (StringUtil::Lower(name) == "\"databases\"") {
+		info.name = "show_databases";
+	} else if (name == "\"tables\"") {
 		// show all tables
 		info.name = "show_tables";
 	} else if (name == "__show_tables_expanded") {

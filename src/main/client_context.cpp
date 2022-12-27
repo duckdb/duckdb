@@ -43,7 +43,10 @@
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/http_stats.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -61,8 +64,7 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
-      client_data(make_unique<ClientData>(*this)) {
+    : db(move(database)), interrupted(false), client_data(make_unique<ClientData>(*this)), transaction(*this) {
 }
 
 ClientContext::~ClientContext() {
@@ -81,7 +83,7 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 void ClientContext::Destroy() {
 	auto lock = LockContext();
 	if (transaction.HasActiveTransaction()) {
-		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
 			transaction.Rollback();
 		}
@@ -148,7 +150,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 	query_progress = -1;
-	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
+	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
@@ -169,7 +171,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 		if (transaction.HasActiveTransaction()) {
 			// Move the query profiler into the history
 			auto &prev_profilers = client_data->query_profiler_history->GetPrevProfilers();
-			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(client_data->profiler));
+			prev_profilers.emplace_back(transaction.GetActiveQuery(), move(client_data->profiler));
 			// Reinitialize the query profiler
 			client_data->profiler = make_shared<QueryProfiler>(*this);
 			// Propagate settings of the saved query into the new profiler.
@@ -178,7 +180,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 				prev_profilers.pop_front();
 			}
 
-			ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
 					transaction.Commit();
@@ -232,10 +234,6 @@ Executor &ClientContext::GetExecutor() {
 
 FileOpener *FileOpener::Get(ClientContext &context) {
 	return ClientData::Get(context).file_opener.get();
-}
-
-SchemaCatalogEntry *SchemaCatalogEntry::GetTemporaryObjects(ClientContext &context) {
-	return context.client_data->temporary_objects.get();
 }
 
 const string &ClientContext::GetCurrentQuery() {
@@ -333,7 +331,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
-	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
+	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 
 	if (!planner.properties.bound_all_parameters) {
 		return result;
@@ -378,10 +376,19 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
-	auto &db_config = DBConfig::GetConfig(*this);
-	if (db_config.options.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
-		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-		                                   StatementTypeToString(statement.statement_type)));
+	auto &transaction = MetaTransaction::Get(*this);
+	auto &manager = DatabaseManager::Get(*this);
+	for (auto &modified_database : statement.properties.modified_databases) {
+		auto entry = manager.GetDatabase(*this, modified_database);
+		if (!entry) {
+			throw InternalException("Database \"%s\" not found", modified_database);
+		}
+		if (entry->IsReadOnly()) {
+			throw Exception(StringUtil::Format(
+			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
+			    StatementTypeToString(statement.statement_type), modified_database));
+		}
+		transaction.ModifyDatabase(entry);
 	}
 
 	// bind the bound values before execution
@@ -509,13 +516,15 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto n_param = statement->n_param;
+	auto named_param_map = move(statement->named_param_map);
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	RunFunctionInTransactionInternal(
 	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, move(statement)); }, false);
 	prepared_data->unbound_statement = move(unbound_statement);
-	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param);
+	return make_unique<PreparedStatement>(shared_from_this(), move(prepared_data), move(statement_query), n_param,
+	                                      move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
@@ -900,9 +909,8 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
-		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
+		auto existing_function =
+		    Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info->schema, info->name, true);
 		if (existing_function) {
 			auto new_info = (CreateScalarFunctionInfo *)info;
 			if (new_info->functions.MergeFunctionSet(existing_function->functions)) {
@@ -911,6 +919,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 			}
 		}
 		// create function
+		auto &catalog = Catalog::GetSystemCatalog(*this);
 		catalog.CreateFunction(*this, info);
 	});
 }
@@ -960,8 +969,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// obtain the table info
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto table = catalog.GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema_name, table_name, true);
 		if (!table) {
 			return;
 		}
@@ -978,8 +986,8 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*this);
-		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
+		auto table_entry =
+		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry->columns.PhysicalColumnCount()) {
 			throw Exception("Failed to append: table entry has different number of columns!");

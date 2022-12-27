@@ -213,10 +213,17 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	bool uncompressed = false;
+	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
+		uncompressed = true;
+	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
+		uncompressed = true;
+	}
+	if (uncompressed) {
 		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 		return;
 	}

@@ -789,6 +789,17 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
+//===--------------------------------------------------------------------===//
+// Parallel
+//===--------------------------------------------------------------------===//
+bool ParquetWriteIsParallel(ClientContext &context, FunctionData &bind_data) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.preserve_insertion_order) {
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                                     ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
@@ -825,6 +836,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
+	function.parallel = ParquetWriteIsParallel;
 	function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
 	function.copy_from_function = scan_fun.functions[0];
 
@@ -834,7 +846,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 	auto &context = *con.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan", true)) {
 		throw InvalidInputException("Parquet extension is either already loaded or built-in");

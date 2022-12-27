@@ -24,6 +24,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	bool parallel;
 	bool per_thread_output;
 
 public:
@@ -51,7 +52,7 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return per_thread_output;
+		return per_thread_output || parallel;
 	}
 };
 } // namespace duckdb

@@ -61,7 +61,6 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
@@ -100,14 +99,12 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py build/release/duckdb
-        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
       shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
 
     - name: Deploy
       shell: bash
@@ -116,7 +113,7 @@ jobs:
         zip -j duckdb_cli-osx-universal.zip build/release/duckdb
         zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
-        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -125,7 +122,6 @@ jobs:
           libduckdb-osx-universal.zip
           duckdb_cli-osx-universal.zip
           duckdb_odbc-osx-universal.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
 
   xcode-extensions:
     name: OSX Extensions Release

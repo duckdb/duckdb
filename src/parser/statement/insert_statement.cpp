@@ -4,13 +4,14 @@
 
 namespace duckdb {
 
-InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA) {
+InsertStatement::InsertStatement()
+    : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA), catalog(INVALID_CATALOG) {
 }
 
 InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other),
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
-      columns(other.columns), table(other.table), schema(other.schema) {
+      columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog) {
 	cte_map = other.cte_map.Copy();
 }
 
@@ -18,6 +19,9 @@ string InsertStatement::ToString() const {
 	string result;
 	result = cte_map.ToString();
 	result += "INSERT INTO ";
+	if (!catalog.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+	}
 	if (!schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}

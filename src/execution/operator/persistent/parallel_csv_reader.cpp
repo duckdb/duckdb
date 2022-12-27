@@ -214,14 +214,14 @@ add_row : {
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
-			AddRow(insert_chunk, column);
+			AddRow(insert_chunk, column, error_message);
 			success = Flush(insert_chunk);
 		}
 		reached_remainder_state = false;
 		parse_chunk.Reset();
 		return success;
 	} else {
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
 	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -362,14 +362,14 @@ final_state : {
 			if (try_add_line) {
 				bool success = column == return_types.size();
 				if (success) {
-					AddRow(insert_chunk, column);
+					AddRow(insert_chunk, column, error_message);
 					success = Flush(insert_chunk);
 				}
 				parse_chunk.Reset();
 				reached_remainder_state = false;
 				return success;
 			} else {
-				AddRow(insert_chunk, column);
+				AddRow(insert_chunk, column, error_message);
 			}
 		}
 	}

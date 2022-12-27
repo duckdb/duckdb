@@ -225,7 +225,7 @@ void ICUExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	// iterate over all the collations
 	int32_t count;
