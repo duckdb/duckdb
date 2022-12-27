@@ -545,7 +545,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		}
 
 		// init parse chunk and read csv with info candidate
-		InitParseChunk(sql_types.size());
+		InitParseChunk(return_types.size());
 		if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
 			continue;
 		}

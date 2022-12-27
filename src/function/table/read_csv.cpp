@@ -512,7 +512,7 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 	}
 	result->next_file = 1;
 	if (result->initial_reader) {
-		result->sql_types = result->initial_reader->sql_types;
+		result->sql_types = result->initial_reader->return_types;
 	}
 	return move(result);
 }
