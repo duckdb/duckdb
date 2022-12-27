@@ -114,18 +114,13 @@ public:
 	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
 	//! cols, those files might have cols at different positions and with different logical type.
 	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
-	unordered_map<column_t, column_t> union_column_map;
-	//! If the parquet file has union_cols5  union_cols[5] will be true.
+	vector<idx_t> union_idx_map;
+	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
 	//! some parquet files may not have all union cols.
-	vector<bool> is_union_cols;
+	vector<bool> union_null_cols;
 	//! All union cols will cast to same type.
-	vector<LogicalType> union_types;
-	//! Since We will call ParquetReader::CreateReader multiple times.
-	//! When we have all union names remap the child_readers.
-	bool have_init_schema;
-	//! Last idx before the generated cols.
-	idx_t last_parquet_col;
-
+	vector<LogicalType> union_col_types;
+	
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
 	                    TableFilterSet *table_filters);
@@ -156,6 +151,7 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
+	void RearrangeRootReader(unique_ptr<duckdb::ColumnReader>& root_reader);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

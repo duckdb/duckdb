@@ -346,38 +346,14 @@ public:
 		vector<LogicalType> union_col_types;
 		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(context, result->files, union_col_types, 
 															 union_col_names, union_names_map, parquet_options);
+
+		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(move(dummy_readers), union_col_types, 
+										 			 		union_col_names, union_names_map);	
+
 		move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
-
-		for (auto &reader : result->union_readers) {
-			reader->have_init_schema = true;
-			reader->union_types = union_col_types;
-			auto &col_names = reader->names;
-			vector<bool> is_null_cols(union_col_names.size(), true);
-
-			for (idx_t col = 0; col <= reader->last_parquet_col; ++col) {
-				idx_t remap_col = union_names_map[col_names[col]];
-				reader->union_column_map[remap_col] = col;
-				is_null_cols[remap_col] = false;
-			}
-			for (idx_t col = 0; col < union_col_names.size(); ++col) {
-				if (is_null_cols[col]) {
-					reader->is_union_cols.push_back(false);
-				} else {
-					reader->is_union_cols.push_back(true);
-				}
-			}
-		}
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
-
-		// Add Generated cols (filename, hive_partitioning etc)
 		result->SetInitialReader(result->union_readers[0]);
-		// auto first_generated_col = result->initial_reader->last_parquet_col + 1;
-		// auto last_generated_col = result->initial_reader->names.size() - 1;
-		// for (idx_t col = first_generated_col; col <= last_generated_col; ++col) {
-		// 	names.push_back(result->initial_reader->names[col]);
-		// 	return_types.push_back(result->initial_reader->return_types[col]);
-		// }
 		D_ASSERT(names.size() == return_types.size());
 
 		return move(result);

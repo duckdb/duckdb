@@ -20,7 +20,7 @@ template <class READER_TYPE, class OPTION_TYPE>
 class UnionByName {
 
 public:
-	//! Union all  files by their col names
+	//! Union all files by their col names
 	DUCKDB_API static vector<unique_ptr<READER_TYPE>> UnionCols(ClientContext &context, const vector<string> &files, 
 									vector<LogicalType> &union_col_types, vector<string> &union_col_names,
 									case_insensitive_map_t<idx_t> &union_names_map, OPTION_TYPE options) {
@@ -53,7 +53,29 @@ public:
 			}
 			union_readers.push_back(move(reader));
 		}
-		return union_readers;
+		return move(union_readers);
+	}
+
+	//! 
+	DUCKDB_API static vector<unique_ptr<READER_TYPE>> CreateUnionMap(vector<unique_ptr<READER_TYPE>> union_readers, vector<LogicalType> &union_col_types, 
+										  vector<string> &union_col_names, case_insensitive_map_t<idx_t> &union_names_map){
+		for (auto &reader : union_readers) {
+			auto &col_names = reader->names;
+			vector<bool> union_null_cols(union_col_names.size(), true);
+			vector<idx_t> union_idx_map(col_names.size(),0);
+			
+			for (idx_t col = 0; col < col_names.size(); ++col) {
+				idx_t union_idx = union_names_map[col_names[col]];
+				union_idx_map[col] = union_idx;
+				union_null_cols[union_idx] = false;
+			}
+
+			reader->union_col_types = union_col_types;
+			reader->union_idx_map = move(union_idx_map);
+			reader->union_null_cols = move(union_null_cols);
+		}
+		return  move(union_readers);
 	}
 };
-} // namespace duckdb
+
+}// namespace duckdb
