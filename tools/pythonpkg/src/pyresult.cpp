@@ -41,7 +41,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
 	return chunk;
 }
 
-py::tuple DuckDBPyResult::Fetchone() {
+py::object DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {

@@ -30,7 +30,7 @@ public:
 	explicit DuckDBPyResult() {};
 
 public:
-	py::tuple Fetchone();
+	py::object Fetchone();
 
 	py::list Fetchmany(idx_t size);
 
