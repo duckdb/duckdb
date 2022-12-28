@@ -169,6 +169,14 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
+
+[[cpp11::register]] SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right) {
+	unique_ptr<ParsedExpression> cond;
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, nullptr, JoinType::INNER);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+
 [[cpp11::register]] SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
 	unique_ptr<ParsedExpression> cond;
 
@@ -187,6 +195,68 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::INNER);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
+
+[[cpp11::register]] SEXP rapi_rel_left_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_inner_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::LEFT);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_right_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	return rapi_rel_left_join(right, left, conds);
+}
+
+[[cpp11::register]] SEXP rapi_rel_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_semi_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::SEMI);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_anti_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_anti_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::ANTI);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
 
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
@@ -216,6 +286,11 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] SEXP rapi_rel_union_all(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
 	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::UNION);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_intersect(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
+	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::INTERSECT);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 

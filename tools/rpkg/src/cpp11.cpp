@@ -139,6 +139,13 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right);
+extern "C" SEXP _duckdb_rapi_rel_full_join(SEXP left, SEXP right) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_full_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
 extern "C" SEXP _duckdb_rapi_rel_inner_join(SEXP left, SEXP right, SEXP conds) {
   BEGIN_CPP11
@@ -146,10 +153,45 @@ extern "C" SEXP _duckdb_rapi_rel_inner_join(SEXP left, SEXP right, SEXP conds) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_left_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
+extern "C" SEXP _duckdb_rapi_rel_left_join(SEXP left, SEXP right, SEXP conds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_left_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_rel_right_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
+extern "C" SEXP _duckdb_rapi_rel_right_join(SEXP left, SEXP right, SEXP conds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_right_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_rel_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
+extern "C" SEXP _duckdb_rapi_rel_semi_join(SEXP left, SEXP right, SEXP conds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_semi_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_rel_anti_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
+extern "C" SEXP _duckdb_rapi_rel_anti_join(SEXP left, SEXP right, SEXP conds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_anti_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_union_all(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b);
 extern "C" SEXP _duckdb_rapi_rel_union_all(SEXP rel_a, SEXP rel_b) {
   BEGIN_CPP11
     return cpp11::as_sexp(rapi_rel_union_all(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_a), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_b)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_rel_intersect(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b);
+extern "C" SEXP _duckdb_rapi_rel_intersect(SEXP rel_a, SEXP rel_b) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_intersect(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_a), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_b)));
   END_CPP11
 }
 // relational.cpp
@@ -317,49 +359,55 @@ extern "C" SEXP _duckdb_rapi_ptr_to_str(SEXP extptr) {
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
-    {"_duckdb_rapi_bind",               (DL_FUNC) &_duckdb_rapi_bind,               4},
-    {"_duckdb_rapi_connect",            (DL_FUNC) &_duckdb_rapi_connect,            1},
-    {"_duckdb_rapi_df_is_materialized", (DL_FUNC) &_duckdb_rapi_df_is_materialized, 1},
-    {"_duckdb_rapi_disconnect",         (DL_FUNC) &_duckdb_rapi_disconnect,         1},
-    {"_duckdb_rapi_execute",            (DL_FUNC) &_duckdb_rapi_execute,            3},
-    {"_duckdb_rapi_execute_arrow",      (DL_FUNC) &_duckdb_rapi_execute_arrow,      2},
-    {"_duckdb_rapi_expr_constant",      (DL_FUNC) &_duckdb_rapi_expr_constant,      1},
-    {"_duckdb_rapi_expr_function",      (DL_FUNC) &_duckdb_rapi_expr_function,      2},
-    {"_duckdb_rapi_expr_reference",     (DL_FUNC) &_duckdb_rapi_expr_reference,     2},
-    {"_duckdb_rapi_expr_set_alias",     (DL_FUNC) &_duckdb_rapi_expr_set_alias,     2},
-    {"_duckdb_rapi_expr_tostring",      (DL_FUNC) &_duckdb_rapi_expr_tostring,      1},
-    {"_duckdb_rapi_get_substrait",      (DL_FUNC) &_duckdb_rapi_get_substrait,      2},
-    {"_duckdb_rapi_get_substrait_json", (DL_FUNC) &_duckdb_rapi_get_substrait_json, 2},
-    {"_duckdb_rapi_prepare",            (DL_FUNC) &_duckdb_rapi_prepare,            2},
-    {"_duckdb_rapi_prepare_substrait",  (DL_FUNC) &_duckdb_rapi_prepare_substrait,  2},
-	{"_duckdb_rapi_prepare_substrait_json",  (DL_FUNC) &_duckdb_rapi_prepare_substrait_json,  2},
-    {"_duckdb_rapi_ptr_to_str",         (DL_FUNC) &_duckdb_rapi_ptr_to_str,         1},
-    {"_duckdb_rapi_record_batch",       (DL_FUNC) &_duckdb_rapi_record_batch,       2},
-    {"_duckdb_rapi_register_arrow",     (DL_FUNC) &_duckdb_rapi_register_arrow,     4},
-    {"_duckdb_rapi_register_df",        (DL_FUNC) &_duckdb_rapi_register_df,        6},
-    {"_duckdb_rapi_rel_aggregate",      (DL_FUNC) &_duckdb_rapi_rel_aggregate,      3},
-    {"_duckdb_rapi_rel_alias",          (DL_FUNC) &_duckdb_rapi_rel_alias,          1},
-    {"_duckdb_rapi_rel_distinct",       (DL_FUNC) &_duckdb_rapi_rel_distinct,       1},
-    {"_duckdb_rapi_rel_explain",        (DL_FUNC) &_duckdb_rapi_rel_explain,        1},
-    {"_duckdb_rapi_rel_filter",         (DL_FUNC) &_duckdb_rapi_rel_filter,         2},
-    {"_duckdb_rapi_rel_from_altrep_df", (DL_FUNC) &_duckdb_rapi_rel_from_altrep_df, 1},
-    {"_duckdb_rapi_rel_from_df",        (DL_FUNC) &_duckdb_rapi_rel_from_df,        3},
-    {"_duckdb_rapi_rel_inner_join",     (DL_FUNC) &_duckdb_rapi_rel_inner_join,     3},
-    {"_duckdb_rapi_rel_limit",          (DL_FUNC) &_duckdb_rapi_rel_limit,          2},
-    {"_duckdb_rapi_rel_names",          (DL_FUNC) &_duckdb_rapi_rel_names,          1},
-    {"_duckdb_rapi_rel_order",          (DL_FUNC) &_duckdb_rapi_rel_order,          2},
-    {"_duckdb_rapi_rel_project",        (DL_FUNC) &_duckdb_rapi_rel_project,        2},
-    {"_duckdb_rapi_rel_set_alias",      (DL_FUNC) &_duckdb_rapi_rel_set_alias,      2},
-    {"_duckdb_rapi_rel_sql",            (DL_FUNC) &_duckdb_rapi_rel_sql,            2},
-    {"_duckdb_rapi_rel_to_altrep",      (DL_FUNC) &_duckdb_rapi_rel_to_altrep,      1},
-    {"_duckdb_rapi_rel_to_df",          (DL_FUNC) &_duckdb_rapi_rel_to_df,          1},
-    {"_duckdb_rapi_rel_tostring",       (DL_FUNC) &_duckdb_rapi_rel_tostring,       1},
-    {"_duckdb_rapi_rel_union_all",      (DL_FUNC) &_duckdb_rapi_rel_union_all,      2},
-    {"_duckdb_rapi_release",            (DL_FUNC) &_duckdb_rapi_release,            1},
-    {"_duckdb_rapi_shutdown",           (DL_FUNC) &_duckdb_rapi_shutdown,           1},
-    {"_duckdb_rapi_startup",            (DL_FUNC) &_duckdb_rapi_startup,            3},
-    {"_duckdb_rapi_unregister_arrow",   (DL_FUNC) &_duckdb_rapi_unregister_arrow,   2},
-    {"_duckdb_rapi_unregister_df",      (DL_FUNC) &_duckdb_rapi_unregister_df,      2},
+    {"_duckdb_rapi_bind",                   (DL_FUNC) &_duckdb_rapi_bind,                   4},
+    {"_duckdb_rapi_connect",                (DL_FUNC) &_duckdb_rapi_connect,                1},
+    {"_duckdb_rapi_df_is_materialized",     (DL_FUNC) &_duckdb_rapi_df_is_materialized,     1},
+    {"_duckdb_rapi_disconnect",             (DL_FUNC) &_duckdb_rapi_disconnect,             1},
+    {"_duckdb_rapi_execute",                (DL_FUNC) &_duckdb_rapi_execute,                3},
+    {"_duckdb_rapi_execute_arrow",          (DL_FUNC) &_duckdb_rapi_execute_arrow,          2},
+    {"_duckdb_rapi_expr_constant",          (DL_FUNC) &_duckdb_rapi_expr_constant,          1},
+    {"_duckdb_rapi_expr_function",          (DL_FUNC) &_duckdb_rapi_expr_function,          2},
+    {"_duckdb_rapi_expr_reference",         (DL_FUNC) &_duckdb_rapi_expr_reference,         2},
+    {"_duckdb_rapi_expr_set_alias",         (DL_FUNC) &_duckdb_rapi_expr_set_alias,         2},
+    {"_duckdb_rapi_expr_tostring",          (DL_FUNC) &_duckdb_rapi_expr_tostring,          1},
+    {"_duckdb_rapi_get_substrait",          (DL_FUNC) &_duckdb_rapi_get_substrait,          2},
+    {"_duckdb_rapi_get_substrait_json",     (DL_FUNC) &_duckdb_rapi_get_substrait_json,     2},
+    {"_duckdb_rapi_prepare",                (DL_FUNC) &_duckdb_rapi_prepare,                2},
+    {"_duckdb_rapi_prepare_substrait",      (DL_FUNC) &_duckdb_rapi_prepare_substrait,      2},
+    {"_duckdb_rapi_prepare_substrait_json", (DL_FUNC) &_duckdb_rapi_prepare_substrait_json, 2},
+    {"_duckdb_rapi_ptr_to_str",             (DL_FUNC) &_duckdb_rapi_ptr_to_str,             1},
+    {"_duckdb_rapi_record_batch",           (DL_FUNC) &_duckdb_rapi_record_batch,           2},
+    {"_duckdb_rapi_register_arrow",         (DL_FUNC) &_duckdb_rapi_register_arrow,         4},
+    {"_duckdb_rapi_register_df",            (DL_FUNC) &_duckdb_rapi_register_df,            6},
+    {"_duckdb_rapi_rel_aggregate",          (DL_FUNC) &_duckdb_rapi_rel_aggregate,          3},
+    {"_duckdb_rapi_rel_alias",              (DL_FUNC) &_duckdb_rapi_rel_alias,              1},
+    {"_duckdb_rapi_rel_anti_join",          (DL_FUNC) &_duckdb_rapi_rel_anti_join,          3},
+    {"_duckdb_rapi_rel_distinct",           (DL_FUNC) &_duckdb_rapi_rel_distinct,           1},
+    {"_duckdb_rapi_rel_explain",            (DL_FUNC) &_duckdb_rapi_rel_explain,            1},
+    {"_duckdb_rapi_rel_filter",             (DL_FUNC) &_duckdb_rapi_rel_filter,             2},
+    {"_duckdb_rapi_rel_from_altrep_df",     (DL_FUNC) &_duckdb_rapi_rel_from_altrep_df,     1},
+    {"_duckdb_rapi_rel_from_df",            (DL_FUNC) &_duckdb_rapi_rel_from_df,            3},
+    {"_duckdb_rapi_rel_full_join",          (DL_FUNC) &_duckdb_rapi_rel_full_join,          2},
+    {"_duckdb_rapi_rel_inner_join",         (DL_FUNC) &_duckdb_rapi_rel_inner_join,         3},
+    {"_duckdb_rapi_rel_intersect",          (DL_FUNC) &_duckdb_rapi_rel_intersect,          2},
+    {"_duckdb_rapi_rel_left_join",          (DL_FUNC) &_duckdb_rapi_rel_left_join,          3},
+    {"_duckdb_rapi_rel_limit",              (DL_FUNC) &_duckdb_rapi_rel_limit,              2},
+    {"_duckdb_rapi_rel_names",              (DL_FUNC) &_duckdb_rapi_rel_names,              1},
+    {"_duckdb_rapi_rel_order",              (DL_FUNC) &_duckdb_rapi_rel_order,              2},
+    {"_duckdb_rapi_rel_project",            (DL_FUNC) &_duckdb_rapi_rel_project,            2},
+    {"_duckdb_rapi_rel_right_join",         (DL_FUNC) &_duckdb_rapi_rel_right_join,         3},
+    {"_duckdb_rapi_rel_semi_join",          (DL_FUNC) &_duckdb_rapi_rel_semi_join,          3},
+    {"_duckdb_rapi_rel_set_alias",          (DL_FUNC) &_duckdb_rapi_rel_set_alias,          2},
+    {"_duckdb_rapi_rel_sql",                (DL_FUNC) &_duckdb_rapi_rel_sql,                2},
+    {"_duckdb_rapi_rel_to_altrep",          (DL_FUNC) &_duckdb_rapi_rel_to_altrep,          1},
+    {"_duckdb_rapi_rel_to_df",              (DL_FUNC) &_duckdb_rapi_rel_to_df,              1},
+    {"_duckdb_rapi_rel_tostring",           (DL_FUNC) &_duckdb_rapi_rel_tostring,           1},
+    {"_duckdb_rapi_rel_union_all",          (DL_FUNC) &_duckdb_rapi_rel_union_all,          2},
+    {"_duckdb_rapi_release",                (DL_FUNC) &_duckdb_rapi_release,                1},
+    {"_duckdb_rapi_shutdown",               (DL_FUNC) &_duckdb_rapi_shutdown,               1},
+    {"_duckdb_rapi_startup",                (DL_FUNC) &_duckdb_rapi_startup,                3},
+    {"_duckdb_rapi_unregister_arrow",       (DL_FUNC) &_duckdb_rapi_unregister_arrow,       2},
+    {"_duckdb_rapi_unregister_df",          (DL_FUNC) &_duckdb_rapi_unregister_df,          2},
     {NULL, NULL, 0}
 };
 }
