@@ -69,8 +69,12 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
-	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem", py::arg("filesystem"))
-	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem", py::arg("name"))
+	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem",
+	         py::arg("filesystem"))
+	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem",
+	         py::arg("name"))
+	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
+	         "List registered filesystems, including builtin ones")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -153,13 +157,13 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 }
 
-void DuckDBPyConnection::UnregisterFilesystem(const py::str& name) {
+void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
 	auto &fs = database->GetFileSystem();
 
 	fs.UnregisterSubSystem(name);
 }
 
-void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem& filesystem) {
+void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem) {
 	PythonGILWrapper gil_wrapper;
 
 	if (!py::isinstance<AbstractFileSystem>(filesystem)) {
@@ -174,6 +178,14 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem& filesystem
 	}
 
 	fs.RegisterSubSystem(make_unique<PythonFilesystem>(prefix, filesystem));
+}
+
+py::list DuckDBPyConnection::ListFilesystems() {
+	auto subsystems = database->GetFileSystem().ListSubSystems();
+	py::list names;
+	for (auto &name : subsystems)
+		names.append(py::str(name));
+	return names;
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {

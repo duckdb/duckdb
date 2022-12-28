@@ -30,4 +30,5 @@ class TestPythonFilesystem:
         duckdb_cursor.unregister_filesystem('memory')
 
     def test_unregister_builtin(self, duckdb_cursor: DuckDBPyConnection):
+        assert 's3fs' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('s3fs')

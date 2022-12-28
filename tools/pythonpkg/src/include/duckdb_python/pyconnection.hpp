@@ -142,8 +142,9 @@ public:
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
-	void RegisterFilesystem(const AbstractFileSystem& filesystem);
-	void UnregisterFilesystem(const py::str& name);
+	void RegisterFilesystem(const AbstractFileSystem &filesystem);
+	void UnregisterFilesystem(const py::str &name);
+	py::list ListFilesystems();
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

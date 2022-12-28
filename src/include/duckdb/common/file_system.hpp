@@ -187,6 +187,7 @@ public:
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
+	DUCKDB_API virtual vector<string> ListSubSystems();
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);

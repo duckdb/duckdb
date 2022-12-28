@@ -311,6 +311,10 @@ void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
 }
 
+vector<string> FileSystem::ListSubSystems() {
+	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
+}
+
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }

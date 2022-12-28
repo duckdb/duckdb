@@ -109,6 +109,14 @@ public:
 		compressed_fs[compression_type] = move(fs);
 	}
 
+	vector<string> ListSubSystems() {
+		vector<string> names;
+		for (auto& sub_system : sub_systems) {
+			names.push_back(sub_system->GetName());
+		}
+		return names;
+	}
+
 	std::string GetName() const override {
 		return "VirtualFileSystem";
 	}
