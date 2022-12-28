@@ -502,32 +502,34 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	}
 }
 
-static int32_t GetISOYearWeek(int32_t &year, int32_t month, int32_t day) {
+static int32_t GetISOYearWeeks(int32_t year) {
+	//	https://en.wikipedia.org/wiki/ISO_week_date#Weeks_per_year
+	//	• years in which 1 January or 31 December are Thursdays
+	const auto dowDec31 = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 12, 31));
+	const auto dowJan01 = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 1));
+	return 52 + int(dowDec31 == 4 || dowJan01 == 4);
+}
+
+static int32_t GetISOYearWeek(const date_t date, int32_t &year) {
+	//	https://en.wikipedia.org/wiki/ISO_week_date#Calculating_the_week_number_from_an_ordinal_date
+	int32_t month, day;
+	Date::Convert(date, year, month, day);
 	auto day_of_the_year =
-	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month] : Date::CUMULATIVE_DAYS[month]) + day;
-	// get the first day of the first week of the year
-	// the first week is the week that has the 4th of January in it
-	const auto weekday_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
-	// if fourth is monday, then fourth is the first day
-	// if fourth is tuesday, third is the first day
-	// if fourth is wednesday, second is the first day
-	// if fourth is thursday, first is the first day
-	// if fourth is friday - sunday, day is in the previous year
-	// (day is 0-based, weekday is 1-based)
-	const auto first_day_of_the_first_isoweek = 4 - weekday_of_the_fourth;
-	if (day_of_the_year < first_day_of_the_first_isoweek) {
-		// day is part of last year (13th month)
-		--year;
-		return GetISOYearWeek(year, 12, day);
+	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month - 1] : Date::CUMULATIVE_DAYS[month - 1]) + day;
+	const auto dow = Date::ExtractISODayOfTheWeek(date);
+	const auto w = (10 + day_of_the_year - dow) / 7;
+	if (w < 1) {
+		return GetISOYearWeeks(--year);
+	} else if (w > GetISOYearWeeks(year)) {
+		++year;
+		return 1;
 	} else {
-		return ((day_of_the_year - first_day_of_the_first_isoweek) / 7) + 1;
+		return w;
 	}
 }
 
 void Date::ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week) {
-	int32_t month, day;
-	Date::Convert(date, year, month, day);
-	week = GetISOYearWeek(year, month - 1, day - 1);
+	week = GetISOYearWeek(date, year);
 }
 
 int32_t Date::ExtractISOWeekNumber(date_t date) {
