@@ -3,6 +3,7 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -138,6 +139,20 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 	return result;
 }
 
+void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
+	static char *evar;
+
+	if ((evar = std::getenv(env_var_name)) != NULL)
+		this->config.SetOption(key, Value(evar));
+}
+
+void AWSEnvironmentCredentialsProvider::SetAll() {
+	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
+}
+
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	string region;
 	string access_key_id;
@@ -265,49 +280,17 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
 
-	bool success = false;
-	string last_error = "";
-	auto time_at_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {}, (char *)write_buffer->Ptr(),
+	                      write_buffer->idx);
 
-	// Retry loop to make large uploads resilient to brief connection issues
-	while (true) {
-		try {
-			res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
-			                      (char *)write_buffer->Ptr(), write_buffer->idx);
-			if (res->code == 200) {
-				success = true;
-				break;
-			} else {
-				last_error = res->error + " (HTTP code " + to_string(res->code) + ")";
-			}
-		} catch (std::runtime_error &e) {
-			if (strncmp(e.what(), "HTTP PUT error", 14) != 0) {
-				throw e;
-			}
-			last_error = e.what();
-		}
-
-		// If there are no parts uploaded yet, failing immediately makes more sense than waiting for the time-out
-		if (file_handle.parts_uploaded.load() == 0) {
-			break;
-		}
-
-		auto current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-		if ((uint64_t)(current_time - time_at_start) > file_handle.http_params.timeout) {
-			break;
-		}
-
-		std::this_thread::sleep_for(milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS + 1));
-	}
-
-	if (!success) {
-		throw std::runtime_error("Unable to connect to URL \"" + file_handle.path + "\"(last attempt failed with: \"" +
-		                         last_error + "\")");
+	if (res->code != 200) {
+		throw IOException("Unable to connect to URL " + file_handle.path + " " + res->error + " (HTTP code " +
+		                  to_string(res->code) + ")");
 	}
 
 	auto etag_lookup = res->headers.find("ETag");
 	if (etag_lookup == res->headers.end()) {
-		throw std::runtime_error("Unexpected reponse when uploading part to S3");
+		throw IOException("Unexpected response when uploading part to S3");
 	}
 
 	// Insert etag
@@ -383,7 +366,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	for (auto i = 0; i < parts; i++) {
 		auto etag_lookup = file_handle.part_etags.find(i);
 		if (etag_lookup == file_handle.part_etags.end()) {
-			throw std::runtime_error("Unknown part number");
+			throw IOException("Unknown part number");
 		}
 		ss << "<Part><ETag>" << etag_lookup->second << "</ETag><PartNumber>" << i + 1 << "</PartNumber></Part>";
 	}
@@ -401,7 +384,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw std::runtime_error("Unexpected response during S3 multipart upload finalization");
+		throw IOException("Unexpected response during S3 multipart upload finalization");
 	}
 	file_handle.upload_finalized = true;
 }
@@ -507,14 +490,13 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 		} else if (found_param->second == "false") {
 			params.use_ssl = false;
 		} else {
-			throw std::runtime_error("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
+			throw IOException("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
 		}
 		query_params.erase(found_param);
 	}
 	if (!query_params.empty()) {
-		throw std::runtime_error(
-		    "Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
-		    "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
+		throw IOException("Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
+		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
 	}
 }
 
@@ -522,15 +504,15 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 	string http_proto, host, bucket, path, query_param;
 
 	if (url.rfind("s3://", 0) != 0) {
-		throw std::runtime_error("URL needs to start with s3://");
+		throw IOException("URL needs to start with s3://");
 	}
 	auto slash_pos = url.find('/', 5);
 	if (slash_pos == string::npos) {
-		throw std::runtime_error("URL needs to contain a '/' after the host");
+		throw IOException("URL needs to contain a '/' after the host");
 	}
 	bucket = url.substr(5, slash_pos - 5);
 	if (bucket.empty()) {
-		throw std::runtime_error("URL needs to contain a bucket name");
+		throw IOException("URL needs to contain a bucket name");
 	}
 
 	auto question_pos = url.find_last_of('?');
@@ -550,7 +532,7 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		query_param = url.substr(question_pos + 1);
 	}
 	if (path.empty()) {
-		throw std::runtime_error("URL needs to contain key");
+		throw IOException("URL needs to contain key");
 	}
 
 	if (params.url_style == "vhost" || params.url_style == "") {
@@ -577,7 +559,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 }
 
 static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url) {
-	string full_url = parsed_url.http_proto + parsed_url.host + parsed_url.path;
+	string full_url = parsed_url.http_proto + parsed_url.host + S3FileSystem::UrlEncode(parsed_url.path);
 
 	if (!parsed_url.query_param.empty()) {
 		full_url += "?" + parsed_url.query_param;
@@ -639,7 +621,7 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const 
                                                       FileLockType lock, FileCompressionType compression,
                                                       FileOpener *opener) {
 	if (!opener) {
-		throw std::runtime_error("CreateHandle called on S3FileSystem without FileOpener");
+		throw IOException("CreateHandle called on S3FileSystem without FileOpener");
 	}
 	auto s3authparams = S3AuthParams::ReadFrom(opener);
 	ReadQueryParams(query_param, s3authparams);
@@ -736,8 +718,8 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
-	auto res = HTTPFileHandle::Initialize();
+void S3FileHandle::Initialize(FileOpener *opener) {
+	HTTPFileHandle::Initialize(opener);
 
 	auto &s3fs = (S3FileSystem &)file_system;
 
@@ -759,8 +741,6 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 		parts_uploaded = 0;
 		upload_finalized = false;
 	}
-
-	return res;
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
@@ -841,8 +821,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Main paging loop
 	do {
 		// main listobject call, may
-		string response_str =
-		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token);
+		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
+		                                               main_continuation_token, HTTPStats::TryGetStats(opener));
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -856,8 +836,9 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			// Paging loop for common prefix requests
 			string common_prefix_continuation_token = "";
 			do {
-				auto prefix_res = AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params,
-				                                           common_prefix_continuation_token);
+				auto prefix_res =
+				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
+				                             HTTPStats::TryGetStats(opener));
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -892,7 +873,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, bool use_delimiter) {
+                                string &continuation_token, HTTPStats *stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
@@ -936,18 +917,23 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    std::cerr << response.reason << std::endl;
-			    throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                             std::to_string(response.status) + ")");
+			    throw IOException("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
+			                      std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
+		    if (stats) {
+			    stats->total_bytes_received += data_length;
+		    }
 		    response << string(data, data_length);
 		    return true;
 	    });
+	if (stats) {
+		stats->get_count++;
+	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
-		                         to_string((int)res.error()) + ")");
+		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + listobjectv2_url + "'");
 	}
 
 	return response.str();

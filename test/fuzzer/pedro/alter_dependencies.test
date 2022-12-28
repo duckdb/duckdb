@@ -1,0 +1,26 @@
+# name: test/fuzzer/pedro/alter_dependencies.test
+# description: Issue #4696: Alter table dependency conflict
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1 (c2 INT, c1 INT);
+
+statement ok
+CREATE INDEX i1 ON t1 (c1);
+
+statement ok
+START TRANSACTION;
+
+statement error
+ALTER TABLE t1 ALTER c2 TYPE BOOLEAN;
+----
+Cannot alter
+
+# committing triggers a rollback
+statement ok
+COMMIT;
+
+statement error
+ALTER TABLE t1 ALTER c2 SET NOT NULL;
+---
+Cannot alter

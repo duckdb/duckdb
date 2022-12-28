@@ -37,4 +37,8 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(LogicalDeserializa
 	return make_unique<LogicalColumnDataGet>(table_index, move(chunk_types), move(collection));
 }
 
+vector<idx_t> LogicalColumnDataGet::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

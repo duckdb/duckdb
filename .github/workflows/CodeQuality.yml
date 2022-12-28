@@ -100,8 +100,6 @@ jobs:
       matrix:
         testset:
           - 'standard'
-          - 'python'
-          - 'coverage'
     needs: tidy-check
     env:
       GEN: ninja

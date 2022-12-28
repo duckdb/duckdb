@@ -101,7 +101,9 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	const auto child_count = ListVector::GetListSize(input);
 
 	Vector child_hashes(LogicalType::HASH, child_count);
-	VectorOperations::Hash(child, child_hashes, child_count);
+	if (child_count > 0) {
+		VectorOperations::Hash(child, child_hashes, child_count);
+	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
 	// Reduce the number of entries to check to the non-empty ones

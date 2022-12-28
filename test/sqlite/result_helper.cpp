@@ -250,8 +250,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 	}
 
 	/* Check to see if we are expecting success or failure */
-	auto expect_ok = statement.expect_ok;
-	if (!expect_ok) {
+	auto expected_result = statement.expected_result;
+	if (expected_result != ExpectedResult::RESULT_SUCCESS) {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
@@ -259,9 +259,13 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		bool internal_error =
 		    result.HasError() ? TestIsInternalError(runner.always_fail_error_messages, result.GetError()) : false;
 		if (!internal_error) {
-			error = !error;
+			if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+				error = false;
+			} else {
+				error = !error;
+			}
 		} else {
-			expect_ok = true;
+			expected_result = ExpectedResult::RESULT_SUCCESS;
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
@@ -273,8 +277,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		logger.UnexpectedStatement(expect_ok, result);
-		if (expect_ok && SkipErrorMessage(result.GetError())) {
+		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}

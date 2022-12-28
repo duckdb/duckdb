@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
@@ -35,6 +36,13 @@ bool Transformer::TransformOrderBy(duckdb_libpgquery::PGList *order, vector<Orde
 				throw NotImplementedException("Unimplemented order by type");
 			}
 			auto order_expression = TransformExpression(target);
+			if (order_expression->GetExpressionClass() == ExpressionClass::STAR) {
+				auto &star_expr = (StarExpression &)*order_expression;
+				D_ASSERT(star_expr.relation_name.empty());
+				if (star_expr.columns) {
+					throw ParserException("COLUMNS expr is not supported in ORDER BY");
+				}
+			}
 			result.emplace_back(type, null_order, move(order_expression));
 		} else {
 			throw NotImplementedException("ORDER BY list member type %d\n", temp->type);

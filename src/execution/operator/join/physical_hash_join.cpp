@@ -306,6 +306,10 @@ public:
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
+	if (hash_table->Count() == 0) {
+		hash_table->finalized = true;
+		return;
+	}
 	hash_table->InitializePointerTable();
 	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(move(new_event));
@@ -476,7 +480,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	}
 
 	if (state.scan_structure) {
-		// still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		// still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		state.scan_structure->Next(state.join_keys, input, chunk);
 		if (chunk.size() > 0) {
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -796,7 +800,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::PROBE && sink.hash_table->finalized);
 
 	if (scan_structure) {
-		// Still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		// still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		scan_structure->Next(join_keys, payload, chunk);
 		if (chunk.size() == 0) {
 			scan_structure = nullptr;

@@ -15,6 +15,7 @@
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 

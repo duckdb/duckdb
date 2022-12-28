@@ -1,0 +1,45 @@
+# name: test/sql/function/enum/test_enum_code.test
+# description: Enum Code Function
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', 'anxious')
+
+statement ok
+CREATE TABLE test (x mood)
+
+statement ok
+INSERT INTO test VALUES ('ok'), ('sad'), ('anxious'), ('happy')
+
+query I
+SELECT enum_code(x) FROM test
+----
+1
+0
+3
+2
+
+statement error
+SELECT enum_code('bla')
+
+statement ok
+PREPARE p1 as SELECT enum_code(x) FROM test
+
+query I
+EXECUTE p1
+----
+1
+0
+3
+2
+
+statement ok
+PREPARE p2 as SELECT enum_code(?);
+
+query I
+EXECUTE p2('happy'::mood)
+----
+2

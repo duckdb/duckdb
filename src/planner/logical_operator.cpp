@@ -7,6 +7,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 namespace duckdb {
 
@@ -281,9 +282,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_ALTER:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::Deserialize(state, reader);
 		break;
@@ -302,14 +300,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_DROP:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		result = LogicalPragma::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		result = LogicalCreate::Deserialize(state, reader);
@@ -329,17 +321,23 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		result = LogicalExport::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_VACUUM:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		result = LogicalReset::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		throw SerializationException("Invalid type for operator deserialization");
+		result = LogicalExtensionOperator::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");
@@ -349,6 +347,10 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	result->children = move(children);
 
 	return result;
+}
+
+vector<idx_t> LogicalOperator::GetTableIndex() const {
+	return vector<idx_t> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {

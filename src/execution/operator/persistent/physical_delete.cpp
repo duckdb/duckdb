@@ -37,7 +37,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 	auto &ustate = (DeleteLocalState &)lstate;
 
 	// get rows and
-	auto &transaction = Transaction::GetTransaction(context.client);
+	auto &transaction = Transaction::Get(context.client, table.db);
 	auto &row_identifiers = input.data[row_id_index];
 
 	vector<column_t> column_ids;

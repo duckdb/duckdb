@@ -12,6 +12,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 

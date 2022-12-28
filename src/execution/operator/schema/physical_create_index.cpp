@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -31,14 +32,13 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-
 	auto state = make_unique<CreateIndexGlobalSinkState>();
 
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, *context.db);
+		                                       info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -55,7 +55,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, *context.client.db);
+		                                      info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -84,7 +84,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 
 	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
-	                            *context.client.db);
+	                            table.storage->db);
 	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART

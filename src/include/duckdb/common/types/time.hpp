@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+struct dtime_t;
+
 //! The Time class is a static class that holds helper functions for the Time
 //! type.
 class Time {

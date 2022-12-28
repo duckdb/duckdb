@@ -8,12 +8,16 @@ load
 query III
 PRAGMA database_list
 ----
-0	main	(empty)
+0	memory	:memory:
+1	system	NULL
+2	temp	:memory:
 
 query III
 SELECT * FROM pragma_database_list()
 ----
-0	main	(empty)
+0	memory	:memory:
+1	system	NULL
+2	temp	:memory:
 
 statement error
 PRAGMA database_list()
@@ -24,4 +28,4 @@ load __TEST_DIR__/test.db
 query II
 SELECT seq, name FROM pragma_database_list() WHERE file LIKE '%test.db%'
 ----
-0	main
+0	test

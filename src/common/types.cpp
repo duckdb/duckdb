@@ -460,7 +460,7 @@ string LogicalType::ToString() const {
 		string ret = "UNION(";
 		size_t count = UnionType::GetMemberCount(*this);
 		for (size_t i = 0; i < count; i++) {
-			ret += UnionType::GetMemberType(*this, i).ToString();
+			ret += UnionType::GetMemberName(*this, i) + " " + UnionType::GetMemberType(*this, i).ToString();
 			if (i < count - 1) {
 				ret += ", ";
 			}
@@ -1293,16 +1293,12 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 
-enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1, DEDUP_POINTER = 2 };
+enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
 	      enum_name(move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
-	}
-	explicit EnumTypeInfo()
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::DEDUP_POINTER),
-	      enum_name("dedup_pointer"), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
 	}
 	EnumDictType dict_type;
 	string enum_name;
@@ -1315,9 +1311,6 @@ protected:
 		auto &other = (EnumTypeInfo &)*other_p;
 		if (dict_type != other.dict_type) {
 			return false;
-		}
-		if (dict_type == EnumDictType::DEDUP_POINTER) {
-			return true;
 		}
 		D_ASSERT(dict_type == EnumDictType::VECTOR_DICT);
 		// We must check if both enums have the same size
@@ -1419,12 +1412,6 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
-LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
-	auto info = make_shared<EnumTypeInfo>();
-	D_ASSERT(info->dict_type == EnumDictType::DEDUP_POINTER);
-	return LogicalType(LogicalTypeId::ENUM, info);
-}
-
 template <class T>
 int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
@@ -1450,10 +1437,6 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	auto &enum_info = ((EnumTypeInfo &)*info);
-	if (enum_info.dict_type == EnumDictType::DEDUP_POINTER) {
-		return (const char *)val.GetValue<uint64_t>();
-	}
 	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
@@ -1490,10 +1473,6 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto aux_info = type.AuxInfo();
 	D_ASSERT(aux_info);
 	auto &info = (EnumTypeInfo &)*aux_info;
-
-	if (info.dict_type == EnumDictType::DEDUP_POINTER) {
-		return PhysicalType::UINT64; // for pointer enum types
-	}
 	D_ASSERT(info.dict_type == EnumDictType::VECTOR_DICT);
 	return EnumVectorDictType(info.dict_size);
 }

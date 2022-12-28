@@ -187,7 +187,7 @@ FROM specials;
 {-infinity=1, 1970-01-01 00:00:00=1, infinity=1}	{-infinity=1, 1970-01-01 00:00:00+00=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
 
 query III
-SELECT QUANTILE_DISC(ts, 0.34), QUANTILE_DISC(tstz, 0.34), QUANTILE_DISC(dt, 0.34)
+SELECT QUANTILE_DISC(ts, 0.32), QUANTILE_DISC(tstz, 0.32), QUANTILE_DISC(dt, 0.32)
 FROM specials;
 ----
 -infinity	-infinity	-infinity

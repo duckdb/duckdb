@@ -65,6 +65,17 @@ static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_
 	case LogicalTypeId::MAP: {
 		return LogicalType::MAP(LogicalType::VARCHAR, GetJSONType(const_struct_names, MapType::ValueType(type)));
 	}
+	case LogicalTypeId::UNION: {
+		child_list_t<LogicalType> member_types;
+		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
+			auto &member_name = UnionType::GetMemberName(type, member_idx);
+			auto &member_type = UnionType::GetMemberType(type, member_idx);
+
+			const_struct_names[member_name] = make_unique<Vector>(Value(member_name));
+			member_types.emplace_back(member_name, GetJSONType(const_struct_names, member_type));
+		}
+		return LogicalType::UNION(member_types);
+	}
 	// All other types (e.g. date) are cast to VARCHAR
 	default:
 		return LogicalTypeId::VARCHAR;
@@ -300,6 +311,56 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 	}
 }
 
+static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
+                              Vector &value_v, idx_t count) {
+	// Structs become objects, therefore we initialize vals to JSON objects
+	for (idx_t i = 0; i < count; i++) {
+		vals[i] = yyjson_mut_obj(doc);
+	}
+
+	// Initialize re-usable array for the nested values
+	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[count]);
+	auto nested_vals = nested_vals_ptr.get();
+
+	auto &tag_v = UnionVector::GetTags(value_v);
+	UnifiedVectorFormat tag_data;
+	tag_v.ToUnifiedFormat(count, tag_data);
+
+	// Add the key/value pairs to the objects
+	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
+		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
+		auto &member_key_v = *info.const_struct_names.at(UnionType::GetMemberName(value_v.GetType(), member_idx));
+
+		// This implementation is not optimal since we convert the entire member vector,
+		// and then skip the rows not matching the tag afterwards.
+
+		CreateValues(info, doc, nested_vals, member_val_v, count);
+
+		// This is a inlined copy of AddKeyValuePairs but we also skip null tags
+		// and the rows where the member is not matching the tag
+		UnifiedVectorFormat key_data;
+		member_key_v.ToUnifiedFormat(count, key_data);
+		auto keys = (string_t *)key_data.data;
+
+		for (idx_t i = 0; i < count; i++) {
+			auto tag_idx = tag_data.sel->get_index(i);
+			if (!tag_data.validity.RowIsValid(tag_idx)) {
+				continue;
+			}
+			auto tag = ((uint8_t *)tag_data.data)[tag_idx];
+			if (tag != member_idx) {
+				continue;
+			}
+			auto key_idx = key_data.sel->get_index(i);
+			if (!key_data.validity.RowIsValid(key_idx)) {
+				continue;
+			}
+			auto key = CreateJSONValue<string_t>(doc, keys[key_idx]);
+			yyjson_mut_obj_add(vals[i], key, nested_vals[i]);
+		}
+	}
+}
+
 static void CreateValuesList(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                              Vector &value_v, idx_t count) {
 	// Initialize array for the nested values
@@ -357,6 +418,9 @@ static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc
 		break;
 	case LogicalTypeId::LIST:
 		CreateValuesList(info, doc, vals, value_v, count);
+		break;
+	case LogicalTypeId::UNION:
+		CreateValuesUnion(info, doc, vals, value_v, count);
 		break;
 	default:
 		throw InternalException("Unsupported type arrived at JSON create function");

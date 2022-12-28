@@ -225,7 +225,7 @@ void ICUExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	// iterate over all the collations
 	int32_t count;
@@ -253,12 +253,12 @@ void ICUExtension::Load(DuckDB &db) {
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
-	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
 	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
-	config.options.set_variables["TimeZone"] = Value(tz_string);
+	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
+	                          SetICUTimeZone);
 
 	RegisterICUDateAddFunctions(*con.context);
 	RegisterICUDatePartFunctions(*con.context);
@@ -269,10 +269,10 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUTimeZoneFunctions(*con.context);
 
 	// Calendars
-	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
 	UErrorCode status = U_ZERO_ERROR;
 	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.options.set_variables["Calendar"] = Value(cal->getType());
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
+	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(move(cal_names));

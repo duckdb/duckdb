@@ -19,7 +19,7 @@ bool StringUtil::Contains(const string &haystack, const string &needle) {
 
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
-	while (CharacterIsSpace(*it)) {
+	while (it != str.end() && CharacterIsSpace(*it)) {
 		it++;
 	}
 	str.erase(str.begin(), it);
@@ -163,6 +163,10 @@ string StringUtil::Lower(const string &str) {
 	string copy(str);
 	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
 	return (copy);
+}
+
+bool StringUtil::CIEquals(const string &l1, const string &l2) {
+	return StringUtil::Lower(l1) == StringUtil::Lower(l2);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

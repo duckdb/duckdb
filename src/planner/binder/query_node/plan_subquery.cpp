@@ -357,7 +357,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	D_ASSERT(root);
 	// first we translate the QueryNode of the subquery into a logical plan
 	// note that we do not plan nested subqueries yet
-	auto sub_binder = Binder::CreateBinder(context);
+	auto sub_binder = Binder::CreateBinder(context, this);
 	sub_binder->plan_subquery = false;
 	auto subquery_root = sub_binder->CreatePlan(*expr.subquery);
 	D_ASSERT(subquery_root);

@@ -15,7 +15,7 @@ parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
 args = parser.parse_args()
 
 stored_functions = {
-    'substrait': ["from_substrait", "get_substrait", "get_substrait_json"]
+    'substrait': ["from_substrait", "get_substrait", "get_substrait_json", "from_substrait_json"]
 }
 
 functions = {}

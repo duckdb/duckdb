@@ -36,7 +36,6 @@ jobs:
       BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
-      BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
@@ -63,14 +62,12 @@ jobs:
       shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
-        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
       shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
         build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
@@ -82,7 +79,7 @@ jobs:
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip  duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-amd64.zip
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -90,7 +87,6 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
 
 
  linux-release-aarch64:
@@ -113,9 +109,6 @@ jobs:
      STATIC_LIBCPP: 1
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
-     BUILD_JDBC: 1
-     OVERRIDE_JDBC_OS_ARCH: arm64
-     JAVA_HOME: ../../jdk8u345-b01
 
    steps:
      - uses: actions/checkout@v3
@@ -128,7 +121,6 @@ jobs:
        run: |
          apt-get update -y -qq
          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
-         curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
 
      - name: Install unixODBC
        shell: bash
@@ -150,7 +142,7 @@ jobs:
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+         python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v2
        with:
@@ -159,7 +151,6 @@ jobs:
            libduckdb-linux-aarch64.zip
            duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
-           build/release/tools/jdbc/duckdb_jdbc.jar
 
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
@@ -214,7 +205,7 @@ jobs:
       - uses: ./.github/actions/build_extensions
         with:
           openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
-          deploy_as: linux_aarch64
+          deploy_as: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
@@ -290,7 +281,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       shell: bash
@@ -302,20 +293,14 @@ jobs:
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          libduckdb-linux-i386.zip
-          duckdb_cli-linux-i386.zip
     - uses: actions/upload-artifact@v2
       with:
         name: duckdb-binaries-linux-32bit
         path: |
-          build/release/tools/jdbc/duckdb_jdbc.jar
-
+          libduckdb-linux-i386.zip
+          duckdb_cli-linux-i386.zip
 
  linux-rpi:
     name: Linux (Raspberry Pi)
@@ -366,6 +351,47 @@ jobs:
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
 
+
+ linux-clang:
+    name: Clang 12
+    runs-on: ubuntu-18.04
+    needs: linux-release-64
+
+    env:
+      CC: /home/runner/work/llvm/bin/clang
+      CPP: /home/runner/work/llvm/bin/clang-cpp
+      CXX: /home/runner/work/llvm/bin/clang++
+      LD: /home/runner/work/llvm/bin/ld.lld
+      EXTENSION_STATIC_BUILD: 1
+      BUILD_JSON: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "12.0"
+        directory: '/home/runner/work/llvm'
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: make allunit
 
  old-gcc:
     name: GCC 4.8
@@ -544,6 +570,40 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+ linux-memory-leaks:
+    name: Linux Memory Leaks
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Test
+      shell: bash
+      run: |
+        python3 test/memoryleak/test_memory_leaks.py
 
  linux-httpfs:
     name: Linux HTTPFS

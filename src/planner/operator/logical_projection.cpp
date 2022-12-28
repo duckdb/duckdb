@@ -28,4 +28,8 @@ unique_ptr<LogicalOperator> LogicalProjection::Deserialize(LogicalDeserializatio
 	return make_unique<LogicalProjection>(table_index, move(expressions));
 }
 
+vector<idx_t> LogicalProjection::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

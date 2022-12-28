@@ -169,6 +169,18 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
 			auto val = Load<int64_t>((data_ptr_t)stats.c_str());
+			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
+				// logical type
+				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return Value::TIMESTAMPMS(timestamp_t(val));
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return Value::TIMESTAMPNS(timestamp_t(val));
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return Value::TIMESTAMP(timestamp_t(val));
+				} else {
+					throw InternalException("Timestamp logicalType is set but unit is not defined");
+				}
+			}
 			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
 				return Value::TIMESTAMPMS(timestamp_t(val));
 			} else {

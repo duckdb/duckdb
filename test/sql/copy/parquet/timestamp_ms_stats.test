@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/timestamp_ms_stats.test
+# description: Test correct reading of stats for timestamp columns with non-microsecond precision
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select timestamp from 'data/parquet-testing/issue_5533_timestamp_ms_stats.parquet' order by 1;
+----
+2022-11-27 17:42:43.514
+2022-11-27 17:42:43.514
+2022-11-27 17:42:44.28
+2022-11-27 17:42:44.28
+
+query I
+select timestamp from 'data/parquet-testing/issue_5533_timestamp_ms_stats.parquet' where timestamp >= '2022-11-27 00:00:00'
+----
+2022-11-27 17:42:43.514
+2022-11-27 17:42:43.514
+2022-11-27 17:42:44.28
+2022-11-27 17:42:44.28
+

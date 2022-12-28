@@ -242,6 +242,9 @@ typedef struct _duckdb_connection {
 typedef struct _duckdb_prepared_statement {
 	void *__prep;
 } * duckdb_prepared_statement;
+typedef struct _duckdb_extracted_statements {
+	void *__extrac;
+} * duckdb_extracted_statements;
 typedef struct _duckdb_pending_result {
 	void *__pend;
 } * duckdb_pending_result;
@@ -1032,6 +1035,53 @@ Executes the prepared statement with the given bound parameters, and returns an 
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
                                                       duckdb_arrow *out_result);
+
+//===--------------------------------------------------------------------===//
+// Extract Statements
+//===--------------------------------------------------------------------===//
+// A query string can be extracted into multiple SQL statements. Each statement can be prepared and executed separately.
+
+/*!
+Extract all statements from a query.
+Note that after calling `duckdb_extract_statements`, the extracted statements should always be destroyed using
+`duckdb_destroy_extracted`, even if no statements were extracted.
+If the extract fails, `duckdb_extract_statements_error` can be called to obtain the reason why the extract failed.
+* connection: The connection object
+* query: The SQL query to extract
+* out_extracted_statements: The resulting extracted statements object
+* returns: The number of extracted statements or 0 on failure.
+*/
+DUCKDB_API idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
+                                           duckdb_extracted_statements *out_extracted_statements);
+
+/*!
+Prepare an extracted statement.
+Note that after calling `duckdb_prepare_extracted_statement`, the prepared statement should always be destroyed using
+`duckdb_destroy_prepare`, even if the prepare fails.
+If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
+* connection: The connection object
+* extracted_statements: The extracted statements object
+* index: The index of the extracted statement to prepare
+* out_prepared_statement: The resulting prepared statement object
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
+                                                           duckdb_extracted_statements extracted_statements,
+                                                           idx_t index,
+                                                           duckdb_prepared_statement *out_prepared_statement);
+/*!
+Returns the error message contained within the extracted statements.
+The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.
+* result: The extracted statements to fetch the error from.
+* returns: The error of the extracted statements.
+*/
+DUCKDB_API const char *duckdb_extract_statements_error(duckdb_extracted_statements extracted_statements);
+
+/*!
+De-allocates all memory allocated for the extracted statements.
+* extracted_statements: The extracted statements to destroy.
+*/
+DUCKDB_API void duckdb_destroy_extracted(duckdb_extracted_statements *extracted_statements);
 
 //===--------------------------------------------------------------------===//
 // Pending Result Interface

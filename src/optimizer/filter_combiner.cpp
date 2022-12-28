@@ -61,6 +61,9 @@ idx_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 
 FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInformation> &info_list,
                                                    ExpressionValueInformation info) {
+	if (info.constant.IsNull()) {
+		return FilterResult::UNSATISFIABLE;
+	}
 	for (idx_t i = 0; i < info_list.size(); i++) {
 		auto comparison = CompareValueInformation(info_list[i], info);
 		switch (comparison) {

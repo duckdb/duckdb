@@ -8,7 +8,6 @@
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
-#include "test_helper_extension.hpp"
 
 namespace duckdb {
 
@@ -256,9 +255,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
-				command->expect_ok = true;
+				command->expected_result = ExpectedResult::RESULT_SUCCESS;
 			} else if (token.parameters[0] == "error") {
-				command->expect_ok = false;
+				command->expected_result = ExpectedResult::RESULT_ERROR;
+			} else if (token.parameters[0] == "maybe") {
+				command->expected_result = ExpectedResult::RESULT_UNKNOWN;
 			} else {
 				parser.Fail("statement argument should be 'ok' or 'error");
 			}
@@ -272,7 +273,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
-			command->expected_error = parser.ExtractExpectedError(command->expect_ok);
+			command->expected_error =
+			    parser.ExtractExpectedError(command->expected_result == ExpectedResult::RESULT_SUCCESS);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(move(statement_text));
@@ -498,8 +500,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
-			} else if (param == "test_helper") {
-				db->LoadExtension<TestHelperExtension>();
 			} else if (param == "skip_reload") {
 				skip_reload = true;
 			} else {

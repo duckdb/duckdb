@@ -30,14 +30,15 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
+	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
-	auto insert = make_unique<LogicalInsert>(table);
+	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
 
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);

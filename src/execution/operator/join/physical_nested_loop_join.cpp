@@ -17,7 +17,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 	children.push_back(move(right));
 }
 
-static bool HasNullValues(DataChunk &chunk) {
+bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 		UnifiedVectorFormat vdata;
 		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), vdata);
@@ -106,7 +106,10 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	}
 }
 
-bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions) {
+bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions, JoinType join_type) {
+	if (join_type == JoinType::MARK) {
+		return true;
+	}
 	for (auto &cond : conditions) {
 		if (cond.left->return_type.InternalType() == PhysicalType::STRUCT ||
 		    cond.left->return_type.InternalType() == PhysicalType::LIST) {
@@ -150,7 +153,7 @@ public:
 	//! Materialized join condition of the RHS
 	ColumnDataCollection right_condition_data;
 	//! Whether or not the RHS of the nested loop join has NULL values
-	bool has_null;
+	atomic<bool> has_null;
 	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
 	OuterJoinMarker right_outer;
 };

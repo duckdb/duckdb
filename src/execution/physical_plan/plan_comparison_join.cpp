@@ -18,12 +18,13 @@
 
 namespace duckdb {
 
-static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
+static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
 		// not a table scan
 		return false;
 	}
 	auto table = bind_data->table;
+	auto &transaction = Transaction::Get(context, *table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 	if (local_storage.Find(table->storage.get())) {
 		// transaction local appends: skip index join
@@ -146,7 +147,6 @@ static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **re
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
-	auto &transaction = Transaction::GetTransaction(context);
 	// check if one of the tables has an index on column
 	if (op.join_type == JoinType::INNER && op.conditions.size() == 1) {
 		// check if one of the children are table scans and if they have an index in the join attribute
@@ -154,14 +154,14 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
+			if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
 				CanUseIndexJoin(tbl, *op.conditions[0].left, left_index);
 			}
 		}
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
+			if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
 				CanUseIndexJoin(tbl, *op.conditions[0].right, right_index);
 			}
 		}
@@ -267,7 +267,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
-		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions)) {
+		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                           op.estimated_cardinality);

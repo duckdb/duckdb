@@ -1,0 +1,51 @@
+# name: test/sql/storage/compression/patas/patas_read.test_slow
+# group: [patas]
+
+require parquet
+
+require httpfs
+
+load __TEST_DIR__/test_patas.db
+
+statement ok
+DROP TABLE IF EXISTS temperatures;
+
+statement ok
+pragma threads=1;
+
+statement ok
+PRAGMA force_compression='patas';
+
+statement ok
+CREATE TABLE temperatures (
+	temperature DOUBLE
+);
+
+statement ok
+INSERT INTO temperatures SELECT temp from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+create table reference_temperatures (
+	temperature DOUBLE
+);
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+INSERT INTO reference_temperatures SELECT temp from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
+
+statement ok
+checkpoint;
+
+query I nosort r1
+select temperature from reference_temperatures;
+----
+
+query I nosort r1
+select temperature from temperatures
+----
+

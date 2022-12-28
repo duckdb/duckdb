@@ -108,4 +108,12 @@ idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 	return LogicalOperator::EstimateCardinality(context);
 }
 
+vector<idx_t> LogicalAggregate::GetTableIndex() const {
+	vector<idx_t> result {group_index, aggregate_index};
+	if (groupings_index != DConstants::INVALID_INDEX) {
+		result.push_back(groupings_index);
+	}
+	return result;
+}
+
 } // namespace duckdb

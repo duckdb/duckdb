@@ -5,7 +5,6 @@ namespace duckdb {
 class DbpDecoder {
 public:
 	DbpDecoder(const uint8_t *buffer, uint32_t buffer_len) : buffer_((char *)buffer, buffer_len) {
-
 		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
 		// overall header
 		block_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
@@ -14,6 +13,7 @@ public:
 		start_value = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<int64_t>(buffer_));
 
 		// some derivatives
+		D_ASSERT(miniblocks_per_block > 0);
 		values_per_miniblock = block_value_count / miniblocks_per_block;
 		miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
 
@@ -91,6 +91,17 @@ public:
 			throw std::runtime_error("DBP decode did not find enough values");
 		}
 		start_value = values[batch_size - 1];
+	}
+	void Finalize() {
+		if (values_left_in_miniblock == 0) {
+			return;
+		}
+		auto data = unique_ptr<uint32_t[]>(new uint32_t[values_left_in_miniblock]);
+		GetBatch<uint32_t>((char *)data.get(), values_left_in_miniblock);
+	}
+
+	uint64_t TotalValues() {
+		return total_value_count;
 	}
 
 private:

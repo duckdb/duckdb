@@ -1,0 +1,47 @@
+# name: test/fuzzer/pedro/index_insert_from_union.test
+# description: Issue #4978 (33): Insert into ART index leaf assertion error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1));
+
+statement error
+INSERT INTO t2 SELECT * FROM (VALUES (2), (2))
+
+statement error
+INSERT INTO t2 SELECT 2 FROM range(10);
+
+statement error
+INSERT INTO t2 SELECT 2 UNION ALL SELECT 2;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t2 SELECT 1 UNION ALL SELECT 2;
+
+query I
+SELECT * FROM t2 WHERE c1>1
+----
+2
+
+query I
+SELECT * FROM t2 WHERE c1<2
+----
+1
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM t2 WHERE c1>1
+----
+2
+
+query I
+SELECT * FROM t2 WHERE c1<2
+----
+1
