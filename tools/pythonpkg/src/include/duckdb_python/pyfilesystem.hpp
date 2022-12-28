@@ -34,6 +34,7 @@ protected:
 class PythonFilesystem : public FileSystem {
 private:
 	const string prefix;
+	const string name;
 	const py::object filesystem;
 	string stripPrefix(string input) {
 		if (CanHandleFile(input)) {
@@ -44,13 +45,13 @@ private:
 	}
 
 public:
-	explicit PythonFilesystem(const string prefix, const py::object filesystem)
-	    : prefix(prefix), filesystem(filesystem) {
+	explicit PythonFilesystem(const string name, const py::object filesystem)
+	    : prefix(name + "://"), name(name), filesystem(filesystem) {
 	}
 
 protected:
 	string GetName() const {
-		return py::str(py::type::of(filesystem).attr("__name__"));
+		return name;
 	}
 
 public:
