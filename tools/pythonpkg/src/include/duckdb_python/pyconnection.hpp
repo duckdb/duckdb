@@ -18,6 +18,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
 
 namespace duckdb {
 
@@ -141,6 +142,7 @@ public:
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
+	void RegisterFilesystem(const AbstractFileSystem& filesystem);
 	void UnregisterFilesystem(const py::str& name);
 
 	//! Default connection to an in-memory database

@@ -21,6 +21,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
 
 #include <random>
 
@@ -68,6 +69,7 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem", py::arg("filesystem"))
 	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem", py::arg("name"))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
@@ -155,6 +157,23 @@ void DuckDBPyConnection::UnregisterFilesystem(const py::str& name) {
 	auto &fs = database->GetFileSystem();
 
 	fs.UnregisterSubSystem(name);
+}
+
+void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem& filesystem) {
+	PythonGILWrapper gil_wrapper;
+
+	if (!py::isinstance<AbstractFileSystem>(filesystem)) {
+		throw InvalidInputException("Bad filesystem instance");
+	}
+
+	auto &fs = database->GetFileSystem();
+
+	auto prefix = py::str(filesystem.attr("protocol"));
+	if (prefix.is_none() || prefix == py::str("abstract")) {
+		throw InvalidInputException("Must provide concrete fsspec implementation");
+	}
+
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(prefix, filesystem));
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
