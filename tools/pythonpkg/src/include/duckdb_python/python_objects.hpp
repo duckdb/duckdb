@@ -175,12 +175,13 @@ struct PythonObject {
 	static py::object FromValue(const Value &value, const LogicalType &id);
 };
 
-template<class T>
+template <class T>
 class Optional : public py::object {
 public:
 	Optional(const py::object &o) : py::object(o, borrowed_t {}) {
 	}
 	using py::object::object;
+
 public:
 	static bool check_(const py::handle &object) {
 		return object.is_none() || py::isinstance<T>(object);
