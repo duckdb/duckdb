@@ -151,7 +151,8 @@ char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index) {
 }
 
 duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
-	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::LIST) && !AssertLogicalTypeId(type, duckdb::LogicalTypeId::MAP)) {
+	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::LIST) &&
+	    !AssertLogicalTypeId(type, duckdb::LogicalTypeId::MAP)) {
 		return nullptr;
 	}
 	auto &ltype = *((duckdb::LogicalType *)type);
