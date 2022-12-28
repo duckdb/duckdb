@@ -11,6 +11,7 @@
 #include "array_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/python_objects.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ public:
 	explicit DuckDBPyResult() {};
 
 public:
-	py::object Fetchone();
+	Optional<py::tuple> Fetchone();
 
 	py::list Fetchmany(idx_t size);
 

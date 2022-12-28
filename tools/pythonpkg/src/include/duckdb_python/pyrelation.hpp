@@ -181,7 +181,7 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	py::tuple FetchOne();
+	Optional<py::tuple> FetchOne();
 
 	py::list FetchAll();
 

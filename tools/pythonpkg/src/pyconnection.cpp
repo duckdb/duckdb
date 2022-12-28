@@ -640,7 +640,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 }
 
 // these should be functions on the result but well
-py::tuple DuckDBPyConnection::FetchOne() {
+Optional<py::tuple> DuckDBPyConnection::FetchOne() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}

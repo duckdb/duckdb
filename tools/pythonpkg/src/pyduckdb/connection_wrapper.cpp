@@ -218,7 +218,7 @@ py::list PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnection> conn
 	return conn->GetDescription();
 }
 
-py::tuple PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
+Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}

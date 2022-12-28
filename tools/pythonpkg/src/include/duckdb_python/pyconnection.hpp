@@ -122,7 +122,7 @@ public:
 	py::list GetDescription();
 
 	// these should be functions on the result but well
-	py::tuple FetchOne();
+	Optional<py::tuple> FetchOne();
 
 	py::list FetchMany(idx_t size);
 

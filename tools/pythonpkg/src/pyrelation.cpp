@@ -413,7 +413,7 @@ DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	return df;
 }
 
-py::tuple DuckDBPyRelation::FetchOne() {
+Optional<py::tuple> DuckDBPyRelation::FetchOne() {
 	if (!result) {
 		ExecuteOrThrow();
 	}
