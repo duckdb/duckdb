@@ -141,6 +141,8 @@ public:
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
+	void UnregisterFilesystem(const py::str& name);
+
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 	//! Caches and provides an interface to get frequently used modules+subtypes

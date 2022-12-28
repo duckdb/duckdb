@@ -68,6 +68,7 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem", py::arg("name"))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -148,6 +149,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
+
+void DuckDBPyConnection::UnregisterFilesystem(const py::str& name) {
+	auto &fs = database->GetFileSystem();
+
+	fs.UnregisterSubSystem(name);
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {

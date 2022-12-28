@@ -307,6 +307,10 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }

@@ -186,6 +186,7 @@ public:
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
+	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
@@ -207,7 +208,6 @@ public:
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
-protected:
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 };
