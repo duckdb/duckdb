@@ -51,13 +51,13 @@ public:
 	}
 
 protected:
-	string GetName() const {
+	string GetName() const override {
 		return name;
 	}
 
 public:
 	unique_ptr<FileHandle> OpenFile(const string &path, __uint8_t flags, FileLockType lock,
-	                                FileCompressionType compression, FileOpener *opener);
+	                                FileCompressionType compression, FileOpener *opener) override;
 	void Seek(duckdb::FileHandle &handle, uint64_t location) override;
 	FileType GetFileType(FileHandle &handle) override {
 		return FileType::FILE_TYPE_REGULAR;
