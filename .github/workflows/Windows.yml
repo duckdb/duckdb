@@ -41,7 +41,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test
@@ -52,7 +52,6 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
-        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
       shell: bash
@@ -62,7 +61,7 @@ jobs:
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
-        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar duckdb_odbc-windows-amd64.zip
+        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
     - uses: actions/upload-artifact@v2
       with:
@@ -70,7 +69,6 @@ jobs:
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
-          tools/jdbc/duckdb_jdbc.jar
           duckdb_odbc-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
@@ -95,7 +93,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -114,16 +112,14 @@ jobs:
         choco install zip -y --force
         zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+        python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip
 
     - uses: actions/upload-artifact@v2
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-windows-32bit
         path: |
           libduckdb-windows-i386.zip
           duckdb_cli-windows-i386.zip
-          tools/jdbc/duckdb_jdbc.jar
-
 
  mingw:
      name: MingW (64 Bit)
@@ -170,7 +166,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Install ODBC Driver
@@ -195,7 +191,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 0a939c70ec405abde8a36dc4d88043561b64b78d && make release)
+        (cd psqlodbc && git checkout 178899d431e1d635d59b8e82a070ff6db0e8a092 && make release)
 
     - name: Test psqlodbc
       shell: bash

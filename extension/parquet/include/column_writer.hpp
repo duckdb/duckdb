@@ -60,7 +60,8 @@ public:
 	                                                      idx_t max_repeat = 0, idx_t max_define = 1,
 	                                                      bool can_have_nulls = true);
 
-	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) = 0;
+	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                           Allocator &allocator) = 0;
 
 	//! indicates whether the write need to analyse the data before preparing it
 	virtual bool HasAnalyze() {

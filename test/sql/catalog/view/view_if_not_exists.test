@@ -1,0 +1,18 @@
+# name: test/sql/catalog/view/view_if_not_exists.test
+# description: Test view if not exists
+# group: [view]
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE VIEW v1 AS SELECT 42
+
+statement ok
+CREATE VIEW IF NOT EXISTS v1 AS SELECT 84;
+
+query I
+SELECT * FROM v1
+----
+42

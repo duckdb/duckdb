@@ -1,0 +1,20 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_read_constant.benchmark
+# description: Scanning 1GB of ints compressed mostly with the CONSTANT bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Scan Constant Mode
+group bitpacking
+storage persistent
+
+load
+DROP TABLE IF EXISTS integers;
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='constant';
+CREATE TABLE integers AS SELECT (i/119000)::INT32 as i FROM range(0, 250000000) tbl(i);
+checkpoint;
+
+run
+select avg(i) from integers;
+
+result I
+1049.9202

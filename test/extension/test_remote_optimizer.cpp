@@ -21,32 +21,54 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test using a remote optimizer pass in case thats important to someone", "[extension]") {
-
 	pid_t pid = fork();
+
+	int port = 4242;
 
 	if (pid == 0) { // child process
 		// sockets, man, how do they work?!
 		struct sockaddr_in servaddr, cli;
 
 		auto sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		REQUIRE(sockfd != -1);
+		if (sockfd == -1) {
+			printf("Failed to set up socket in child process: %s", strerror(errno));
+			exit(1);
+		}
 		bzero(&servaddr, sizeof(servaddr));
 
 		servaddr.sin_family = AF_INET;
 		servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-		servaddr.sin_port = htons(4242);
-		REQUIRE(::bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) == 0);
-		REQUIRE((listen(sockfd, 5)) == 0);
+		servaddr.sin_port = htons(port);
+		auto res = ::bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+		if (res != 0) {
+			printf("Failed to bind socket in child process: %s", strerror(errno));
+			exit(1);
+		}
+		res = listen(sockfd, 5);
+		if (res != 0) {
+			printf("Failed to listen to socked in child process: %s", strerror(errno));
+			exit(1);
+		}
 
 		socklen_t len = sizeof(cli);
 		auto connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
-		REQUIRE(connfd >= 0);
+		if (connfd < 0) {
+			printf("Failed to set up socket in child process: %s", strerror(errno));
+			exit(1);
+		}
 
-		DuckDB db2; // patent pending
+		DBConfig config;
+		config.options.allow_unsigned_extensions = true;
+		DuckDB db2(nullptr, &config);
 		Connection con2(db2);
+		auto load_parquet = con2.Query("LOAD parquet");
+		if (load_parquet->HasError()) {
+			printf("Failed to load Parquet in child process: %s", load_parquet->GetError().c_str());
+			exit(1);
+		}
 
 		while (true) {
-			ssize_t bytes;
+			idx_t bytes;
 			REQUIRE(read(connfd, &bytes, sizeof(idx_t)) == sizeof(idx_t));
 
 			if (bytes == 0) {
@@ -55,12 +77,14 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 			auto buffer = malloc(bytes);
 			REQUIRE(buffer);
-			REQUIRE(read(connfd, buffer, bytes) == bytes);
+			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
 			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
+			con2.BeginTransaction();
 			PlanDeserializationState state(*con2.context);
 			auto plan = LogicalOperator::Deserialize(deserializer, state);
 			plan->ResolveOperatorTypes();
+			con2.Commit();
 
 			auto statement = make_unique<LogicalPlanStatement>(move(plan));
 			auto result = con2.Query(move(statement));
@@ -71,15 +95,13 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 				BufferedSerializer serializer;
 				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
-				ssize_t len = data.size;
+				idx_t len = data.size;
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-				REQUIRE(write(connfd, data.data.get(), len) == len);
+				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
 			}
 		}
 		exit(0);
-
 	} else if (pid > 0) { // parent process
-
 		DBConfig config;
 		config.options.allow_unsigned_extensions = true;
 		DuckDB db1(nullptr, &config);
@@ -97,7 +119,14 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		                           "/test/extension/loadable_extension_optimizer_demo.duckdb_extension'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_host='127.0.0.1'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_port=4242"));
-		usleep(100000); // need to wait a bit till socket is up
+		usleep(10000); // need to wait a bit till socket is up
+
+		// check if the child PID is still there
+		if (kill(pid, 0) != 0) {
+			// child is gone!
+			printf("Failed to execute remote optimizer test - child exited unexpectedly");
+			FAIL();
+		}
 
 		REQUIRE_NO_FAIL(con1.Query(
 		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name"));

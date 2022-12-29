@@ -157,7 +157,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 	auto update = make_unique<LogicalUpdate>(table);
 

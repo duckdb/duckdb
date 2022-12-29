@@ -36,6 +36,7 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 #include <sstream>
 
@@ -54,9 +55,10 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 		}
 		auto &fk = (ForeignKeyConstraint &)*cond;
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(fk.info.schema, fk.info.table, false, entry->name,
-			                                                     fk.pk_columns, fk.fk_columns, fk.info.pk_keys,
-			                                                     fk.info.fk_keys, alter_fk_type));
+			AlterEntryData alter_data(entry->catalog->GetName(), fk.info.schema, fk.info.table, false);
+			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(move(alter_data), entry->name, fk.pk_columns,
+			                                                     fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
+			                                                     alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
 		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
 			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
@@ -74,33 +76,32 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool int
 	this->internal = internal;
 }
 
-CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
-                                           OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies) {
+CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &context) {
+	return CatalogTransaction(*catalog, context);
+}
+
+CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+                                           OnCreateConflict on_conflict, DependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-
-	if (name != TEMP_SCHEMA) {
-		dependencies.insert(this);
-	} else {
-		entry->temporary = true;
-	}
+	dependencies.AddDependency(this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
-		auto old_entry = set.GetEntry(context, entry_name);
+		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
 			if (old_entry->type != entry_type) {
 				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
-			(void)set.DropEntry(context, entry_name, false);
+			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
 		}
 	}
 	// now try to add the entry
-	if (!set.CreateEntry(context, entry_name, move(entry), dependencies)) {
+	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
@@ -111,27 +112,27 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	return result;
 }
 
-CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
+CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                            OnCreateConflict on_conflict) {
-	unordered_set<CatalogEntry *> dependencies;
-	return AddEntry(context, move(entry), on_conflict, dependencies);
+	DependencyList dependencies;
+	return AddEntry(transaction, move(entry), on_conflict, dependencies);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
 	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(sequence), info->on_conflict);
+	return AddEntry(transaction, move(sequence), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
 	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(type_entry), info->on_conflict);
+	return AddEntry(transaction, move(type_entry), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
 
-	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
+	CatalogEntry *entry = AddEntry(transaction, move(table), info->Base().on_conflict, info->dependencies);
 	if (!entry) {
 		return nullptr;
 	}
@@ -142,60 +143,60 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreat
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
 		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
-		catalog->Alter(context, fk_info);
+		catalog->Alter(transaction.GetContext(), fk_info);
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info->dependencies.insert(set.GetEntry(context, fk_info->name));
+		info->dependencies.AddDependency(set.GetEntry(transaction, fk_info->name));
 	}
 	return entry;
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateView(ClientContext &context, CreateViewInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
 	auto view = make_unique<ViewCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(view), info->on_conflict);
+	return AddEntry(transaction, move(view), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
-	unordered_set<CatalogEntry *> dependencies;
-	dependencies.insert(table);
+	DependencyList dependencies;
+	dependencies.AddDependency(table);
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(index), info->on_conflict, dependencies);
+	return AddEntry(GetCatalogTransaction(context), move(index), info->on_conflict, dependencies);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
 	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
 	collation->internal = info->internal;
-	return AddEntry(context, move(collation), info->on_conflict);
+	return AddEntry(transaction, move(collation), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
 	table_function->internal = info->internal;
-	return AddEntry(context, move(table_function), info->on_conflict);
+	return AddEntry(transaction, move(table_function), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
 	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
 	copy_function->internal = info->internal;
-	return AddEntry(context, move(copy_function), info->on_conflict);
+	return AddEntry(transaction, move(copy_function), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
 	pragma_function->internal = info->internal;
-	return AddEntry(context, move(pragma_function), info->on_conflict);
+	return AddEntry(transaction, move(pragma_function), info->on_conflict);
 }
 
-CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
+CatalogEntry *SchemaCatalogEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) {
 	if (info->on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info->type);
-		auto current_entry = catalog_set.GetEntry(context, info->name);
+		auto current_entry = catalog_set.GetEntry(transaction, info->name);
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info->GetAlterInfo();
-			Alter(context, alter_info.get());
+			Alter(transaction.GetContext(), alter_info.get());
 			return nullptr;
 		}
 	}
@@ -224,14 +225,15 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
 	function->internal = info->internal;
-	return AddEntry(context, move(function), info->on_conflict);
+	return AddEntry(transaction, move(function), info->on_conflict);
 }
 
 void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	auto &set = GetCatalogSet(info->type);
 
 	// first find the entry
-	auto existing_entry = set.GetEntry(context, info->name);
+	auto transaction = GetCatalogTransaction(context);
+	auto existing_entry = set.GetEntry(transaction, info->name);
 	if (!existing_entry) {
 		if (!info->if_exists) {
 			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type), info->name);
@@ -247,27 +249,28 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
-	if (!set.DropEntry(context, info->name, info->cascade)) {
+	if (!set.DropEntry(transaction, info->name, info->cascade, info->allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 
 	// remove the foreign key constraint in main key table if main key table's name is valid
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
-		// alter primary key tablee
-		Catalog::GetCatalog(context).Alter(context, fk_arrays[i].get());
+		// alter primary key table
+		catalog->Alter(context, fk_arrays[i].get());
 	}
 }
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 	CatalogType type = info->GetCatalogType();
 	auto &set = GetCatalogSet(type);
+	auto transaction = GetCatalogTransaction(context);
 	if (info->type == AlterType::CHANGE_OWNERSHIP) {
-		if (!set.AlterOwnership(context, (ChangeOwnershipInfo *)info)) {
+		if (!set.AlterOwnership(transaction, (ChangeOwnershipInfo *)info)) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
 		string name = info->name;
-		if (!set.AlterEntry(context, name, info)) {
+		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException("Entry with name \"%s\" does not exist!", name);
 		}
 	}
@@ -276,7 +279,7 @@ void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,
                               const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
-	set.Scan(context, callback);
+	set.Scan(GetCatalogTransaction(context), callback);
 }
 
 void SchemaCatalogEntry::Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) {
@@ -333,6 +336,20 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}
+}
+
+void SchemaCatalogEntry::Verify(Catalog &catalog) {
+	CatalogEntry::Verify(catalog);
+
+	tables.Verify(catalog);
+	indexes.Verify(catalog);
+	table_functions.Verify(catalog);
+	copy_functions.Verify(catalog);
+	pragma_functions.Verify(catalog);
+	functions.Verify(catalog);
+	sequences.Verify(catalog);
+	collations.Verify(catalog);
+	types.Verify(catalog);
 }
 
 } // namespace duckdb

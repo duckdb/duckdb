@@ -17,6 +17,10 @@ namespace duckdb {
 //! A collation catalog entry
 class CollateCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::COLLATION_ENTRY;
+	static constexpr const char *Name = "collation";
+
+public:
 	CollateCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateCollationInfo *info)
 	    : StandardEntry(CatalogType::COLLATION_ENTRY, schema, catalog, info->name), function(info->function),
 	      combinable(info->combinable), not_required_for_equality(info->not_required_for_equality) {

@@ -20,9 +20,9 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 
 	auto &context = state.gstate.context;
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
-	auto &catalog = Catalog::GetCatalog(context);
-	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
 
+	auto table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, catalog_info->schema, catalog_info->table);
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto create_info = reader.ReadOptional<CreateInfo>(nullptr);

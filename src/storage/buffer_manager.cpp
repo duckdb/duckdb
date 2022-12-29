@@ -6,6 +6,7 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -95,6 +96,10 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		// no re-usable buffer: allocate a new block
 		return block_manager.CreateBlock(block_id, nullptr);
 	}
+}
+
+idx_t GetAllocSize(idx_t size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
 }
 
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
@@ -245,7 +250,7 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_mem
 BufferManager::~BufferManager() {
 }
 
-shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
+shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
 	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
@@ -259,9 +264,17 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	}
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(*this, block_id);
+	// for meta block, cache the handle in meta_blocks
+	if (is_meta_block) {
+		meta_blocks[block_id] = result;
+	}
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
+}
+
+void BlockManager::ClearMetaBlockHandles() {
+	meta_blocks.clear();
 }
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
@@ -435,7 +448,7 @@ void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 190, handle->buffer->size);
+	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = move(replacement_buffer);
 #endif
 }
@@ -707,7 +720,9 @@ private:
 			// as a result we can truncate the file
 			auto max_index = index_manager.GetMaxIndex();
 			auto &fs = FileSystem::GetFileSystem(db);
+#ifndef WIN32 // this ended up causing issues when sorting
 			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
+#endif
 		}
 	}
 
@@ -1001,6 +1016,10 @@ Allocator &BufferAllocator::Get(ClientContext &context) {
 
 Allocator &BufferAllocator::Get(DatabaseInstance &db) {
 	return BufferManager::GetBufferManager(db).GetBufferAllocator();
+}
+
+Allocator &BufferAllocator::Get(AttachedDatabase &db) {
+	return BufferAllocator::Get(db.GetDatabase());
 }
 
 Allocator &BufferManager::GetBufferAllocator() {

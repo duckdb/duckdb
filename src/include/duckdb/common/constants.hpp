@@ -43,9 +43,14 @@ using data_ptr = unique_ptr<char[]>;
 using std::make_shared;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
-#define DEFAULT_SCHEMA "main"
-#define TEMP_SCHEMA    "temp"
-#define INVALID_SCHEMA ""
+#define DEFAULT_SCHEMA  "main"
+#define INVALID_SCHEMA  ""
+#define INVALID_CATALOG ""
+#define SYSTEM_CATALOG  "system"
+#define TEMP_CATALOG    "temp"
+
+DUCKDB_API bool IsInvalidSchema(const string &str);
+DUCKDB_API bool IsInvalidCatalog(const string &str);
 
 //! a saner size_t for loop indices etc
 typedef uint64_t idx_t;

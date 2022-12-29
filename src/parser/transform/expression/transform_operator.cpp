@@ -15,21 +15,17 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child) {
-	const auto schema = DEFAULT_SCHEMA;
-
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(child));
 
 	// built-in operator function
-	auto result = make_unique<FunctionExpression>(schema, op, move(children));
+	auto result = make_unique<FunctionExpression>(op, move(children));
 	result->is_operator = true;
 	return move(result);
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
-	const auto schema = DEFAULT_SCHEMA;
-
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -38,7 +34,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
 
-		auto result = make_unique<FunctionExpression>(schema, "regexp_full_match", move(children));
+		auto result = make_unique<FunctionExpression>("regexp_full_match", move(children));
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
@@ -51,7 +47,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
 		}
 		// not a special operator: convert to a function expression
-		auto result = make_unique<FunctionExpression>(schema, op, move(children));
+		auto result = make_unique<FunctionExpression>(op, move(children));
 		result->is_operator = true;
 		return move(result);
 	}
@@ -165,9 +161,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 			// NOT SIMILAR TO
 			invert_similar = true;
 		}
-		const auto schema = DEFAULT_SCHEMA;
 		const auto regex_function = "regexp_full_match";
-		auto result = make_unique<FunctionExpression>(schema, regex_function, move(children));
+		auto result = make_unique<FunctionExpression>(regex_function, move(children));
 
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));

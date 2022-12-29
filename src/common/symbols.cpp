@@ -15,7 +15,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/stream_query_result.hpp"
-#include "duckdb/optimizer/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -147,6 +147,7 @@ template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
 template class std::unique_ptr<Binder>;
+template class std::unique_ptr<PrivateAllocatorData>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \

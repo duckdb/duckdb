@@ -23,6 +23,7 @@ import java.sql.Types;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
@@ -1577,20 +1578,14 @@ public class TestDuckDBJDBC {
 
 		rs = md.getCatalogs();
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
-
-		assertFalse(rs.next());
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		rs.close();
 
 		rs = md.getSchemas(null, "ma%");
 		assertTrue(rs.next());
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertNull(rs.getObject("TABLE_CATALOG"));
+		assertTrue(rs.getObject("TABLE_CATALOG") != null);
 		assertEquals(rs.getString(1), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertNull(rs.getObject(2));
-
-		assertFalse(rs.next());
 		rs.close();
 
 		rs = md.getSchemas(null, "xxx");
@@ -1600,8 +1595,7 @@ public class TestDuckDBJDBC {
 		rs = md.getTables(null, null, "%", null);
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
@@ -1649,8 +1643,7 @@ public class TestDuckDBJDBC {
 		rs = md.getTables(null, DuckDBDatabase.DEFAULT_SCHEMA, "a", null);
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
@@ -1669,7 +1662,6 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject(9));
 		assertNull(rs.getObject("REF_GENERATION"));
 		assertNull(rs.getObject(10));
-		assertFalse(rs.next());
 
 		rs.close();
 
@@ -1679,8 +1671,7 @@ public class TestDuckDBJDBC {
 
 		rs = md.getColumns(null, null, "a", null);
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
@@ -1698,13 +1689,11 @@ public class TestDuckDBJDBC {
 
 		// and so on but whatever
 
-		assertFalse(rs.next());
 		rs.close();
 
 		rs = md.getColumns(null, DuckDBDatabase.DEFAULT_SCHEMA, "a", "i");
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);;
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
@@ -1720,14 +1709,12 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject("BUFFER_LENGTH"));
 		assertNull(rs.getObject(8));
 
-		assertFalse(rs.next());
 		rs.close();
 
 		// try with catalog as well
 		rs = md.getColumns(conn.getCatalog(), DuckDBDatabase.DEFAULT_SCHEMA, "a", "i");
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
@@ -1743,7 +1730,6 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject("BUFFER_LENGTH"));
 		assertNull(rs.getObject(8));
 
-		assertFalse(rs.next());
 		rs.close();
 
 		rs = md.getColumns(null, "xxx", "a", "i");
@@ -2049,11 +2035,13 @@ public class TestDuckDBJDBC {
 	public static void test_get_catalog() throws Exception {
 		Connection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		ResultSet rs = conn.getMetaData().getCatalogs();
-		assertTrue(rs.next());
-		String catalog = rs.getString(1);
-		assertFalse(rs.next());
+		HashSet<String> set = new HashSet<String>();
+		while(rs.next()) {
+			set.add(rs.getString(1));
+		}
+		assertTrue(!set.isEmpty());
 		rs.close();
-		assertEquals(conn.getCatalog(), catalog);
+		assertTrue(set.contains(conn.getCatalog()));
 		conn.close();
 	}
 
@@ -2474,6 +2462,22 @@ public class TestDuckDBJDBC {
 		conn2.close();
 	}
 
+	public static void test_readonly_remains_bug5593() throws Exception {
+		Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
+		database_file.toFile().delete();
+		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		
+		Properties p = new Properties();
+		p.setProperty("duckdb.read_only", "true");
+		try {
+		Connection conn = DriverManager.getConnection(jdbc_url, p);
+		conn.close();
+		} catch (Exception e) {
+			// nop
+		}
+		assertTrue(p.containsKey("duckdb.read_only"));
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
@@ -2485,9 +2489,18 @@ public class TestDuckDBJDBC {
 			}
 		});
 
+		String specific_test = null;
+		if (args.length >= 1) {
+			specific_test = args[0];
+		}
+
+		boolean anySucceeded = false;
 		boolean anyFailed = false;
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
+				if (specific_test != null && !m.getName().contains(specific_test)) {
+					continue;
+				}
 				System.out.print(m.getName() + " ");
 
 				LocalDateTime start = LocalDateTime.now();
@@ -2500,7 +2513,12 @@ public class TestDuckDBJDBC {
 					t.printStackTrace(System.out);
 					anyFailed = true;
 				}
+				anySucceeded = true;
 			}
+		}
+		if (!anySucceeded) {
+			System.out.println("No tests found that match " + specific_test);
+			System.exit(1);
 		}
 		System.out.println("OK");
 

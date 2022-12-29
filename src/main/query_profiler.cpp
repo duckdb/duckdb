@@ -6,6 +6,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -374,6 +375,31 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	// the query string is empty when a logical plan is deserialized
 	if (query.empty() && !root) {
 		return;
+	}
+
+	if (context.client_data->http_stats && !context.client_data->http_stats->IsEmpty()) {
+		string read =
+		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
+		string written =
+		    "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_sent);
+		string head = "#HEAD: " + to_string(context.client_data->http_stats->head_count);
+		string get = "#GET: " + to_string(context.client_data->http_stats->get_count);
+		string put = "#PUT: " + to_string(context.client_data->http_stats->put_count);
+		string post = "#POST: " + to_string(context.client_data->http_stats->post_count);
+
+		constexpr idx_t TOTAL_BOX_WIDTH = 39;
+		ss << "┌─────────────────────────────────────┐\n";
+		ss << "│┌───────────────────────────────────┐│\n";
+		ss << "││            HTTP Stats:            ││\n";
+		ss << "││                                   ││\n";
+		ss << "││" + DrawPadded(read, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "││" + DrawPadded(written, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "││" + DrawPadded(head, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "││" + DrawPadded(get, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "││" + DrawPadded(put, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "││" + DrawPadded(post, TOTAL_BOX_WIDTH - 4) + "││\n";
+		ss << "│└───────────────────────────────────┘│\n";
+		ss << "└─────────────────────────────────────┘\n";
 	}
 
 	constexpr idx_t TOTAL_BOX_WIDTH = 39;

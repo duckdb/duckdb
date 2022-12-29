@@ -1,0 +1,16 @@
+# name: test/sql/attach/attach_foreign_key.test
+# description: Test attach mixed with foreign key constraints
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
+
+statement error
+CREATE TABLE db1.song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+----
+across different schemas or catalogs
