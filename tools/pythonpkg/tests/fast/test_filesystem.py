@@ -3,10 +3,20 @@ from shutil import copyfileobj
 from typing import Callable
 
 from duckdb import DuckDBPyConnection, InvalidInputException
-from pytest import raises, importorskip
+from pytest import raises, importorskip, fixture
 
 importorskip('fsspec')
-from fsspec import filesystem
+from fsspec import filesystem, AbstractFileSystem
+
+FILENAME = 'integers.csv'
+
+
+@fixture()
+def memory():
+    fs = filesystem('memory')
+    # copy csv into memory filesystem
+    copyfileobj((Path(__file__).parent / 'data' / FILENAME).open(), fs.open(FILENAME, 'w'))
+    return fs
 
 
 class TestPythonFilesystem:
@@ -14,16 +24,12 @@ class TestPythonFilesystem:
         with raises(InvalidInputException):
             duckdb_cursor.unregister_filesystem('fake')
 
-    def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection):
-        fs = filesystem('memory')
-        filename = 'integers.csv'
-        # copy csv into memory filesystem
-        copyfileobj((Path(__file__).parent / 'data' / filename).open(), fs.open(filename, 'w'))
-        duckdb_cursor.register_filesystem(fs)
+    def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
 
-        assert fs.protocol == 'memory'
+        assert memory.protocol == 'memory'
 
-        duckdb_cursor.execute("select * from 'memory://integers.csv'")
+        duckdb_cursor.execute(f"select * from 'memory://{FILENAME}'")
 
         assert duckdb_cursor.fetchall() == [(1, 10, 0), (2, 50, 30)]
 
@@ -34,14 +40,10 @@ class TestPythonFilesystem:
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
-    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
-        fs = filesystem('memory')
-        fs.protocol = ('file', 'local')
-        filename = 'integers.csv'
-        # copy csv into memory filesystem
-        copyfileobj((Path(__file__).parent / 'data' / filename).open(), fs.open(filename, 'w'))
-        duckdb_cursor.register_filesystem(fs)
+    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        memory.protocol = ('file', 'local')
+        duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("select * from 'file://integers.csv'")
+        duckdb_cursor.execute(f"select * from 'file://{FILENAME}'")
 
         assert duckdb_cursor.fetchall() == [(1, 10, 0), (2, 50, 30)]
