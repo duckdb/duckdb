@@ -1,5 +1,5 @@
 # name: test/fuzzer/pedro/index_current_timestamp.test
-# description: Get current timestamp and similar functions cannot be used in indexes
+# description: Get current timestamp and similar functions can be used in indexes
 # group: [pedro]
 
 load __TEST_DIR__/index_current_timestamp.db
@@ -13,20 +13,36 @@ INSERT INTO t1(c1) VALUES(1);
 statement ok
 CREATE SEQUENCE seq
 
+# should work both with empty tables and tables containing rows
+# because it uses the physical create index operator
+statement ok
+CREATE INDEX its1 ON t1((get_current_timestamp()), c1);
+
+# statement does not yet work because it does not use the physical create index operator
 statement error
-CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+INSERT INTO t1 VALUES (42, 'hello')
 ----
 Cannot use get_current_timestamp
+
+statement ok
+DROP INDEX its1;
 
 statement error
 CREATE INDEX i1 ON t1((random()), c1);
 ----
 Cannot use random
 
+# should work both with empty tables and tables containing rows
+# because it uses the physical create index operator
+statement ok
+CREATE INDEX iseq ON t1((nextval('seq')), c1);
+
+# statement does not yet work because it does not use the physical create index operator
 statement error
-CREATE INDEX i1 ON t1((nextval('seq')), c1);
-----
-Cannot use nextval
+INSERT INTO t1 VALUES (42, 'hello')
+
+statement ok
+DROP INDEX iseq;
 
 statement ok
 DELETE FROM t1;
@@ -34,7 +50,7 @@ DELETE FROM t1;
 # now with an empty table
 # we can create the index
 statement ok
-CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+CREATE INDEX its2 ON t1((get_current_timestamp()), c1);
 
 # but attempting to insert a value borks it up
 statement error

@@ -59,8 +59,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		filter_types.push_back(new_column_types[i]);
 		auto is_not_null_expr =
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		auto bound_ref =
-		    make_unique<BoundReferenceExpression>(op.info->names[op.info->column_ids[i]], new_column_types[i], i);
+		auto bound_ref = make_unique<BoundReferenceExpression>(new_column_types[i], i);
 		is_not_null_expr->children.push_back(move(bound_ref));
 		filter_select_list.push_back(move(is_not_null_expr));
 	}
