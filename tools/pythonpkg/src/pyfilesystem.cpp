@@ -36,9 +36,8 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 
 int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	PythonGILWrapper gil;
-	auto const &handler = (PythonFileHandle &)handle;
 
-	const auto &write = handler.handle.attr("write");
+	const auto &write = PythonFileHandle::GetHandle(handle)->attr("write");
 
 	auto data = py::bytes(std::string(reinterpret_cast<char const *>(buffer), nr_bytes));
 
@@ -52,9 +51,8 @@ void PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes,
 
 int64_t PythonFilesystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	PythonGILWrapper gil;
-	auto const &handler = (PythonFileHandle &)handle;
 
-	const auto &read = handler.handle.attr("read");
+	const auto &read = PythonFileHandle::GetHandle(handle)->attr("read");
 
 	string data = py::bytes(read(nr_bytes));
 
@@ -92,15 +90,12 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 	PythonGILWrapper gil;
 
-	auto &handler = (PythonFileHandle &)handle;
-
-	return py::int_(handler.handle.attr("size"));
+	return py::int_(PythonFileHandle::GetHandle(handle)->attr("size"));
 }
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 	PythonGILWrapper gil;
-	auto &handler = (PythonFileHandle &)handle;
 
-	const auto &seek = handler.handle.attr("seek");
+	auto seek = PythonFileHandle::GetHandle(handle)->attr("seek");
 	seek(location);
 }
 bool PythonFilesystem::CanHandleFile(const string &fpath) {

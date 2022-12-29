@@ -21,8 +21,6 @@ public:
 };
 
 class PythonFileHandle : public FileHandle {
-	friend class PythonFilesystem;
-
 public:
 	PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle);
 
@@ -31,7 +29,11 @@ public:
 		handle.attr("close")();
 	}
 
-protected:
+	static const py::object* GetHandle(const FileHandle& handle) {
+		return &((PythonFileHandle&)handle).handle;
+	}
+
+private:
 	py::object handle;
 };
 class PythonFilesystem : public FileSystem {
