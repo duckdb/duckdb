@@ -84,6 +84,8 @@ public:
 		return false;
 	}
 	int64_t GetFileSize(FileHandle &handle) override;
+	void RemoveFile(const string &filename) override;
+	void MoveFile(const string &source, const string &dest) override;
 };
 
 } // namespace duckdb

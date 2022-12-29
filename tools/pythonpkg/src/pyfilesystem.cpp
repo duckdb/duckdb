@@ -106,5 +106,17 @@ bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	}
 	return false;
 }
+void PythonFilesystem::MoveFile(const string &source, const string &dest) {
+	PythonGILWrapper gil;
+
+	auto move = filesystem.attr("mv");
+	move(py::str(source), py::str(dest));
+}
+void PythonFilesystem::RemoveFile(const string &filename) {
+	PythonGILWrapper gil;
+
+	auto remove = filesystem.attr("rm");
+	remove(py::str(filename));
+}
 
 } // namespace duckdb
