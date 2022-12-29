@@ -47,7 +47,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	new_column_types.push_back(LogicalType::ROW_TYPE);
 	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
-	auto projection = make_unique<PhysicalProjection>(op.info->scan_types, move(select_list), op.estimated_cardinality);
+	auto projection = make_unique<PhysicalProjection>(new_column_types, move(select_list), op.estimated_cardinality);
 	projection->children.push_back(move(table_scan));
 
 	// filter operator for IS_NOT_NULL on each key column
