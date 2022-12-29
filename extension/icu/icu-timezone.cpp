@@ -278,6 +278,10 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 	}
 };
 
+timestamp_t ICUDateFunc::ICUFromLocal(icu::Calendar *calendar, timestamp_t local) {
+	return ICUFromLocalTimestamp::Operation(calendar, local);
+}
+
 void RegisterICUTimeZoneFunctions(ClientContext &context) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);

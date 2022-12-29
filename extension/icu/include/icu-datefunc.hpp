@@ -66,6 +66,8 @@ struct ICUDateFunc {
 	static timestamp_t Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the latter timestamp from the former timestamp using the calendar
 	static interval_t Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date);
+	//! Add UTC offset to the local timestamp
+	static timestamp_t ICUFromLocal(icu::Calendar *calendar, timestamp_t local);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
