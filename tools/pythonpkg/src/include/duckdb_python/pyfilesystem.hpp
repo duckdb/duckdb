@@ -20,6 +20,7 @@ public:
 
 class PythonFileHandle : public FileHandle {
 	friend class PythonFilesystem;
+
 public:
 	PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle);
 

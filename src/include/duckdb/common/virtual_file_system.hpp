@@ -95,7 +95,7 @@ public:
 		sub_systems.push_back(move(fs));
 	}
 
-	void UnregisterSubSystem(const string &name) {
+	void UnregisterSubSystem(const string &name) override {
 		for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
 			if (sub_system->get()->GetName() == name) {
 				sub_systems.erase(sub_system);
@@ -109,9 +109,9 @@ public:
 		compressed_fs[compression_type] = move(fs);
 	}
 
-	vector<string> ListSubSystems() {
+	vector<string> ListSubSystems() override {
 		vector<string> names;
-		for (auto& sub_system : sub_systems) {
+		for (auto &sub_system : sub_systems) {
 			names.push_back(sub_system->GetName());
 		}
 		return names;
