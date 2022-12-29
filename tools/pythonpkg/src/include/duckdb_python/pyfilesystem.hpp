@@ -60,14 +60,14 @@ protected:
 	}
 
 public:
-	unique_ptr<FileHandle> OpenFile(const string &path, __uint8_t flags, FileLockType lock,
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock,
 	                                FileCompressionType compression, FileOpener *opener) override;
 	void Seek(duckdb::FileHandle &handle, uint64_t location) override;
 	FileType GetFileType(FileHandle &handle) override {
 		return FileType::FILE_TYPE_REGULAR;
 	}
-	int64_t Read(FileHandle &handle, void *buffer, __int64_t nr_bytes) override;
-	void Read(duckdb::FileHandle &handle, void *buffer, __int64_t nr_bytes, uint64_t location) override;
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	void Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, uint64_t location) override;
 	bool FileExists(const string &filename) override;
 	vector<string> Glob(const string &path, FileOpener *opener) override;
 	bool CanHandleFile(const string &fpath) override;

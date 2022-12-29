@@ -9,7 +9,7 @@ PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, 
     : FileHandle(file_system, path), handle(handle) {
 }
 
-unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, __uint8_t flags, FileLockType lock,
+unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
 	PythonGILWrapper gil;
 
@@ -41,7 +41,7 @@ int64_t PythonFilesystem::Read(FileHandle &handle, void *buffer, int64_t nr_byte
 	return data.size();
 }
 
-void PythonFilesystem::Read(duckdb::FileHandle &handle, void *buffer, __int64_t nr_bytes, uint64_t location) {
+void PythonFilesystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, uint64_t location) {
 	Seek(handle, location);
 
 	Read(handle, buffer, nr_bytes);
