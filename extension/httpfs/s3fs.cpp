@@ -872,6 +872,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	return result;
 }
 
+string S3FileSystem::GetName() const {
+	return "S3FileSystem";
+}
+
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
                                 string &continuation_token, HTTPStats *stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
