@@ -68,6 +68,10 @@ public:
 	}
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	void Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, uint64_t location) override;
+
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+
 	bool FileExists(const string &filename) override;
 	vector<string> Glob(const string &path, FileOpener *opener) override;
 	bool CanHandleFile(const string &fpath) override;

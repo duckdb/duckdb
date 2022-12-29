@@ -13,19 +13,41 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
                                                   FileCompressionType compression, FileOpener *opener) {
 	PythonGILWrapper gil;
 
-	// TODO: support writing?
-	if (flags != FileFlags::FILE_FLAGS_READ) {
-		throw IOException("Cannot open in write mode");
-	}
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw IOException("Compression not supported");
 	}
-	if (lock != FileLockType::NO_LOCK) {
-		throw IOException("Lock not supported");
+
+	// TODO: lock support?
+
+	string flags_s;
+	if (flags & FileFlags::FILE_FLAGS_READ) {
+		flags_s = "rb";
+	} else if (flags & FileFlags::FILE_FLAGS_WRITE) {
+		flags_s = "wb";
+	} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
+		flags_s = "ab";
+	} else {
+		throw InvalidInputException("%s: unsupported file flags", GetName());
 	}
 
-	const auto &handle = filesystem.attr("open")(py::str(stripPrefix(path)));
+	const auto &handle = filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s));
 	return make_unique<PythonFileHandle>(*this, path, handle);
+}
+
+int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	PythonGILWrapper gil;
+	auto const &handler = (PythonFileHandle &)handle;
+
+	const auto &write = handler.handle.attr("write");
+
+	auto data = py::bytes(std::string(reinterpret_cast<char const *>(buffer), nr_bytes));
+
+	return py::int_(write(data));
+}
+void PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	Seek(handle, location);
+
+	Write(handle, buffer, nr_bytes);
 }
 
 int64_t PythonFilesystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
