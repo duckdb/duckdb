@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
@@ -44,7 +45,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		new_column_types.push_back(op.expressions[i]->return_type);
 		select_list.push_back(move(op.expressions[i]));
 	}
-	new_column_types.push_back(LogicalType::ROW_TYPE);
+	new_column_types.emplace_back(LogicalType::ROW_TYPE);
 	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
 	auto projection = make_unique<PhysicalProjection>(new_column_types, move(select_list), op.estimated_cardinality);
