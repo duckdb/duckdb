@@ -172,12 +172,21 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem
 
 	auto &fs = database->GetFileSystem();
 
-	auto prefix = py::str(filesystem.attr("protocol"));
-	if (prefix.is_none() || prefix == py::str("abstract")) {
+	auto protocol = filesystem.attr("protocol");
+	if (protocol.is_none() || py::str(protocol) == py::str("abstract")) {
 		throw InvalidInputException("Must provide concrete fsspec implementation");
 	}
 
-	fs.RegisterSubSystem(make_unique<PythonFilesystem>(prefix, filesystem));
+	vector<string> protocols;
+	if (py::isinstance<py::str>(protocol)) {
+		protocols.push_back(py::str(protocol));
+	} else {
+		for (const auto &sub_protocol : protocol) {
+			protocols.push_back(py::str(sub_protocol));
+		}
+	}
+
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(protocols, filesystem));
 }
 
 py::list DuckDBPyConnection::ListFilesystems() {

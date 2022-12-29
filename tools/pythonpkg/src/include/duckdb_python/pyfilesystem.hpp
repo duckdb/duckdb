@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/file_system.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb_python/python_object_container.hpp"
@@ -34,20 +36,22 @@ protected:
 };
 class PythonFilesystem : public FileSystem {
 private:
-	const string prefix;
+	const vector<string> protocols;
 	const string name;
 	const AbstractFileSystem filesystem;
 	string stripPrefix(string input) {
-		if (CanHandleFile(input)) {
-			return input.substr(prefix.size());
-		} else {
-			return input;
+		for (const auto &protocol : protocols) {
+			auto prefix = protocol + "://";
+			if (StringUtil::StartsWith(input, prefix)) {
+				return input.substr(prefix.size());
+			}
 		}
+		return input;
 	}
 
 public:
-	explicit PythonFilesystem(const string name, const AbstractFileSystem filesystem)
-	    : prefix(name + "://"), name(name), filesystem(filesystem) {
+	explicit PythonFilesystem(const vector<string> protocols, const AbstractFileSystem filesystem)
+	    : protocols(protocols), name(protocols[0]), filesystem(filesystem) {
 	}
 
 protected:

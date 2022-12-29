@@ -6,8 +6,7 @@ from duckdb import DuckDBPyConnection, InvalidInputException
 from pytest import raises, importorskip
 
 importorskip('fsspec')
-
-from fsspec.implementations.memory import MemoryFileSystem
+from fsspec import filesystem
 
 
 class TestPythonFilesystem:
@@ -16,7 +15,7 @@ class TestPythonFilesystem:
             duckdb_cursor.unregister_filesystem('fake')
 
     def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection):
-        fs = MemoryFileSystem()
+        fs = filesystem('memory')
         filename = 'integers.csv'
         # copy csv into memory filesystem
         copyfileobj((Path(__file__).parent / 'data' / filename).open(), fs.open(filename, 'w'))
@@ -34,3 +33,15 @@ class TestPythonFilesystem:
         duckdb_cursor = require('httpfs')
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('S3FileSystem')
+
+    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
+        fs = filesystem('memory')
+        fs.protocol = ('file', 'local')
+        filename = 'integers.csv'
+        # copy csv into memory filesystem
+        copyfileobj((Path(__file__).parent / 'data' / filename).open(), fs.open(filename, 'w'))
+        duckdb_cursor.register_filesystem(fs)
+
+        duckdb_cursor.execute("select * from 'file://integers.csv'")
+
+        assert duckdb_cursor.fetchall() == [(1, 10, 0), (2, 50, 30)]

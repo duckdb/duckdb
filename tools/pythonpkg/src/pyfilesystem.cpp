@@ -63,7 +63,7 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	for (auto item : returner) {
 		string res = py::str(item);
 		// TODO: should this slash be replaced with AbstractFileSystem#root_marker
-		results.push_back(prefix + "/" + res);
+		results.push_back(protocols[0] + "://" + "/" + res);
 	}
 	return results;
 }
@@ -82,7 +82,12 @@ void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 	seek(location);
 }
 bool PythonFilesystem::CanHandleFile(const string &fpath) {
-	return StringUtil::StartsWith(fpath, prefix);
+	for (const auto &protocol : protocols) {
+		if (StringUtil::StartsWith(fpath, protocol + "://")) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb
