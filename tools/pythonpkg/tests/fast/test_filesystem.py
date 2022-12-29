@@ -32,5 +32,5 @@ class TestPythonFilesystem:
 
     def test_unregister_builtin(self, require: Callable[[str], DuckDBPyConnection]):
         duckdb_cursor = require('httpfs')
-        assert 's3fs' in duckdb_cursor.list_filesystems()
-        duckdb_cursor.unregister_filesystem('s3fs')
+        assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
+        duckdb_cursor.unregister_filesystem('S3FileSystem')
