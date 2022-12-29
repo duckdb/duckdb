@@ -36,7 +36,7 @@ class PythonFilesystem : public FileSystem {
 private:
 	const string prefix;
 	const string name;
-	const py::object filesystem;
+	const AbstractFileSystem filesystem;
 	string stripPrefix(string input) {
 		if (CanHandleFile(input)) {
 			return input.substr(prefix.size());
@@ -46,7 +46,7 @@ private:
 	}
 
 public:
-	explicit PythonFilesystem(const string name, const py::object filesystem)
+	explicit PythonFilesystem(const string name, const AbstractFileSystem filesystem)
 	    : prefix(name + "://"), name(name), filesystem(filesystem) {
 	}
 
