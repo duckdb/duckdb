@@ -1,5 +1,6 @@
 from pathlib import Path
 from shutil import copyfileobj
+from typing import Callable
 
 from duckdb import DuckDBPyConnection, InvalidInputException
 from pytest import raises, importorskip
@@ -29,6 +30,7 @@ class TestPythonFilesystem:
 
         duckdb_cursor.unregister_filesystem('memory')
 
-    def test_unregister_builtin(self, duckdb_cursor: DuckDBPyConnection):
+    def test_unregister_builtin(self, require: Callable[[str], DuckDBPyConnection]):
+        duckdb_cursor = require('httpfs')
         assert 's3fs' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('s3fs')
