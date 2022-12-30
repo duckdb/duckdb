@@ -153,7 +153,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
 	    .def("load_extension", &PyConnectionWrapper::LoadExtension, "Load an installed extension", py::arg("extension"),
-	         py::arg("connection") = py::none());
+	         py::arg("connection") = py::none())
+	    .def("register_filesystem", &PyConnectionWrapper::RegisterFilesystem, "Register a fsspec compliant filesystem",
+	         py::arg("filesystem"), py::arg("connection") = py::none())
+	    .def("unregister_filesystem", &PyConnectionWrapper::UnregisterFilesystem, "Unregister a filesystem",
+	         py::arg("name"), py::arg("connection") = py::none())
+	    .def("list_filesystems", &PyConnectionWrapper::ListFilesystems,
+	         "List registered filesystems, including builtin ones", py::arg("connection") = py::none());
 }
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
