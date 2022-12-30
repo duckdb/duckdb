@@ -55,6 +55,6 @@ class TestPythonFilesystem:
     def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV)")
+        duckdb_cursor.execute("copy (select 1) to 'file://01.csv' (FORMAT CSV)")
 
         assert memory.open('01.csv').read() == b'1\n'
