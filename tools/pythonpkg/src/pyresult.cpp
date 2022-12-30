@@ -343,9 +343,9 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DATE: {
 		return py::str("Date");
 	}
-	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 		return py::str("dict");
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		return py::str("list");
 	}
