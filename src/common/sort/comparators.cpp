@@ -58,7 +58,7 @@ int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, cons
 	case PhysicalType::STRUCT: {
 		auto l_nested_ptr = Load<data_ptr_t>(l_ptr);
 		auto r_nested_ptr = Load<data_ptr_t>(r_ptr);
-		return CompareValAndAdvance(l_nested_ptr, r_nested_ptr, type);
+		return CompareValAndAdvance(l_nested_ptr, r_nested_ptr, type, true);
 	}
 	default:
 		throw NotImplementedException("Unimplemented CompareVal for type %s", type.ToString());
@@ -113,7 +113,7 @@ int Comparators::TemplatedCompareVal(const data_ptr_t &left_ptr, const data_ptr_
 	}
 }
 
-int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, const LogicalType &type) {
+int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, const LogicalType &type, bool valid) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -141,11 +141,11 @@ int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, cons
 	case PhysicalType::INTERVAL:
 		return TemplatedCompareAndAdvance<interval_t>(l_ptr, r_ptr);
 	case PhysicalType::VARCHAR:
-		return CompareStringAndAdvance(l_ptr, r_ptr);
+		return CompareStringAndAdvance(l_ptr, r_ptr, valid);
 	case PhysicalType::LIST:
-		return CompareListAndAdvance(l_ptr, r_ptr, ListType::GetChildType(type));
+		return CompareListAndAdvance(l_ptr, r_ptr, ListType::GetChildType(type), valid);
 	case PhysicalType::STRUCT:
-		return CompareStructAndAdvance(l_ptr, r_ptr, StructType::GetChildTypes(type));
+		return CompareStructAndAdvance(l_ptr, r_ptr, StructType::GetChildTypes(type), valid);
 	default:
 		throw NotImplementedException("Unimplemented CompareValAndAdvance for type %s", type.ToString());
 	}
@@ -159,7 +159,10 @@ int Comparators::TemplatedCompareAndAdvance(data_ptr_t &left_ptr, data_ptr_t &ri
 	return result;
 }
 
-int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
+int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, bool valid) {
+	if (!valid) {
+		return 0;
+	}
 	// Construct the string_t
 	uint32_t left_string_size = Load<uint32_t>(left_ptr);
 	uint32_t right_string_size = Load<uint32_t>(right_ptr);
@@ -174,7 +177,7 @@ int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 }
 
 int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
-                                         const child_list_t<LogicalType> &types) {
+                                         const child_list_t<LogicalType> &types, bool valid) {
 	idx_t count = types.size();
 	// Load validity masks
 	ValidityBytes left_validity(left_ptr);
@@ -193,8 +196,8 @@ int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 		left_valid = left_validity.RowIsValid(left_validity.GetValidityEntry(entry_idx), idx_in_entry);
 		right_valid = right_validity.RowIsValid(right_validity.GetValidityEntry(entry_idx), idx_in_entry);
 		auto &type = types[i].second;
-		if ((left_valid && right_valid) || TypeIsConstantSize(type.InternalType())) {
-			comp_res = CompareValAndAdvance(left_ptr, right_ptr, types[i].second);
+		if ((left_valid == right_valid) || TypeIsConstantSize(type.InternalType())) {
+			comp_res = CompareValAndAdvance(left_ptr, right_ptr, types[i].second, left_valid && valid);
 		}
 		if (!left_valid && !right_valid) {
 			comp_res = 0;
@@ -210,7 +213,11 @@ int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	return comp_res;
 }
 
-int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type) {
+int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type,
+                                       bool valid) {
+	if (!valid) {
+		return 0;
+	}
 	// Load list lengths
 	auto left_len = Load<idx_t>(left_ptr);
 	auto right_len = Load<idx_t>(right_ptr);
@@ -284,13 +291,14 @@ int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_p
 			if (left_valid && right_valid) {
 				switch (type.InternalType()) {
 				case PhysicalType::LIST:
-					comp_res = CompareListAndAdvance(left_ptr, right_ptr, ListType::GetChildType(type));
+					comp_res = CompareListAndAdvance(left_ptr, right_ptr, ListType::GetChildType(type), left_valid);
 					break;
 				case PhysicalType::VARCHAR:
-					comp_res = CompareStringAndAdvance(left_ptr, right_ptr);
+					comp_res = CompareStringAndAdvance(left_ptr, right_ptr, left_valid);
 					break;
 				case PhysicalType::STRUCT:
-					comp_res = CompareStructAndAdvance(left_ptr, right_ptr, StructType::GetChildTypes(type));
+					comp_res =
+					    CompareStructAndAdvance(left_ptr, right_ptr, StructType::GetChildTypes(type), left_valid);
 					break;
 				default:
 					throw NotImplementedException("CompareListAndAdvance for variable-size type %s", type.ToString());
