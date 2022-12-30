@@ -29,8 +29,8 @@ public:
 		handle.attr("close")();
 	}
 
-	static const py::object* GetHandle(const FileHandle& handle) {
-		return &((PythonFileHandle&)handle).handle;
+	static const py::object *GetHandle(const FileHandle &handle) {
+		return &((PythonFileHandle &)handle).handle;
 	}
 
 private:
