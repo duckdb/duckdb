@@ -515,8 +515,6 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain a bucket name");
 	}
 
-	auto question_pos = url.find_last_of('?');
-
 	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
 	if (params.url_style == "path") {
 		path = "/" + bucket;
@@ -524,13 +522,18 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		path = "";
 	}
 
-	if (question_pos == string::npos) {
-		path += url.substr(slash_pos);
-		query_param = "";
-	} else {
-		path += url.substr(slash_pos, question_pos - slash_pos);
+	auto question_pos = url.find_last_of('?');
+	if (question_pos != string::npos) {
 		query_param = url.substr(question_pos + 1);
 	}
+
+	if (!query_param.empty() && query_param.find('.') == string::npos) {
+		path += url.substr(slash_pos, question_pos - slash_pos);
+	} else {
+		path += url.substr(slash_pos);
+		query_param = "";
+	}
+
 	if (path.empty()) {
 		throw IOException("URL needs to contain key");
 	}
