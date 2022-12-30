@@ -341,7 +341,8 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install numpy pytest pandas mypy psutil
+        working-directory: tools/pythonpkg
+        run: pip install -r requirements-dev.txt
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
