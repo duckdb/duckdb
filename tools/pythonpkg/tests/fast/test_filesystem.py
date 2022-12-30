@@ -35,6 +35,10 @@ class TestPythonFilesystem:
 
         duckdb_cursor.unregister_filesystem('memory')
 
+    def test_reject_abstract_filesystem(self, duckdb_cursor: DuckDBPyConnection):
+        with raises(InvalidInputException):
+            duckdb_cursor.register_filesystem(AbstractFileSystem())
+
     def test_unregister_builtin(self, require: Callable[[str], DuckDBPyConnection]):
         duckdb_cursor = require('httpfs')
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()

@@ -173,7 +173,7 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem
 	auto &fs = database->GetFileSystem();
 
 	auto protocol = filesystem.attr("protocol");
-	if (protocol.is_none() || py::str(protocol) == py::str("abstract")) {
+	if (protocol.is_none() || py::str("abstract").equal(protocol)) {
 		throw InvalidInputException("Must provide concrete fsspec implementation");
 	}
 
