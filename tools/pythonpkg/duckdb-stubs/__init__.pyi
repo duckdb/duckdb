@@ -10,6 +10,7 @@ from typing import overload
 import pandas
 # stubgen override - unfortunately we need this for version checks
 import sys
+import fsspec
 import pyarrow.lib
 # stubgen override - This should probably not be exposed
 #_clean_default_connection: Any
