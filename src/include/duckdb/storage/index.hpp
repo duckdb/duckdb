@@ -39,7 +39,7 @@ public:
 	TableIOManager &table_io_manager;
 	//! Column identifiers to extract from the base table
 	vector<column_t> column_ids;
-	//! unordered_set of column_ids used by the index
+	//! Unordered_set of column_ids used by the index
 	unordered_set<column_t> column_id_set;
 	//! Unbound expressions used by the index
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -47,7 +47,7 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	//! constraint type
+	//! Index constraint type (primary key, foreign key, ...)
 	IndexConstraintType constraint_type;
 
 public:

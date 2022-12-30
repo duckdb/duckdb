@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-//! Physically CREATE INDEX statement
+//! Physical CREATE (UNIQUE) INDEX statement
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
@@ -43,13 +43,14 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
-	// Source interface
+	//! Source interface, NOP for this operator
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
 public:
-	// Sink interface
+	//! Sink interface, thread-local sink states
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	//! Sink interface, global sink state
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,

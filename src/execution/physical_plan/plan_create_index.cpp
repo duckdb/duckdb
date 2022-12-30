@@ -19,6 +19,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 
 	D_ASSERT(op.children.empty());
 
+	// validate that all expressions contain valid scalar functions
+	// e.g. get_current_timestamp(), random(), and sequence values are not allowed as ART keys
+	// because they make deletions and lookups unfeasible
+	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
+		auto &expr = op.unbound_expressions[i];
+		if (expr->IsScalar()) {
+			auto &func_expr = (BoundFunctionExpression &)*expr;
+			if (func_expr.function.name == "get_current_timestamp" || func_expr.function.name == "random" ||
+			    func_expr.function.name == "nextval") {
+				throw BinderException("Index keys cannot contain the \"%s\" function.", func_expr.function.name);
+			}
+		}
+	}
+
 	// table scan operator for index key columns and row IDs
 
 	unique_ptr<TableFilterSet> table_filters;
