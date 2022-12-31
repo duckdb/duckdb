@@ -1674,6 +1674,9 @@ vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
 	case PhysicalType::DOUBLE:
 		TemplatedSearchInMap<double>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
+	case PhysicalType::INTERVAL:
+		TemplatedSearchInMap<interval_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		break;
 	case PhysicalType::VARCHAR:
 		SearchStringInMap(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
 		break;
