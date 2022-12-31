@@ -7,6 +7,7 @@ from pytest import raises, importorskip, fixture
 
 importorskip('fsspec')
 from fsspec import filesystem, AbstractFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 
 FILENAME = 'integers.csv'
 
@@ -15,8 +16,12 @@ FILENAME = 'integers.csv'
 def memory():
     fs = filesystem('memory')
     # copy csv into memory filesystem
-    copyfileobj((Path(__file__).parent / 'data' / FILENAME).open(), fs.open(FILENAME, 'w'))
+    add_file(fs)
     return fs
+
+
+def add_file(fs):
+    copyfileobj((Path(__file__).parent / 'data' / FILENAME).open(), fs.open(FILENAME, 'w'))
 
 
 class TestPythonFilesystem:
@@ -44,7 +49,9 @@ class TestPythonFilesystem:
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
-    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
+        memory = MemoryFileSystem()
+        add_file(memory)
         memory.protocol = ('file', 'local')
         duckdb_cursor.register_filesystem(memory)
 
@@ -55,6 +62,6 @@ class TestPythonFilesystem:
     def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1) to 'file://01.csv' (FORMAT CSV)")
+        duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV)")
 
         assert memory.open('01.csv').read() == b'1\n'
