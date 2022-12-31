@@ -123,23 +123,8 @@ time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
-	py::dict info = filesystem.attr("info")(handle.path);
+	auto last_mod = filesystem.attr("modified")(handle.path);
 
-	py::object last_mod;
-	if (info.contains("last_modified")) {
-		last_mod = info["last_modified"];
-	} else if (info.contains("mtime")) {
-		last_mod = info["mtime"];
-	} else {
-		return FileSystem::GetLastModifiedTime(handle);
-	}
-
-	auto datetime = py::module::import("datetime").attr("datetime");
-
-	if (py::isinstance(last_mod, datetime)) {
-		return py::int_(last_mod.attr("timestamp")());
-	} else {
-		return py::int_(last_mod);
-	}
+	return py::int_(last_mod.attr("timestamp")());
 }
 } // namespace duckdb
