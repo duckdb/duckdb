@@ -75,3 +75,11 @@ class TestPythonFilesystem:
         duckdb_cursor.execute(f"select * from read_parquet('memory://{filename}')")
 
         assert duckdb_cursor.fetchall() == [(b'foo',), (b'bar',), (b'baz',)]
+
+    def test_write_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+        filename = 'output.parquet'
+
+        duckdb_cursor.execute(f'''COPY (SELECT 1) TO 'memory://{filename}' (FORMAT PARQUET);''')
+
+        assert memory.open(filename).read().startswith(b'PAR1')

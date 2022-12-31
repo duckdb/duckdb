@@ -87,6 +87,7 @@ public:
 	void RemoveFile(const string &filename) override;
 	void MoveFile(const string &source, const string &dest) override;
 	time_t GetLastModifiedTime(FileHandle &handle);
+	void FileSync(FileHandle &handle);
 };
 
 } // namespace duckdb

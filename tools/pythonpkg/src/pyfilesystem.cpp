@@ -127,4 +127,9 @@ time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 
 	return py::int_(last_mod.attr("timestamp")());
 }
+void PythonFilesystem::FileSync(FileHandle &handle) {
+	PythonGILWrapper gil;
+
+	PythonFileHandle::GetHandle(handle)->attr("flush")();
+}
 } // namespace duckdb
