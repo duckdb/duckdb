@@ -20,8 +20,8 @@ def memory():
     return fs
 
 
-def add_file(fs):
-    copyfileobj((Path(__file__).parent / 'data' / FILENAME).open(), fs.open(FILENAME, 'w'))
+def add_file(fs, filename=FILENAME):
+    copyfileobj((Path(__file__).parent / 'data' / filename).open('rb'), fs.open(filename, 'wb'))
 
 
 class TestPythonFilesystem:
@@ -65,3 +65,13 @@ class TestPythonFilesystem:
         duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV)")
 
         assert memory.open('01.csv').read() == b'1\n'
+
+    def test_read_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        filename = 'binary_string.parquet'
+        add_file(memory, filename)
+
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute(f"select * from read_parquet('memory://{filename}')")
+
+        assert duckdb_cursor.fetchall() == [(b'foo',), (b'bar',), (b'baz',)]
