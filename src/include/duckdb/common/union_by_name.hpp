@@ -58,9 +58,9 @@ public:
 
 	//! Create information for reader's col mapping to union cols
 	static vector<unique_ptr<READER_TYPE>> CreateUnionMap(vector<unique_ptr<READER_TYPE>> union_readers,
-	                                                                 vector<LogicalType> &union_col_types,
-	                                                                 vector<string> &union_col_names,
-	                                                                 case_insensitive_map_t<idx_t> &union_names_map) {
+	                                                      vector<LogicalType> &union_col_types,
+	                                                      vector<string> &union_col_names,
+	                                                      case_insensitive_map_t<idx_t> &union_names_map) {
 		for (auto &reader : union_readers) {
 			auto &col_names = reader->names;
 			vector<bool> union_null_cols(union_col_names.size(), true);
