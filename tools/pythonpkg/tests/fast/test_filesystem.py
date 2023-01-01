@@ -14,7 +14,7 @@ FILENAME = 'integers.csv'
 
 @fixture()
 def memory():
-    fs = filesystem('memory')
+    fs = filesystem('memory', skip_instance_cache=True)
     # copy csv into memory filesystem
     add_file(fs)
     return fs
@@ -50,7 +50,7 @@ class TestPythonFilesystem:
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
-        memory = MemoryFileSystem()
+        memory = MemoryFileSystem(skip_instance_cache=True)
         add_file(memory)
         memory.protocol = ('file', 'local')
         duckdb_cursor.register_filesystem(memory)
