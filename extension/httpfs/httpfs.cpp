@@ -284,6 +284,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, cons
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                 FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+	if (!opener) {
+		throw IOException("Cannot open a HTTPFS file without a file opener");
+	}
 
 	// splitting query params from base path
 	string stripped_path, query_param;
