@@ -1673,7 +1673,7 @@ vector<idx_t> MapVector::Search(Vector &keys, idx_t count, const Value &key, lis
 		TemplatedSearchInMap<double>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedSearchInMap<interval_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<interval_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::VARCHAR:
 		SearchStringInMap(keys, count, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
