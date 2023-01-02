@@ -553,6 +553,15 @@ public:
 
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
+				if(bind_data.parquet_options.union_by_name){
+					const auto& union_null_cols = data.reader->union_null_cols;
+					for (idx_t col = 0; col < union_null_cols.size(); ++col) {
+						if (union_null_cols[col]) {
+							output.data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
+							ConstantVector::SetNull(output.data[col], true);
+						}
+					}
+				}
 				return;
 			}
 			if (!ParquetParallelStateNext(context, bind_data, data, gstate)) {
