@@ -148,7 +148,7 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	}
 
 	//! this is more for completeness reasons
-	bound_function.return_type = LogicalType::MAP(move(child_types));
+	bound_function.return_type = LogicalType::MAP(std::move(child_types));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

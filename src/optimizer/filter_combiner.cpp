@@ -40,7 +40,7 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	auto copy = expr->Copy();
 	auto pointer_copy = copy.get();
 	D_ASSERT(stored_expressions.find(pointer_copy) == stored_expressions.end());
-	stored_expressions.insert(make_pair(pointer_copy, move(copy)));
+	stored_expressions.insert(make_pair(pointer_copy, std::move(copy)));
 	return pointer_copy;
 }
 
@@ -94,7 +94,7 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	auto result = AddFilter(expr.get());
 	if (result == FilterResult::UNSUPPORTED) {
 		// unsupported filter, push into remaining filters
-		remaining_filters.push_back(move(expr));
+		remaining_filters.push_back(std::move(expr));
 		return FilterResult::SUCCESS;
 	}
 	return result;
@@ -103,7 +103,7 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	// first loop over the remaining filters
 	for (auto &filter : remaining_filters) {
-		callback(move(filter));
+		callback(std::move(filter));
 	}
 	remaining_filters.clear();
 	// now loop over the equivalence sets
@@ -116,7 +116,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 			for (idx_t k = i + 1; k < entries.size(); k++) {
 				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
 				                                                         entries[i]->Copy(), entries[k]->Copy());
-				callback(move(comparison));
+				callback(std::move(comparison));
 			}
 			// for each entry also create a comparison with each constant
 			int lower_index = -1, upper_index = -1;
@@ -134,8 +134,8 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				} else {
 					auto constant = make_unique<BoundConstantExpression>(info.constant);
 					auto comparison = make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(),
-					                                                         move(constant));
-					callback(move(comparison));
+					                                                         std::move(constant));
+					callback(std::move(comparison));
 				}
 			}
 			if (lower_index >= 0 && upper_index >= 0) {
@@ -143,20 +143,20 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				auto lower_constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
 				auto upper_constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
 				auto between = make_unique<BoundBetweenExpression>(
-				    entries[i]->Copy(), move(lower_constant), move(upper_constant), lower_inclusive, upper_inclusive);
-				callback(move(between));
+				    entries[i]->Copy(), std::move(lower_constant), std::move(upper_constant), lower_inclusive, upper_inclusive);
+				callback(std::move(between));
 			} else if (lower_index >= 0) {
 				// only lower index found, create simple comparison expression
 				auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
 				auto comparison = make_unique<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
-				                                                         entries[i]->Copy(), move(constant));
-				callback(move(comparison));
+				                                                         entries[i]->Copy(), std::move(constant));
+				callback(std::move(comparison));
 			} else if (upper_index >= 0) {
 				// only upper index found, create simple comparison expression
 				auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
 				auto comparison = make_unique<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
-				                                                         entries[i]->Copy(), move(constant));
-				callback(move(comparison));
+				                                                         entries[i]->Copy(), std::move(constant));
+				callback(std::move(comparison));
 			}
 		}
 	}
@@ -422,7 +422,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 						for (idx_t k = 0; k < constant_list.size(); k++) {
 							auto constant_filter = make_unique<ConstantFilter>(constant_value.second[k].comparison_type,
 							                                                   constant_value.second[k].constant);
-							table_filters.PushFilter(column_index, move(constant_filter));
+							table_filters.PushFilter(column_index, std::move(constant_filter));
 						}
 						table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 					}
@@ -452,8 +452,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
 				like_string[like_string.size() - 1]++;
 				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
-				table_filters.PushFilter(column_index, move(lower_bound));
-				table_filters.PushFilter(column_index, move(upper_bound));
+				table_filters.PushFilter(column_index, std::move(lower_bound));
+				table_filters.PushFilter(column_index, std::move(upper_bound));
 				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
@@ -479,7 +479,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				if (equality) {
 					//! Here the like can be transformed to an equality query
 					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
-					table_filters.PushFilter(column_index, move(equal_filter));
+					table_filters.PushFilter(column_index, std::move(equal_filter));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
@@ -487,8 +487,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
 					prefix[prefix.size() - 1]++;
 					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
-					table_filters.PushFilter(column_index, move(lower_bound));
-					table_filters.PushFilter(column_index, move(upper_bound));
+					table_filters.PushFilter(column_index, std::move(lower_bound));
+					table_filters.PushFilter(column_index, std::move(upper_bound));
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				}
 			}
@@ -551,8 +551,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			                                               Value::Numeric(type, in_values.front()));
 			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
 			                                               Value::Numeric(type, in_values.back()));
-			table_filters.PushFilter(column_index, move(lower_bound));
-			table_filters.PushFilter(column_index, move(upper_bound));
+			table_filters.PushFilter(column_index, std::move(lower_bound));
+			table_filters.PushFilter(column_index, std::move(upper_bound));
 			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
@@ -616,7 +616,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 			// try to add transitive filters
 			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter) == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
-				remaining_filters.push_back(move(transitive_filter));
+				remaining_filters.push_back(std::move(transitive_filter));
 			}
 		}
 		return ret;
@@ -727,7 +727,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				                                             : ExpressionType::COMPARE_LESSTHAN;
 				auto left = comparison.lower->Copy();
 				auto right = comparison.input->Copy();
-				auto lower_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				auto lower_comp = make_unique<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(lower_comp.get());
 			}
 
@@ -762,7 +762,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				                                             : ExpressionType::COMPARE_LESSTHAN;
 				auto left = comparison.input->Copy();
 				auto right = comparison.upper->Copy();
-				auto upper_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				auto upper_comp = make_unique<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(upper_comp.get());
 			}
 
@@ -841,7 +841,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 				// Add the filter j >= i in the remaing filters
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
-				remaining_filters.push_back(move(filter));
+				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
 		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHAN &&
@@ -856,7 +856,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 				// Add the filter j [>, <] i
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
-				remaining_filters.push_back(move(filter));
+				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
 		} else {
@@ -876,7 +876,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			// try to add transitive filters
 			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter) == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
-				remaining_filters.push_back(move(transitive_filter));
+				remaining_filters.push_back(std::move(transitive_filter));
 			}
 		}
 		return FilterResult::SUCCESS;
@@ -897,7 +897,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression *expr) {
 			if (remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 				auto comparison = (BoundComparisonExpression *)remaining_filters[i].get();
 				if (expr->Equals(comparison->right.get()) && comparison->type != ExpressionType::COMPARE_NOTEQUAL) {
-					auto filter = move(remaining_filters[i]);
+					auto filter = std::move(remaining_filters[i]);
 					remaining_filters.erase(remaining_filters.begin() + i);
 					return filter;
 				}
@@ -1144,11 +1144,11 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //		or_conjunction->children.emplace_back(comparison_expr->Copy());
 //
 //		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
-//		conjs_to_push->conjunctions.emplace_back(move(or_conjunction));
+//		conjs_to_push->conjunctions.emplace_back(std::move(or_conjunction));
 //		conjs_to_push->root_or = cur_root_or;
 //
 //		auto &&vec_col_conjs = map_col_conjunctions[column_ref];
-//		vec_col_conjs.emplace_back(move(conjs_to_push));
+//		vec_col_conjs.emplace_back(std::move(conjs_to_push));
 //		vec_colref_insertion_order.emplace_back(column_ref);
 //		return true;
 //	}
@@ -1178,7 +1178,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	} else {
 //		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
 //		new_conjunction->children.emplace_back(comparison_expr->Copy());
-//		conjunctions_to_push->conjunctions.emplace_back(move(new_conjunction));
+//		conjunctions_to_push->conjunctions.emplace_back(std::move(new_conjunction));
 //	}
 //	return true;
 //}
@@ -1205,7 +1205,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //					GenerateConjunctionFilter<ConjunctionOrFilter>(conjunction.get(), last_conj_filter);
 //				}
 //			}
-//			table_filter.PushFilter(column_index, move(root_or_filter));
+//			table_filter.PushFilter(column_index, std::move(root_or_filter));
 //		}
 //	}
 //	map_col_conjunctions.clear();

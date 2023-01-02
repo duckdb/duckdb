@@ -48,8 +48,8 @@ PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator
                                                RadixPartitionInfo &partition_info_p, vector<LogicalType> group_types_p,
                                                vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
-    : context(context), allocator(allocator), group_types(move(group_types_p)), payload_types(move(payload_types_p)),
-      bindings(move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
+    : context(context), allocator(allocator), group_types(std::move(group_types_p)), payload_types(std::move(payload_types_p)),
+      bindings(std::move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
       hashes_subset(LogicalType::HASH) {
 
 	sel_vectors.resize(partition_info.n_partitions);
@@ -159,11 +159,11 @@ HashTableList PartitionableHashTable::GetPartition(idx_t partition) {
 	D_ASSERT(IsPartitioned());
 	D_ASSERT(partition < partition_info.n_partitions);
 	D_ASSERT(radix_partitioned_hts.size() > partition);
-	return move(radix_partitioned_hts[partition]);
+	return std::move(radix_partitioned_hts[partition]);
 }
 HashTableList PartitionableHashTable::GetUnpartitioned() {
 	D_ASSERT(!IsPartitioned());
-	return move(unpartitioned_hts);
+	return std::move(unpartitioned_hts);
 }
 
 void PartitionableHashTable::Finalize() {

@@ -34,13 +34,13 @@ bool TableFunctionData::Equals(const FunctionData &other) const {
 	return false;
 }
 
-Function::Function(string name_p) : name(move(name_p)) {
+Function::Function(string name_p) : name(std::move(name_p)) {
 }
 Function::~Function() {
 }
 
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
-    : Function(move(name_p)), arguments(move(arguments_p)), varargs(move(varargs_p)) {
+    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
 }
 
 SimpleFunction::~SimpleFunction() {
@@ -56,7 +56,7 @@ bool SimpleFunction::HasVarArgs() const {
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
                                                            LogicalType varargs_p)
-    : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)) {
+    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)) {
 }
 
 SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
@@ -73,7 +73,7 @@ bool SimpleNamedParameterFunction::HasNamedParameters() {
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
                                        FunctionSideEffects side_effects, LogicalType varargs_p,
                                        FunctionNullHandling null_handling)
-    : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)), return_type(move(return_type_p)),
+    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)), return_type(std::move(return_type_p)),
       side_effects(side_effects), null_handling(null_handling) {
 }
 

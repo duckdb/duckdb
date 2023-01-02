@@ -7,13 +7,13 @@
 namespace duckdb {
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
-    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
+    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)), binding(binding),
       depth(depth) {
-	this->alias = move(alias_p);
+	this->alias = std::move(alias_p);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), move(type), binding, depth) {
+    : BoundColumnRefExpression(string(), std::move(type), binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {

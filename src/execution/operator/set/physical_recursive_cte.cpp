@@ -14,9 +14,9 @@ namespace duckdb {
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
                                            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, move(types), estimated_cardinality), union_all(union_all) {
-	children.push_back(move(top));
-	children.push_back(move(bottom));
+    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality), union_all(union_all) {
+	children.push_back(std::move(top));
+	children.push_back(std::move(bottom));
 }
 
 PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {

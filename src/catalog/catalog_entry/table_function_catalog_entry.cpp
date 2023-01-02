@@ -5,7 +5,7 @@ namespace duckdb {
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                      CreateTableFunctionInfo *info)
-    : StandardEntry(CatalogType::TABLE_FUNCTION_ENTRY, schema, catalog, info->name), functions(move(info->functions)) {
+    : StandardEntry(CatalogType::TABLE_FUNCTION_ENTRY, schema, catalog, info->name), functions(std::move(info->functions)) {
 	D_ASSERT(this->functions.Size() > 0);
 }
 

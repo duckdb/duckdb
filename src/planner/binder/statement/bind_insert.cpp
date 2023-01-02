@@ -82,7 +82,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// bind the default values
 	BindDefaultValues(table->columns, insert->bound_defaults);
 	if (!stmt.select_statement) {
-		result.plan = move(insert);
+		result.plan = std::move(insert);
 		return result;
 	}
 
@@ -131,9 +131,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
-	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
+	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
 
-	insert->AddChild(move(root));
+	insert->AddChild(std::move(root));
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;
@@ -141,14 +141,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		result.names.clear();
 		auto insert_table_index = GenerateTableIndex();
 		insert->table_index = insert_table_index;
-		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
+		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
-		                     move(result));
+		return BindReturning(std::move(stmt.returning_list), table, insert_table_index, std::move(index_as_logicaloperator),
+		                     std::move(result));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());
-	result.plan = move(insert);
+	result.plan = std::move(insert);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

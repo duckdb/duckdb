@@ -21,11 +21,11 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
-	bind_context.AddContext(move(left_binder.bind_context));
-	bind_context.AddContext(move(right_binder.bind_context));
+	bind_context.AddContext(std::move(left_binder.bind_context));
+	bind_context.AddContext(std::move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

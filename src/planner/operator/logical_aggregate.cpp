@@ -5,7 +5,7 @@
 namespace duckdb {
 
 LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
+    : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, std::move(select_list)), group_index(group_index),
       aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX) {
 }
 
@@ -91,13 +91,13 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	for (idx_t i = 0; i < grouping_functions_size; i++) {
 		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());
 	}
-	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, move(expressions));
+	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, std::move(expressions));
 	result->groupings_index = groupings_index;
-	result->groups = move(groups);
-	result->grouping_functions = move(grouping_functions);
-	result->grouping_sets = move(grouping_sets);
+	result->groups = std::move(groups);
+	result->grouping_functions = std::move(grouping_functions);
+	result->grouping_sets = std::move(grouping_sets);
 
-	return move(result);
+	return std::move(result);
 }
 
 idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {

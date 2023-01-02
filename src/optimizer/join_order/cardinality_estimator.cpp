@@ -541,12 +541,12 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
 			idx_t cardinality_with_and_filter =
-			    InspectConjunctionAND(cardinality, it.first, &filter, move(column_statistics));
+			    InspectConjunctionAND(cardinality, it.first, &filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 			auto &filter = (ConjunctionOrFilter &)*it.second;
 			idx_t cardinality_with_or_filter =
-			    InspectConjunctionOR(cardinality, it.first, &filter, move(column_statistics));
+			    InspectConjunctionOR(cardinality, it.first, &filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
 	}

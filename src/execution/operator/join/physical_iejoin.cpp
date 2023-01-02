@@ -19,7 +19,7 @@ namespace duckdb {
 PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, move(left), move(right), move(cond), join_type,
+    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond), join_type,
                         estimated_cardinality) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
@@ -52,8 +52,8 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator>
 		default:
 			throw NotImplementedException("Unimplemented join type for IEJoin");
 		}
-		lhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, move(left)));
-		rhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, move(right)));
+		lhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, std::move(left)));
+		rhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, std::move(right)));
 	}
 
 	for (idx_t i = 2; i < conditions.size(); ++i) {
@@ -99,7 +99,7 @@ public:
 	}
 
 	IEJoinGlobalState(IEJoinGlobalState &prev)
-	    : GlobalSinkState(prev), tables(move(prev.tables)), child(prev.child + 1) {
+	    : GlobalSinkState(prev), tables(std::move(prev.tables)), child(prev.child + 1) {
 	}
 
 	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
@@ -386,7 +386,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Sort on the first expression
 	auto ref = make_unique<BoundReferenceExpression>(order1.expression->return_type, 0);
 	vector<BoundOrderByNode> orders;
-	orders.emplace_back(BoundOrderByNode(order1.type, order1.null_order, move(ref)));
+	orders.emplace_back(BoundOrderByNode(order1.type, order1.null_order, std::move(ref)));
 
 	l1 = make_unique<SortedTable>(context, orders, payload_layout);
 
@@ -422,7 +422,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Sort on the first expression
 	orders.clear();
 	ref = make_unique<BoundReferenceExpression>(order2.expression->return_type, 0);
-	orders.emplace_back(BoundOrderByNode(order2.type, order2.null_order, move(ref)));
+	orders.emplace_back(BoundOrderByNode(order2.type, order2.null_order, std::move(ref)));
 
 	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);

@@ -159,7 +159,7 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 	child_types.push_back(make_pair("value", LogicalType::LIST(children[1].second)));
 
 	//! this is more for completeness reasons
-	bound_function.return_type = LogicalType::MAP(move(child_types));
+	bound_function.return_type = LogicalType::MAP(std::move(child_types));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

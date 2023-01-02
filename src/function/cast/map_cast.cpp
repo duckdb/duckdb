@@ -5,7 +5,7 @@ namespace duckdb {
 
 struct MapBoundCastData : public BoundCastData {
 	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
-	    : key_cast(move(key_cast)), value_cast(move(value_cast)) {
+	    : key_cast(std::move(key_cast)), value_cast(std::move(value_cast)) {
 	}
 
 	BoundCastInfo key_cast;
@@ -25,7 +25,7 @@ unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalTy
 	auto target_val = LogicalType::LIST(MapType::ValueType(target));
 	auto key_cast = input.GetCastFunction(source_key, target_key);
 	auto value_cast = input.GetCastFunction(source_val, target_val);
-	return make_unique<MapBoundCastData>(move(key_cast), move(value_cast));
+	return make_unique<MapBoundCastData>(std::move(key_cast), std::move(value_cast));
 }
 
 static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

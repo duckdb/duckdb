@@ -174,7 +174,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	child_list_t<LogicalType> struct_children;
 	struct_children.push_back({"key", LogicalType::LIST(arguments[0]->return_type)});
 	struct_children.push_back({"value", LogicalType::LIST(LogicalType::UBIGINT)});
-	auto struct_type = LogicalType::MAP(move(struct_children));
+	auto struct_type = LogicalType::MAP(std::move(struct_children));
 
 	function.return_type = struct_type;
 	return make_unique<VariableReturnBindData>(function.return_type);

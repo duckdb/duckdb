@@ -68,9 +68,9 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
 		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i));
-		struct_values.emplace_back(make_pair(move(struct_keys[i]), move(val)));
+		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
 	}
-	return Value::STRUCT(move(struct_values));
+	return Value::STRUCT(std::move(struct_values));
 }
 
 Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
@@ -79,7 +79,7 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	}
 	auto keys = TransformListValue(dict.keys);
 	auto values = TransformListValue(dict.values);
-	return Value::MAP(move(keys), move(values));
+	return Value::MAP(std::move(keys), std::move(values));
 }
 
 Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
@@ -117,7 +117,7 @@ Value TransformListValue(py::handle ele) {
 	for (idx_t i = 0; i < size; i++) {
 		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i));
 		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
-		values.push_back(move(new_value));
+		values.push_back(std::move(new_value));
 	}
 
 	return Value::LIST(element_type, values);

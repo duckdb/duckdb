@@ -14,12 +14,12 @@ namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, case_insensitive_map_t<idx_t> &alias_map,
                          expression_map_t<idx_t> &projection_map, idx_t max_count)
-    : binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
+    : binders(std::move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
       alias_map(alias_map), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
                          case_insensitive_map_t<idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
-    : binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+    : binders(std::move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
 }
@@ -33,7 +33,7 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_unique<BoundColumnRefExpression>(move(alias), LogicalType::INVALID,
+	return make_unique<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
 
@@ -42,7 +42,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
 	auto result = CreateProjectionReference(*expr, extra_list->size());
-	extra_list->push_back(move(expr));
+	extra_list->push_back(std::move(expr));
 	return result;
 }
 
@@ -126,7 +126,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		                      expr->ToString());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
-	return CreateExtraReference(move(expr));
+	return CreateExtraReference(std::move(expr));
 }
 
 } // namespace duckdb

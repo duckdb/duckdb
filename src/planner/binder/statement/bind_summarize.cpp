@@ -11,58 +11,58 @@ namespace duckdb {
 
 static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<ParsedExpression>> &children,
                                                         const string &alias) {
-	auto list_function = make_unique<FunctionExpression>("list_value", move(children));
+	auto list_function = make_unique<FunctionExpression>("list_value", std::move(children));
 	vector<unique_ptr<ParsedExpression>> unnest_children;
-	unnest_children.push_back(move(list_function));
-	auto unnest_function = make_unique<FunctionExpression>("unnest", move(unnest_children));
+	unnest_children.push_back(std::move(list_function));
+	auto unnest_function = make_unique<FunctionExpression>("unnest", std::move(unnest_children));
 	unnest_function->alias = alias;
-	return move(unnest_function);
+	return std::move(unnest_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ColumnRefExpression>(move(column_name)));
-	auto aggregate_function = make_unique<FunctionExpression>(aggregate, move(children));
-	auto cast_function = make_unique<CastExpression>(LogicalType::VARCHAR, move(aggregate_function));
-	return move(cast_function);
+	children.push_back(make_unique<ColumnRefExpression>(std::move(column_name)));
+	auto aggregate_function = make_unique<FunctionExpression>(aggregate, std::move(children));
+	auto cast_function = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
+	return std::move(cast_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
                                                              const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ColumnRefExpression>(move(column_name)));
+	children.push_back(make_unique<ColumnRefExpression>(std::move(column_name)));
 	children.push_back(make_unique<ConstantExpression>(modifier));
-	auto aggregate_function = make_unique<FunctionExpression>(aggregate, move(children));
-	auto cast_function = make_unique<CastExpression>(LogicalType::VARCHAR, move(aggregate_function));
-	return move(cast_function);
+	auto aggregate_function = make_unique<FunctionExpression>(aggregate, std::move(children));
+	auto cast_function = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
+	return std::move(cast_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateCountStar() {
 	vector<unique_ptr<ParsedExpression>> children;
-	auto aggregate_function = make_unique<FunctionExpression>("count_star", move(children));
-	return move(aggregate_function);
+	auto aggregate_function = make_unique<FunctionExpression>("count_star", std::move(children));
+	return std::move(aggregate_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(move(left));
-	children.push_back(move(right));
-	auto binary_function = make_unique<FunctionExpression>(op, move(children));
-	return move(binary_function);
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
+	auto binary_function = make_unique<FunctionExpression>(op, std::move(children));
+	return std::move(binary_function);
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_name) {
 	auto count_star = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateCountStar());
-	auto count = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", move(column_name)));
-	auto null_percentage = SummarizeCreateBinaryFunction("/", move(count), move(count_star));
+	auto count = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", std::move(column_name)));
+	auto null_percentage = SummarizeCreateBinaryFunction("/", std::move(count), std::move(count_star));
 	auto negate_x =
-	    SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)), move(null_percentage));
+	    SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)), std::move(null_percentage));
 	auto percentage_x =
-	    SummarizeCreateBinaryFunction("*", move(negate_x), make_unique<ConstantExpression>(Value::DOUBLE(100)));
+	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_unique<ConstantExpression>(Value::DOUBLE(100)));
 	auto round_x =
-	    SummarizeCreateBinaryFunction("round", move(percentage_x), make_unique<ConstantExpression>(Value::INTEGER(2)));
-	auto concat_x = SummarizeCreateBinaryFunction("concat", move(round_x), make_unique<ConstantExpression>(Value("%")));
+	    SummarizeCreateBinaryFunction("round", std::move(percentage_x), make_unique<ConstantExpression>(Value::INTEGER(2)));
+	auto concat_x = SummarizeCreateBinaryFunction("concat", std::move(round_x), make_unique<ConstantExpression>(Value("%")));
 
 	return concat_x;
 }
@@ -87,7 +87,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	vector<unique_ptr<ParsedExpression>> count_children;
 	vector<unique_ptr<ParsedExpression>> null_percentage_children;
 	auto select = make_unique<SelectStatement>();
-	select->node = move(query_copy);
+	select->node = std::move(query_copy);
 	for (idx_t i = 0; i < plan.names.size(); i++) {
 		name_children.push_back(make_unique<ConstantExpression>(Value(plan.names[i])));
 		type_children.push_back(make_unique<ConstantExpression>(Value(plan.types[i].ToString())));
@@ -110,7 +110,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 		count_children.push_back(SummarizeCreateCountStar());
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
-	auto subquery_ref = make_unique<SubqueryRef>(move(select), "summarize_tbl");
+	auto subquery_ref = make_unique<SubqueryRef>(std::move(select), "summarize_tbl");
 	subquery_ref->column_name_alias = plan.names;
 
 	auto select_node = make_unique<SelectNode>();
@@ -126,7 +126,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(q75_children, "q75"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(count_children, "count"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
-	select_node->from_table = move(subquery_ref);
+	select_node->from_table = std::move(subquery_ref);
 
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return Bind(*select_node);

@@ -103,7 +103,7 @@ unique_ptr<TableFunctionRef> MyReplacementScan(ClientContext &context, const str
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("my_scan", move(children));
+	table_function->function = make_unique<FunctionExpression>("my_scan", std::move(children));
 	return table_function;
 }
 
@@ -166,9 +166,9 @@ void CreateFunction(Connection &con, string name, vector<LogicalType> arguments,
 	// we can register multiple functions here if we want overloads
 	// you may also want to set has_side_effects or varargs in the ScalarFunction (if required)
 	ScalarFunctionSet set(name);
-	set.AddFunction(ScalarFunction(move(arguments), move(return_type), nullptr));
+	set.AddFunction(ScalarFunction(std::move(arguments), std::move(return_type), nullptr));
 
-	CreateScalarFunctionInfo info(move(set));
+	CreateScalarFunctionInfo info(std::move(set));
 	catalog.CreateFunction(context, &info);
 }
 
@@ -178,9 +178,9 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 
 	// we can register multiple functions here if we want overloads
 	AggregateFunctionSet set(name);
-	set.AddFunction(AggregateFunction(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
+	set.AddFunction(AggregateFunction(std::move(arguments), std::move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
 
-	CreateAggregateFunctionInfo info(move(set));
+	CreateAggregateFunctionInfo info(std::move(set));
 	catalog.CreateFunction(context, &info);
 }
 
@@ -188,7 +188,7 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 // Custom Table Scan Function
 //===--------------------------------------------------------------------===//
 struct MyBindData : public TableFunctionData {
-	MyBindData(string name_p) : table_name(move(name_p)) {
+	MyBindData(string name_p) : table_name(std::move(name_p)) {
 	}
 
 	string table_name;
@@ -217,7 +217,7 @@ static unique_ptr<FunctionData> MyScanBind(ClientContext &context, TableFunction
 		throw std::runtime_error("Unknown table " + table_name);
 	}
 	auto result = make_unique<MyBindData>(table_name);
-	return move(result);
+	return std::move(result);
 }
 
 static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
@@ -258,7 +258,7 @@ void CreateMyScanFunction(Connection &con) {
 	my_scan.projection_pushdown = true;
 	my_scan.filter_pushdown = false;
 
-	CreateTableFunctionInfo info(move(my_scan));
+	CreateTableFunctionInfo info(std::move(my_scan));
 	catalog.CreateTableFunction(context, &info);
 }
 
@@ -314,7 +314,7 @@ void ExecuteQuery(Connection &con, const string &query) {
 //===--------------------------------------------------------------------===//
 class MyScanNode : public MyNode {
 public:
-	MyScanNode(string name_p, vector<column_t> column_ids_p) : name(move(name_p)), column_ids(move(column_ids_p)) {
+	MyScanNode(string name_p, vector<column_t> column_ids_p) : name(std::move(name_p)), column_ids(std::move(column_ids_p)) {
 		// fill up the data based on which table we are scanning
 		if (name == "mytable") {
 			// i
@@ -356,7 +356,7 @@ public:
 // it is also possible to transform the expressions into our own expressions (MyExpression)
 class MyExpressionExecutor {
 public:
-	MyExpressionExecutor(vector<int> current_row_p) : current_row(move(current_row_p)) {
+	MyExpressionExecutor(vector<int> current_row_p) : current_row(std::move(current_row_p)) {
 	}
 
 	vector<int> current_row;
@@ -377,7 +377,7 @@ protected:
 //===--------------------------------------------------------------------===//
 class MyFilterNode : public MyNode {
 public:
-	MyFilterNode(unique_ptr<Expression> filter_node) : filter(move(filter_node)) {
+	MyFilterNode(unique_ptr<Expression> filter_node) : filter(std::move(filter_node)) {
 	}
 
 	unique_ptr<Expression> filter;
@@ -409,7 +409,7 @@ public:
 //===--------------------------------------------------------------------===//
 class MyProjectionNode : public MyNode {
 public:
-	MyProjectionNode(vector<unique_ptr<Expression>> projections_p) : projections(move(projections_p)) {
+	MyProjectionNode(vector<unique_ptr<Expression>> projections_p) : projections(std::move(projections_p)) {
 	}
 
 	vector<unique_ptr<Expression>> projections;
@@ -433,7 +433,7 @@ public:
 //===--------------------------------------------------------------------===//
 class MyAggregateNode : public MyNode {
 public:
-	MyAggregateNode(vector<unique_ptr<Expression>> aggregates_p) : aggregates(move(aggregates_p)) {
+	MyAggregateNode(vector<unique_ptr<Expression>> aggregates_p) : aggregates(std::move(aggregates_p)) {
 		// initialize aggregate states to 0
 		aggregate_states.resize(aggregates.size(), 0);
 	}
@@ -460,7 +460,7 @@ public:
 		while (true) {
 			auto next = child->GetNextRow();
 			if (next.empty()) {
-				return move(aggregate_states);
+				return std::move(aggregate_states);
 			}
 			MyExpressionExecutor executor(next);
 			for (size_t i = 0; i < aggregates.size(); i++) {
@@ -478,16 +478,16 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyProjectionNode>(move(op.expressions));
-		node->child = move(child);
-		return move(node);
+		auto node = make_unique<MyProjectionNode>(std::move(op.expressions));
+		node->child = std::move(child);
+		return std::move(node);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		// filter
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyFilterNode>(move(op.expressions[0]));
-		node->child = move(child);
-		return move(node);
+		auto node = make_unique<MyFilterNode>(std::move(op.expressions[0]));
+		node->child = std::move(child);
+		return std::move(node);
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
@@ -495,9 +495,9 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 			throw std::runtime_error("Grouped aggregate not supported");
 		}
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyAggregateNode>(move(op.expressions));
-		node->child = move(child);
-		return move(node);
+		auto node = make_unique<MyAggregateNode>(std::move(op.expressions));
+		node->child = std::move(child);
+		return std::move(node);
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = (LogicalGet &)op;

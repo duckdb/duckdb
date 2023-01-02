@@ -10,7 +10,7 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, const AggregateFunction &function_p,
 	                        vector<unique_ptr<Expression>> &children, unique_ptr<FunctionData> bind_info_p,
 	                        const BoundOrderModifier &order_bys)
-	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p), bind_info(move(bind_info_p)) {
+	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p), bind_info(std::move(bind_info_p)) {
 		arg_types.reserve(children.size());
 		for (const auto &child : children) {
 			arg_types.emplace_back(child->return_type);
@@ -357,11 +357,11 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
                                                              unique_ptr<BoundOrderModifier> order_bys) {
 
 	auto sorted_bind =
-	    make_unique<SortedAggregateBindData>(context, bound_function, children, move(bind_info), *order_bys);
+	    make_unique<SortedAggregateBindData>(context, bound_function, children, std::move(bind_info), *order_bys);
 
 	// The arguments are the children plus the sort columns.
 	for (auto &order : order_bys->orders) {
-		children.emplace_back(move(order.expression));
+		children.emplace_back(std::move(order.expression));
 	}
 
 	vector<LogicalType> arguments;
@@ -380,9 +380,9 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window, SortedAggregateFunction::Serialize, SortedAggregateFunction::Deserialize);
 
-	bound_function = move(ordered_aggregate);
+	bound_function = std::move(ordered_aggregate);
 
-	return move(sorted_bind);
+	return std::move(sorted_bind);
 }
 
 } // namespace duckdb

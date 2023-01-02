@@ -57,8 +57,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			(*cteref)++;
 
 			result->types = b->types;
-			result->bound_columns = move(names);
-			return move(result);
+			result->bound_columns = std::move(names);
+			return std::move(result);
 		}
 	}
 	// not a CTE
@@ -126,11 +126,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
-		                                           move(return_names));
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
+		                                           std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
 		                          logical_get->GetTable());
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents

@@ -15,7 +15,7 @@ PyDictionary::PyDictionary(py::object dict) {
 	keys = py::list(dict.attr("keys")());
 	values = py::list(dict.attr("values")());
 	len = py::len(keys);
-	this->dict = move(dict);
+	this->dict = std::move(dict);
 }
 
 PyTimeDelta::PyTimeDelta(py::handle &obj) {

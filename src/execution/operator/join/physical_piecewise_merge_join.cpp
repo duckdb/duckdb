@@ -17,7 +17,7 @@ namespace duckdb {
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
                                                        JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(left), move(right), move(cond), join_type,
+    : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, std::move(left), std::move(right), std::move(cond), join_type,
                         estimated_cardinality) {
 
 	for (auto &cond : conditions) {
@@ -30,20 +30,20 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 		switch (cond.comparison) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			lhs_orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, move(left)));
-			rhs_orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, move(right)));
+			lhs_orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left)));
+			rhs_orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right)));
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			lhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(left)));
-			rhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, move(right)));
+			lhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left)));
+			rhs_orders.emplace_back(BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right)));
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			// Allowed in multi-predicate joins, but can't be first/sort.
 			D_ASSERT(!lhs_orders.empty());
-			lhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(left)));
-			rhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, move(right)));
+			lhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left)));
+			rhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right)));
 			break;
 
 		default:

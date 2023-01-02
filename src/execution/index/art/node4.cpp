@@ -77,7 +77,7 @@ void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		// Grow to Node16
 		auto new_node = Node16::New();
 		new_node->count = 4;
-		new_node->prefix = move(node->prefix);
+		new_node->prefix = std::move(node->prefix);
 		for (idx_t i = 0; i < 4; i++) {
 			new_node->key[i] = n->key[i];
 			new_node->children[i] = n->children[i];

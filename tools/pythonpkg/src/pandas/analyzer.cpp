@@ -108,7 +108,7 @@ static LogicalType ConvertStructToMap(LogicalType &map_value_type) {
 	// TODO: find a way to figure out actual type of the keys, not just the converted one
 	children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
 	children.push_back(make_pair("value", LogicalType::LIST(map_value_type)));
-	return LogicalType::MAP(move(children));
+	return LogicalType::MAP(std::move(children));
 }
 
 static bool UpgradeType(LogicalType &left, const LogicalType &right) {
@@ -163,7 +163,7 @@ static LogicalType EmptyMap() {
 	auto empty = LogicalType::LIST(LogicalTypeId::SQLNULL);
 	child_types.push_back(make_pair("key", empty));
 	child_types.push_back(make_pair("value", empty));
-	return LogicalType::MAP(move(child_types));
+	return LogicalType::MAP(std::move(child_types));
 }
 
 //! Check if the keys match
@@ -229,7 +229,7 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 
 	child_types.push_back(make_pair("key", key_type));
 	child_types.push_back(make_pair("value", value_type));
-	return LogicalType::MAP(move(child_types));
+	return LogicalType::MAP(std::move(child_types));
 }
 
 //! Python dictionaries don't allow duplicate keys, so we don't need to check this.
@@ -244,9 +244,9 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 
 		auto dict_val = dict.values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);
-		struct_children.push_back(make_pair(key, move(val)));
+		struct_children.push_back(make_pair(key, std::move(val)));
 	}
-	return LogicalType::STRUCT(move(struct_children));
+	return LogicalType::STRUCT(std::move(struct_children));
 }
 
 //! 'can_convert' is used to communicate if internal structures encountered here are valid

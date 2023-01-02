@@ -43,7 +43,7 @@ void TransactionContext::Commit() {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
-	auto transaction = move(current_transaction);
+	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	string error = transaction->Commit();
 	if (!error.empty()) {
@@ -62,7 +62,7 @@ void TransactionContext::Rollback() {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
-	auto transaction = move(current_transaction);
+	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	transaction->Rollback();
 }

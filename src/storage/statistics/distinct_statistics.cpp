@@ -13,7 +13,7 @@ DistinctStatistics::DistinctStatistics()
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(move(log)), sample_count(sample_count),
+    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(std::move(log)), sample_count(sample_count),
       total_count(total_count) {
 }
 
