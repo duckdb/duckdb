@@ -271,27 +271,22 @@ static void CreateValuesStruct(const JSONCreateFunctionData &info, yyjson_mut_do
 
 static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                             Vector &value_v, idx_t count) {
-	auto &entries = StructVector::GetEntries(value_v);
 	// Create nested keys
-	auto &map_key_list_v = *entries[0];
-	auto &map_key_v = ListVector::GetEntry(map_key_list_v);
-	auto map_key_count = ListVector::GetListSize(map_key_list_v);
+	auto &map_key_v = MapVector::GetKeys(value_v);
+	auto map_key_count = ListVector::GetListSize(value_v);
 	auto nested_keys_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_key_count]);
 	auto nested_keys = nested_keys_ptr.get();
 	TemplatedCreateValues<string_t>(doc, nested_keys, map_key_v, map_key_count);
 	// Create nested values
-	auto &map_val_list_v = *entries[1];
-	auto &map_val_v = ListVector::GetEntry(map_val_list_v);
-	auto map_val_count = ListVector::GetListSize(map_val_list_v);
+	auto &map_val_v = MapVector::GetValues(value_v);
+	auto map_val_count = ListVector::GetListSize(value_v);
 	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_val_count]);
 	auto nested_vals = nested_vals_ptr.get();
 	CreateValues(info, doc, nested_vals, map_val_v, map_val_count);
 	// Add the key/value pairs to the objects
 	UnifiedVectorFormat map_data;
 	value_v.ToUnifiedFormat(count, map_data);
-	UnifiedVectorFormat map_key_list_data;
-	map_key_list_v.ToUnifiedFormat(map_key_count, map_key_list_data);
-	auto map_key_list_entries = (list_entry_t *)map_key_list_data.data;
+	auto map_key_list_entries = (list_entry_t *)map_data.data;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = map_data.sel->get_index(i);
 		if (!map_data.validity.RowIsValid(idx)) {
@@ -299,8 +294,7 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 			vals[i] = yyjson_mut_null(doc);
 		} else {
 			vals[i] = yyjson_mut_obj(doc);
-			idx_t key_idx = map_key_list_data.sel->get_index(i);
-			const auto &key_list_entry = map_key_list_entries[key_idx];
+			const auto &key_list_entry = map_key_list_entries[idx];
 			for (idx_t child_i = key_list_entry.offset; child_i < key_list_entry.offset + key_list_entry.length;
 			     child_i++) {
 				if (!unsafe_yyjson_is_null(nested_keys[child_i])) {

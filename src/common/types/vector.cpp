@@ -546,10 +546,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
-		auto &child_entries = StructVector::GetEntries(*vector);
-		Value key = child_entries[0]->GetValue(index);
-		Value value = child_entries[1]->GetValue(index);
-		return Value::MAP(move(key), move(value));
+		auto offlen = ((list_entry_t *)data)[index];
+		auto &child_vec = ListVector::GetEntry(*vector);
+		std::vector<Value> children;
+		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+			children.push_back(child_vec.GetValue(i));
+		}
+		return Value::MAP(ListType::GetChildType(type), move(children));
 	}
 	case LogicalTypeId::UNION: {
 		auto tag = UnionVector::GetTag(*vector, index);
@@ -1511,12 +1514,12 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 }
 
 Vector &MapVector::GetKeys(Vector &vector) {
-	auto &entries = StructVector::GetEntries(vector);
+	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
 	return *entries[0];
 }
 Vector &MapVector::GetValues(Vector &vector) {
-	auto &entries = StructVector::GetEntries(vector);
+	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
 	return *entries[1];
 }
@@ -1529,8 +1532,7 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP ||
-	         vector.GetType().id() == LogicalTypeId::UNION);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -1548,7 +1550,7 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 }
 
 const Vector &ListVector::GetEntry(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::GetEntry(child);
@@ -1566,7 +1568,7 @@ Vector &ListVector::GetEntry(Vector &vector) {
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
@@ -1576,10 +1578,10 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 }
 
 template <class T>
-void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
-	auto &list_vector = ListVector::GetEntry(list);
+void TemplatedSearchInMap(Vector &keys, idx_t count, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
+                          idx_t length) {
 	UnifiedVectorFormat vector_data;
-	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
+	keys.ToUnifiedFormat(count, vector_data);
 	auto data = (T *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 
@@ -1602,16 +1604,15 @@ void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_k
 }
 
 template <class T>
-void TemplatedSearchInMap(Vector &list, const Value &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
-                          idx_t length) {
-	TemplatedSearchInMap<T>(list, key.template GetValueUnsafe<T>(), offsets, is_key_null, offset, length);
+void TemplatedSearchInMap(Vector &keys, idx_t count, const Value &key, vector<idx_t> &offsets, bool is_key_null,
+                          idx_t offset, idx_t length) {
+	TemplatedSearchInMap<T>(keys, count, key.template GetValueUnsafe<T>(), offsets, is_key_null, offset, length);
 }
 
-void SearchStringInMap(Vector &list, const string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
-                       idx_t length) {
-	auto &list_vector = ListVector::GetEntry(list);
+void SearchStringInMap(Vector &keys, idx_t count, const string &key, vector<idx_t> &offsets, bool is_key_null,
+                       idx_t offset, idx_t length) {
 	UnifiedVectorFormat vector_data;
-	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
+	keys.ToUnifiedFormat(count, vector_data);
 	auto data = (string_t *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 	if (is_key_null) {
@@ -1633,67 +1634,63 @@ void SearchStringInMap(Vector &list, const string &key, vector<idx_t> &offsets, 
 	}
 }
 
-vector<idx_t> ListVector::Search(Vector &list, const Value &key, idx_t row) {
+vector<idx_t> MapVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
 	vector<idx_t> offsets;
 
-	auto &list_vector = ListVector::GetEntry(list);
-	auto &entry = ListVector::GetData(list)[row];
-
-	switch (list_vector.GetType().InternalType()) {
+	switch (keys.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedSearchInMap<int8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<int8_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INT16:
-		TemplatedSearchInMap<int16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<int16_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INT32:
-		TemplatedSearchInMap<int32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<int32_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INT64:
-		TemplatedSearchInMap<int64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<int64_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INT128:
-		TemplatedSearchInMap<hugeint_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<hugeint_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedSearchInMap<uint8_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<uint8_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedSearchInMap<uint16_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<uint16_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedSearchInMap<uint32_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<uint32_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedSearchInMap<uint64_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<uint64_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedSearchInMap<float>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<float>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedSearchInMap<double>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<double>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedSearchInMap<interval_t>(list, key, offsets, key.IsNull(), entry.offset, entry.length);
+		TemplatedSearchInMap<interval_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::VARCHAR:
-		SearchStringInMap(list, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
+		SearchStringInMap(keys, count, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	default:
-		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");
+		throw InvalidTypeException(keys.GetType().id(), "Invalid type for List Vector Search");
 	}
 	return offsets;
 }
 
-Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	auto &child_vec = ListVector::GetEntry(list);
+Value FlatVector::GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets) {
 	vector<Value> list_values;
 	list_values.reserve(offsets.size());
 	for (auto &offset : offsets) {
-		list_values.push_back(child_vec.GetValue(offset));
+		list_values.push_back(values.GetValue(offset));
 	}
-	return Value::LIST(ListType::GetChildType(list.GetType()), move(list_values));
+	return Value::LIST(values.GetType(), move(list_values));
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {

@@ -27,7 +27,6 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	if (args.data[1].GetType().id() == LogicalTypeId::SQLNULL) {
 		//! We don't need to look through the map if the 'key' to look for is NULL
-		//! Because maps can't have NULL as key
 		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto list_data = ConstantVector::GetData<list_entry_t>(result);
@@ -40,21 +39,23 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
-	UnifiedVectorFormat map_keys_data;
+	UnifiedVectorFormat map_data;
 	UnifiedVectorFormat key_data;
 
 	auto &map_keys = MapVector::GetKeys(map);
 	auto &map_values = MapVector::GetValues(map);
 
-	map_keys.ToUnifiedFormat(args.size(), map_keys_data);
+	map.ToUnifiedFormat(args.size(), map_data);
 	key.ToUnifiedFormat(args.size(), key_data);
 
 	for (idx_t row = 0; row < args.size(); row++) {
-		idx_t row_index = map_keys_data.sel->get_index(row);
+		idx_t row_index = map_data.sel->get_index(row);
 		idx_t key_index = key_data.sel->get_index(row);
 		auto key_value = key.GetValue(key_index);
-		auto offsets = ListVector::Search(map_keys, key_value, row_index);
-		auto values = ListVector::GetValuesFromOffsets(map_values, offsets);
+
+		list_entry_t entry = ListVector::GetData(map)[row_index];
+		auto offsets = MapVector::Search(map_keys, args.size(), key_value, entry);
+		auto values = FlatVector::GetValuesFromOffsets(map_values, offsets);
 		FillResult(values, result, row);
 	}
 
