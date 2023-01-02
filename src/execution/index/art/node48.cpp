@@ -77,8 +77,8 @@ void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[child_index[pos]] = node;
 }
 
-ARTPointer &Node48::GetARTPointer(idx_t pos) {
-	return children[child_index[pos]];
+bool Node48::GetARTPointer(idx_t pos) {
+	return children[child_index[pos]] && !children[child_index[pos]].IsSwizzled();
 }
 
 void Node48::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child) {
@@ -124,13 +124,13 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 	auto n = (Node48 *)(node);
 
 	// adjust the ART size
-	if (n->GetARTPointer(pos) && !n->GetARTPointer(pos).IsSwizzled()) {
+	if (n->GetARTPointer(pos)) {
 		auto child = n->GetChild(art, pos);
 		art.memory_size -= child->MemorySize(art, true);
 	}
 
 	// erase the child and decrease the count
-	n->children[pos].Reset();
+	n->children[n->child_index[pos]].Reset();
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 

@@ -62,7 +62,7 @@ void Node::ReplaceChildPointer(idx_t pos, Node *node) {
 	throw InternalException("ReplaceChildPointer not implemented for the specific node type.");
 }
 
-ARTPointer &Node::GetARTPointer(idx_t) {
+bool Node::GetARTPointer(idx_t) {
 	throw InternalException("GetARTPointer not implemented for the specific node type.");
 }
 // LCOV_EXCL_STOP
@@ -194,7 +194,7 @@ void Node::Delete(Node *ptr) {
 		DestroyObject((Node256 *)ptr);
 		break;
 	default:
-		throw InternalException("eek");
+		throw InternalException("Invalid node type for delete.");
 	}
 }
 
@@ -299,11 +299,15 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	NodeType node_type(static_cast<NodeType>(n));
 
 	Node *deserialized_node;
+	auto old_memory_size = art.memory_size;
 	switch (node_type) {
 	case NodeType::NLeaf: {
 		auto leaf = Leaf::New();
 		leaf->Deserialize(art, reader);
 		art.memory_size += leaf->MemorySize(art, false);
+		if (art.track_memory) {
+			art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
+		}
 		return leaf;
 	}
 	case NodeType::N4: {
@@ -325,6 +329,9 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	}
 	deserialized_node->DeserializeInternal(art, reader);
 	art.memory_size += deserialized_node->MemorySize(art, false);
+	if (art.track_memory) {
+		art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
+	}
 	return deserialized_node;
 }
 
@@ -534,8 +541,7 @@ idx_t Node::RecursiveMemorySize(ART &art) {
 
 	auto next_pos = GetNextPos(DConstants::INVALID_INDEX);
 	while (next_pos != DConstants::INVALID_INDEX) {
-		auto ART_ptr = GetARTPointer(next_pos);
-		if (ART_ptr && !ART_ptr.IsSwizzled()) {
+		if (GetARTPointer(next_pos)) {
 			auto child = GetChild(art, next_pos);
 			memory_size_children += child->MemorySize(art, true);
 		}

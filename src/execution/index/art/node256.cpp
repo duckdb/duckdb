@@ -73,8 +73,8 @@ void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }
 
-ARTPointer &Node256::GetARTPointer(idx_t pos) {
-	return children[pos];
+bool Node256::GetARTPointer(idx_t pos) {
+	return children[pos] && !children[pos].IsSwizzled();
 }
 
 void Node256::InsertChild(ART &, Node *&node, uint8_t key_byte, Node *new_child) {
@@ -88,7 +88,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	auto n = (Node256 *)(node);
 
 	// adjust the ART size
-	if (n->GetARTPointer(pos) && !n->GetARTPointer(pos).IsSwizzled()) {
+	if (n->GetARTPointer(pos)) {
 		auto child = n->GetChild(art, pos);
 		art.memory_size -= child->MemorySize(art, true);
 	}

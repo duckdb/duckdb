@@ -41,7 +41,7 @@ public:
 	//! Replace child pointer
 	void ReplaceChildPointer(idx_t pos, Node *node) override;
 	//! Returns the ART pointer at pos
-	ARTPointer &GetARTPointer(idx_t pos) override;
+	bool GetARTPointer(idx_t pos) override;
 
 	//! Insert a new child node at key_byte into the Node4
 	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);

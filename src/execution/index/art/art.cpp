@@ -277,6 +277,7 @@ void Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySect
 
 		if (single_row_id) {
 			node = Leaf::New(start_key, prefix_start, row_ids[key_section.start]);
+			art.memory_size += node->MemorySize(art, false);
 			return;
 		}
 		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
@@ -364,7 +365,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 
 	D_ASSERT(old_memory_size <= this->memory_size);
-	this->buffer_manager.IncreaseUsedMemory(this->memory_size - old_memory_size);
+	if (this->track_memory) {
+		this->buffer_manager.IncreaseUsedMemory(this->memory_size - old_memory_size);
+	}
 	return true;
 }
 
@@ -526,7 +529,9 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	}
 
 	D_ASSERT(old_memory_size >= this->memory_size);
-	buffer_manager.DecreaseUsedMemory(old_memory_size - this->memory_size);
+	if (this->track_memory) {
+		this->buffer_manager.DecreaseUsedMemory(old_memory_size - this->memory_size);
+	}
 }
 
 void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {

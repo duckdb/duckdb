@@ -129,7 +129,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
-	state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
+	if (state.global_index->track_memory) {
+		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
+	}
 	table.storage->info->indexes.AddIndex(move(state.global_index));
 	return SinkFinalizeType::READY;
 }
