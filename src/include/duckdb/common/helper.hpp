@@ -67,6 +67,14 @@ struct UniqueConstructor {
 	}
 };
 
+#ifdef DEBUG
+template< class T >
+typename std::remove_reference<T>::type&& move(T&& t) noexcept {
+	// using this will also trigger an error (call to 'move' is ambiguous)
+	throw std::runtime_error("Use `std::move` instead of `[duckdb::]move`");
+}
+#endif
+
 template <typename T>
 T MaxValue(T a, T b) {
 	return a > b ? a : b;

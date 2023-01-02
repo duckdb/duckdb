@@ -250,7 +250,6 @@ public:
 			TemplatedExecute<string_t, OP>(left, right, result, count);
 			break;
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;

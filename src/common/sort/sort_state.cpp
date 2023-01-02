@@ -4,7 +4,6 @@
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/common/radix.hpp"
-
 #include <algorithm>
 #include <numeric>
 
@@ -28,7 +27,6 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 			// Lists get 2 bytes (null and empty list)
 			col_size += 2;
 			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			// Structs get 1 bytes (null)
 			col_size++;

@@ -529,17 +529,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(Value key, Value value) {
+Value Value::MAP(LogicalType child_type, vector<Value> values) {
 	Value result;
-	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", key.type()});
-	child_types.push_back({"value", value.type()});
 
-	result.type_ = LogicalType::MAP(std::move(child_types));
-
-	result.struct_value.push_back(std::move(key));
-	result.struct_value.push_back(std::move(value));
+	result.type_ = LogicalType::MAP(std::move(child_type));
 	result.is_null = false;
+	if (values.empty()) {
+		return result;
+	}
+	result.list_value = std::move(values);
 	return result;
 }
 
