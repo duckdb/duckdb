@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from shutil import copyfileobj
 from typing import Callable
@@ -10,6 +11,8 @@ from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 
 FILENAME = 'integers.csv'
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 @fixture()
