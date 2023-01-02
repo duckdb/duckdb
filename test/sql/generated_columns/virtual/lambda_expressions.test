@@ -38,3 +38,27 @@ query II
 select * from lambda_tbl1;
 ----
 [5, 4, 6, 2, 7, 8]	[4, 6, 2, 8]
+
+# 'evens' is referenced, but aliased to 'odd'
+query I
+select odd from lambda_tbl1 as tbl(evens,odd)
+----
+[4, 6, 2, 8]
+
+# Test ambiguity resolution within the generated expression
+query II
+select tbl.evens, (select 1 as evens) as evens from lambda_tbl1 as tbl;
+----
+[4, 6, 2, 8]	1
+
+# Introduce another columns called 'nums' that should not be referenced
+query II
+select lambda_tbl1.evens, (select 1) as nums from lambda_tbl1;
+----
+[4, 6, 2, 8]	1
+
+# Aliasing table names
+query III
+select nums, evens, (select * from range(5) lambda_tbl1) from lambda_tbl1 tbl(evens, nums);
+----
+[4, 6, 2, 8]	[5, 4, 6, 2, 7, 8]	0
