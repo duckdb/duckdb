@@ -6,7 +6,7 @@ from typing import Callable
 from duckdb import DuckDBPyConnection, InvalidInputException
 from pytest import raises, importorskip, fixture
 
-importorskip('fsspec')
+importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 
