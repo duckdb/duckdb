@@ -19,7 +19,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		return make_unique<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(std::move(op.info)),
 		                                  op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_DROP:
-		return make_unique<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)), op.estimated_cardinality);
+		return make_unique<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)),
+		                                 op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		return make_unique<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
 		                                        op.estimated_cardinality);
@@ -33,7 +34,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		return std::move(result);
 	}
 	case LogicalOperatorType::LOGICAL_LOAD:
-		return make_unique<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)), op.estimated_cardinality);
+		return make_unique<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)),
+		                                 op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return make_unique<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(std::move(op.info)),
 		                                   op.estimated_cardinality);

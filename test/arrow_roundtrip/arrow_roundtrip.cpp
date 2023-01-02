@@ -17,7 +17,8 @@ using namespace duckdb;
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
 	                      unique_ptr<QueryResult> result_p, bool big_result)
-	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)), big_result(big_result) {
+	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
+	      big_result(big_result) {
 	}
 
 	vector<LogicalType> types;

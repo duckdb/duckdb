@@ -108,7 +108,8 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 		auto check = std::move(is_null);
 		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));
 		auto result_if_false = std::move(*expr_ptr);
-		return make_unique<BoundCaseExpression>(std::move(check), std::move(result_if_true), std::move(result_if_false));
+		return make_unique<BoundCaseExpression>(std::move(check), std::move(result_if_true),
+		                                        std::move(result_if_false));
 	}
 	return nullptr;
 }

@@ -127,7 +127,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		auto between_right =
 		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value));
 
-		auto compare_between = make_unique<BetweenExpression>(std::move(input), std::move(between_left), std::move(between_right));
+		auto compare_between =
+		    make_unique<BetweenExpression>(std::move(input), std::move(between_left), std::move(between_right));
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_BETWEEN) {
 			return std::move(compare_between);
 		} else {

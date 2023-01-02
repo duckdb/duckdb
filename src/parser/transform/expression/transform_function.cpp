@@ -291,9 +291,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return std::move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(), std::move(children),
-	                                                std::move(filter_expr), std::move(order_bys), root->agg_distinct, false,
-	                                                root->export_state);
+	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
+	                                                std::move(children), std::move(filter_expr), std::move(order_bys),
+	                                                root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
 
 	return std::move(function);

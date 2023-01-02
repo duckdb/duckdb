@@ -85,8 +85,8 @@ StandardEntry *EntryBinding::GetStandardEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id)
-    : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index), bound_column_ids(bound_column_ids),
-      entry(entry) {
+    : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index),
+      bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;

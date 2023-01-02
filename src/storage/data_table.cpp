@@ -25,7 +25,8 @@ namespace duckdb {
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
                              string table)
-    : db(db), table_io_manager(std::move(table_io_manager_p)), cardinality(0), schema(std::move(schema)), table(std::move(table)) {
+    : db(db), table_io_manager(std::move(table_io_manager_p)), cardinality(0), schema(std::move(schema)),
+      table(std::move(table)) {
 }
 
 bool DataTableInfo::IsTemporary() const {

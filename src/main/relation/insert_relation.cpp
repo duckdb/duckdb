@@ -8,8 +8,8 @@
 namespace duckdb {
 
 InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
-    : Relation(child_p->context, RelationType::INSERT_RELATION), child(std::move(child_p)), schema_name(std::move(schema_name)),
-      table_name(std::move(table_name)) {
+    : Relation(child_p->context, RelationType::INSERT_RELATION), child(std::move(child_p)),
+      schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 

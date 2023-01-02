@@ -12,7 +12,8 @@ namespace duckdb {
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
                                                JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type, estimated_cardinality) {
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
+                             estimated_cardinality) {
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 }

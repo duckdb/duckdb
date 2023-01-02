@@ -7,7 +7,8 @@ namespace duckdb {
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA) {
 }
 CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)), view_name(std::move(view_name_p)) {
+    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)),
+      view_name(std::move(view_name_p)) {
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry *schema, string view_name)

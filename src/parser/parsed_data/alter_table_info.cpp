@@ -11,9 +11,10 @@ namespace duckdb {
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
                                          string entry_name_p, string owner_schema_p, string owner_name_p,
                                          bool if_exists)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
-                if_exists),
-      entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)), owner_name(std::move(owner_name_p)) {
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p),
+                std::move(entry_name_p), if_exists),
+      entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
+      owner_name(std::move(owner_name_p)) {
 }
 
 CatalogType ChangeOwnershipInfo::GetCatalogType() const {
@@ -33,7 +34,8 @@ void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
 // AlterTableInfo
 //===--------------------------------------------------------------------===//
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name), data.if_exists),
+    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_exists),
       alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
@@ -212,7 +214,8 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, Alt
 	auto column_name = reader.ReadRequired<string>();
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
-	return make_unique<ChangeColumnTypeInfo>(std::move(data), std::move(column_name), std::move(target_type), std::move(expression));
+	return make_unique<ChangeColumnTypeInfo>(std::move(data), std::move(column_name), std::move(target_type),
+	                                         std::move(expression));
 }
 
 //===--------------------------------------------------------------------===//
@@ -292,8 +295,8 @@ AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, v
                                          vector<string> fk_columns, vector<PhysicalIndex> pk_keys,
                                          vector<PhysicalIndex> fk_keys, AlterForeignKeyType type_p)
     : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT, std::move(data)), fk_table(std::move(fk_table)),
-      pk_columns(std::move(pk_columns)), fk_columns(std::move(fk_columns)), pk_keys(std::move(pk_keys)), fk_keys(std::move(fk_keys)),
-      type(type_p) {
+      pk_columns(std::move(pk_columns)), fk_columns(std::move(fk_columns)), pk_keys(std::move(pk_keys)),
+      fk_keys(std::move(fk_keys)), type(type_p) {
 }
 AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
@@ -319,15 +322,16 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, Alte
 	auto pk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto fk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto type = reader.ReadRequired<AlterForeignKeyType>();
-	return make_unique<AlterForeignKeyInfo>(std::move(data), std::move(fk_table), std::move(pk_columns), std::move(fk_columns),
-	                                        std::move(pk_keys), std::move(fk_keys), type);
+	return make_unique<AlterForeignKeyInfo>(std::move(data), std::move(fk_table), std::move(pk_columns),
+	                                        std::move(fk_columns), std::move(pk_keys), std::move(fk_keys), type);
 }
 
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name), data.if_exists),
+    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_exists),
       alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {

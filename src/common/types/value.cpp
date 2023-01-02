@@ -77,8 +77,9 @@ Value::Value(const Value &other)
 }
 
 Value::Value(Value &&other) noexcept
-    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_), str_value(std::move(other.str_value)),
-      struct_value(std::move(other.struct_value)), list_value(std::move(other.list_value)) {
+    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_),
+      str_value(std::move(other.str_value)), struct_value(std::move(other.struct_value)),
+      list_value(std::move(other.list_value)) {
 }
 
 Value &Value::operator=(const Value &other) {

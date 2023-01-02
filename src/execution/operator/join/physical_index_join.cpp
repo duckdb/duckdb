@@ -61,8 +61,8 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
                                      vector<column_t> column_ids_p, Index *index_p, bool lhs_first,
                                      idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, std::move(op.types), estimated_cardinality),
-      left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)), index(index_p),
-      conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
+      left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)),
+      index(index_p), conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	column_ids = std::move(column_ids_p);
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));

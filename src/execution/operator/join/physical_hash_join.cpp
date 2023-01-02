@@ -41,8 +41,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
-    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       std::move(perfect_join_state)) {
+    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
+                       estimated_cardinality, std::move(perfect_join_state)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -158,8 +158,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr =
-			    function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr, AggregateType::NON_DISTINCT);
+			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
+			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));

@@ -14,8 +14,8 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
-      function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)) {
+      function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
+      names(std::move(names_p)), table_filters(std::move(table_filters_p)) {
 }
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,

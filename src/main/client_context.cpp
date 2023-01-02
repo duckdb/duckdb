@@ -269,8 +269,9 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		// no result collector - create a materialized result by continuously fetching
 		auto result_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
 		D_ASSERT(!result_collection->Types().empty());
-		auto materialized_result = make_unique<MaterializedQueryResult>(
-		    pending.statement_type, pending.properties, pending.names, std::move(result_collection), GetClientProperties());
+		auto materialized_result =
+		    make_unique<MaterializedQueryResult>(pending.statement_type, pending.properties, pending.names,
+		                                         std::move(result_collection), GetClientProperties());
 
 		auto &collection = materialized_result->Collection();
 		D_ASSERT(!collection.Types().empty());
@@ -423,7 +424,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	D_ASSERT(types == statement.types);
 	D_ASSERT(!active_query->open_result);
 
-	auto pending_result = make_unique<PendingQueryResult>(shared_from_this(), *statement_p, std::move(types), stream_result);
+	auto pending_result =
+	    make_unique<PendingQueryResult>(shared_from_this(), *statement_p, std::move(types), stream_result);
 	active_query->prepared = std::move(statement_p);
 	active_query->open_result = pending_result.get();
 	return pending_result;
@@ -523,8 +525,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	RunFunctionInTransactionInternal(
 	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
-	return make_unique<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query), n_param,
-	                                      std::move(named_param_map));
+	return make_unique<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
+	                                      n_param, std::move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {

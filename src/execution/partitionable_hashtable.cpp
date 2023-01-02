@@ -48,9 +48,9 @@ PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator
                                                RadixPartitionInfo &partition_info_p, vector<LogicalType> group_types_p,
                                                vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
-    : context(context), allocator(allocator), group_types(std::move(group_types_p)), payload_types(std::move(payload_types_p)),
-      bindings(std::move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
-      hashes_subset(LogicalType::HASH) {
+    : context(context), allocator(allocator), group_types(std::move(group_types_p)),
+      payload_types(std::move(payload_types_p)), bindings(std::move(bindings_p)), is_partitioned(false),
+      partition_info(partition_info_p), hashes(LogicalType::HASH), hashes_subset(LogicalType::HASH) {
 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);

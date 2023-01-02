@@ -10,8 +10,8 @@ namespace duckdb {
 
 BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p,
                                          BoundCastInfo bound_cast_p, bool try_cast_p)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)), child(std::move(child_p)),
-      try_cast(try_cast_p), bound_cast(std::move(bound_cast_p)) {
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)),
+      child(std::move(child_p)), try_cast(try_cast_p), bound_cast(std::move(bound_cast_p)) {
 }
 
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
@@ -200,7 +200,8 @@ unique_ptr<Expression> BoundCastExpression::Deserialize(ExpressionDeserializatio
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto try_cast = reader.ReadRequired<bool>();
 	auto cast_function = BindCastFunction(state.gstate.context, child->return_type, target_type);
-	return make_unique<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function), try_cast);
+	return make_unique<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function),
+	                                        try_cast);
 }
 
 } // namespace duckdb

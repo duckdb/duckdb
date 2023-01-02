@@ -44,8 +44,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 			PlanSubqueries(&expr, &root);
 		}
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
-		auto aggregate =
-		    make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index, std::move(statement.aggregates));
+		auto aggregate = make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index,
+		                                               std::move(statement.aggregates));
 		aggregate->groups = std::move(statement.groups.group_expressions);
 		aggregate->groupings_index = statement.groupings_index;
 		aggregate->grouping_sets = std::move(statement.groups.grouping_sets);

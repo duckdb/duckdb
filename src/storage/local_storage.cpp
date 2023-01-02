@@ -21,7 +21,8 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table) : table(table) {
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(std::move(parent.partial_manager)), written_blocks(std::move(parent.written_blocks)) {
+    : table(table), partial_manager(std::move(parent.partial_manager)),
+      written_blocks(std::move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}

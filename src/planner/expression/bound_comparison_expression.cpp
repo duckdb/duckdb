@@ -6,7 +6,8 @@ namespace duckdb {
 
 BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left,
                                                      unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(std::move(left)), right(std::move(right)) {
+    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(std::move(left)),
+      right(std::move(right)) {
 }
 
 string BoundComparisonExpression::ToString() const {

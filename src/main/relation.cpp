@@ -81,8 +81,8 @@ shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
 
 	auto expr = std::move(expression_list[0]);
 	for (idx_t i = 1; i < expression_list.size(); i++) {
-		expr =
-		    make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr), std::move(expression_list[i]));
+		expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+		                                          std::move(expression_list[i]));
 	}
 	return make_shared<FilterRelation>(shared_from_this(), std::move(expr));
 }

@@ -33,8 +33,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.children.empty()) {
 		// this is for table producing functions that consume subquery results
 		D_ASSERT(op.children.size() == 1);
-		auto node = make_unique<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
-		                                                    op.estimated_cardinality, std::move(op.projected_input));
+		auto node =
+		    make_unique<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
+		                                            op.estimated_cardinality, std::move(op.projected_input));
 		node->children.push_back(CreatePlan(std::move(op.children[0])));
 		return std::move(node);
 	}
@@ -86,7 +87,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			}
 		}
 
-		auto projection = make_unique<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+		auto projection =
+		    make_unique<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		projection->children.push_back(std::move(node));
 		return std::move(projection);
 	} else {

@@ -19,8 +19,8 @@ namespace duckdb {
 PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond), join_type,
-                        estimated_cardinality) {
+    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond),
+                        join_type, estimated_cardinality) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);

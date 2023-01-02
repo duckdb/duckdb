@@ -57,8 +57,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 		auto prior_subquery = std::move(expr.subquery);
 		expr.subquery = make_unique<SelectStatement>();
-		expr.subquery->node =
-		    make_unique<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node), std::move(prior_subquery));
+		expr.subquery->node = make_unique<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node),
+		                                                     std::move(prior_subquery));
 	}
 	// now bind the child node of the subquery
 	if (expr.child) {

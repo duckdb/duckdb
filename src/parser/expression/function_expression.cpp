@@ -82,8 +82,9 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 		order_copy.reset(static_cast<OrderModifier *>(order_bys->Copy().release()));
 	}
 
-	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(copy_children), std::move(filter_copy),
-	                                            std::move(order_copy), distinct, is_operator, export_state);
+	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(copy_children),
+	                                            std::move(filter_copy), std::move(order_copy), distinct, is_operator,
+	                                            export_state);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

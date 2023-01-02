@@ -23,7 +23,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
     : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, std::move(name_p)), db(db),
       type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
-	storage = make_unique<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
+	storage =
+	    make_unique<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	internal = true;

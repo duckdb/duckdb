@@ -179,7 +179,8 @@ public:
 
 	DUCKDB_API void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                         scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), udf_func, *context, std::move(varargs));
+		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), udf_func, *context,
+		                             std::move(varargs));
 	}
 
 	//------------------------------------- Aggreate Functions ----------------------------------------//

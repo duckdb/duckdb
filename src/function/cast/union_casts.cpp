@@ -13,7 +13,8 @@ namespace duckdb {
 struct ToUnionBoundCastData : public BoundCastData {
 	ToUnionBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
 	                     BoundCastInfo member_cast_info)
-	    : tag(member_idx), name(std::move(name)), type(std::move(type)), cost(cost), member_cast_info(std::move(member_cast_info)) {
+	    : tag(member_idx), name(std::move(name)), type(std::move(type)), cost(cost),
+	      member_cast_info(std::move(member_cast_info)) {
 	}
 
 	union_tag_t tag;
@@ -43,7 +44,8 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 		auto member_cast_cost = input.function_set.ImplicitCastCost(source, member_type);
 		if (member_cast_cost != -1) {
 			auto member_cast_info = input.GetCastFunction(source, member_type);
-			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost, std::move(member_cast_info));
+			candidates.emplace_back(member_idx, member_name, member_type, member_cast_cost,
+			                        std::move(member_cast_info));
 		}
 	};
 

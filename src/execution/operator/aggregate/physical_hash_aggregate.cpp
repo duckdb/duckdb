@@ -108,7 +108,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), std::move(groups_p), {}, {}, estimated_cardinality) {
+    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), std::move(groups_p), {}, {},
+                            estimated_cardinality) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
@@ -129,7 +130,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 	input_group_types = CreateGroupChunkTypes(groups_p);
 
-	grouped_aggregate_data.InitializeGroupby(std::move(groups_p), std::move(expressions), std::move(grouping_functions_p));
+	grouped_aggregate_data.InitializeGroupby(std::move(groups_p), std::move(expressions),
+	                                         std::move(grouping_functions_p));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
@@ -469,8 +471,8 @@ class HashAggregateFinalizeTask : public ExecutorTask {
 public:
 	HashAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
 	                          ClientContext &context, const PhysicalHashAggregate &op)
-	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p), context(context),
-	      op(op) {
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p),
+	      context(context), op(op) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -516,8 +518,8 @@ public:
 	HashDistinctAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
 	                                  ClientContext &context, const PhysicalHashAggregate &op,
 	                                  vector<vector<unique_ptr<GlobalSourceState>>> &global_sources_p)
-	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p), context(context),
-	      op(op), global_sources(global_sources_p) {
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p),
+	      context(context), op(op), global_sources(global_sources_p) {
 	}
 
 	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info,

@@ -162,7 +162,8 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 		children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 		return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	}
-	auto result = make_unique<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
+	auto result =
+	    make_unique<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
 
 	result->partitions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);

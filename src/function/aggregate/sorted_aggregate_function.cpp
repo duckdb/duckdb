@@ -10,7 +10,8 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, const AggregateFunction &function_p,
 	                        vector<unique_ptr<Expression>> &children, unique_ptr<FunctionData> bind_info_p,
 	                        const BoundOrderModifier &order_bys)
-	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p), bind_info(std::move(bind_info_p)) {
+	    : buffer_manager(BufferManager::GetBufferManager(context)), function(function_p),
+	      bind_info(std::move(bind_info_p)) {
 		arg_types.reserve(children.size());
 		for (const auto &child : children) {
 			arg_types.emplace_back(child->return_type);

@@ -53,7 +53,8 @@ unique_ptr<Expression> BoundBetweenExpression::Deserialize(ExpressionDeserializa
 	auto upper = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto lower_inclusive = reader.ReadRequired<bool>();
 	auto upper_inclusive = reader.ReadRequired<bool>();
-	return make_unique<BoundBetweenExpression>(std::move(input), std::move(lower), std::move(upper), lower_inclusive, upper_inclusive);
+	return make_unique<BoundBetweenExpression>(std::move(input), std::move(lower), std::move(upper), lower_inclusive,
+	                                           upper_inclusive);
 }
 
 } // namespace duckdb

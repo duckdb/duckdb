@@ -54,15 +54,17 @@ static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &
 
 static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_name) {
 	auto count_star = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateCountStar());
-	auto count = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", std::move(column_name)));
+	auto count =
+	    make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", std::move(column_name)));
 	auto null_percentage = SummarizeCreateBinaryFunction("/", std::move(count), std::move(count_star));
-	auto negate_x =
-	    SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)), std::move(null_percentage));
+	auto negate_x = SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)),
+	                                              std::move(null_percentage));
 	auto percentage_x =
 	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_unique<ConstantExpression>(Value::DOUBLE(100)));
-	auto round_x =
-	    SummarizeCreateBinaryFunction("round", std::move(percentage_x), make_unique<ConstantExpression>(Value::INTEGER(2)));
-	auto concat_x = SummarizeCreateBinaryFunction("concat", std::move(round_x), make_unique<ConstantExpression>(Value("%")));
+	auto round_x = SummarizeCreateBinaryFunction("round", std::move(percentage_x),
+	                                             make_unique<ConstantExpression>(Value::INTEGER(2)));
+	auto concat_x =
+	    SummarizeCreateBinaryFunction("concat", std::move(round_x), make_unique<ConstantExpression>(Value("%")));
 
 	return concat_x;
 }

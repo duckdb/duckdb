@@ -15,8 +15,8 @@ PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tab
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk)
     : PhysicalOperator(PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality), tableref(tableref),
-      table(table), columns(std::move(columns)), expressions(std::move(expressions)), bound_defaults(std::move(bound_defaults)),
-      return_chunk(return_chunk) {
+      table(table), columns(std::move(columns)), expressions(std::move(expressions)),
+      bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk) {
 }
 
 //===--------------------------------------------------------------------===//

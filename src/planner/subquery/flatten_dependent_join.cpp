@@ -165,8 +165,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				vector<unique_ptr<Expression>> aggr_children;
 				aggr_children.push_back(std::move(colref));
-				auto first_fun = make_unique<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-				                                                       nullptr, nullptr, AggregateType::NON_DISTINCT);
+				auto first_fun =
+				    make_unique<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children), nullptr,
+				                                          nullptr, AggregateType::NON_DISTINCT);
 				aggr.expressions.push_back(std::move(first_fun));
 			}
 		} else {
@@ -230,12 +231,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
 		if (!right_has_correlation) {
 			// only left has correlation: push into left
-			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+			plan->children[0] =
+			    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
 			return plan;
 		}
 		if (!left_has_correlation) {
 			// only right has correlation: push into right
-			plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+			plan->children[1] =
+			    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
 			return plan;
 		}
 		// both sides have correlation
@@ -301,7 +304,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				throw Exception("MARK join with correlation in RHS not supported");
 			}
 			// push the child into the LHS
-			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+			plan->children[0] =
+			    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
 			// rewrite expressions in the join conditions
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 			rewriter.VisitOperator(*plan);
@@ -342,8 +346,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				auto &any_join = (LogicalAnyJoin &)join;
 				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 				                                                         std::move(left), std::move(right));
-				auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-				                                                           std::move(comparison), std::move(any_join.condition));
+				auto conjunction = make_unique<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(any_join.condition));
 				any_join.condition = std::move(conjunction);
 			}
 		}
