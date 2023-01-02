@@ -71,8 +71,8 @@ public:
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 	void Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, uint64_t location) override;
 
-	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
-	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	bool FileExists(const string &filename) override;
 	vector<string> Glob(const string &path, FileOpener *opener) override;
@@ -86,8 +86,8 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override;
 	void RemoveFile(const string &filename) override;
 	void MoveFile(const string &source, const string &dest) override;
-	time_t GetLastModifiedTime(FileHandle &handle);
-	void FileSync(FileHandle &handle);
+	time_t GetLastModifiedTime(FileHandle &handle) override;
+	void FileSync(FileHandle &handle) override;
 };
 
 } // namespace duckdb
