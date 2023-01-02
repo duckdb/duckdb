@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -105,6 +106,11 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = {alias};
 	}
+	if (expr.type == ExpressionType::LAMBDA) {
+		// auto& lambda_expr = (LambdaExpression&)expr;
+		// ReplaceAliases(*lambda_expr.lhs, list, alias_map);
+		return;
+	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { ReplaceAliases((ParsedExpression &)child, list, alias_map); });
 }
@@ -115,6 +121,10 @@ static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), table_name);
+	}
+	if (expr.type == ExpressionType::LAMBDA) {
+		// Don't qualify the parameters of the lambda expression
+		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });

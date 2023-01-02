@@ -1,0 +1,40 @@
+# name: test/sql/generated_columns/virtual/lambda_expressions.test
+# group: [virtual]
+
+statement ok
+pragma enable_verification;
+
+# Correct expression
+statement ok
+CREATE TABLE lambda_tbl1 (
+	nums INTEGER[],
+	evens AS (
+		list_filter(nums, x -> x%2=0)
+	)
+)
+
+# Lhs not present in rhs ('x' does not exist)
+statement error
+CREATE TABLE lambda_tbl2 (
+	nums INTEGER[],
+	evens AS (
+		list_filter(nums, b -> x%2=0)
+	)
+)
+
+# Column referenced does not exist
+statement error
+CREATE TABLE lambda_tbl3 (
+	nums INTEGER[],
+	evens AS (
+		list_filter(not_nums, x -> x%2=0)
+	)
+)
+
+statement ok
+insert into lambda_tbl1 VALUES ([5,4,6,2,7,8]);
+
+query II
+select * from lambda_tbl1;
+----
+[5, 4, 6, 2, 7, 8]	[4, 6, 2, 8]

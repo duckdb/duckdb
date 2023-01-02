@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 
@@ -19,7 +20,7 @@ BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in check constraint");
 	case ExpressionClass::COLUMN_REF:
-		return BindCheckColumn((ColumnRefExpression &)expr);
+		return BindCheckColumn((ColumnRefExpression &)expr, depth);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
@@ -41,9 +42,30 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	return BindExpression(&result, 0);
 }
 
-BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
+// FIXME: this is quite naive and optimistic
+bool IsLambdaBinding(vector<DummyBinding> *lambda_bindings_p, ColumnRefExpression &colref) {
+	if (!lambda_bindings_p) {
+		return false;
+	}
+	if (colref.IsQualified()) {
+		// TODO: return MatchingLambdaBinding ?
+	}
+	auto &lambda_bindings = *lambda_bindings_p;
+	for (auto &binding : lambda_bindings) {
+		if (binding.name_map.count(colref.GetColumnName())) {
+			return true;
+		}
+	}
+	return false;
+}
+
+BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.column_names.size() > 1) {
 		return BindQualifiedColumnName(colref, table);
+	}
+	if (IsLambdaBinding(lambda_bindings, colref)) {
+		// Found a lambda parameter!
+		return ExpressionBinder::BindExpression(colref, depth);
 	}
 	if (!columns.ColumnExists(colref.column_names[0])) {
 		throw BinderException("Table does not contain column %s referenced in check constraint!",

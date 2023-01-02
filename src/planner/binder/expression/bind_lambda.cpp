@@ -156,4 +156,19 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	}
 }
 
+idx_t ExpressionBinder::MatchingLambdaBinding(ColumnRefExpression &expr) const {
+	if (lambda_bindings == nullptr) {
+		return DConstants::INVALID_INDEX;
+	}
+	auto &table_name = expr.GetTableName();
+	auto &bindings = (vector<DummyBinding> &)*lambda_bindings;
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		auto &binding = bindings[i];
+		if (table_name == binding.alias) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 } // namespace duckdb

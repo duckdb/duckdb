@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -159,6 +160,10 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 		auto columnref = (ColumnRefExpression &)expr;
 		auto &name = columnref.GetColumnName();
 		dependencies.push_back(name);
+	}
+	if (expr.type == ExpressionType::LAMBDA) {
+		// Skip it so we don't register lambda column references as dependencies
+		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);

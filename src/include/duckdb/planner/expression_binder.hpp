@@ -131,6 +131,8 @@ protected:
 	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
 	                          unique_ptr<Expression> &expr, string &alias);
 
+	idx_t MatchingLambdaBinding(ColumnRefExpression &expr) const;
+
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);

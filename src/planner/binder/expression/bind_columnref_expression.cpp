@@ -313,18 +313,13 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 
 	BindResult result;
 
-	auto found_lambda_binding = false;
-	if (lambda_bindings) {
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if (table_name == (*lambda_bindings)[i].alias) {
-				result = (*lambda_bindings)[i].Bind(colref, depth);
-				found_lambda_binding = true;
-				break;
-			}
-		}
-	}
-
-	if (!found_lambda_binding) {
+	auto lambda_binding_idx = MatchingLambdaBinding(colref);
+	if (lambda_binding_idx != DConstants::INVALID_INDEX) {
+		D_ASSERT(lambda_bindings);
+		D_ASSERT(lambda_bindings->size() > lambda_binding_idx);
+		auto &lambda_binding = (*lambda_bindings)[lambda_binding_idx];
+		result = lambda_binding.Bind(colref, depth);
+	} else {
 		if (binder.macro_binding && table_name == binder.macro_binding->alias) {
 			result = binder.macro_binding->Bind(colref, depth);
 		} else {
@@ -332,14 +327,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		}
 	}
 
-	if (!result.HasError()) {
-		BoundColumnReferenceInfo ref;
-		ref.name = colref.column_names.back();
-		ref.query_location = colref.query_location;
-		bound_columns.push_back(move(ref));
-	} else {
+	if (result.HasError()) {
 		result.error = binder.FormatError(colref_p, result.error);
+		return result;
 	}
+	BoundColumnReferenceInfo ref;
+	ref.name = colref.column_names.back();
+	ref.query_location = colref.query_location;
+	bound_columns.push_back(move(ref));
 	return result;
 }
 

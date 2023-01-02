@@ -28,7 +28,7 @@ protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
 
-	BindResult BindCheckColumn(ColumnRefExpression &expr);
+	BindResult BindCheckColumn(ColumnRefExpression &expr, idx_t depth);
 
 	string UnsupportedAggregateMessage() override;
 };
