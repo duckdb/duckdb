@@ -91,7 +91,7 @@ int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
-	return py::int_(PythonFileHandle::GetHandle(handle)->attr("size"));
+	return py::int_(filesystem.attr("size")(handle.path));
 }
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 	PythonGILWrapper gil;
