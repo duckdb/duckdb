@@ -515,8 +515,6 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain a bucket name");
 	}
 
-	auto question_pos = url.find_last_of('?');
-
 	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
 	if (params.url_style == "path") {
 		path = "/" + bucket;
@@ -524,13 +522,18 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		path = "";
 	}
 
-	if (question_pos == string::npos) {
-		path += url.substr(slash_pos);
-		query_param = "";
-	} else {
-		path += url.substr(slash_pos, question_pos - slash_pos);
+	auto question_pos = url.find_last_of('?');
+	if (question_pos != string::npos) {
 		query_param = url.substr(question_pos + 1);
 	}
+
+	if (!query_param.empty() && query_param.find('.') == string::npos) {
+		path += url.substr(slash_pos, question_pos - slash_pos);
+	} else {
+		path += url.substr(slash_pos);
+		query_param = "";
+	}
+
 	if (path.empty()) {
 		throw IOException("URL needs to contain key");
 	}
@@ -814,6 +817,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Parse pattern
 	auto parsed_url = S3UrlParse(glob_pattern, s3_auth_params);
 
+	ReadQueryParams(parsed_url.query_param, s3_auth_params);
+
 	// Do main listobjectsv2 request
 	vector<string> s3_keys;
 	string main_continuation_token = "";
@@ -854,11 +859,6 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_url.bucket.length() + 1);
 	}
 
-	// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
-	if (parsed_url.query_param != "") {
-		pattern_trimmed += '?' + parsed_url.query_param;
-	}
-
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
 
@@ -866,6 +866,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_url.bucket + "/" + s3_key;
+			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
+			if (parsed_url.query_param != "") {
+				result_full_url += '?' + parsed_url.query_param;
+			}
 			result.push_back(result_full_url);
 		}
 	}
