@@ -170,7 +170,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
-	default:
+	case TableReferenceType::POSITIONAL_JOIN:
+		result = Bind((PositionalJoinRef &)ref);
+		break;
+	case TableReferenceType::CTE:
+	case TableReferenceType::INVALID:
 		throw InternalException("Unknown table ref type");
 	}
 	result->sample = move(ref.sample);
@@ -204,8 +208,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::CTE:
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
-	default:
-		throw InternalException("Unsupported bound table ref type type");
+	case TableReferenceType::POSITIONAL_JOIN:
+		root = CreatePlan((BoundPositionalJoinRef &)ref);
+		break;
+	case TableReferenceType::INVALID:
+		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause
 	if (ref.sample) {

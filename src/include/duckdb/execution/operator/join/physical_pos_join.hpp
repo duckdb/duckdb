@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/join/physical_cross_product.hpp
+// duckdb/execution/operator/join/physical_pos_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,18 +13,18 @@
 
 namespace duckdb {
 
-//! PhysicalCrossProduct represents a cross product between two tables
-class PhysicalCrossProduct : public CachingPhysicalOperator {
+//! PhysicalPositionalJoin represents a cross product between two tables
+class PhysicalPositionalJoin : public CachingPhysicalOperator {
 public:
-	PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-	                     unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
+	PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
+	                       unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
 	bool ParallelOperator() const override {
-		return true;
+		return false;
 	}
 
 protected:
@@ -33,7 +33,7 @@ protected:
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
 	bool IsOrderPreserving() const override {
-		return false;
+		return true;
 	}
 
 public:
@@ -53,37 +53,4 @@ public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const PhysicalOperator *> GetSources() const override;
 };
-
-class CrossProductExecutor {
-public:
-	explicit CrossProductExecutor(ColumnDataCollection &rhs);
-
-	OperatorResultType Execute(DataChunk &input, DataChunk &output);
-
-	bool ScanLHS() {
-		return scan_input_chunk;
-	}
-
-	idx_t PositionInChunk() {
-		return position_in_chunk;
-	}
-
-	idx_t ScanPosition() {
-		return scan_state.current_row_index;
-	}
-
-private:
-	void Reset(DataChunk &input, DataChunk &output);
-	bool NextValue(DataChunk &input, DataChunk &output);
-
-private:
-	ColumnDataCollection &rhs;
-	ColumnDataScanState scan_state;
-	DataChunk scan_chunk;
-	idx_t position_in_chunk;
-	bool initialized;
-	bool finished;
-	bool scan_input_chunk;
-};
-
 } // namespace duckdb

@@ -24,7 +24,8 @@ enum class TableReferenceType : uint8_t {
 	TABLE_FUNCTION = 5,  // table producing function
 	EXPRESSION_LIST = 6, // expression list
 	CTE = 7,             // Recursive CTE
-	EMPTY = 8            // placeholder for empty FROM
+	EMPTY = 8,           // placeholder for empty FROM
+	POSITIONAL_JOIN = 9  // out of positional (row-wise) "join"
 };
 
 } // namespace duckdb

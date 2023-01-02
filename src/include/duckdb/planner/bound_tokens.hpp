@@ -53,5 +53,6 @@ class BoundTableFunction;
 class BoundEmptyTableRef;
 class BoundExpressionListRef;
 class BoundCTERef;
+class BoundPositionalJoinRef;
 
 } // namespace duckdb

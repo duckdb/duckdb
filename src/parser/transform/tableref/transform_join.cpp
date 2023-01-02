@@ -2,6 +2,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/crossproductref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/pos_join_ref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -29,6 +30,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		result->type = JoinType::SEMI;
 		break;
 	}
+	case duckdb_libpgquery::PG_JOIN_POSITION: {
+		// Not used
+		break;
+	}
 	default: {
 		throw NotImplementedException("Join type %d not supported\n", root->jointype);
 	}
@@ -39,6 +44,13 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 	result->right = TransformTableRefNode(root->rarg);
 	result->is_natural = root->isNatural;
 	result->query_location = root->location;
+
+	if (root->jointype == duckdb_libpgquery::PG_JOIN_POSITION) { // POSITIONAL JOIN
+		auto pj = make_unique<PositionalJoinRef>();
+		pj->left = move(result->left);
+		pj->right = move(result->right);
+		return move(pj);
+	}
 
 	if (root->usingClause && root->usingClause->length > 0) {
 		// usingClause is a list of strings

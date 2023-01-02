@@ -201,6 +201,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		EnumerateTableRefChildren(*cp_ref.right, callback);
 		break;
 	}
+	case TableReferenceType::POSITIONAL_JOIN: {
+		auto &pj_ref = (PositionalJoinRef &)ref;
+		EnumerateTableRefChildren(*pj_ref.left, callback);
+		EnumerateTableRefChildren(*pj_ref.right, callback);
+		break;
+	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = (ExpressionListRef &)ref;
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
@@ -233,7 +239,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	case TableReferenceType::EMPTY:
 		// these TableRefs do not need to be unfolded
 		break;
-	default:
+	case TableReferenceType::INVALID:
+	case TableReferenceType::CTE:
 		throw NotImplementedException("TableRef type not implemented for traversal");
 	}
 }

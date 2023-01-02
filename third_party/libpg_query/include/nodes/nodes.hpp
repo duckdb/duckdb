@@ -664,7 +664,12 @@ typedef enum PGJoinType {
 	 * by the executor (nor, indeed, by most of the planner).
 	 */
 	PG_JOIN_UNIQUE_OUTER, /* LHS path must be made unique */
-	PG_JOIN_UNIQUE_INNER  /* RHS path must be made unique */
+	PG_JOIN_UNIQUE_INNER, /* RHS path must be made unique */
+
+	/*
+	 * Positional joins are essentially parallel table scans.
+	 */
+	PG_JOIN_POSITION /* Two tables of the same length */
 
 	/*
 	 * We might need additional join types someday.

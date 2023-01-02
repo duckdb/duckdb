@@ -1,0 +1,20 @@
+# name: test/sql/join/positional/test_positional_join.test
+# description: Test positional joins
+# group: [positional]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2);
+
+query IIII
+SELECT * 
+FROM test t1 POSITIONAL JOIN test t2 
+ORDER BY 1, 2, 3, 4;
+----
+11	1	11	1
+12	2	12	2

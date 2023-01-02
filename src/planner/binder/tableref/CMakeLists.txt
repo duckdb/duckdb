@@ -6,6 +6,7 @@ add_library_unity(
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
   bind_joinref.cpp
+  bind_pos_join_ref.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
   bind_named_parameters.cpp
@@ -14,6 +15,7 @@ add_library_unity(
   plan_dummytableref.cpp
   plan_expressionlistref.cpp
   plan_joinref.cpp
+  plan_pos_join_ref.cpp
   plan_subqueryref.cpp
   plan_table_function.cpp
   plan_cteref.cpp)
