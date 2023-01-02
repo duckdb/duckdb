@@ -139,13 +139,6 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right);
-extern "C" SEXP _duckdb_rapi_rel_full_join(SEXP left, SEXP right) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_full_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right)));
-  END_CPP11
-}
-// relational.cpp
 SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
 extern "C" SEXP _duckdb_rapi_rel_inner_join(SEXP left, SEXP right, SEXP conds) {
   BEGIN_CPP11
@@ -178,6 +171,13 @@ SEXP rapi_rel_anti_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, l
 extern "C" SEXP _duckdb_rapi_rel_anti_join(SEXP left, SEXP right, SEXP conds) {
   BEGIN_CPP11
     return cpp11::as_sexp(rapi_rel_anti_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds);
+extern "C" SEXP _duckdb_rapi_rel_full_join(SEXP left, SEXP right, SEXP conds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_full_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds)));
   END_CPP11
 }
 // relational.cpp
@@ -387,7 +387,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_filter",             (DL_FUNC) &_duckdb_rapi_rel_filter,             2},
     {"_duckdb_rapi_rel_from_altrep_df",     (DL_FUNC) &_duckdb_rapi_rel_from_altrep_df,     1},
     {"_duckdb_rapi_rel_from_df",            (DL_FUNC) &_duckdb_rapi_rel_from_df,            3},
-    {"_duckdb_rapi_rel_full_join",          (DL_FUNC) &_duckdb_rapi_rel_full_join,          2},
+    {"_duckdb_rapi_rel_full_join",          (DL_FUNC) &_duckdb_rapi_rel_full_join,          3},
     {"_duckdb_rapi_rel_inner_join",         (DL_FUNC) &_duckdb_rapi_rel_inner_join,         3},
     {"_duckdb_rapi_rel_intersect",          (DL_FUNC) &_duckdb_rapi_rel_intersect,          2},
     {"_duckdb_rapi_rel_left_join",          (DL_FUNC) &_duckdb_rapi_rel_left_join,          3},

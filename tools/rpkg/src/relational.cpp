@@ -170,13 +170,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 }
 
 
-[[cpp11::register]] SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right) {
-	unique_ptr<ParsedExpression> cond;
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, nullptr, JoinType::INNER);
-	return make_external<RelationWrapper>("duckdb_relation", res);
-}
-
-
 [[cpp11::register]] SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
 	unique_ptr<ParsedExpression> cond;
 
@@ -216,7 +209,22 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_right_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
-	return rapi_rel_left_join(right, left, conds);
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_inner_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::RIGHT);
+	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
 [[cpp11::register]] SEXP rapi_rel_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
@@ -242,7 +250,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	unique_ptr<ParsedExpression> cond;
 
 	if (conds.size() == 0) { // nop
-		stop("rel_anti_join needs conditions");
+		stop("rel_semi_join needs conditions");
 	} else if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
@@ -253,7 +261,59 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::ANTI);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::MARK);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+//[[cpp11::register]] SEXP rapi_rel_anti_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+//	unique_ptr<ParsedExpression> cond;
+//
+//	if (conds.size() != 2) { // nop
+//		stop("rel_anti_join needs exactly 2 conditions");
+//	}
+//
+//	unique_ptr<ParsedExpression> left_parsed;
+//	unique_ptr<ParsedExpression> right_parsed;
+//
+////	vector<unique_ptr<ParsedExpression>> cond_args;
+//	idx_t i = 0;
+//	for (expr_extptr_t expr : conds) {
+//		if (i == 0) left_parsed = expr->Copy();
+//		if (i == 1) right_parsed = expr->Copy();
+//		i++;
+////		cond_args.push_back(expr->Copy());
+//	}
+////	left_parsed = move(cond_args.at(0));
+////	right_parsed = move(cond_args.at(1));
+//
+////	left_parsed = (expr_extptr_t)left->Copy();
+////	right_parsed = (expr_extptr_t)right->Copy();
+//
+////  left <- is a relationwrapper
+////	left->rel <- is a relation
+////	right->rel <- is the relations
+//
+//	auto anti_join_cond = make_unique<ComparisonExpression>(ExpressionType::COMPARE_IN, move(left_parsed), move(right_parsed));
+//	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(anti_join_cond), JoinType::MARK);
+//	return make_external<RelationWrapper>("duckdb_relation", res);
+//}
+
+[[cpp11::register]] SEXP rapi_rel_full_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+	unique_ptr<ParsedExpression> cond;
+
+	if (conds.size() == 0) { // nop
+		stop("rel_full_join needs conditions");
+	} else if (conds.size() == 1) {
+		cond = ((expr_extptr_t)conds[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> cond_args;
+		for (expr_extptr_t expr : conds) {
+			cond_args.push_back(expr->Copy());
+		}
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
+	}
+
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), JoinType::OUTER);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
