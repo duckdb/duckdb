@@ -52,14 +52,14 @@ public:
 	//! Constructs an ART containing the bound expressions, which are resolved during index construction
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
+	    AttachedDatabase &db, bool track_memory, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
 	//! Root of the tree
 	Node *tree;
-	//! Attached database
-	AttachedDatabase &db;
+	//	//! Attached database
+	//	AttachedDatabase &db;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -124,12 +124,6 @@ private:
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
-
-private:
-	//! The estimated ART memory consumption
-	idx_t estimated_art_size;
-	//! The estimated memory consumption of a single key
-	idx_t estimated_key_size;
 };
 
 } // namespace duckdb

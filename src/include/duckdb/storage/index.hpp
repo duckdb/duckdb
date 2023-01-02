@@ -29,8 +29,9 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
-	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
+	Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+	      bool track_memory);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -49,6 +50,16 @@ public:
 	vector<LogicalType> logical_types;
 	//! Index constraint type (primary key, foreign key, ...)
 	IndexConstraintType constraint_type;
+
+	//! Attached database instance
+	AttachedDatabase &db;
+	//! Buffer manager of the database instance
+	BufferManager &buffer_manager;
+	//! The size of the index in memory
+	//! This does not track the size of the index meta information, but only allocated nodes and leaves
+	idx_t memory_size;
+	//! Flag determining if this index's size is tracked by the buffer manager
+	bool track_memory;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids

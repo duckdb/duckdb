@@ -46,6 +46,10 @@ Node::Node(NodeType type) : count(0), type(type) {
 }
 
 // LCOV_EXCL_START
+idx_t Node::MemorySize(ART &, const bool &) {
+	throw InternalException("MemorySize not implemented for the specific node type.");
+}
+
 idx_t Node::GetMin() {
 	throw InternalException("GetMin not implemented for the specific node type.");
 }
@@ -57,46 +61,50 @@ Node *Node::GetChild(ART &art, idx_t pos) {
 void Node::ReplaceChildPointer(idx_t pos, Node *node) {
 	throw InternalException("ReplaceChildPointer not implemented for the specific node type.");
 }
+
+ARTPointer &Node::GetARTPointer(idx_t) {
+	throw InternalException("GetARTPointer not implemented for the specific node type.");
+}
 // LCOV_EXCL_STOP
 
-void Node::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
+void Node::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::InsertChild(node, key_byte, new_child);
+		Node4::InsertChild(art, node, key_byte, new_child);
 		break;
 	case NodeType::N16:
-		Node16::InsertChild(node, key_byte, new_child);
+		Node16::InsertChild(art, node, key_byte, new_child);
 		break;
 	case NodeType::N48:
-		Node48::InsertChild(node, key_byte, new_child);
+		Node48::InsertChild(art, node, key_byte, new_child);
 		break;
 	case NodeType::N256:
-		Node256::InsertChild(node, key_byte, new_child);
+		Node256::InsertChild(art, node, key_byte, new_child);
 		break;
 	default:
-		throw InternalException("Unrecognized leaf type for insert");
+		throw InternalException("Unrecognized node type for insert.");
 	}
 }
 
-void Node::EraseChild(Node *&node, idx_t pos, ART &art) {
+void Node::EraseChild(ART &art, Node *&node, idx_t pos) {
 	switch (node->type) {
 	case NodeType::N4: {
-		Node4::EraseChild(node, pos, art);
+		Node4::EraseChild(art, node, pos);
 		break;
 	}
 	case NodeType::N16: {
-		Node16::EraseChild(node, pos, art);
+		Node16::EraseChild(art, node, pos);
 		break;
 	}
 	case NodeType::N48: {
-		Node48::EraseChild(node, pos, art);
+		Node48::EraseChild(art, node, pos);
 		break;
 	}
 	case NodeType::N256:
-		Node256::EraseChild(node, pos, art);
+		Node256::EraseChild(art, node, pos);
 		break;
 	default:
-		throw InternalException("Unrecognized leaf type for erase");
+		throw InternalException("Unrecognized node type for erase.");
 	}
 }
 
@@ -113,7 +121,7 @@ NodeType Node::GetTypeBySize(idx_t size) {
 	return NodeType::N256;
 }
 
-void Node::New(NodeType &type, Node *&node) {
+void Node::New(const NodeType &type, Node *&node) {
 	switch (type) {
 	case NodeType::N4:
 		node = (Node *)Node4::New();
@@ -128,7 +136,7 @@ void Node::New(NodeType &type, Node *&node) {
 		node = (Node *)Node256::New();
 		return;
 	default:
-		throw InternalException("Unrecognized type for new node creation!");
+		throw InternalException("Unrecognized node type for new node creation.");
 	}
 }
 
@@ -146,6 +154,10 @@ Node48 *Node48::New() {
 
 Node256 *Node256::New() {
 	return AllocateObject<Node256>();
+}
+
+Leaf *Leaf::New() {
+	return AllocateObject<Leaf>();
 }
 
 Leaf *Leaf::New(Key &value, uint32_t depth, row_t row_id) {
@@ -217,23 +229,24 @@ string Node::ToString(ART &art) {
 }
 
 BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type) {
-	// Iterate through children and annotate their offsets
+
+	// iterate through children and annotate their offsets
 	vector<BlockPointer> child_offsets;
 	for (idx_t i = 0; i < internal_type.children_size; i++) {
 		child_offsets.emplace_back(internal_type.children[i].Serialize(art, writer));
 	}
 	auto ptr = writer.GetBlockPointer();
-	// Write Node Type
+
 	writer.Write(type);
-	// Write count
 	writer.Write<uint16_t>(count);
-	// Write Prefix
 	prefix.Serialize(writer);
-	// Write Key values
+
+	// write key values
 	for (idx_t i = 0; i < internal_type.key_size; i++) {
 		writer.Write(internal_type.key[i]);
 	}
-	// Write child offsets
+
+	// write child offsets
 	for (auto &offsets : child_offsets) {
 		writer.Write(offsets.block_id);
 		writer.Write(offsets.offset);
@@ -242,6 +255,7 @@ BlockPointer Node::SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, 
 }
 
 BlockPointer Node::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
+
 	switch (type) {
 	case NodeType::N4:
 	case NodeType::N16:
@@ -255,33 +269,43 @@ BlockPointer Node::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 		return leaf->Serialize(writer);
 	}
 	default:
-		throw InternalException("Invalid ART Node");
+		throw InternalException("Invalid ART node for serialize.");
 	}
 }
 
-void Node::DeserializeInternal(duckdb::MetaBlockReader &reader) {
+void Node::DeserializeInternal(ART &art, duckdb::MetaBlockReader &reader) {
+
 	InternalType internal_type(this);
 	count = reader.Read<uint16_t>();
 	prefix.Deserialize(reader);
-	// Get Key values
+
+	// read key values
 	for (idx_t i = 0; i < internal_type.key_size; i++) {
 		internal_type.key[i] = reader.Read<uint8_t>();
 	}
-	// Get Child offsets
+
+	// read child offsets
 	for (idx_t i = 0; i < internal_type.children_size; i++) {
 		internal_type.children[i] = ARTPointer(reader);
 	}
 }
 
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
+
 	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), block_id);
 	reader.offset = offset;
+
 	auto n = reader.Read<uint8_t>();
 	NodeType node_type(static_cast<NodeType>(n));
+
 	Node *deserialized_node;
 	switch (node_type) {
-	case NodeType::NLeaf:
-		return Leaf::Deserialize(reader);
+	case NodeType::NLeaf: {
+		auto leaf = Leaf::New();
+		leaf->Deserialize(art, reader);
+		art.memory_size += leaf->MemorySize(art, false);
+		return leaf;
+	}
 	case NodeType::N4: {
 		deserialized_node = (Node *)Node4::New();
 		break;
@@ -299,7 +323,8 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		break;
 	}
 	}
-	deserialized_node->DeserializeInternal(reader);
+	deserialized_node->DeserializeInternal(art, reader);
+	art.memory_size += deserialized_node->MemorySize(art, false);
 	return deserialized_node;
 }
 
@@ -321,20 +346,30 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 	// because maybe there is enough free space in the bigger node to fit the smaller one
 	// without too much recursion
 
+	// need to swap back ARTs for properly tracking ART size
+	auto swapped = false;
+
 	if (info.l_node->type < info.r_node->type) {
 		// swap subtrees to ensure that l_node has the bigger node type
 		swap(info.l_art, info.r_art);
 		swap(info.l_node, info.r_node);
 		UpdateParentsOfNodes(info.l_node, info.r_node, parents);
+		swapped = true;
 	}
 
 	if (info.r_node->type == NodeType::NLeaf) {
 		D_ASSERT(info.l_node->type == NodeType::NLeaf);
 		D_ASSERT(info.r_node->type == NodeType::NLeaf);
 		if (info.l_art->IsUnique()) {
+			if (swapped) {
+				swap(info.l_art, info.r_art);
+			}
 			return false;
 		}
-		Leaf::Merge(info.l_node, info.r_node);
+		Leaf::Merge(*info.l_art, info.l_node, info.r_node);
+		if (swapped) {
+			swap(info.l_art, info.r_art);
+		}
 		return true;
 	}
 
@@ -351,7 +386,11 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 
 		if (l_child_pos == DConstants::INVALID_INDEX) {
 			// insert child at empty position
-			Node::InsertChild(info.l_node, key_byte, r_child);
+			auto r_memory_size = r_child->MemorySize(*info.r_art, true);
+			Node::InsertChild(*info.l_art, info.l_node, key_byte, r_child);
+
+			info.l_art->memory_size += r_memory_size;
+			info.r_art->memory_size -= r_memory_size;
 			if (parents.l_parent) {
 				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
 			}
@@ -363,9 +402,15 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 			MergeInfo child_info(info.l_art, info.r_art, l_child, r_child);
 			ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_child_pos);
 			if (!ResolvePrefixesAndMerge(child_info, depth + 1, child_parents)) {
+				if (swapped) {
+					swap(info.l_art, info.r_art);
+				}
 				return false;
 			}
 		}
+	}
+	if (swapped) {
+		swap(info.l_art, info.r_art);
 	}
 	return true;
 }
@@ -380,19 +425,27 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	auto l_prefix_size = l_node->prefix.Size();
 	auto r_prefix_size = r_node->prefix.Size();
 
+	// need to swap back ARTs for properly tracking ART size
+	auto swapped = false;
+
 	// make sure that r_node has the longer (or equally long) prefix
 	if (l_prefix_size > r_prefix_size) {
 		swap(info.l_art, info.r_art);
 		swap(l_node, r_node);
 		swap(l_prefix_size, r_prefix_size);
 		UpdateParentsOfNodes(l_node, r_node, parents);
+		swapped = true;
 	}
 
 	auto mismatch_pos = l_node->prefix.MismatchPosition(r_node->prefix);
 
 	// both nodes have no prefix or the same prefix
 	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
-		return Merge(info, depth + mismatch_pos, parents);
+		auto success = Merge(info, depth + mismatch_pos, parents);
+		if (swapped) {
+			swap(info.l_art, info.r_art);
+		}
+		return success;
 	}
 
 	if (mismatch_pos == l_prefix_size) {
@@ -406,13 +459,22 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 		auto child_pos = l_node->GetChildPos(mismatch_byte);
 
 		// update the prefix of r_node to only consist of the bytes after mismatch_pos
-		r_node->prefix.Reduce(mismatch_pos);
+		r_node->prefix.Reduce(*info.r_art, mismatch_pos);
 
 		// insert r_node as a child of l_node at empty position
 		if (child_pos == DConstants::INVALID_INDEX) {
-			Node::InsertChild(l_node, mismatch_byte, r_node);
+
+			auto r_memory_size = r_node->MemorySize(*info.r_art, true);
+			Node::InsertChild(*info.l_art, l_node, mismatch_byte, r_node);
+
+			info.l_art->memory_size += r_memory_size;
+			info.r_art->memory_size -= r_memory_size;
 			UpdateParentsOfNodes(l_node, null_parent, parents);
 			r_node = nullptr;
+
+			if (swapped) {
+				swap(info.l_art, info.r_art);
+			}
 			return true;
 		}
 
@@ -420,7 +482,12 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 		auto child_node = l_node->GetChild(*info.l_art, child_pos);
 		MergeInfo child_info(info.l_art, info.r_art, child_node, r_node);
 		ParentsOfNodes child_parents(l_node, child_pos, parents.r_parent, parents.r_pos);
-		return ResolvePrefixesAndMerge(child_info, depth + mismatch_pos, child_parents);
+		auto success = ResolvePrefixesAndMerge(child_info, depth + mismatch_pos, child_parents);
+
+		if (swapped) {
+			swap(info.l_art, info.r_art);
+		}
+		return success;
 	}
 
 	// prefixes differ, create new node and insert both nodes as children
@@ -428,18 +495,27 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	// create new node
 	Node *new_node = Node4::New();
 	new_node->prefix = Prefix(l_node->prefix, mismatch_pos);
+	info.l_art->memory_size += new_node->MemorySize(*info.l_art, false);
 
 	// insert l_node, break up prefix of l_node
-	auto key_byte = l_node->prefix.Reduce(mismatch_pos);
-	Node4::InsertChild(new_node, key_byte, l_node);
+	auto key_byte = l_node->prefix.Reduce(*info.l_art, mismatch_pos);
+	Node4::InsertChild(*info.l_art, new_node, key_byte, l_node);
 
 	// insert r_node, break up prefix of r_node
-	key_byte = r_node->prefix.Reduce(mismatch_pos);
-	Node4::InsertChild(new_node, key_byte, r_node);
+	key_byte = r_node->prefix.Reduce(*info.r_art, mismatch_pos);
+	auto r_memory_size = r_node->MemorySize(*info.r_art, true);
+	Node4::InsertChild(*info.l_art, new_node, key_byte, r_node);
+
+	info.l_art->memory_size += r_memory_size;
+	info.r_art->memory_size -= r_memory_size;
 
 	l_node = new_node;
 	UpdateParentsOfNodes(l_node, null_parent, parents);
 	r_node = nullptr;
+
+	if (swapped) {
+		swap(info.l_art, info.r_art);
+	}
 	return true;
 }
 
@@ -449,6 +525,24 @@ bool Node::MergeARTs(ART *l_art, ART *r_art) {
 	MergeInfo info(l_art, r_art, l_art->tree, r_art->tree);
 	ParentsOfNodes parents(null_parent, 0, null_parent, 0);
 	return ResolvePrefixesAndMerge(info, 0, parents);
+}
+
+idx_t Node::RecursiveMemorySize(ART &art) {
+
+	// get the size of all children
+	auto memory_size_children = 0;
+
+	auto next_pos = GetNextPos(DConstants::INVALID_INDEX);
+	while (next_pos != DConstants::INVALID_INDEX) {
+		auto ART_ptr = GetARTPointer(next_pos);
+		if (ART_ptr && !ART_ptr.IsSwizzled()) {
+			auto child = GetChild(art, next_pos);
+			memory_size_children += child->MemorySize(art, true);
+		}
+		next_pos = GetNextPos(next_pos);
+	}
+
+	return memory_size_children;
 }
 
 } // namespace duckdb

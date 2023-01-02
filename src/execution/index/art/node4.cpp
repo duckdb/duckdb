@@ -10,6 +10,13 @@ Node4::Node4() : Node(NodeType::N4) {
 	memset(key, 0, sizeof(key));
 }
 
+idx_t Node4::MemorySize(ART &art, const bool &recurse) {
+	if (recurse) {
+		return prefix.MemorySize() + sizeof(*this) + RecursiveMemorySize(art);
+	}
+	return prefix.MemorySize() + sizeof(*this);
+}
+
 idx_t Node4::GetChildPos(uint8_t k) {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] == k) {
@@ -67,12 +74,16 @@ void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }
 
-void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
+ARTPointer &Node4::GetARTPointer(idx_t pos) {
+	return children[pos];
+}
+
+void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child) {
 	Node4 *n = (Node4 *)node;
 
-	// Insert new child node into node
-	if (node->count < 4) {
-		// Insert element
+	// insert new child node into node
+	if (node->count < Node4::GetSize()) {
+		// still space, just insert the child
 		idx_t pos = 0;
 		while ((pos < node->count) && (n->key[pos] < key_byte)) {
 			pos++;
@@ -86,45 +97,66 @@ void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		n->key[pos] = key_byte;
 		n->children[pos] = new_child;
 		n->count++;
+
 	} else {
-		// Grow to Node16
+		// node is full, grow to Node16
 		auto new_node = Node16::New();
-		new_node->count = 4;
+		art.memory_size += new_node->MemorySize(art, false);
+		new_node->count = n->count;
 		new_node->prefix = move(node->prefix);
-		for (idx_t i = 0; i < 4; i++) {
+
+		for (idx_t i = 0; i < n->count; i++) {
 			new_node->key[i] = n->key[i];
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		// Delete old node and replace it with new Node16
+		n->count = 0;
+
+		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
-		Node16::InsertChild(node, key_byte, new_child);
+		Node16::InsertChild(art, node, key_byte, new_child);
 	}
 }
 
-void Node4::EraseChild(Node *&node, int pos, ART &art) {
+void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
+
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
+	D_ASSERT(n->count > 1);
+
+	// adjust the ART size
+	if (n->GetARTPointer(pos) && !n->GetARTPointer(pos).IsSwizzled()) {
+		auto child = n->GetChild(art, pos);
+		art.memory_size -= child->MemorySize(art, true);
+	}
+
 	// erase the child and decrease the count
 	n->children[pos].Reset();
 	n->count--;
+	D_ASSERT(n->count > 1);
+
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
 		n->children[pos] = n->children[pos + 1];
 	}
 	// set any remaining nodes as nullptr
-	for (; pos < 4; pos++) {
+	for (; pos < Node4::GetSize(); pos++) {
 		n->children[pos] = nullptr;
 	}
 
-	// This is a one way node
+	// this is a one way node, compress
 	if (n->count == 1) {
+
+		// get only child and concatenate prefixes
 		auto child_ref = n->GetChild(art, 0);
 		// concatenate prefixes
 		child_ref->prefix.Concatenate(n->key[0], node->prefix);
+		// free this node
 		n->children[0] = nullptr;
+		n->prefix.SetEmpty();
+		art.memory_size -= n->MemorySize(art, false);
 		Node::Delete(node);
 		node = child_ref;
 	}

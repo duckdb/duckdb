@@ -552,6 +552,18 @@ void BufferManager::SetLimit(idx_t limit) {
 	}
 }
 
+void BufferManager::IncreaseUsedMemory(idx_t size) {
+	if (current_memory + size > maximum_memory) {
+		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
+	}
+	current_memory += size;
+}
+
+void BufferManager::DecreaseUsedMemory(idx_t size) {
+	D_ASSERT(current_memory >= size);
+	current_memory -= size;
+}
+
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//

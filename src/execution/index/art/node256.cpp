@@ -1,10 +1,18 @@
 #include "duckdb/execution/index/art/node256.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
 namespace duckdb {
 
 Node256::Node256() : Node(NodeType::N256) {
+}
+
+idx_t Node256::MemorySize(ART &art, const bool &recurse) {
+	if (recurse) {
+		return prefix.MemorySize() + sizeof(*this) + RecursiveMemorySize(art);
+	}
+	return prefix.MemorySize() + sizeof(*this);
 }
 
 idx_t Node256::GetChildPos(uint8_t k) {
@@ -65,28 +73,46 @@ void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }
 
-void Node256::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
+ARTPointer &Node256::GetARTPointer(idx_t pos) {
+	return children[pos];
+}
+
+void Node256::InsertChild(ART &, Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node256 *)(node);
 
 	n->count++;
 	n->children[key_byte] = new_child;
 }
 
-void Node256::EraseChild(Node *&node, int pos, ART &art) {
+void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	auto n = (Node256 *)(node);
+
+	// adjust the ART size
+	if (n->GetARTPointer(pos) && !n->GetARTPointer(pos).IsSwizzled()) {
+		auto child = n->GetChild(art, pos);
+		art.memory_size -= child->MemorySize(art, true);
+	}
+
+	// erase the child and decrease the count
 	n->children[pos].Reset();
 	n->count--;
-	if (node->count <= 36) {
+
+	// shrink node to Node48
+	if (node->count <= Node48::GetSize() - 11) {
+
 		auto new_node = Node48::New();
+		art.memory_size += new_node->MemorySize(art, false);
 		new_node->prefix = move(n->prefix);
-		for (idx_t i = 0; i < 256; i++) {
+
+		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->children[i]) {
 				new_node->child_index[i] = new_node->count;
-				new_node->children[new_node->count] = n->children[i];
+				new_node->children[new_node->count++] = n->children[i];
 				n->children[i] = nullptr;
-				new_node->count++;
 			}
 		}
+
+		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
 	}

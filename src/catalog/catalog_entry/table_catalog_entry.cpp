@@ -65,10 +65,10 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
 		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
-		                       storage->db, index_block->block_id, index_block->offset);
+		                       storage->db, true, index_block->block_id, index_block->offset);
 	} else {
 		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
-		                       storage->db);
+		                       storage->db, true);
 		if (!storage->IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}

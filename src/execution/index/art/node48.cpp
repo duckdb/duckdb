@@ -11,6 +11,13 @@ Node48::Node48() : Node(NodeType::N48) {
 	}
 }
 
+idx_t Node48::MemorySize(ART &art, const bool &recurse) {
+	if (recurse) {
+		return prefix.MemorySize() + sizeof(*this) + RecursiveMemorySize(art);
+	}
+	return prefix.MemorySize() + sizeof(*this);
+}
+
 idx_t Node48::GetChildPos(uint8_t k) {
 	if (child_index[k] == Node::EMPTY_MARKER) {
 		return DConstants::INVALID_INDEX;
@@ -70,12 +77,16 @@ void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[child_index[pos]] = node;
 }
 
-void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
+ARTPointer &Node48::GetARTPointer(idx_t pos) {
+	return children[child_index[pos]];
+}
+
+void Node48::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node48 *)node;
 
-	// Insert new child node into node
-	if (node->count < 48) {
-		// Insert element
+	// insert new child node into node
+	if (node->count < Node48::GetSize()) {
+		// still space, just insert the child
 		idx_t pos = n->count;
 		if (n->children[pos]) {
 			// find an empty position in the node list if the current position is occupied
@@ -87,31 +98,49 @@ void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		n->children[pos] = new_child;
 		n->child_index[key_byte] = pos;
 		n->count++;
+
 	} else {
-		// Grow to Node256
+		// node is full, grow to Node256
 		auto new_node = Node256::New();
+		art.memory_size += new_node->MemorySize(art, false);
+		new_node->count = n->count;
+		new_node->prefix = move(n->prefix);
+
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
 				n->children[n->child_index[i]] = nullptr;
 			}
 		}
-		new_node->count = n->count;
-		new_node->prefix = move(n->prefix);
+
+		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
-		Node256::InsertChild(node, key_byte, new_child);
+		Node256::InsertChild(art, node, key_byte, new_child);
 	}
 }
 
-void Node48::EraseChild(Node *&node, int pos, ART &art) {
+void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 	auto n = (Node48 *)(node);
-	n->children[n->child_index[pos]].Reset();
+
+	// adjust the ART size
+	if (n->GetARTPointer(pos) && !n->GetARTPointer(pos).IsSwizzled()) {
+		auto child = n->GetChild(art, pos);
+		art.memory_size -= child->MemorySize(art, true);
+	}
+
+	// erase the child and decrease the count
+	n->children[pos].Reset();
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
-	if (node->count <= 12) {
+
+	// shrink node to Node16
+	if (node->count < Node16::GetSize() - 3) {
+
 		auto new_node = Node16::New();
+		art.memory_size += new_node->MemorySize(art, false);
 		new_node->prefix = move(n->prefix);
+
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;
@@ -119,6 +148,8 @@ void Node48::EraseChild(Node *&node, int pos, ART &art) {
 				n->children[n->child_index[i]] = nullptr;
 			}
 		}
+
+		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
 	}

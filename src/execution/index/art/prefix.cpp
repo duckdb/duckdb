@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
+
 namespace duckdb {
 
 bool Prefix::IsInlined() const {
@@ -56,6 +58,14 @@ Prefix::~Prefix() {
 	Destroy();
 }
 
+idx_t Prefix::MemorySize() {
+	return sizeof(*this) + sizeof(uint8_t) * size;
+}
+
+void Prefix::SetEmpty() {
+	size = 0;
+}
+
 void Prefix::Destroy() {
 	if (!IsInlined()) {
 		DeleteArray<uint8_t>(value.ptr, size);
@@ -95,6 +105,7 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 			prefix[i] = data[i];
 		}
 		DeleteArray<uint8_t>(data, new_size);
+
 	} else {
 		// new entry would not be inlined
 		// take over the data directly
@@ -105,39 +116,44 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 }
 
 void Prefix::Concatenate(uint8_t key, Prefix &other) {
-	auto new_length = size + 1 + other.size;
+	auto new_size = size + 1 + other.size;
 	// have to allocate space in our prefix array
-	auto new_prefix = AllocateArray<uint8_t>(new_length);
+	auto new_prefix = AllocateArray<uint8_t>(new_size);
 	idx_t new_prefix_idx = 0;
+
 	// 1) add the to-be deleted node's prefix
 	for (uint32_t i = 0; i < other.size; i++) {
 		new_prefix[new_prefix_idx++] = other[i];
 	}
-	// 2) now move the current key as part of the prefix
+
+	// 2) now move the current partial key byte as part of the prefix
 	new_prefix[new_prefix_idx++] = key;
+
 	// 3) move the existing prefix (if any)
 	auto prefix = GetPrefixData();
 	for (uint32_t i = 0; i < size; i++) {
 		new_prefix[new_prefix_idx++] = prefix[i];
 	}
-	Overwrite(new_length, new_prefix);
+	Overwrite(new_size, new_prefix);
 }
 
-uint8_t Prefix::Reduce(uint32_t n) {
+uint8_t Prefix::Reduce(ART &art, uint32_t n) {
 	auto new_size = size - n - 1;
+	art.memory_size -= size - new_size;
 	auto prefix = GetPrefixData();
-	auto key = prefix[n];
+	auto partial_key = prefix[n];
+
 	if (new_size == 0) {
 		Destroy();
 		size = 0;
-		return key;
+		return partial_key;
 	}
 	auto new_prefix = AllocateArray<uint8_t>(new_size);
 	for (idx_t i = 0; i < new_size; i++) {
 		new_prefix[i] = prefix[i + n + 1];
 	}
 	Overwrite(new_size, new_prefix);
-	return key;
+	return partial_key;
 }
 
 void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
@@ -153,7 +169,7 @@ void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
 	reader.ReadData(prefix, size);
 }
 
-uint32_t Prefix::KeyMismatchPosition(Key &key, uint64_t depth) {
+uint32_t Prefix::KeyMismatchPosition(Key &key, uint32_t depth) {
 	uint64_t pos;
 	auto prefix = GetPrefixData();
 	for (pos = 0; pos < size; pos++) {

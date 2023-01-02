@@ -35,7 +35,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, table.storage->db);
+		                                       info->constraint_type, table.storage->db, true);
 		break;
 	}
 	default:
@@ -52,7 +52,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, table.storage->db);
+		                                      info->constraint_type, table.storage->db, false);
 		break;
 	}
 	default:
@@ -81,7 +81,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 
 	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
-	                            table.storage->db);
+	                            table.storage->db, false);
 	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART
@@ -129,6 +129,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
+	state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	table.storage->info->indexes.AddIndex(move(state.global_index));
 	return SinkFinalizeType::READY;
 }

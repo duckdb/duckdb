@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -30,6 +31,9 @@ row_t *Leaf::GetRowIds() {
 	} else {
 		return rowids.ptr + 1;
 	}
+}
+
+Leaf::Leaf() : Node(NodeType::NLeaf) {
 }
 
 Leaf::Leaf(Key &value, uint32_t depth, row_t row_id) : Node(NodeType::NLeaf) {
@@ -75,6 +79,13 @@ Leaf::~Leaf() {
 	}
 }
 
+idx_t Leaf::MemorySize(ART &, const bool &) {
+	if (IsInlined()) {
+		return prefix.MemorySize() + sizeof(*this) + sizeof(row_t);
+	}
+	return prefix.MemorySize() + sizeof(*this) + sizeof(row_t) * (GetCapacity() + 1);
+}
+
 row_t *Leaf::Resize(row_t *current_row_ids, uint32_t current_count, idx_t new_capacity) {
 	D_ASSERT(new_capacity >= current_count);
 	auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
@@ -90,34 +101,45 @@ row_t *Leaf::Resize(row_t *current_row_ids, uint32_t current_count, idx_t new_ca
 	return new_row_ids;
 }
 
-void Leaf::Insert(row_t row_id) {
+void Leaf::Insert(ART &art, row_t row_id) {
 	auto capacity = GetCapacity();
 	row_t *row_ids = GetRowIds();
 	D_ASSERT(count <= capacity);
+
 	if (count == capacity) {
-		// Grow array
+		// grow array
+		art.memory_size += capacity * sizeof(row_t);
 		row_ids = Resize(row_ids, count, capacity * 2);
 	}
+	// insert new row ID
 	row_ids[count++] = row_id;
 }
 
-void Leaf::Remove(row_t row_id) {
+void Leaf::Remove(ART &art, row_t row_id) {
 	idx_t entry_offset = DConstants::INVALID_INDEX;
 	row_t *row_ids = GetRowIds();
+
+	// find the row ID in the leaf
 	for (idx_t i = 0; i < count; i++) {
 		if (row_ids[i] == row_id) {
 			entry_offset = i;
 			break;
 		}
 	}
+
+	// didn't find the row ID
 	if (entry_offset == DConstants::INVALID_INDEX) {
 		return;
 	}
+
+	// now empty leaf
 	if (IsInlined()) {
 		D_ASSERT(count == 1);
 		count--;
+		art.memory_size -= sizeof(row_t);
 		return;
 	}
+
 	count--;
 	if (count == 1) {
 		// after erasing we can now inline the leaf
@@ -125,21 +147,28 @@ void Leaf::Remove(row_t row_id) {
 		auto remaining_row_id = row_ids[0] == row_id ? row_ids[1] : row_ids[0];
 		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.inlined = remaining_row_id;
+		art.memory_size -= sizeof(row_t) * 2;
 		return;
 	}
+
+	// shrink array, if less than half full
 	auto capacity = GetCapacity();
 	if (capacity > 2 && count < capacity / 2) {
-		// Shrink array, if less than half full
+
+		art.memory_size -= capacity * sizeof(row_t);
 		auto new_capacity = capacity / 2;
 		auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
 		new_allocation[0] = new_capacity;
+
 		auto new_row_ids = new_allocation + 1;
 		memcpy(new_row_ids, row_ids, entry_offset * sizeof(row_t));
 		memcpy(new_row_ids + entry_offset, row_ids + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
+
 		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.ptr = new_allocation;
+
 	} else {
-		// Copy the rest
+		// move the trailing row IDs (after entry_offset)
 		memmove(row_ids + entry_offset, row_ids + entry_offset + 1, (count - entry_offset) * sizeof(row_t));
 	}
 }
@@ -154,7 +183,7 @@ string Leaf::ToString(Node *node) {
 	return str + "]";
 }
 
-void Leaf::Merge(Node *&l_node, Node *&r_node) {
+void Leaf::Merge(ART &art, Node *&l_node, Node *&r_node) {
 	Leaf *l_n = (Leaf *)l_node;
 	Leaf *r_n = (Leaf *)r_node;
 
@@ -163,24 +192,24 @@ void Leaf::Merge(Node *&l_node, Node *&r_node) {
 	auto r_row_ids = r_n->GetRowIds();
 
 	if (l_n->count + r_n->count > l_capacity) {
+		auto capacity = l_n->GetCapacity();
 		auto new_capacity = NextPowerOfTwo(l_n->count + r_n->count);
+		art.memory_size += sizeof(row_t) * (new_capacity - capacity);
 		l_row_ids = l_n->Resize(l_row_ids, l_n->count, new_capacity);
 	}
 
+	// append row_ids to l_n
 	memcpy(l_row_ids + l_n->count, r_row_ids, r_n->count * sizeof(row_t));
 	l_n->count += r_n->count;
 }
 
 BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
+
 	auto ptr = writer.GetBlockPointer();
-	// Write Node Type
 	writer.Write(type);
-	// Write compression Info
 	prefix.Serialize(writer);
-	// Write Row Ids
-	// Length
 	writer.Write<uint16_t>(count);
-	// Actual Row Ids
+
 	auto row_ids = GetRowIds();
 	for (idx_t i = 0; i < count; i++) {
 		writer.Write(row_ids[i]);
@@ -188,22 +217,23 @@ BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 	return ptr;
 }
 
-Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
-	Prefix prefix;
+void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
+
 	prefix.Deserialize(reader);
-	auto num_elements = reader.Read<uint16_t>();
-	if (num_elements == 1) {
+	count = reader.Read<uint16_t>();
+	if (count == 1) {
 		// inlined
-		auto element = reader.Read<row_t>();
-		return Leaf::New(element, prefix);
+		auto row_id = reader.Read<row_t>();
+		rowids.inlined = row_id;
+
 	} else {
 		// non-inlined
-		auto elements = AllocateArray<row_t>(num_elements + 1);
-		elements[0] = num_elements;
-		for (idx_t i = 0; i < num_elements; i++) {
-			elements[i + 1] = reader.Read<row_t>();
+		auto row_ids = AllocateArray<row_t>(count + 1);
+		row_ids[0] = count;
+		for (idx_t i = 0; i < count; i++) {
+			row_ids[i + 1] = reader.Read<row_t>();
 		}
-		return Leaf::New(elements, num_elements, prefix);
+		Resize(row_ids, count, count);
 	}
 }
 
