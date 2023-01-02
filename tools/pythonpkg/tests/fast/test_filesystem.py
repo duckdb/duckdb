@@ -24,7 +24,8 @@ def memory():
 
 
 def add_file(fs, filename=FILENAME):
-    copyfileobj((Path(__file__).parent / 'data' / filename).open('rb'), fs.open(filename, 'wb'))
+    with (Path(__file__).parent / 'data' / filename).open('rb') as source, fs.open(filename, 'wb') as dest:
+        copyfileobj(source, dest)
 
 
 class TestPythonFilesystem:
