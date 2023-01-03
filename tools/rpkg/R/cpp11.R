@@ -84,14 +84,6 @@ rapi_rel_right_join <- function(left, right, conds) {
   .Call(`_duckdb_rapi_rel_right_join`, left, right, conds)
 }
 
-rapi_rel_semi_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_semi_join`, left, right, conds)
-}
-
-rapi_rel_anti_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_anti_join`, left, right, conds)
-}
-
 rapi_rel_full_join <- function(left, right, conds) {
   .Call(`_duckdb_rapi_rel_full_join`, left, right, conds)
 }

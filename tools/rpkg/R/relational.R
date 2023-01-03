@@ -181,53 +181,6 @@ rel_inner_join <- rapi_rel_inner_join
 #' rel2 <- duckdb:::rel_left_join(left, right, cond)
 rel_left_join <- rapi_rel_left_join
 
-#' Lazily LEFT join two DuckDB relation objects
-#' @param left the left-hand-side DuckDB relation object
-#' @param right the right-hand-side DuckDB relation object
-#' @param conds a list of DuckDB expressions to use for the join
-#' @return a new `duckdb_relation` object resulting from the join
-#' @noRd
-#' @examples
-#' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
-#' left <- duckdb:::rel_from_df(con, mtcars)
-#' right <- duckdb:::rel_from_df(con, mtcars)
-#' cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("cyl", left), duckdb:::expr_reference("cyl", right))))
-#' rel2 <- duckdb:::rel_left_join(left, right, cond)
-rel_anti_join <- rapi_rel_anti_join
-
-#' Lazily LEFT join two DuckDB relation objects
-#' @param left the left-hand-side DuckDB relation object
-#' @param right the right-hand-side DuckDB relation object
-#' @param conds a list of DuckDB expressions to use for the join
-#' @return a new `duckdb_relation` object resulting from the join
-#' @noRd
-#' @examples
-#' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
-#' left <- duckdb:::rel_from_df(con, mtcars)
-#' right <- duckdb:::rel_from_df(con, mtcars)
-#' cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("cyl", left), duckdb:::expr_reference("cyl", right))))
-#' rel2 <- duckdb:::rel_left_join(left, right, cond)
-rel_full_join <- rapi_rel_full_join
-
-
-#' Lazily LEFT join two DuckDB relation objects
-#' @param left the left-hand-side DuckDB relation object
-#' @param right the right-hand-side DuckDB relation object
-#' @param conds a list of DuckDB expressions to use for the join
-#' @return a new `duckdb_relation` object resulting from the join
-#' @noRd
-#' @examples
-#' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
-#' left <- duckdb:::rel_from_df(con, mtcars)
-#' right <- duckdb:::rel_from_df(con, mtcars)
-#' cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("cyl", left), duckdb:::expr_reference("cyl", right))))
-#' rel2 <- duckdb:::rel_left_join(left, right, cond)
-rel_full_join <- rapi_rel_full_join
-
-
 #' Lazily RIGHT join two DuckDB relation objects
 #' @param left the left-hand-side DuckDB relation object
 #' @param right the right-hand-side DuckDB relation object
@@ -243,6 +196,35 @@ rel_full_join <- rapi_rel_full_join
 #' rel2 <- duckdb:::rel_right_join(left, right, cond)
 rel_right_join <- rapi_rel_right_join
 
+#' Lazily LEFT join two DuckDB relation objects
+#' @param left the left-hand-side DuckDB relation object
+#' @param right the right-hand-side DuckDB relation object
+#' @param conds a list of DuckDB expressions to use for the join
+#' @return a new `duckdb_relation` object resulting from the join
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
+#' left <- duckdb:::rel_from_df(con, mtcars)
+#' right <- duckdb:::rel_from_df(con, mtcars)
+#' cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("cyl", left), duckdb:::expr_reference("cyl", right))))
+#' rel2 <- duckdb:::rel_left_join(left, right, cond)
+# rel_anti_join <- rapi_rel_anti_join
+
+#' Lazily LEFT join two DuckDB relation objects
+#' @param left the left-hand-side DuckDB relation object
+#' @param right the right-hand-side DuckDB relation object
+#' @param conds a list of DuckDB expressions to use for the join
+#' @return a new `duckdb_relation` object resulting from the join
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
+#' left <- duckdb:::rel_from_df(con, mtcars)
+#' right <- duckdb:::rel_from_df(con, mtcars)
+#' cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("cyl", left), duckdb:::expr_reference("cyl", right))))
+#' rel2 <- duckdb:::rel_left_join(left, right, cond)
+rel_full_join <- rapi_rel_full_join
 
 #' UNION ALL on two DuckDB relation objects
 #' @param rel_a a DuckDB relation object
