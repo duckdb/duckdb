@@ -78,6 +78,16 @@ public:
 		}
 		return union_readers;
 	}
+
+	//! Set nulls into the cols that mismtach union names
+	static void SetNullUnionCols(DataChunk &result, const vector<bool> &union_null_cols) {
+		for (idx_t col = 0; col < union_null_cols.size(); ++col) {
+			if (union_null_cols[col]) {
+				result.data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result.data[col], true);
+			}
+		}
+	}
 };
 
 } // namespace duckdb

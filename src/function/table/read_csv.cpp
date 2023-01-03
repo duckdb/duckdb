@@ -571,7 +571,8 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 	} while (true);
 
 	if (bind_data.options.union_by_name) {
-		lstate.csv_reader->SetNullUnionCols(output);
+		UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::SetNullUnionCols(output,
+		                                                                           lstate.csv_reader->union_null_cols);
 	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];

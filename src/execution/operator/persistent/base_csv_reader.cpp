@@ -282,15 +282,6 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	return false;
 }
 
-void BaseCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
-	for (idx_t col = 0; col < union_null_cols.size(); ++col) {
-		if (union_null_cols[col]) {
-			insert_chunk.data[col].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(insert_chunk.data[col], true);
-		}
-	}
-}
-
 void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset) {
 	D_ASSERT(col_idx < chunk.data.size());
 	D_ASSERT(row_idx < chunk.size());
@@ -345,9 +336,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success =
-				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
-				                      parse_chunk.size(), error_message);
+				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+				                            parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 			           return_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk

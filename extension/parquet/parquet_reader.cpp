@@ -5,7 +5,6 @@
 
 #include "boolean_column_reader.hpp"
 #include "generated_column_reader.hpp"
-#include "generated_null_column_reader.hpp"
 #include "row_number_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
@@ -710,9 +709,9 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader , vector<column_t>& column_ids) {
+void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids) {
 	auto &root_struct_reader = (StructColumnReader &)*root_reader;
-	unordered_map<idx_t,idx_t> reverse_union_idx; 
+	unordered_map<idx_t, idx_t> reverse_union_idx;
 
 	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
 		auto child_reader = move(root_struct_reader.child_readers[col]);
@@ -722,9 +721,9 @@ void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root
 	}
 
 	vector<bool> column_id_nulls(column_ids.size(), true);
-	for	(idx_t col = 0; col < column_ids.size(); ++col){
+	for (idx_t col = 0; col < column_ids.size(); ++col) {
 		auto find = reverse_union_idx.find(column_ids[col]);
-		if(find != reverse_union_idx.end()){
+		if (find != reverse_union_idx.end()) {
 			column_ids[col] = find->second;
 			column_id_nulls[col] = false;
 		}
@@ -924,7 +923,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		return false;
 	}
 
-	union_null_cols = union_null_cols.empty() ? vector<bool> (result.ColumnCount(), false) : union_null_cols;
+	union_null_cols = union_null_cols.empty() ? vector<bool>(result.ColumnCount(), false) : union_null_cols;
 	D_ASSERT(union_null_cols.size() == result.ColumnCount());
 
 	// see if we have to switch to the next row group in the parquet file
@@ -985,7 +984,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// Prefetch column-wise
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
-					if (IsRowIdColumnId(state.column_ids[out_col_idx])|| union_null_cols[out_col_idx]) {
+					if (IsRowIdColumnId(state.column_ids[out_col_idx]) || union_null_cols[out_col_idx]) {
 						continue;
 					}
 
@@ -1036,7 +1035,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	if (state.filters) {
 		vector<bool> need_to_read(result.ColumnCount(), true);
 
-		for(idx_t col = 0; col < need_to_read.size(); ++col){
+		for (idx_t col = 0; col < need_to_read.size(); ++col) {
 			need_to_read[col] = need_to_read[col] && !union_null_cols[col];
 		}
 
@@ -1091,7 +1090,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				result.data[out_col_idx].Reference(constant_42);
 				continue;
 			}
-			if(union_null_cols[out_col_idx]){
+			if (union_null_cols[out_col_idx]) {
 				continue;
 			}
 

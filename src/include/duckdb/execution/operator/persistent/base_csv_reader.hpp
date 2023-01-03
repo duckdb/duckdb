@@ -72,10 +72,6 @@ public:
 
 	ParserMode mode;
 
-public:
-	//! Fill nulls into the cols that mismtach union names
-	void SetNullUnionCols(DataChunk &insert_chunk);
-
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);

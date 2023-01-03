@@ -151,7 +151,7 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
-	void RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t>& column_ids);
+	void RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {
