@@ -24,7 +24,7 @@ idx_t Node256::GetChildPos(uint8_t k) {
 }
 
 idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
-	for (idx_t pos = k; pos < 256; pos++) {
+	for (idx_t pos = k; pos < Node256::GetSize(); pos++) {
 		if (children[pos]) {
 			if (pos == k) {
 				equal = true;
@@ -38,7 +38,7 @@ idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
 }
 
 idx_t Node256::GetMin() {
-	for (idx_t i = 0; i < 256; i++) {
+	for (idx_t i = 0; i < Node256::GetSize(); i++) {
 		if (children[i]) {
 			return i;
 		}
@@ -47,7 +47,8 @@ idx_t Node256::GetMin() {
 }
 
 idx_t Node256::GetNextPos(idx_t pos) {
-	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
+	for (; pos < Node256::GetSize(); pos++) {
 		if (children[pos]) {
 			return pos;
 		}
@@ -56,7 +57,8 @@ idx_t Node256::GetNextPos(idx_t pos) {
 }
 
 idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
-	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
+	for (; pos < Node256::GetSize(); pos++) {
 		if (children[pos]) {
 			byte = uint8_t(pos);
 			return pos;

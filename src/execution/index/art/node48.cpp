@@ -27,7 +27,7 @@ idx_t Node48::GetChildPos(uint8_t k) {
 }
 
 idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
-	for (idx_t pos = k; pos < 256; pos++) {
+	for (idx_t pos = k; pos < Node256::GetSize(); pos++) {
 		if (child_index[pos] != Node::EMPTY_MARKER) {
 			if (pos == k) {
 				equal = true;
@@ -41,7 +41,7 @@ idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 }
 
 idx_t Node48::GetMin() {
-	for (idx_t i = 0; i < 256; i++) {
+	for (idx_t i = 0; i < Node256::GetSize(); i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
 			return i;
 		}
@@ -50,7 +50,8 @@ idx_t Node48::GetMin() {
 }
 
 idx_t Node48::GetNextPos(idx_t pos) {
-	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
+	for (; pos < Node256::GetSize(); pos++) {
 		if (child_index[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}
@@ -59,7 +60,8 @@ idx_t Node48::GetNextPos(idx_t pos) {
 }
 
 idx_t Node48::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
-	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
+	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
+	for (; pos < Node256::GetSize(); pos++) {
 		if (child_index[pos] != Node::EMPTY_MARKER) {
 			byte = uint8_t(pos);
 			return pos;
@@ -106,7 +108,7 @@ void Node48::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_chil
 		new_node->count = n->count;
 		new_node->prefix = move(n->prefix);
 
-		for (idx_t i = 0; i < 256; i++) {
+		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
 				n->children[n->child_index[i]] = nullptr;
@@ -143,7 +145,7 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 		art.memory_size += new_node->MemorySize(art, false);
 		new_node->prefix = move(n->prefix);
 
-		for (idx_t i = 0; i < 256; i++) {
+		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;
 				new_node->children[new_node->count++] = n->children[n->child_index[i]];
