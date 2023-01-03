@@ -47,9 +47,6 @@ bool IsLambdaBinding(vector<DummyBinding> *lambda_bindings_p, ColumnRefExpressio
 	if (!lambda_bindings_p) {
 		return false;
 	}
-	if (colref.IsQualified()) {
-		// TODO: return MatchingLambdaBinding ?
-	}
 	auto &lambda_bindings = *lambda_bindings_p;
 	for (auto &binding : lambda_bindings) {
 		if (binding.name_map.count(colref.GetColumnName())) {
