@@ -216,7 +216,7 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		current_segment = std::move(compressed_segment);
+		current_segment = Move(compressed_segment);
 
 		current_segment->function = function;
 
@@ -295,7 +295,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), segment_size);
+		state.FlushSegment(Move(current_segment), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);
@@ -391,7 +391,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 	    duckdb_fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
 	analyze_state->fsst_encoder = nullptr;
 
-	return std::move(compression_state);
+	return Move(compression_state);
 }
 
 void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
@@ -515,7 +515,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 		state->duckdb_fsst_decoder = nullptr;
 	}
 
-	return std::move(state);
+	return Move(state);
 }
 
 void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_count, uint32_t last_known_value) {

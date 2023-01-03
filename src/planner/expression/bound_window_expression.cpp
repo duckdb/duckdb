@@ -11,8 +11,8 @@ namespace duckdb {
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate,
                                              unique_ptr<FunctionData> bind_info)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, std::move(return_type)), aggregate(std::move(aggregate)),
-      bind_info(std::move(bind_info)), ignore_nulls(false) {
+    : Expression(type, ExpressionClass::BOUND_WINDOW, Move(return_type)), aggregate(Move(aggregate)),
+      bind_info(Move(bind_info)), ignore_nulls(false) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -121,7 +121,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 
-	return std::move(new_window);
+	return Move(new_window);
 }
 
 void BoundWindowExpression::Serialize(FieldWriter &writer) const {
@@ -156,14 +156,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	if (has_aggregate) {
 		auto aggr_function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 		    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
-		aggregate = make_unique<AggregateFunction>(std::move(aggr_function));
+		aggregate = make_unique<AggregateFunction>(Move(aggr_function));
 		return_type = aggregate->return_type;
 	} else {
 		children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 		return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	}
-	auto result =
-	    make_unique<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
+	auto result = make_unique<BoundWindowExpression>(state.type, return_type, Move(aggregate), Move(bind_info));
 
 	result->partitions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
@@ -175,8 +174,8 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	result->children = std::move(children);
-	return std::move(result);
+	result->children = Move(children);
+	return Move(result);
 }
 
 } // namespace duckdb

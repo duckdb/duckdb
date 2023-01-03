@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct UnnestBindData : public FunctionData {
-	explicit UnnestBindData(LogicalType input_type_p) : input_type(std::move(input_type_p)) {
+	explicit UnnestBindData(LogicalType input_type_p) : input_type(Move(input_type_p)) {
 	}
 
 	LogicalType input_type;
@@ -57,7 +57,7 @@ static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &con
 
 	auto result = make_unique<UnnestLocalState>();
 	result->operator_state = PhysicalUnnest::GetState(context, gstate.select_list);
-	return std::move(result);
+	return Move(result);
 }
 
 static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -65,9 +65,9 @@ static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, T
 	auto result = make_unique<UnnestGlobalState>();
 	auto ref = make_unique<BoundReferenceExpression>(bind_data.input_type, 0);
 	auto bound_unnest = make_unique<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
-	bound_unnest->child = std::move(ref);
-	result->select_list.push_back(std::move(bound_unnest));
-	return std::move(result);
+	bound_unnest->child = Move(ref);
+	result->select_list.push_back(Move(bound_unnest));
+	return Move(result);
 }
 
 static OperatorResultType UnnestFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,

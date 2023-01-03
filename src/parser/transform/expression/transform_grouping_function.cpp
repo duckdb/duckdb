@@ -10,7 +10,7 @@ unique_ptr<ParsedExpression> Transformer::TransformGroupingFunction(duckdb_libpg
 		op->children.push_back(TransformExpression(n));
 	}
 	op->query_location = n->location;
-	return std::move(op);
+	return Move(op);
 }
 
 } // namespace duckdb

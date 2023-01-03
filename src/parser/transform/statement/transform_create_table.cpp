@@ -44,7 +44,7 @@ OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateC
 unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate) {
 	auto child = TransformExpression(collate->arg);
 	auto collation = TransformCollation(collate);
-	return make_unique<CollateExpression>(collation, std::move(child));
+	return make_unique<CollateExpression>(collation, Move(child));
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
@@ -106,11 +106,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.LogicalColumnCount());
 					if (constraint) {
-						info->constraints.push_back(std::move(constraint));
+						info->constraints.push_back(Move(constraint));
 					}
 				}
 			}
-			info->columns.AddColumn(std::move(centry));
+			info->columns.AddColumn(Move(centry));
 			column_count++;
 			break;
 		}
@@ -127,7 +127,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		throw ParserException("Table must have at least one column!");
 	}
 
-	result->info = std::move(info);
+	result->info = Move(info);
 	return result;
 }
 

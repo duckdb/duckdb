@@ -51,7 +51,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	ParquetOptions parquet_options;
 
 	void SetInitialReader(shared_ptr<ParquetReader> reader) {
-		initial_reader = std::move(reader);
+		initial_reader = Move(reader);
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
@@ -216,7 +216,7 @@ public:
 		    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
 		result->names = result->initial_reader->names;
 		result->types = result->initial_reader->return_types;
-		return std::move(result);
+		return Move(result);
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -288,7 +288,7 @@ public:
 				if (overall_stats) {
 					overall_stats->Merge(*file_stats);
 				} else {
-					overall_stats = std::move(file_stats);
+					overall_stats = Move(file_stats);
 				}
 			}
 			// success!
@@ -303,12 +303,12 @@ public:
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
-		result->files = std::move(files);
+		result->files = Move(files);
 
 		result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
 		return_types = result->types = result->initial_reader->return_types;
 		names = result->names = result->initial_reader->names;
-		return std::move(result);
+		return Move(result);
 	}
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
@@ -341,7 +341,7 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = ParquetGlob(fs, file_name, context);
-		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
+		return ParquetScanBindInternal(context, Move(files), return_types, names, parquet_options);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
@@ -372,7 +372,7 @@ public:
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
 		}
-		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
+		return ParquetScanBindInternal(context, Move(files), return_types, names, parquet_options);
 	}
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -406,7 +406,7 @@ public:
 		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
-		return std::move(result);
+		return Move(result);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
@@ -448,7 +448,7 @@ public:
 				}
 			}
 		}
-		return std::move(result);
+		return Move(result);
 	}
 
 	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
@@ -683,7 +683,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -695,7 +695,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	global_state->writer =
 	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
 	                               parquet_bind.column_names, parquet_bind.codec);
-	return std::move(global_state);
+	return Move(global_state);
 }
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
@@ -753,7 +753,7 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, cons
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
+	table_function->function = make_unique<FunctionExpression>("parquet_scan", Move(children));
 	return table_function;
 }
 

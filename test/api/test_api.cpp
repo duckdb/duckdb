@@ -204,14 +204,14 @@ TEST_CASE("Test multiple result sets", "[api]") {
 
 	result = con.Query("SELECT 42; SELECT 84");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-	result = std::move(result->next);
+	result = Move(result->next);
 	REQUIRE(CHECK_COLUMN(result, 0, {84}));
 	REQUIRE(!result->next);
 
 	// also with stream api
 	result = con.SendQuery("SELECT 42; SELECT 84");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-	result = std::move(result->next);
+	result = Move(result->next);
 	REQUIRE(CHECK_COLUMN(result, 0, {84}));
 	REQUIRE(!result->next);
 }
@@ -394,20 +394,20 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 
 	// stream the results using the Fetch() API
 	auto result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a");
-	VerifyStreamResult(std::move(result));
+	VerifyStreamResult(Move(result));
 	// we can also stream a materialized result
 	auto materialized = con.Query("SELECT CAST(a AS INTEGER) FROM test ORDER BY a");
-	VerifyStreamResult(std::move(materialized));
+	VerifyStreamResult(Move(materialized));
 	// return multiple results using the stream API
 	result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER "
 	                       "BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a;");
-	auto next = std::move(result->next);
+	auto next = Move(result->next);
 	while (next) {
-		auto nextnext = std::move(next->next);
-		VerifyStreamResult(std::move(nextnext));
-		next = std::move(nextnext);
+		auto nextnext = Move(next->next);
+		VerifyStreamResult(Move(nextnext));
+		next = Move(nextnext);
 	}
-	VerifyStreamResult(std::move(result));
+	VerifyStreamResult(Move(result));
 }
 
 TEST_CASE("Test streaming query during stack unwinding", "[api]") {
@@ -524,7 +524,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 
 	for (size_t i = 0; i < createdConnections; i++) {
 		auto conn = make_unique<Connection>(*db);
-		connections.push_back(std::move(conn));
+		connections.push_back(Move(conn));
 	}
 
 	REQUIRE(connection_manager.connections.size() == createdConnections);

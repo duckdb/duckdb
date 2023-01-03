@@ -10,7 +10,7 @@ UniqueConstraint::UniqueConstraint(LogicalIndex index, bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }
 UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
-    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
+    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(Move(columns)),
       is_primary_key(is_primary_key) {
 }
 
@@ -31,7 +31,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 	} else {
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
 		result->columns = columns;
-		return std::move(result);
+		return Move(result);
 	}
 }
 
@@ -50,11 +50,11 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(FieldReader &source) {
 	if (index != DConstants::INVALID_INDEX) {
 		// single column parsed constraint
 		auto result = make_unique<UniqueConstraint>(LogicalIndex(index), is_primary_key);
-		result->columns = std::move(columns);
-		return std::move(result);
+		result->columns = Move(columns);
+		return Move(result);
 	} else {
 		// column list parsed constraint
-		return make_unique<UniqueConstraint>(std::move(columns), is_primary_key);
+		return make_unique<UniqueConstraint>(Move(columns), is_primary_key);
 	}
 }
 

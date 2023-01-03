@@ -38,7 +38,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(LogicalDeserializ
                                                                FieldReader &reader) {
 	auto result = make_unique<LogicalComparisonJoin>(JoinType::INVALID, state.type);
 	LogicalComparisonJoin::Deserialize(*result, state, reader);
-	return std::move(result);
+	return Move(result);
 }
 
 } // namespace duckdb

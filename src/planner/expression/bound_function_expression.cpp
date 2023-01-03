@@ -10,9 +10,8 @@ namespace duckdb {
 BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)),
-      function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info)),
-      is_operator(is_operator) {
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, Move(return_type)),
+      function(Move(bound_function)), children(Move(arguments)), bind_info(Move(bind_info)), is_operator(is_operator) {
 	D_ASSERT(!function.name.empty());
 }
 
@@ -64,10 +63,10 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, std::move(new_children),
-	                                                 std::move(new_bind_info), is_operator);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, Move(new_children), Move(new_bind_info),
+	                                                 is_operator);
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void BoundFunctionExpression::Verify() const {
@@ -90,7 +89,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
 
 	auto return_type = function.return_type;
-	return make_unique<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
-	                                            std::move(bind_info), is_operator);
+	return make_unique<BoundFunctionExpression>(Move(return_type), Move(function), Move(children), Move(bind_info),
+	                                            is_operator);
 }
 } // namespace duckdb

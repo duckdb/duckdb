@@ -27,8 +27,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 	info->temporary =
 	    stmt->into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
-	info->query = std::move(query);
-	result->info = std::move(info);
+	info->query = Move(query);
+	result->info = Move(info);
 	return result;
 }
 

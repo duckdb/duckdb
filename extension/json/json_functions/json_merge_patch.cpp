@@ -80,7 +80,7 @@ CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
 	                   MergePatchFunction);
 	fun.varargs = LogicalType::JSON;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return CreateScalarFunctionInfo(std::move(fun));
+	return CreateScalarFunctionInfo(Move(fun));
 }
 
 } // namespace duckdb

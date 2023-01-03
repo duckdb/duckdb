@@ -70,8 +70,8 @@ typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Va
 struct ExtensionOption {
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p)
-	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
-	      default_value(std::move(default_value_p)) {
+	    : description(Move(description_p)), type(Move(type_p)), set_function(set_function_p),
+	      default_value(Move(default_value_p)) {
 	}
 
 	string description;

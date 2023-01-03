@@ -165,7 +165,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 		throw InternalException("Unrecognized expression type in logical operator visitor");
 	}
 	if (result) {
-		*expression = std::move(result);
+		*expression = Move(result);
 	} else {
 		// visit the children of this node
 		VisitExpressionChildren(expr);

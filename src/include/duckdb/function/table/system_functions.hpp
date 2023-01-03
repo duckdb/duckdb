@@ -99,11 +99,11 @@ struct DuckDBViewsFun {
 
 struct TestType {
 	TestType(LogicalType type_p, string name_p)
-	    : type(std::move(type_p)), name(std::move(name_p)), min_value(Value::MinimumValue(type)),
+	    : type(Move(type_p)), name(Move(name_p)), min_value(Value::MinimumValue(type)),
 	      max_value(Value::MaximumValue(type)) {
 	}
 	TestType(LogicalType type_p, string name_p, Value min, Value max)
-	    : type(std::move(type_p)), name(std::move(name_p)), min_value(std::move(min)), max_value(std::move(max)) {
+	    : type(Move(type_p)), name(Move(name_p)), min_value(Move(min)), max_value(Move(max)) {
 	}
 
 	LogicalType type;

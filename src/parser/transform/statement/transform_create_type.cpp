@@ -52,7 +52,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 			// CREATE TYPE mood AS ENUM (SELECT ...)
 			D_ASSERT(stmt->vals == nullptr);
 			auto query = TransformSelect(stmt->query, false);
-			info->query = std::move(query);
+			info->query = Move(query);
 			info->type = LogicalType::INVALID;
 		} else {
 			D_ASSERT(stmt->query == nullptr);
@@ -72,7 +72,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 		throw InternalException("Unknown kind of new type");
 	}
 
-	result->info = std::move(info);
+	result->info = Move(info);
 	return result;
 }
 } // namespace duckdb

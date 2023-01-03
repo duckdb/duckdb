@@ -21,20 +21,19 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
 
 	// for both the left and right sides, cast them to the same types
-	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, std::move(left_node));
-	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, std::move(right_node));
+	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, Move(left_node));
+	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, Move(right_node));
 
 	if (!node.right_binder->bind_context.cte_references[node.ctename] ||
 	    *node.right_binder->bind_context.cte_references[node.ctename] == 0) {
-		auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-		                                             std::move(right_node), LogicalOperatorType::LOGICAL_UNION);
-		return VisitQueryNode(node, std::move(root));
+		auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), Move(left_node),
+		                                             Move(right_node), LogicalOperatorType::LOGICAL_UNION);
+		return VisitQueryNode(node, Move(root));
 	}
-	auto root =
-	    make_unique<LogicalRecursiveCTE>(node.setop_index, node.types.size(), node.union_all, std::move(left_node),
-	                                     std::move(right_node), LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+	auto root = make_unique<LogicalRecursiveCTE>(node.setop_index, node.types.size(), node.union_all, Move(left_node),
+	                                             Move(right_node), LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
 
-	return VisitQueryNode(node, std::move(root));
+	return VisitQueryNode(node, Move(root));
 }
 
 } // namespace duckdb

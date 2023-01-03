@@ -10,21 +10,20 @@
 namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	auto bound_comparison =
-	    make_unique<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-	return std::move(bound_comparison);
+	auto bound_comparison = make_unique<BoundComparisonExpression>(cond.comparison, Move(cond.left), Move(cond.right));
+	return Move(bound_comparison);
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {
 	unique_ptr<Expression> result;
 	for (auto &cond : conditions) {
-		auto expr = CreateExpression(std::move(cond));
+		auto expr = CreateExpression(Move(cond));
 		if (!result) {
-			result = std::move(expr);
+			result = Move(expr);
 		} else {
-			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
-			                                                    std::move(result));
-			result = std::move(conj);
+			auto conj =
+			    make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, Move(expr), Move(result));
+			result = Move(conj);
 		}
 	}
 	return result;
@@ -46,8 +45,8 @@ JoinCondition JoinCondition::Deserialize(Deserializer &source, PlanDeserializati
 	FieldReader reader(source);
 	auto left = reader.ReadOptional<Expression>(nullptr, state);
 	auto right = reader.ReadOptional<Expression>(nullptr, state);
-	result.left = std::move(left);
-	result.right = std::move(right);
+	result.left = Move(left);
+	result.right = Move(right);
 	result.comparison = reader.ReadRequired<ExpressionType>();
 	reader.Finalize();
 	return result;

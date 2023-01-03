@@ -33,7 +33,7 @@ public:
 	}
 	template <class T>
 	static void Invalidate(T &o, string error) {
-		Get(o).Invalidate(std::move(error));
+		Get(o).Invalidate(Move(error));
 	}
 
 	template <class T>

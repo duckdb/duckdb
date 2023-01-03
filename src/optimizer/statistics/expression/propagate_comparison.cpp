@@ -110,16 +110,16 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 		return PropagateExpression(*expr_ptr);
 	case FilterPropagateResult::FILTER_TRUE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(expr.left));
-		children.push_back(std::move(expr.right));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
+		children.push_back(Move(expr.left));
+		children.push_back(Move(expr.right));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(Move(children), Value::BOOLEAN(true));
 		return nullptr;
 	}
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(expr.left));
-		children.push_back(std::move(expr.right));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		children.push_back(Move(expr.left));
+		children.push_back(Move(expr.right));
+		*expr_ptr = ExpressionRewriter::ConstantOrNull(Move(children), Value::BOOLEAN(false));
 		return nullptr;
 	}
 	default:

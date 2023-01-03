@@ -18,7 +18,7 @@ class PhysicalAttach : public PhysicalOperator {
 public:
 	explicit PhysicalAttach(unique_ptr<AttachInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::ATTACH, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      info(std::move(info)) {
+	      info(Move(info)) {
 	}
 
 	unique_ptr<AttachInfo> info;

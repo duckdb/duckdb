@@ -19,7 +19,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto result = make_unique<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
-	return std::move(result);
+	return Move(result);
 }
 
 idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {

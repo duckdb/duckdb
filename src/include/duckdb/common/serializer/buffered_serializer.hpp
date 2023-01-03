@@ -38,7 +38,7 @@ public:
 
 	//! Retrieves the data after the writing has been completed
 	BinaryData GetData() {
-		return std::move(blob);
+		return Move(blob);
 	}
 
 	void Reset() {

@@ -16,7 +16,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
 				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_entry);
 			}
-			result->exclude_list.insert(std::move(exclude_entry));
+			result->exclude_list.insert(Move(exclude_entry));
 		}
 	}
 	if (star->replace_list) {
@@ -33,7 +33,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCEPT and REPLACE list", exclude_entry);
 			}
-			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));
+			result->replace_list.insert(make_pair(Move(exclude_entry), Move(replace_expression)));
 		}
 	}
 	if (star->regex) {
@@ -43,7 +43,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		result->regex = star->regex;
 	}
 	result->columns = star->columns;
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root) {
@@ -58,9 +58,9 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 		for (auto node = fields->head; node; node = node->next) {
 			column_names.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 		}
-		auto colref = make_unique<ColumnRefExpression>(std::move(column_names));
+		auto colref = make_unique<ColumnRefExpression>(Move(column_names));
 		colref->query_location = root->location;
-		return std::move(colref);
+		return Move(colref);
 	}
 	case duckdb_libpgquery::T_PGAStar: {
 		return TransformStarExpression(head_node);

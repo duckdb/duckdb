@@ -116,7 +116,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);
-	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
+	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(Move(copy));
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
@@ -390,33 +390,29 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, Move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
 		auto schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, Move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, Move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, Move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, Move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -452,7 +448,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			stmt.info->temporary = true;
 		}
 
-		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
+		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(Move(stmt.info));
 		for (auto &index : get.column_ids) {
 			create_index_info->scan_types.push_back(get.returned_types[index]);
 		}
@@ -461,8 +457,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		create_index_info->column_ids = get.column_ids;
 
 		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
-		                                              std::move(expressions), *table, std::move(get.function));
+		result.plan = make_unique<LogicalCreateIndex>(Move(get.bind_data), Move(create_index_info), Move(expressions),
+		                                              *table, Move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -511,8 +507,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
-		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
-		auto root = std::move(bound_info->query);
+		auto bound_info = BindCreateTableInfo(Move(stmt.info));
+		auto root = Move(bound_info->query);
 		for (auto &fk_schema : fk_schemas) {
 			if (fk_schema != bound_info->schema) {
 				throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
@@ -521,20 +517,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		// create the logical operator
 		auto &schema = bound_info->schema;
-		auto create_table = make_unique<LogicalCreateTable>(schema, std::move(bound_info));
+		auto create_table = make_unique<LogicalCreateTable>(schema, Move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
 			properties.return_type = StatementReturnType::CHANGED_ROWS;
-			create_table->children.push_back(std::move(root));
+			create_table->children.push_back(Move(root));
 		}
-		result.plan = std::move(create_table);
+		result.plan = Move(create_table);
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, Move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = (SelectStatement &)*create_type_info.query;
@@ -558,11 +553,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (need_to_add) {
 				auto distinct_modifier = make_unique<DistinctModifier>();
 				distinct_modifier->distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
-				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
+				query_node.modifiers.emplace(query_node.modifiers.begin(), Move(distinct_modifier));
 			}
 
 			auto query_obj = Bind(*create_type_info.query);
-			auto query = std::move(query_obj.plan);
+			auto query = Move(query_obj.plan);
 
 			auto &sql_types = query_obj.types;
 			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
@@ -570,7 +565,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				throw BinderException("The query must return one varchar column");
 			}
 
-			result.plan->AddChild(std::move(query));
+			result.plan->AddChild(Move(query));
 		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
 			// two cases:
 			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.

@@ -233,7 +233,7 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 
 struct RegisterUdfTask : public Task {
 	RegisterUdfTask(Connection &connection, std::string name, std::string return_type_name, Napi::Function callback)
-	    : Task(connection, callback), name(std::move(name)), return_type_name(std::move(return_type_name)) {
+	    : Task(connection, callback), name(Move(name)), return_type_name(Move(return_type_name)) {
 	}
 
 	void DoWork() override {
@@ -312,7 +312,7 @@ Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 
 struct UnregisterUdfTask : public Task {
 	UnregisterUdfTask(Connection &connection, std::string name, Napi::Function callback)
-	    : Task(connection, callback), name(std::move(name)) {
+	    : Task(connection, callback), name(Move(name)) {
 	}
 
 	void DoWork() override {
@@ -356,7 +356,7 @@ Napi::Value Connection::UnregisterUdf(const Napi::CallbackInfo &info) {
 
 struct ExecTask : public Task {
 	ExecTask(Connection &connection, std::string sql, Napi::Function callback)
-	    : Task(connection, callback), sql(std::move(sql)) {
+	    : Task(connection, callback), sql(Move(sql)) {
 	}
 
 	void DoWork() override {
@@ -370,7 +370,7 @@ struct ExecTask : public Task {
 			}
 
 			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
-				auto res = connection.connection->Query(std::move(statements[i]));
+				auto res = connection.connection->Query(Move(statements[i]));
 				if (res->HasError()) {
 					success = false;
 					error = res->GetErrorObject();

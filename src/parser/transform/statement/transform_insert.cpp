@@ -16,10 +16,10 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 				throw ParserException("VALUES lists must all be the same length");
 			}
 		}
-		result->values.push_back(std::move(insert_values));
+		result->values.push_back(Move(insert_values));
 	}
 	result->alias = "valueslist";
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNode *node) {

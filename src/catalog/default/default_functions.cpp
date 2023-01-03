@@ -145,7 +145,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
-	bind_info->function = std::move(function);
+	bind_info->function = Move(function);
 	return bind_info;
 
 }
@@ -155,8 +155,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(std::move(expressions[0]));
-	return CreateInternalTableMacroInfo(default_macro, std::move(result));
+	auto result = make_unique<ScalarMacroFunction>(Move(expressions[0]));
+	return CreateInternalTableMacroInfo(default_macro, Move(result));
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
@@ -166,8 +166,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
 	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(std::move(select.node));
-	return CreateInternalTableMacroInfo(default_macro, std::move(result));
+	auto result = make_unique<TableMacroFunction>(Move(select.node));
+	return CreateInternalTableMacroInfo(default_macro, Move(result));
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {

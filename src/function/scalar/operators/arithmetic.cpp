@@ -119,7 +119,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_unique<DecimalArithmeticBindData>();
 		res->check_overflow = check_overflow;
-		return std::move(res);
+		return Move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -176,10 +176,10 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		}
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
-	                                            StatisticsType::LOCAL_STATS);
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, Move(new_min), Move(new_max), StatisticsType::LOCAL_STATS);
 	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
-	return std::move(stats);
+	return Move(stats);
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
@@ -246,7 +246,7 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 			bound_function.statistics = PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
 		}
 	}
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
@@ -278,7 +278,7 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, Fi
 
 	auto bind_data = make_unique<DecimalArithmeticBindData>();
 	bind_data->check_overflow = check_overflow;
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
@@ -455,7 +455,7 @@ struct DecimalNegateBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_unique<DecimalNegateBindData>();
 		res->bound_type = bound_type;
-		return std::move(res);
+		return Move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -542,12 +542,12 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 		new_min = Value(expr.return_type);
 		new_max = Value(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
-	                                            StatisticsType::LOCAL_STATS);
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, Move(new_min), Move(new_max), StatisticsType::LOCAL_STATS);
 	if (istats.validity_stats) {
 		stats->validity_stats = istats.validity_stats->Copy();
 	}
-	return std::move(stats);
+	return Move(stats);
 }
 
 ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
@@ -764,7 +764,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		bound_function.statistics =
 		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {

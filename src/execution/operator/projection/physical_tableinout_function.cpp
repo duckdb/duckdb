@@ -25,9 +25,9 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
                                                        unique_ptr<FunctionData> bind_data_p,
                                                        vector<column_t> column_ids_p, idx_t estimated_cardinality,
                                                        vector<column_t> project_input_p)
-    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
-      function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
-      projected_input(std::move(project_input_p)) {
+    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, Move(types), estimated_cardinality),
+      function(Move(function_p)), bind_data(Move(bind_data_p)), column_ids(Move(column_ids_p)),
+      projected_input(Move(project_input_p)) {
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
@@ -40,7 +40,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	if (!projected_input.empty()) {
 		result->input_chunk.Initialize(context.client, children[0]->types);
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
@@ -49,7 +49,7 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->global_state = function.init_global(context, input);
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

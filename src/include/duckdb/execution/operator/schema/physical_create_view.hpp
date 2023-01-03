@@ -18,7 +18,7 @@ class PhysicalCreateView : public PhysicalOperator {
 public:
 	explicit PhysicalCreateView(unique_ptr<CreateViewInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_VIEW, {LogicalType::BIGINT}, estimated_cardinality),
-	      info(std::move(info)) {
+	      info(Move(info)) {
 	}
 
 	unique_ptr<CreateViewInfo> info;

@@ -170,7 +170,7 @@ unique_ptr<QueryNode> SelectNode::Copy() const {
 	result->qualify = qualify ? qualify->Copy() : nullptr;
 	result->sample = sample ? sample->Copy() : nullptr;
 	this->CopyProperties(*result);
-	return std::move(result);
+	return Move(result);
 }
 
 void SelectNode::Serialize(FieldWriter &writer) const {
@@ -214,7 +214,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 	result->having = reader.ReadOptional<ParsedExpression>(nullptr);
 	result->sample = reader.ReadOptional<SampleOptions>(nullptr);
 	result->qualify = reader.ReadOptional<ParsedExpression>(nullptr);
-	return std::move(result);
+	return Move(result);
 }
 
 } // namespace duckdb

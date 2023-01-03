@@ -13,13 +13,12 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(std::move(name)),
-      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
+    : type(type), name(Move(name)), statement(unique_ptr_cast<SQLStatement, SelectStatement>(Move(statement_p))),
       select_list(statement->node->GetSelectList()) {
 }
 
 StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::ORIGINAL, "Original", std::move(statement_p)) {
+    : StatementVerifier(VerificationType::ORIGINAL, "Original", Move(statement_p)) {
 }
 
 StatementVerifier::~StatementVerifier() noexcept {
@@ -106,11 +105,11 @@ bool StatementVerifier::Run(
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.force_external = ForceExternal();
 	try {
-		auto result = run(query, std::move(statement));
+		auto result = run(query, Move(statement));
 		if (result->HasError()) {
 			failed = true;
 		}
-		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(Move(result));
 	} catch (const Exception &ex) {
 		failed = true;
 		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));

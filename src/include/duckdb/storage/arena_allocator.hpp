@@ -35,7 +35,7 @@ public:
 	//! Resets the current head and destroys all previous arena chunks
 	void Reset();
 	void Destroy();
-	void Move(ArenaAllocator &allocator);
+	void MoveAllocator(ArenaAllocator &allocator);
 
 	ArenaChunk *GetHead();
 	ArenaChunk *GetTail();

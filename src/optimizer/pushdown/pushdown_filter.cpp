@@ -10,17 +10,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
 	auto &filter = (LogicalFilter &)*op;
 	if (!filter.projection_map.empty()) {
-		return FinishPushdown(std::move(op));
+		return FinishPushdown(Move(op));
 	}
 	// filter: gather the filters and remove the filter from the set of operations
 	for (auto &expression : filter.expressions) {
-		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
+		if (AddFilter(Move(expression)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_unique<LogicalEmptyResult>(Move(op));
 		}
 	}
 	GenerateFilters();
-	return Rewrite(std::move(filter.children[0]));
+	return Rewrite(Move(filter.children[0]));
 }
 
 } // namespace duckdb

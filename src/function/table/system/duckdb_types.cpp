@@ -64,7 +64,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, Tab
 		schema->Scan(context, CatalogType::TYPE_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back((TypeCatalogEntry *)entry); });
 	};
-	return std::move(result);
+	return Move(result);
 }
 
 void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

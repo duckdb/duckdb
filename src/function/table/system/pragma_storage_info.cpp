@@ -80,7 +80,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
 	result->storage_info = table_entry->storage->GetStorageInfo();
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &context, TableFunctionInitInput &input) {

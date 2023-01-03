@@ -16,7 +16,7 @@ struct SimpleFactory {
 	std::shared_ptr<arrow::Schema> schema;
 
 	SimpleFactory(arrow::RecordBatchVector batches, std::shared_ptr<arrow::Schema> schema)
-	    : batches(std::move(batches)), schema(std::move(schema)) {
+	    : batches(Move(batches)), schema(Move(schema)) {
 	}
 
 	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,

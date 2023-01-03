@@ -8,7 +8,7 @@ namespace duckdb {
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                            unique_ptr<ParsedExpression> right)
-    : ParsedExpression(type, ExpressionClass::COMPARISON), left(std::move(left)), right(std::move(right)) {
+    : ParsedExpression(type, ExpressionClass::COMPARISON), left(Move(left)), right(Move(right)) {
 }
 
 string ComparisonExpression::ToString() const {
@@ -28,7 +28,7 @@ bool ComparisonExpression::Equals(const ComparisonExpression *a, const Compariso
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void ComparisonExpression::Serialize(FieldWriter &writer) const {
@@ -39,7 +39,7 @@ void ComparisonExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>();
-	return make_unique<ComparisonExpression>(type, std::move(left_child), std::move(right_child));
+	return make_unique<ComparisonExpression>(type, Move(left_child), Move(right_child));
 }
 
 } // namespace duckdb

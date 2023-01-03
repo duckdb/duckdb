@@ -63,7 +63,7 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
 	}
-	return make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
+	return make_external<FunctionExpression>("duckdb_expr", name, Move(children));
 }
 
 [[cpp11::register]] void rapi_expr_set_alias(duckdb::expr_extptr_t expr, std::string alias) {
@@ -90,7 +90,7 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	                                (int32_t)(NumericLimits<int32_t>::Maximum() * unif_rand()));
 	auto rel =
 	    con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)->Alias(alias);
-	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", std::move(rel)));
+	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", Move(rel)));
 	res.attr("df") = df;
 	return res;
 }
@@ -107,9 +107,9 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		for (expr_extptr_t expr : exprs) {
 			filters.push_back(expr->Copy());
 		}
-		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, Move(filters));
 	}
-	auto res = std::make_shared<FilterRelation>(rel->rel, std::move(filter_expr));
+	auto res = std::make_shared<FilterRelation>(rel->rel, Move(filter_expr));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
@@ -124,10 +124,10 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	for (expr_extptr_t expr : exprs) {
 		auto dexpr = expr->Copy();
 		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
-		projections.push_back(std::move(dexpr));
+		projections.push_back(Move(dexpr));
 	}
 
-	auto res = std::make_shared<ProjectionRelation>(rel->rel, std::move(projections), std::move(aliases));
+	auto res = std::make_shared<ProjectionRelation>(rel->rel, Move(projections), Move(aliases));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
@@ -150,11 +150,11 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		if (aggr_names.size() > aggr_idx) {
 			expr->alias = aggr_names[aggr_idx];
 		}
-		res_aggregates.push_back(std::move(expr));
+		res_aggregates.push_back(Move(expr));
 		aggr_idx++;
 	}
 
-	auto res = std::make_shared<AggregateRelation>(rel->rel, std::move(res_aggregates), std::move(res_groups));
+	auto res = std::make_shared<AggregateRelation>(rel->rel, Move(res_aggregates), Move(res_groups));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
@@ -165,7 +165,7 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
 	}
 
-	auto res = std::make_shared<OrderRelation>(rel->rel, std::move(res_orders));
+	auto res = std::make_shared<OrderRelation>(rel->rel, Move(res_orders));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
@@ -181,10 +181,10 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		for (expr_extptr_t expr : conds) {
 			cond_args.push_back(expr->Copy());
 		}
-		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
+		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, Move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), JoinType::INNER);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, Move(cond), JoinType::INNER);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
@@ -252,7 +252,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
 		stop(res->GetError());
 	}
-	return result_to_df(std::move(res));
+	return result_to_df(Move(res));
 }
 
 [[cpp11::register]] SEXP rapi_rel_names(duckdb::rel_extptr_t rel) {

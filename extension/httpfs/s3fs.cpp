@@ -443,7 +443,7 @@ shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uin
 	}
 
 	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size,
-	                                                   std::move(duckdb_buffer));
+	                                                   Move(duckdb_buffer));
 
 	{
 		unique_lock<mutex> lck(file_handle.write_buffers_lock);

@@ -30,7 +30,7 @@ unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {
 	result->function = reader.ReadRequiredSerializable<ParsedExpression>();
 	result->alias = reader.ReadRequired<string>();
 	result->column_name_alias = reader.ReadRequiredList<string>();
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Copy() {
@@ -40,7 +40,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 
-	return std::move(copy);
+	return Move(copy);
 }
 
 } // namespace duckdb

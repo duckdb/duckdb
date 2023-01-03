@@ -13,9 +13,9 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
                                                  unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
                                                  JoinType join_type, idx_t estimated_cardinality)
     : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
-      condition(std::move(condition)) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+      condition(Move(condition)) {
+	children.push_back(Move(left));
+	children.push_back(Move(right));
 	// MARK and SINGLE joins not handled
 	D_ASSERT(join_type != JoinType::MARK);
 	D_ASSERT(join_type != JoinType::SINGLE);

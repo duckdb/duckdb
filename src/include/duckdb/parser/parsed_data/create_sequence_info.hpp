@@ -61,7 +61,7 @@ public:
 		result->max_value = max_value;
 		result->start_value = start_value;
 		result->cycle = cycle;
-		return std::move(result);
+		return Move(result);
 	}
 
 protected:

@@ -12,7 +12,7 @@ CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
 }
 
 void RowGroupWriter::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
+	partial_block_manager.RegisterPartialBlock(Move(allocation));
 }
 
 PartialBlockAllocation RowGroupWriter::GetBlockAllocation(uint32_t segment_size) {

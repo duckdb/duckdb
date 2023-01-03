@@ -6,8 +6,7 @@ namespace duckdb {
 
 BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left,
                                                      unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(std::move(left)),
-      right(std::move(right)) {
+    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(Move(left)), right(Move(right)) {
 }
 
 string BoundComparisonExpression::ToString() const {
@@ -32,7 +31,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	auto copy = make_unique<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void BoundComparisonExpression::Serialize(FieldWriter &writer) const {
@@ -44,7 +43,7 @@ unique_ptr<Expression> BoundComparisonExpression::Deserialize(ExpressionDeserial
                                                               FieldReader &reader) {
 	auto left = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto right = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<BoundComparisonExpression>(state.type, std::move(left), std::move(right));
+	return make_unique<BoundComparisonExpression>(state.type, Move(left), Move(right));
 }
 
 } // namespace duckdb

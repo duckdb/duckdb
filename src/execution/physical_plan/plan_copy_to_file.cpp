@@ -14,8 +14,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		op.file_path += ".tmp";
 	}
 	// COPY from select statement to file
-	auto copy =
-	    make_unique<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
+	auto copy = make_unique<PhysicalCopyToFile>(op.types, op.function, Move(op.bind_data), op.estimated_cardinality);
 	copy->file_path = op.file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->per_thread_output = op.per_thread_output;
@@ -23,8 +22,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		copy->parallel = op.function.parallel(context, *copy->bind_data);
 	}
 
-	copy->children.push_back(std::move(plan));
-	return std::move(copy);
+	copy->children.push_back(Move(plan));
+	return Move(copy);
 }
 
 } // namespace duckdb

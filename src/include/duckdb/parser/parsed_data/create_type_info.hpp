@@ -19,7 +19,7 @@ struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
 	}
 	CreateTypeInfo(string name_p, LogicalType type_p)
-	    : CreateInfo(CatalogType::TYPE_ENTRY), name(std::move(name_p)), type(std::move(type_p)) {
+	    : CreateInfo(CatalogType::TYPE_ENTRY), name(Move(name_p)), type(Move(type_p)) {
 	}
 
 	//! Name of the Type
@@ -38,7 +38,7 @@ public:
 		if (query) {
 			result->query = query->Copy();
 		}
-		return std::move(result);
+		return Move(result);
 	}
 
 protected:

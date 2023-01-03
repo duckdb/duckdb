@@ -169,7 +169,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (aggr.filter) {
 		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN);
+		bound_filter = BoundCastExpression::AddCastToType(context, Move(child.expr), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully
@@ -183,7 +183,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			auto &child = (BoundExpression &)*order.expression;
 			types.push_back(child.expr->return_type);
 			arguments.push_back(child.expr->return_type);
-			children.push_back(std::move(child.expr));
+			children.push_back(Move(child.expr));
 		}
 		aggr.order_bys->orders.clear();
 	}
@@ -192,7 +192,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		auto &child = (BoundExpression &)*aggr.children[i];
 		types.push_back(child.expr->return_type);
 		arguments.push_back(child.expr->return_type);
-		children.push_back(std::move(child.expr));
+		children.push_back(Move(child.expr));
 	}
 
 	// bind the aggregate
@@ -215,15 +215,15 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, std::move(order_expr.expr)));
+			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, Move(order_expr.expr)));
 		}
 	}
 
 	auto aggregate = function_binder.BindAggregateFunction(
-	    bound_function, std::move(children), std::move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, std::move(order_bys));
+	    bound_function, Move(children), Move(bound_filter),
+	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, Move(order_bys));
 	if (aggr.export_state) {
-		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
+		aggregate = ExportAggregateFunction::Bind(Move(aggregate));
 	}
 
 	// check for all the aggregates if this aggregate already exists
@@ -233,7 +233,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
 		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
-		node.aggregates.push_back(std::move(aggregate));
+		node.aggregates.push_back(Move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;
@@ -244,6 +244,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
 	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	return BindResult(std::move(colref));
+	return BindResult(Move(colref));
 }
 } // namespace duckdb

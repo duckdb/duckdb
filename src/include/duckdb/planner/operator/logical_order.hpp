@@ -19,7 +19,7 @@ namespace duckdb {
 class LogicalOrder : public LogicalOperator {
 public:
 	explicit LogicalOrder(vector<BoundOrderByNode> orders)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(Move(orders)) {
 	}
 
 	vector<BoundOrderByNode> orders;

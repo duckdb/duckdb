@@ -32,12 +32,12 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto &then_expr = (BoundExpression &)*check.then_expr;
 		BoundCaseCheck result_check;
 		result_check.when_expr =
-		    BoundCastExpression::AddCastToType(context, std::move(when_expr.expr), LogicalType::BOOLEAN);
-		result_check.then_expr = BoundCastExpression::AddCastToType(context, std::move(then_expr.expr), return_type);
-		result->case_checks.push_back(std::move(result_check));
+		    BoundCastExpression::AddCastToType(context, Move(when_expr.expr), LogicalType::BOOLEAN);
+		result_check.then_expr = BoundCastExpression::AddCastToType(context, Move(then_expr.expr), return_type);
+		result->case_checks.push_back(Move(result_check));
 	}
 	auto &else_expr = (BoundExpression &)*expr.else_expr;
-	result->else_expr = BoundCastExpression::AddCastToType(context, std::move(else_expr.expr), return_type);
-	return BindResult(std::move(result));
+	result->else_expr = BoundCastExpression::AddCastToType(context, Move(else_expr.expr), return_type);
+	return BindResult(Move(result));
 }
 } // namespace duckdb

@@ -3,7 +3,7 @@
 namespace duckdb {
 
 BoundExpression::BoundExpression(unique_ptr<Expression> expr)
-    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr)) {
+    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(Move(expr)) {
 }
 
 string BoundExpression::ToString() const {

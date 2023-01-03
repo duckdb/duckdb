@@ -62,7 +62,7 @@ static Value ConvertVectorToValue(vector<Value> set) {
 	if (set.empty()) {
 		return Value::EMPTYLIST(LogicalType::BOOLEAN);
 	}
-	return Value::LIST(std::move(set));
+	return Value::LIST(Move(set));
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
@@ -73,7 +73,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(Move(set)));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -83,7 +83,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		options.SetReadOption(loption, ConvertVectorToValue(std::move(set)), expected_names);
+		options.SetReadOption(loption, ConvertVectorToValue(Move(set)), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
@@ -115,7 +115,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 		options = initial_reader->options;
 	}
-	return std::move(bind_data);
+	return Move(bind_data);
 }
 
 //===--------------------------------------------------------------------===//
@@ -274,7 +274,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
-	return std::move(local_data);
+	return Move(local_data);
 }
 
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -298,7 +298,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 
 		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
-	return std::move(global_data);
+	return Move(global_data);
 }
 
 static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,

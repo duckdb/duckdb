@@ -58,7 +58,7 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	state->Verify();
-	states.push_back(std::move(state));
+	states.push_back(Move(state));
 }
 
 void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {

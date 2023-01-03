@@ -28,7 +28,7 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 }
 
 JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len)
-    : constant(constant), path(std::move(path_p)), ptr(path.c_str()), len(len) {
+    : constant(constant), path(Move(path_p)), ptr(path.c_str()), len(len) {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
@@ -51,11 +51,11 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		CheckPath(path_val, path, len);
 	}
-	return make_unique<JSONReadFunctionData>(constant, std::move(path), len);
+	return make_unique<JSONReadFunctionData>(constant, Move(path), len);
 }
 
 JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
-    : paths(std::move(paths_p)), lens(std::move(lens_p)) {
+    : paths(Move(paths_p)), lens(Move(lens_p)) {
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
 	}
@@ -92,7 +92,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 		CheckPath(path_val, paths.back(), lens.back());
 	}
 
-	return make_unique<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
+	return make_unique<JSONReadManyFunctionData>(Move(paths), Move(lens));
 }
 
 string ThrowPathError(const char *ptr, const char *end) {

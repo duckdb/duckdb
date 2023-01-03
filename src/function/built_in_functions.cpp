@@ -19,37 +19,37 @@ BuiltinFunctions::~BuiltinFunctions() {
 
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
-	CreateCollationInfo info(std::move(name), std::move(function), combinable, not_required_for_equality);
+	CreateCollationInfo info(Move(name), Move(function), combinable, not_required_for_equality);
 	info.internal = true;
 	catalog.CreateCollation(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
-	CreateAggregateFunctionInfo info(std::move(set));
+	CreateAggregateFunctionInfo info(Move(set));
 	info.internal = true;
 	catalog.CreateFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunction function) {
-	CreateAggregateFunctionInfo info(std::move(function));
+	CreateAggregateFunctionInfo info(Move(function));
 	info.internal = true;
 	catalog.CreateFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(PragmaFunction function) {
-	CreatePragmaFunctionInfo info(std::move(function));
+	CreatePragmaFunctionInfo info(Move(function));
 	info.internal = true;
 	catalog.CreatePragmaFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(const string &name, PragmaFunctionSet functions) {
-	CreatePragmaFunctionInfo info(name, std::move(functions));
+	CreatePragmaFunctionInfo info(name, Move(functions));
 	info.internal = true;
 	catalog.CreatePragmaFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
-	CreateScalarFunctionInfo info(std::move(function));
+	CreateScalarFunctionInfo info(Move(function));
 	info.internal = true;
 	catalog.CreateFunction(transaction, &info);
 }
@@ -62,25 +62,25 @@ void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction f
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
-	CreateScalarFunctionInfo info(std::move(set));
+	CreateScalarFunctionInfo info(Move(set));
 	info.internal = true;
 	catalog.CreateFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunction function) {
-	CreateTableFunctionInfo info(std::move(function));
+	CreateTableFunctionInfo info(Move(function));
 	info.internal = true;
 	catalog.CreateTableFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunctionSet set) {
-	CreateTableFunctionInfo info(std::move(set));
+	CreateTableFunctionInfo info(Move(set));
 	info.internal = true;
 	catalog.CreateTableFunction(transaction, &info);
 }
 
 void BuiltinFunctions::AddFunction(CopyFunction function) {
-	CreateCopyFunctionInfo info(std::move(function));
+	CreateCopyFunctionInfo info(Move(function));
 	info.internal = true;
 	catalog.CreateCopyFunction(transaction, &info);
 }

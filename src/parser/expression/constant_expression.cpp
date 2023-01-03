@@ -8,7 +8,7 @@
 namespace duckdb {
 
 ConstantExpression::ConstantExpression(Value val)
-    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(std::move(val)) {
+    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(Move(val)) {
 }
 
 string ConstantExpression::ToString() const {
@@ -26,7 +26,7 @@ hash_t ConstantExpression::Hash() const {
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = make_unique<ConstantExpression>(value);
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void ConstantExpression::Serialize(FieldWriter &writer) const {
@@ -35,7 +35,7 @@ void ConstantExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	Value value = reader.ReadRequiredSerializable<Value, Value>();
-	return make_unique<ConstantExpression>(std::move(value));
+	return make_unique<ConstantExpression>(Move(value));
 }
 
 } // namespace duckdb

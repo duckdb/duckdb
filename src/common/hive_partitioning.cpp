@@ -116,7 +116,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			}
 
 			// Use filter combiner to determine that this filter makes
-			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+			if (!should_prune_file && combiner.AddFilter(Move(filter_copy)) == FilterResult::UNSATISFIABLE) {
 				should_prune_file = true;
 			}
 		}
@@ -126,8 +126,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 		}
 	}
 
-	filters = std::move(pruned_filters);
-	files = std::move(pruned_files);
+	filters = Move(pruned_filters);
+	files = Move(pruned_files);
 }
 
 } // namespace duckdb

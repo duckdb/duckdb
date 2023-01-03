@@ -12,6 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <limits>
 
@@ -314,7 +315,7 @@ struct LogicalType {
 	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
-		type_info_ = std::move(other.type_info_);
+		type_info_ = Move(other.type_info_);
 		return *this;
 	}
 
@@ -495,7 +496,7 @@ bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
 struct aggregate_state_t {
-	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)), bound_argument_types(std::move(bound_argument_types_p)) {
+	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(Move(function_name_p)), return_type(Move(return_type_p)), bound_argument_types(Move(bound_argument_types_p)) {
 	}
 
 	string function_name;

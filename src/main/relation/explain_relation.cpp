@@ -8,14 +8,14 @@
 namespace duckdb {
 
 ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p)
-    : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(std::move(child_p)) {
+    : Relation(child_p->context, RelationType::EXPLAIN_RELATION), child(Move(child_p)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement ExplainRelation::Bind(Binder &binder) {
 	auto select = make_unique<SelectStatement>();
 	select->node = child->GetQueryNode();
-	ExplainStatement explain(std::move(select));
+	ExplainStatement explain(Move(select));
 	return binder.Bind((SQLStatement &)explain);
 }
 

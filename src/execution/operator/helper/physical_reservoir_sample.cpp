@@ -61,7 +61,7 @@ void PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chun
 	if (!sample_chunk) {
 		return;
 	}
-	chunk.Move(*sample_chunk);
+	chunk.MoveChunk(*sample_chunk);
 }
 
 string PhysicalReservoirSample::ParamsToString() const {

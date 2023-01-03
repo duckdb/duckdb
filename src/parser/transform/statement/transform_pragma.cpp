@@ -64,7 +64,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 			break;
 		}
 		auto set_statement = make_unique<SetVariableStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
-		return std::move(set_statement);
+		return Move(set_statement);
 	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:
 		break;
@@ -72,7 +72,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 		throw InternalException("Unknown pragma type");
 	}
 
-	return std::move(result);
+	return Move(result);
 }
 
 } // namespace duckdb

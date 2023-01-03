@@ -67,7 +67,7 @@ vector<BufferHandle> RowDataCollection::Build(idx_t added_count, data_ptr_t key_
 				// now append to the block
 				idx_t append_count = AppendToBlock(last_block, handle, append_entries, remaining, entry_sizes);
 				remaining -= append_count;
-				handles.push_back(std::move(handle));
+				handles.push_back(Move(handle));
 			}
 		}
 		while (remaining > 0) {
@@ -83,9 +83,9 @@ vector<BufferHandle> RowDataCollection::Build(idx_t added_count, data_ptr_t key_
 			remaining -= append_count;
 
 			if (keep_pinned) {
-				pinned_blocks.push_back(std::move(handle));
+				pinned_blocks.push_back(Move(handle));
 			} else {
-				handles.push_back(std::move(handle));
+				handles.push_back(Move(handle));
 			}
 		}
 	}
@@ -121,8 +121,8 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 		temp.count = other.count;
 		temp.block_capacity = other.block_capacity;
 		temp.entry_size = other.entry_size;
-		temp.blocks = std::move(other.blocks);
-		temp.pinned_blocks = std::move(other.pinned_blocks);
+		temp.blocks = Move(other.blocks);
+		temp.pinned_blocks = Move(other.pinned_blocks);
 	}
 	other.Clear();
 
@@ -131,10 +131,10 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	block_capacity = MaxValue(block_capacity, temp.block_capacity);
 	entry_size = MaxValue(entry_size, temp.entry_size);
 	for (auto &block : temp.blocks) {
-		blocks.emplace_back(std::move(block));
+		blocks.emplace_back(Move(block));
 	}
 	for (auto &handle : temp.pinned_blocks) {
-		pinned_blocks.emplace_back(std::move(handle));
+		pinned_blocks.emplace_back(Move(handle));
 	}
 }
 

@@ -78,8 +78,7 @@ private:
 };
 
 struct MappingValue {
-	explicit MappingValue(EntryIndex index_p)
-	    : index(std::move(index_p)), timestamp(0), deleted(false), parent(nullptr) {
+	explicit MappingValue(EntryIndex index_p) : index(Move(index_p)), timestamp(0), deleted(false), parent(nullptr) {
 	}
 
 	EntryIndex index;

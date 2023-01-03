@@ -109,7 +109,7 @@ public:
 			return nullptr;
 		}
 
-		auto res = std::move(chunks[0]);
+		auto res = Move(chunks[0]);
 		chunks.erase(chunks.begin() + 0);
 		return res;
 	}

@@ -28,7 +28,7 @@ CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
 	                               LogicalType::LIST(LogicalType::VARCHAR), ManyTypeFunction,
 	                               JSONReadManyFunctionData::Bind));
 
-	return CreateScalarFunctionInfo(std::move(set));
+	return CreateScalarFunctionInfo(Move(set));
 }
 
 } // namespace duckdb

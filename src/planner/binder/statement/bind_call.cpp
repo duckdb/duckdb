@@ -10,7 +10,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	BoundStatement result;
 
 	TableFunctionRef ref;
-	ref.function = std::move(stmt.function);
+	ref.function = Move(stmt.function);
 
 	auto bound_func = Bind(ref);
 	auto &bound_table_func = (BoundTableFunction &)*bound_func;

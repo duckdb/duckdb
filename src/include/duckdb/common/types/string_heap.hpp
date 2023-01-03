@@ -21,7 +21,7 @@ public:
 	DUCKDB_API StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
 	DUCKDB_API void Destroy();
-	DUCKDB_API void Move(StringHeap &other);
+	DUCKDB_API void MoveHeap(StringHeap &other);
 
 	//! Add a string to the string heap, returns a pointer to the string
 	DUCKDB_API string_t AddString(const char *data, idx_t len);

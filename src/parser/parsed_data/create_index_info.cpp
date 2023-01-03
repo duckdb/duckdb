@@ -20,7 +20,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	result->scan_types = scan_types;
 	result->names = names;
 	result->column_ids = column_ids;
-	return std::move(result);
+	return Move(result);
 }
 
 void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {

@@ -62,7 +62,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 
 			RProtector child_protector;
 			auto dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
-			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
+			dest_list.push_back(cpp11::named_arg(name.c_str()) = Move(dest_child));
 		}
 
 		// Note we cannot use cpp11's data frame here as it tries to calculate the number of rows itself,

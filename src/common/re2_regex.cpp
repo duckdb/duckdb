@@ -2,6 +2,8 @@
 #include <memory>
 
 #include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/helper.hpp"
+
 #include "re2/re2.h"
 
 namespace duckdb_re2 {
@@ -54,7 +56,7 @@ std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex) {
 	Match match;
 	while (RegexSearchInternal(input.c_str(), match, regex, RE2::UNANCHORED, position, input.size())) {
 		position += match.position(0) + match.length(0);
-		matches.emplace_back(std::move(match));
+		matches.emplace_back(duckdb::Move(match));
 	}
 	return matches;
 }

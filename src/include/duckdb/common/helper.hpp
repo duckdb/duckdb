@@ -67,11 +67,16 @@ struct UniqueConstructor {
 	}
 };
 
+template< class T >
+typename std::remove_reference<T>::type&& Move(T&& t) noexcept {
+	return std::move(t);
+}
+
 #ifdef DEBUG
 template< class T >
 typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 	// using this will also trigger an error (call to 'move' is ambiguous)
-	throw std::runtime_error("Use `std::move` instead of `[duckdb::]move`");
+	throw std::runtime_error("Use `Move` instead of `move`");
 }
 #endif
 

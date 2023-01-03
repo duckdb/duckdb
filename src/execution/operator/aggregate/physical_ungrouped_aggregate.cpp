@@ -20,8 +20,8 @@ namespace duckdb {
 PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
                                                        idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
-      aggregates(std::move(expressions)) {
+    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, Move(types), estimated_cardinality),
+      aggregates(Move(expressions)) {
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
 	if (!distinct_collection_info) {
@@ -40,7 +40,7 @@ struct AggregateState {
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(state.get());
-			aggregates.push_back(std::move(state));
+			aggregates.push_back(Move(state));
 			destructors.push_back(aggr.function.destructor);
 #ifdef DEBUG
 			counts.push_back(0);
@@ -58,11 +58,6 @@ struct AggregateState {
 
 			destructors[i](state_vector, 1);
 		}
-	}
-
-	void Move(AggregateState &other) {
-		other.aggregates = std::move(aggregates);
-		other.destructors = std::move(destructors);
 	}
 
 	//! The aggregate values
@@ -337,7 +332,7 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       UngroupedAggregateGlobalState &state_p, ClientContext &context,
 	                                       const PhysicalUngroupedAggregate &op)
-	    : ExecutorTask(executor), event(std::move(event_p)), gstate(state_p), context(context), op(op) {
+	    : ExecutorTask(executor), event(Move(event_p)), gstate(state_p), context(context), op(op) {
 	}
 
 	void AggregateDistinct() {
@@ -440,7 +435,7 @@ public:
 		tasks.push_back(make_unique<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
 		                                                                    gstate, context, op));
 		D_ASSERT(!tasks.empty());
-		SetTasks(std::move(tasks));
+		SetTasks(Move(tasks));
 	}
 };
 
@@ -466,13 +461,13 @@ public:
 			                                                     *distinct_state.radix_states[table_idx], tasks);
 		}
 		D_ASSERT(!tasks.empty());
-		SetTasks(std::move(tasks));
+		SetTasks(Move(tasks));
 	}
 
 	void FinishEvent() override {
 		//! Now that all tables are combined, it's time to do the distinct aggregations
 		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(std::move(new_event));
+		this->InsertEvent(Move(new_event));
 	}
 };
 
@@ -493,12 +488,12 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 	}
 	if (any_partitioned) {
 		auto new_event = make_shared<UngroupedDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
+		event.InsertEvent(Move(new_event));
 	} else {
 		//! Hashtables aren't partitioned, they dont need to be joined first
 		//! So we can compute the aggregate already
 		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
+		event.InsertEvent(Move(new_event));
 	}
 	return SinkFinalizeType::READY;
 }

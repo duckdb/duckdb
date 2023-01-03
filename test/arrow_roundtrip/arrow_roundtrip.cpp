@@ -17,8 +17,7 @@ using namespace duckdb;
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
 	                      unique_ptr<QueryResult> result_p, bool big_result)
-	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
-	      big_result(big_result) {
+	    : types(Move(types_p)), names(Move(names_p)), tz(Move(tz_p)), result(Move(result_p)), big_result(big_result) {
 	}
 
 	vector<LogicalType> types;
@@ -128,7 +127,7 @@ void RunArrowComparison(Connection &con, const string &query, bool big_result = 
 	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowRoundtripFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result);
+	ArrowRoundtripFactory factory(Move(types), Move(names), tz, Move(initial_result), big_result);
 
 	// construct the arrow scan
 	vector<Value> params;

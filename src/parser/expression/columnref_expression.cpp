@@ -8,17 +8,15 @@
 namespace duckdb {
 
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
-                                             : vector<string> {std::move(table_name), std::move(column_name)}) {
+    : ColumnRefExpression(table_name.empty() ? vector<string> {Move(column_name)}
+                                             : vector<string> {Move(table_name), Move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name)
-    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(string column_name) : ColumnRefExpression(vector<string> {Move(column_name)}) {
 }
 
 ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
-      column_names(std::move(column_names_p)) {
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_names(Move(column_names_p)) {
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());
@@ -87,7 +85,7 @@ hash_t ColumnRefExpression::Hash() const {
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_unique<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void ColumnRefExpression::Serialize(FieldWriter &writer) const {
@@ -96,8 +94,8 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
-	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
-	return std::move(expression);
+	auto expression = make_unique<ColumnRefExpression>(Move(column_names));
+	return Move(expression);
 }
 
 } // namespace duckdb

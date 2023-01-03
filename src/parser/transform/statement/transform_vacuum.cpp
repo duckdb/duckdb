@@ -51,7 +51,7 @@ unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGNode 
 		}
 	}
 
-	return std::move(result);
+	return Move(result);
 }
 
 } // namespace duckdb

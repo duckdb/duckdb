@@ -15,12 +15,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOrder &op)
 				projections.push_back(i);
 			}
 		} else {
-			projections = std::move(op.projections);
+			projections = Move(op.projections);
 		}
-		auto order = make_unique<PhysicalOrder>(op.types, std::move(op.orders), std::move(projections),
-		                                        op.estimated_cardinality);
-		order->children.push_back(std::move(plan));
-		plan = std::move(order);
+		auto order = make_unique<PhysicalOrder>(op.types, Move(op.orders), Move(projections), op.estimated_cardinality);
+		order->children.push_back(Move(plan));
+		plan = Move(order);
 	}
 	return plan;
 }

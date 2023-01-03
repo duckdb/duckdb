@@ -32,7 +32,7 @@ unique_ptr<GlobalTableFunctionState> PragmaDatabaseListInit(ClientContext &conte
 	auto result = make_unique<PragmaDatabaseListData>();
 	auto &db_manager = DatabaseManager::Get(context);
 	result->databases = db_manager.GetDatabases(context);
-	return std::move(result);
+	return Move(result);
 }
 
 void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

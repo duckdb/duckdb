@@ -19,8 +19,8 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(LogicalDeserializationSt
 	auto join_type = reader.ReadRequired<JoinType>();
 	auto condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto result = make_unique<LogicalAnyJoin>(join_type);
-	result->condition = std::move(condition);
-	return std::move(result);
+	result->condition = Move(condition);
+	return Move(result);
 }
 
 } // namespace duckdb

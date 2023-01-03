@@ -16,8 +16,8 @@ void StringHeap::Destroy() {
 	allocator.Destroy();
 }
 
-void StringHeap::Move(StringHeap &other) {
-	other.allocator.Move(allocator);
+void StringHeap::MoveHeap(StringHeap &other) {
+	other.allocator.MoveAllocator(allocator);
 }
 
 string_t StringHeap::AddString(const char *data, idx_t len) {

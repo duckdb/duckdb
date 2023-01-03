@@ -20,7 +20,7 @@ public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateSchemaInfo>();
 		CopyProperties(*result);
-		return std::move(result);
+		return Move(result);
 	}
 
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &deserializer) {

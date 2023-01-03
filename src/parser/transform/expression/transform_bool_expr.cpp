@@ -12,19 +12,17 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 		switch (root->boolop) {
 		case duckdb_libpgquery::PG_AND_EXPR: {
 			if (!result) {
-				result = std::move(next);
+				result = Move(next);
 			} else {
-				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(result),
-				                                            std::move(next));
+				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, Move(result), Move(next));
 			}
 			break;
 		}
 		case duckdb_libpgquery::PG_OR_EXPR: {
 			if (!result) {
-				result = std::move(next);
+				result = Move(next);
 			} else {
-				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(result),
-				                                            std::move(next));
+				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, Move(result), Move(next));
 			}
 			break;
 		}
@@ -32,15 +30,15 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 			if (next->type == ExpressionType::COMPARE_IN) {
 				// convert COMPARE_IN to COMPARE_NOT_IN
 				next->type = ExpressionType::COMPARE_NOT_IN;
-				result = std::move(next);
+				result = Move(next);
 			} else if (next->type >= ExpressionType::COMPARE_EQUAL &&
 			           next->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 				// NOT on a comparison: we can negate the comparison
 				// e.g. NOT(x > y) is equivalent to x <= y
 				next->type = NegateComparisionExpression(next->type);
-				result = std::move(next);
+				result = Move(next);
 			} else {
-				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(next));
+				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, Move(next));
 			}
 			break;
 		}

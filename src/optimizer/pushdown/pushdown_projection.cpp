@@ -16,7 +16,7 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 		return proj.expressions[colref.binding.column_index]->Copy();
 	}
 	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceProjectionBindings(proj, std::move(child)); });
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceProjectionBindings(proj, Move(child)); });
 	return expr;
 }
 
@@ -31,19 +31,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		auto &f = *filter;
 		D_ASSERT(f.bindings.size() <= 1);
 		// rewrite the bindings within this subquery
-		f.filter = ReplaceProjectionBindings(proj, std::move(f.filter));
+		f.filter = ReplaceProjectionBindings(proj, Move(f.filter));
 		// add the filter to the child pushdown
-		if (child_pushdown.AddFilter(std::move(f.filter)) == FilterResult::UNSATISFIABLE) {
+		if (child_pushdown.AddFilter(Move(f.filter)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_unique<LogicalEmptyResult>(Move(op));
 		}
 	}
 	child_pushdown.GenerateFilters();
 	// now push into children
-	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[0] = child_pushdown.Rewrite(Move(op->children[0]));
 	if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		// child returns an empty result: generate an empty result here too
-		return make_unique<LogicalEmptyResult>(std::move(op));
+		return make_unique<LogicalEmptyResult>(Move(op));
 	}
 	return op;
 }

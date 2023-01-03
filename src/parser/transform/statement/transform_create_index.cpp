@@ -57,7 +57,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	if (stmt->relation->schemaname) {
 		tableref->schema_name = stmt->relation->schemaname;
 	}
-	info->table = std::move(tableref);
+	info->table = Move(tableref);
 	if (stmt->idxname) {
 		info->index_name = stmt->idxname;
 	} else {
@@ -66,7 +66,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	for (auto &expr : info->expressions) {
 		info->parsed_expressions.emplace_back(expr->Copy());
 	}
-	result->info = std::move(info);
+	result->info = Move(info);
 	return result;
 }
 

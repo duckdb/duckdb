@@ -52,7 +52,7 @@ public:
 
 	void Push(PY_TYPE obj) {
 		auto lock = GetLock();
-		PushInternal(*lock, std::move(obj));
+		PushInternal(*lock, Move(obj));
 	}
 
 	const PY_TYPE *GetPointerTop() {

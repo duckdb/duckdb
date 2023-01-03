@@ -44,14 +44,14 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				child_operator = LogicalCrossProduct::Create(std::move(child_operator), std::move(op));
+				child_operator = LogicalCrossProduct::Create(Move(child_operator), Move(op));
 			} else {
-				child_operator = std::move(op);
+				child_operator = Move(op);
 			}
-			bind_context.AddContext(std::move(using_binder->bind_context));
+			bind_context.AddContext(Move(using_binder->bind_context));
 		}
 		if (child_operator) {
-			root = LogicalCrossProduct::Create(std::move(root), std::move(child_operator));
+			root = LogicalCrossProduct::Create(Move(root), Move(child_operator));
 		}
 	}
 
@@ -62,13 +62,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		condition = binder.Bind(stmt.condition);
 
 		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(std::move(condition));
-		filter->AddChild(std::move(root));
-		root = std::move(filter);
+		auto filter = make_unique<LogicalFilter>(Move(condition));
+		filter->AddChild(Move(root));
+		root = Move(filter);
 	}
 	// create the delete node
 	auto del = make_unique<LogicalDelete>(table, GenerateTableIndex());
-	del->AddChild(std::move(root));
+	del->AddChild(Move(root));
 
 	// set up the delete expression
 	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
@@ -81,11 +81,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		auto update_table_index = GenerateTableIndex();
 		del->table_index = update_table_index;
 
-		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
-		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
-		                     std::move(del_as_logicaloperator), std::move(result));
+		unique_ptr<LogicalOperator> del_as_logicaloperator = Move(del);
+		return BindReturning(Move(stmt.returning_list), table, update_table_index, Move(del_as_logicaloperator),
+		                     Move(result));
 	}
-	result.plan = std::move(del);
+	result.plan = Move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	properties.allow_stream_result = false;

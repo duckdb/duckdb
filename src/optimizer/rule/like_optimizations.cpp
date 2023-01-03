@@ -16,7 +16,7 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
 	func->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
-	root = std::move(func);
+	root = Move(func);
 }
 
 static bool PatternIsConstant(const string &pattern) {
@@ -123,7 +123,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 		// Pattern is constant
 		return make_unique<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
 		                                                          : ExpressionType::COMPARE_EQUAL,
-		                                              std::move(root->children[0]), std::move(root->children[1]));
+		                                              Move(root->children[0]), Move(root->children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -141,19 +141,19 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
-	auto new_function = make_unique<BoundFunctionExpression>(expr->return_type, std::move(function),
-	                                                         std::move(expr->children), nullptr);
+	auto new_function =
+	    make_unique<BoundFunctionExpression>(expr->return_type, Move(function), Move(expr->children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	new_function->children[1] = make_unique<BoundConstantExpression>(Value(std::move(pattern)));
+	new_function->children[1] = make_unique<BoundConstantExpression>(Value(Move(pattern)));
 
-	result = std::move(new_function);
+	result = Move(new_function);
 	if (is_not_like) {
 		auto negation = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-		negation->children.push_back(std::move(result));
-		result = std::move(negation);
+		negation->children.push_back(Move(result));
+		result = Move(negation);
 	}
 
 	return result;

@@ -50,9 +50,9 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, Move(collection),
 	                                                   context.GetClientProperties());
-	gstate.result = std::move(result);
+	gstate.result = Move(result);
 	return SinkFinalizeType::READY;
 }
 
@@ -67,7 +67,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientCon
 unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = (BatchCollectorGlobalState &)state;
 	D_ASSERT(gstate.result);
-	return std::move(gstate.result);
+	return Move(gstate.result);
 }
 
 } // namespace duckdb

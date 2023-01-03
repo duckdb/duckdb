@@ -91,7 +91,7 @@ public:
 	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {
 		auto state = CreateBenchmarkState();
 		Load(state.get());
-		return std::move(state);
+		return Move(state);
 	}
 
 	void Run(BenchmarkState *state_p) override {

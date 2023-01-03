@@ -12,10 +12,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 	if (!op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);
 		op.prepared->types = plan->types;
-		op.prepared->plan = std::move(plan);
+		op.prepared->plan = Move(plan);
 	}
 
-	return make_unique<PhysicalPrepare>(op.name, std::move(op.prepared), op.estimated_cardinality);
+	return make_unique<PhysicalPrepare>(op.name, Move(op.prepared), op.estimated_cardinality);
 }
 
 } // namespace duckdb

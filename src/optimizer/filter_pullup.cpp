@@ -6,26 +6,26 @@ namespace duckdb {
 unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
-		return PullupFilter(std::move(op));
+		return PullupFilter(Move(op));
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return PullupProjection(std::move(op));
+		return PullupProjection(Move(op));
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		return PullupCrossProduct(std::move(op));
+		return PullupCrossProduct(Move(op));
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		return PullupJoin(std::move(op));
+		return PullupJoin(Move(op));
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-		return PullupSetOperation(std::move(op));
+		return PullupSetOperation(Move(op));
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		// we can just pull directly through these operations without any rewriting
-		op->children[0] = Rewrite(std::move(op->children[0]));
+		op->children[0] = Rewrite(Move(op->children[0]));
 		return op;
 	}
 	default:
-		return FinishPullup(std::move(op));
+		return FinishPullup(Move(op));
 	}
 }
 
@@ -36,15 +36,15 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 
 	switch (join.join_type) {
 	case JoinType::INNER:
-		return PullupInnerJoin(std::move(op));
+		return PullupInnerJoin(Move(op));
 	case JoinType::LEFT:
 	case JoinType::ANTI:
 	case JoinType::SEMI: {
-		return PullupFromLeft(std::move(op));
+		return PullupFromLeft(Move(op));
 	}
 	default:
 		// unsupported join type: call children pull up
-		return FinishPullup(std::move(op));
+		return FinishPullup(Move(op));
 	}
 }
 
@@ -53,37 +53,37 @@ unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOper
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return op;
 	}
-	return PullupBothSide(std::move(op));
+	return PullupBothSide(Move(op));
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
-	return PullupBothSide(std::move(op));
+	return PullupBothSide(Move(op));
 }
 
 unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
                                                                vector<unique_ptr<Expression>> &expressions) {
 	unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
 	for (idx_t i = 0; i < expressions.size(); ++i) {
-		filter->expressions.push_back(std::move(expressions[i]));
+		filter->expressions.push_back(Move(expressions[i]));
 	}
 	expressions.clear();
-	filter->children.push_back(std::move(child));
-	return std::move(filter);
+	filter->children.push_back(Move(child));
+	return Move(filter);
 }
 
 unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (idx_t i = 0; i < op->children.size(); i++) {
 		FilterPullup pullup;
-		op->children[i] = pullup.Rewrite(std::move(op->children[i]));
+		op->children[i] = pullup.Rewrite(Move(op->children[i]));
 	}
 	// now pull up any existing filters
 	if (filters_expr_pullup.empty()) {
 		// no filters to pull up
 		return op;
 	}
-	return GeneratePullupFilter(std::move(op), filters_expr_pullup);
+	return GeneratePullupFilter(Move(op), filters_expr_pullup);
 }
 
 } // namespace duckdb

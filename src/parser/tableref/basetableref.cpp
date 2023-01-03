@@ -37,7 +37,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 	result->column_name_alias = reader.ReadRequiredList<string>();
 	result->catalog_name = reader.ReadField<string>(INVALID_CATALOG);
 
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
@@ -49,6 +49,6 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 
-	return std::move(copy);
+	return Move(copy);
 }
 } // namespace duckdb

@@ -39,7 +39,7 @@ struct BindResult {
 	}
 	explicit BindResult(string error) : error(error) {
 	}
-	explicit BindResult(unique_ptr<Expression> expr) : expression(std::move(expr)) {
+	explicit BindResult(unique_ptr<Expression> expr) : expression(Move(expr)) {
 	}
 
 	bool HasError() {

@@ -84,19 +84,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		// Extract the matching expressions
 		vector<unique_ptr<Expression>> select_list;
 		for (const auto &expr_idx : matching) {
-			select_list.emplace_back(std::move(op.expressions[expr_idx]));
+			select_list.emplace_back(Move(op.expressions[expr_idx]));
 			types.emplace_back(op.types[output_idx + expr_idx]);
 		}
 
 		// Chain the new window operator on top of the plan
 		unique_ptr<PhysicalOperator> window;
 		if (process_streaming) {
-			window = make_unique<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window = make_unique<PhysicalStreamingWindow>(types, Move(select_list), op.estimated_cardinality);
 		} else {
-			window = make_unique<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window = make_unique<PhysicalWindow>(types, Move(select_list), op.estimated_cardinality);
 		}
-		window->children.push_back(std::move(plan));
-		plan = std::move(window);
+		window->children.push_back(Move(plan));
+		plan = Move(window);
 
 		// Remember the projection order if we changed it
 		if (!streaming_windows.empty() || !blocking_windows.empty() || !evaluation_order.empty()) {
@@ -116,9 +116,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 			const auto expr_idx = evaluation_order[i] + output_idx;
 			select_list[expr_idx] = make_unique<BoundReferenceExpression>(op.types[expr_idx], i + output_idx);
 		}
-		auto proj = make_unique<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj->children.push_back(std::move(plan));
-		plan = std::move(proj);
+		auto proj = make_unique<PhysicalProjection>(op.types, Move(select_list), op.estimated_cardinality);
+		proj->children.push_back(Move(plan));
+		plan = Move(proj);
 	}
 
 	return plan;

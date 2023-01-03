@@ -34,7 +34,7 @@ public:
 
 	idx_t Count();
 
-	void Move(TableIndexList &other);
+	void MoveList(TableIndexList &other);
 
 	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,

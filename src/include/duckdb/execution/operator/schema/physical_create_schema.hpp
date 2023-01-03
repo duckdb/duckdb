@@ -18,7 +18,7 @@ class PhysicalCreateSchema : public PhysicalOperator {
 public:
 	explicit PhysicalCreateSchema(unique_ptr<CreateSchemaInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_SCHEMA, {LogicalType::BIGINT}, estimated_cardinality),
-	      info(std::move(info)) {
+	      info(Move(info)) {
 	}
 
 	unique_ptr<CreateSchemaInfo> info;

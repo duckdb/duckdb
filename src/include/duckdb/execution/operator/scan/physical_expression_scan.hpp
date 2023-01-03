@@ -19,8 +19,8 @@ class PhysicalExpressionScan : public PhysicalOperator {
 public:
 	PhysicalExpressionScan(vector<LogicalType> types, vector<vector<unique_ptr<Expression>>> expressions,
 	                       idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::EXPRESSION_SCAN, std::move(types), estimated_cardinality),
-	      expressions(std::move(expressions)) {
+	    : PhysicalOperator(PhysicalOperatorType::EXPRESSION_SCAN, Move(types), estimated_cardinality),
+	      expressions(Move(expressions)) {
 	}
 
 	//! The set of expressions to scan

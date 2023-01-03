@@ -511,7 +511,7 @@ unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunc
 		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
 		break;
 	}
-	function.name = std::move(name);
+	function.name = Move(name);
 	function.arguments[0] = decimal_type;
 	function.return_type = decimal_type;
 	return nullptr;
@@ -542,9 +542,9 @@ template <class OP, class OP_STRING, class OP_VECTOR>
 unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
 	auto input_type = arguments[0]->return_type;
-	auto name = std::move(function.name);
+	auto name = Move(function.name);
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
-	function.name = std::move(name);
+	function.name = Move(name);
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

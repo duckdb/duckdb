@@ -20,11 +20,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 
-	auto cte = make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, std::move(left), std::move(right),
-	                                             op.estimated_cardinality);
+	auto cte =
+	    make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, Move(left), Move(right), op.estimated_cardinality);
 	cte->working_table = working_table;
 
-	return std::move(cte);
+	return Move(cte);
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
@@ -39,7 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 		throw Exception("Referenced recursive CTE does not exist.");
 	}
 	chunk_scan->collection = cte->second.get();
-	return std::move(chunk_scan);
+	return Move(chunk_scan);
 }
 
 } // namespace duckdb

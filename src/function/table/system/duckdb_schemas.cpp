@@ -45,7 +45,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSchemasInit(ClientContext &context, T
 	// scan all the schemas and collect them
 	result->entries = Catalog::GetAllSchemas(context);
 
-	return std::move(result);
+	return Move(result);
 }
 
 void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

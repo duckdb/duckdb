@@ -21,7 +21,7 @@ public:
 	ParquetFileMetadataCache() : metadata(nullptr) {
 	}
 	ParquetFileMetadataCache(std::unique_ptr<duckdb_parquet::format::FileMetaData> file_metadata, time_t r_time)
-	    : metadata(std::move(file_metadata)), read_time(r_time) {
+	    : metadata(Move(file_metadata)), read_time(r_time) {
 	}
 
 	~ParquetFileMetadataCache() override = default;

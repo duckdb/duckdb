@@ -11,7 +11,7 @@ ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter 
 	auto op = make_unique<ConjunctionExpressionMatcher>();
 	op->matchers.push_back(make_unique<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
-	root = std::move(op);
+	root = Move(op);
 }
 
 unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConjunctionExpression &conj,
@@ -25,7 +25,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConj
 	}
 	if (conj.children.size() == 1) {
 		// one expression remaining: simply return that expression and erase the conjunction
-		return std::move(conj.children[0]);
+		return Move(conj.children[0]);
 	}
 	return nullptr;
 }

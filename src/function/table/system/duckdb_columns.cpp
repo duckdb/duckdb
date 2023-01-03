@@ -85,7 +85,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 class ColumnHelper {

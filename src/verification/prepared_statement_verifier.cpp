@@ -10,7 +10,7 @@
 namespace duckdb {
 
 PreparedStatementVerifier::PreparedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::PREPARED, "Prepared", std::move(statement_p)) {
+    : StatementVerifier(VerificationType::PREPARED, "Prepared", Move(statement_p)) {
 }
 
 unique_ptr<StatementVerifier> PreparedStatementVerifier::Create(const SQLStatement &statement) {
@@ -27,19 +27,19 @@ void PreparedStatementVerifier::Extract() {
 	string name = "__duckdb_verification_prepared_statement";
 	auto prepare = make_unique<PrepareStatement>();
 	prepare->name = name;
-	prepare->statement = std::move(statement);
+	prepare->statement = Move(statement);
 
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
-	execute->values = std::move(values);
+	execute->values = Move(values);
 
 	auto dealloc = make_unique<DropStatement>();
 	dealloc->info->type = CatalogType::PREPARED_STATEMENT;
 	dealloc->info->name = string(name);
 
-	prepare_statement = std::move(prepare);
-	execute_statement = std::move(execute);
-	dealloc_statement = std::move(dealloc);
+	prepare_statement = Move(prepare);
+	execute_statement = Move(execute);
+	dealloc_statement = Move(dealloc);
 }
 
 void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &child) {
@@ -57,13 +57,13 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 			}
 		}
 		if (index == values.size()) {
-			values.push_back(std::move(child));
+			values.push_back(Move(child));
 		}
 		// replace it with an expression
 		auto parameter = make_unique<ParameterExpression>();
 		parameter->parameter_nr = index + 1;
 		parameter->alias = alias;
-		child = std::move(parameter);
+		child = Move(parameter);
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(*child,
@@ -79,15 +79,15 @@ bool PreparedStatementVerifier::Run(
 	Extract();
 	// execute the prepared statements
 	try {
-		auto prepare_result = run(string(), std::move(prepare_statement));
+		auto prepare_result = run(string(), Move(prepare_statement));
 		if (prepare_result->HasError()) {
 			prepare_result->ThrowError("Failed prepare during verify: ");
 		}
-		auto execute_result = run(string(), std::move(execute_statement));
+		auto execute_result = run(string(), Move(execute_statement));
 		if (execute_result->HasError()) {
 			execute_result->ThrowError("Failed execute during verify: ");
 		}
-		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(execute_result));
+		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(Move(execute_result));
 	} catch (const Exception &ex) {
 		if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
 			materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
@@ -97,7 +97,7 @@ bool PreparedStatementVerifier::Run(
 		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
 		failed = true;
 	}
-	run(string(), std::move(dealloc_statement));
+	run(string(), Move(dealloc_statement));
 	context.interrupted = false;
 
 	return failed;

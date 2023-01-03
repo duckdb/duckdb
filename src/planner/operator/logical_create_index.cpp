@@ -42,8 +42,8 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
 	reader.Finalize();
-	return make_unique<LogicalCreateIndex>(std::move(bind_data), std::move(info), std::move(unbound_expressions),
-	                                       *table, std::move(function));
+	return make_unique<LogicalCreateIndex>(Move(bind_data), Move(info), Move(unbound_expressions), *table,
+	                                       Move(function));
 }
 
 } // namespace duckdb

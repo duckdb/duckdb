@@ -69,9 +69,9 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
 		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i));
-		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
+		struct_values.emplace_back(make_pair(Move(struct_keys[i]), Move(val)));
 	}
-	return Value::STRUCT(std::move(struct_values));
+	return Value::STRUCT(Move(struct_values));
 }
 
 Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
@@ -95,15 +95,15 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
-		struct_values.emplace_back(make_pair("key", std::move(new_key)));
-		struct_values.emplace_back(make_pair("value", std::move(new_value)));
+		struct_values.emplace_back(make_pair("key", Move(new_key)));
+		struct_values.emplace_back(make_pair("value", Move(new_value)));
 
-		elements.push_back(Value::STRUCT(std::move(struct_values)));
+		elements.push_back(Value::STRUCT(Move(struct_values)));
 	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
 
-	return Value::MAP(ListType::GetChildType(map_type), std::move(elements));
+	return Value::MAP(ListType::GetChildType(map_type), Move(elements));
 }
 
 Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
@@ -138,15 +138,15 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
-		struct_values.emplace_back(make_pair("key", std::move(new_key)));
-		struct_values.emplace_back(make_pair("value", std::move(new_value)));
+		struct_values.emplace_back(make_pair("key", Move(new_key)));
+		struct_values.emplace_back(make_pair("value", Move(new_value)));
 
-		elements.push_back(Value::STRUCT(std::move(struct_values)));
+		elements.push_back(Value::STRUCT(Move(struct_values)));
 	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
 
-	return Value::MAP(ListType::GetChildType(map_type), std::move(elements));
+	return Value::MAP(ListType::GetChildType(map_type), Move(elements));
 }
 
 Value TransformListValue(py::handle ele) {
@@ -163,7 +163,7 @@ Value TransformListValue(py::handle ele) {
 	for (idx_t i = 0; i < size; i++) {
 		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i));
 		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
-		values.push_back(std::move(new_value));
+		values.push_back(Move(new_value));
 	}
 
 	return Value::LIST(element_type, values);

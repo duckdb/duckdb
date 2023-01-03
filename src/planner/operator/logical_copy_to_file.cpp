@@ -49,12 +49,12 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 		bind_data = copy_func.deserialize(context, reader, copy_func);
 	}
 
-	auto result = make_unique<LogicalCopyToFile>(copy_func, std::move(bind_data));
+	auto result = make_unique<LogicalCopyToFile>(copy_func, Move(bind_data));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->is_file_and_exists = is_file_and_exists;
 	result->per_thread_output = per_thread_output;
-	return std::move(result);
+	return Move(result);
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

@@ -18,7 +18,7 @@ class PhysicalTransaction : public PhysicalOperator {
 public:
 	explicit PhysicalTransaction(unique_ptr<TransactionInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::TRANSACTION, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      info(std::move(info)) {
+	      info(Move(info)) {
 	}
 
 	unique_ptr<TransactionInfo> info;

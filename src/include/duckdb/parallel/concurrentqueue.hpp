@@ -62,7 +62,7 @@ public:
 		if (q.empty()) {
 			return false;
 		}
-		item = std::move(q.front());
+		item = Move(q.front());
 		q.pop();
 		return true;
 	}

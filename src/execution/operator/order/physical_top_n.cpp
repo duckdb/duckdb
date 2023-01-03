@@ -12,7 +12,7 @@ namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
                            idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)),
+    : PhysicalOperator(PhysicalOperatorType::TOP_N, Move(types), estimated_cardinality), orders(Move(orders)),
       limit(limit), offset(offset) {
 }
 
@@ -44,7 +44,7 @@ public:
 	void Sink(DataChunk &input);
 	void Finalize();
 
-	void Move(TopNSortState &other);
+	void MoveState(TopNSortState &other);
 
 	void InitializeScan(TopNScanState &state, bool exclude_offset);
 	void Scan(TopNScanState &state, DataChunk &chunk);
@@ -131,9 +131,9 @@ void TopNSortState::Sink(DataChunk &input) {
 	Append(heap.sort_chunk, input);
 }
 
-void TopNSortState::Move(TopNSortState &other) {
-	local_state = std::move(other.local_state);
-	global_state = std::move(other.global_state);
+void TopNSortState::MoveState(TopNSortState &other) {
+	local_state = Move(other.local_state);
+	global_state = Move(other.global_state);
 	count = other.count;
 	is_sorted = other.is_sorted;
 }
@@ -305,7 +305,7 @@ void TopNHeap::Reduce() {
 		std::swap(current_chunk, prev_chunk);
 	}
 
-	sort_state.Move(new_state);
+	sort_state.MoveState(new_state);
 }
 
 void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_chunk) {

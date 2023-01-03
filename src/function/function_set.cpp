@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(std::move(name)) {
+ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(Move(name)) {
 }
 
 ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
@@ -17,7 +17,7 @@ ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
 	return GetFunctionByOffset(index);
 }
 
-AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(std::move(name)) {
+AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(Move(name)) {
 }
 
 AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
@@ -50,7 +50,7 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 	return GetFunctionByOffset(index);
 }
 
-TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
+TableFunctionSet::TableFunctionSet(string name) : FunctionSet(Move(name)) {
 }
 
 TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {

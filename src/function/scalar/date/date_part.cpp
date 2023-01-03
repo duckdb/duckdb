@@ -167,7 +167,7 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	} else if (child_stats[0]->validity_stats) {
 		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 struct DatePart {
@@ -198,7 +198,7 @@ struct DatePart {
 		if (child_stats[0]->validity_stats) {
 			result->validity_stats = child_stats[0]->validity_stats->Copy();
 		}
-		return std::move(result);
+		return Move(result);
 	}
 
 	template <typename OP>
@@ -1212,10 +1212,10 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t date_stats, function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, Move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, Move(ts_func), nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, Move(interval_func)));
 	set.AddFunction(operator_set);
 }
 
@@ -1233,12 +1233,12 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t time_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, Move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, Move(ts_func), nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, Move(interval_func)));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, std::move(time_func), nullptr, nullptr, time_stats));
+	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, Move(time_func), nullptr, nullptr, time_stats));
 	set.AddFunction(operator_set);
 }
 
@@ -1335,7 +1335,7 @@ struct StructDatePart {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+		bound_function.return_type = LogicalType::STRUCT(Move(struct_children));
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}
 
@@ -1459,7 +1459,7 @@ struct StructDatePart {
 	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
-		return make_unique<BindData>(std::move(stype), std::move(part_codes));
+		return make_unique<BindData>(Move(stype), Move(part_codes));
 	}
 
 	template <typename INPUT_TYPE>

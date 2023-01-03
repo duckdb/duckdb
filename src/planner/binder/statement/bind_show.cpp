@@ -14,11 +14,11 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 	stmt.info->types = plan.types;
 	stmt.info->aliases = plan.names;
 
-	auto show = make_unique<LogicalShow>(std::move(plan.plan));
+	auto show = make_unique<LogicalShow>(Move(plan.plan));
 	show->types_select = plan.types;
 	show->aliases = plan.names;
 
-	result.plan = std::move(show);
+	result.plan = Move(show);
 
 	result.names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,

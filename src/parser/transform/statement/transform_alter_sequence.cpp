@@ -62,7 +62,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			}
 			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_catalog, sequence_schema,
 			                                             sequence_name, owner_schema, owner_name, stmt->missing_ok);
-			result->info = std::move(info);
+			result->info = Move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");
 		}

@@ -18,7 +18,7 @@ RowLayout::RowLayout()
 
 void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align) {
 	offsets.clear();
-	types = std::move(types_p);
+	types = Move(types_p);
 
 	// Null mask at the front - 1 bit per value.
 	flag_width = ValidityBytes::ValidityMaskSize(types.size());
@@ -61,7 +61,7 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 	data_width = row_width - flag_width;
 
 	// Aggregate fields.
-	aggregates = std::move(aggregates_p);
+	aggregates = Move(aggregates_p);
 	for (auto &aggregate : aggregates) {
 		offsets.push_back(row_width);
 		row_width += aggregate.payload_size;
@@ -80,11 +80,11 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 }
 
 void RowLayout::Initialize(vector<LogicalType> types_p, bool align) {
-	Initialize(std::move(types_p), Aggregates(), align);
+	Initialize(Move(types_p), Aggregates(), align);
 }
 
 void RowLayout::Initialize(Aggregates aggregates_p, bool align) {
-	Initialize(vector<LogicalType>(), std::move(aggregates_p), align);
+	Initialize(vector<LogicalType>(), Move(aggregates_p), align);
 }
 
 } // namespace duckdb

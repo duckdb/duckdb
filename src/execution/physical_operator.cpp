@@ -230,7 +230,7 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 
 CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types_p,
                                                  idx_t estimated_cardinality)
-    : PhysicalOperator(type, std::move(types_p), estimated_cardinality) {
+    : PhysicalOperator(type, Move(types_p), estimated_cardinality) {
 
 	caching_supported = true;
 	for (auto &col_type : types) {
@@ -281,7 +281,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		if (state.cached_chunk->size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD) ||
 		    child_result == OperatorResultType::FINISHED) {
 			// chunk cache full: return it
-			chunk.Move(*state.cached_chunk);
+			chunk.MoveChunk(*state.cached_chunk);
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 			return child_result;
 		} else {
@@ -299,7 +299,7 @@ OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContex
                                                                  OperatorState &state_p) const {
 	auto &state = (CachingOperatorState &)state_p;
 	if (state.cached_chunk) {
-		chunk.Move(*state.cached_chunk);
+		chunk.MoveChunk(*state.cached_chunk);
 		state.cached_chunk.reset();
 	} else {
 		chunk.SetCardinality(0);

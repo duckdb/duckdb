@@ -15,10 +15,10 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 		if (conditions_p[i].comparison == ExpressionType::COMPARE_EQUAL ||
 		    conditions_p[i].comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// COMPARE_EQUAL and COMPARE_NOT_DISTINCT_FROM, move to the start
-			conditions[equal_position++] = std::move(conditions_p[i]);
+			conditions[equal_position++] = Move(conditions_p[i]);
 		} else {
 			// other expression, move to the end
-			conditions[other_position--] = std::move(conditions_p[i]);
+			conditions[other_position--] = Move(conditions_p[i]);
 		}
 	}
 }

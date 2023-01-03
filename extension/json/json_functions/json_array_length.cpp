@@ -28,7 +28,7 @@ CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
 	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
 	                               JSONReadManyFunctionData::Bind));
 
-	return CreateScalarFunctionInfo(std::move(set));
+	return CreateScalarFunctionInfo(Move(set));
 }
 
 } // namespace duckdb

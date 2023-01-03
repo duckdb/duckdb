@@ -76,7 +76,7 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
 	} else {
 		names.emplace_back("range");
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 struct RangeFunctionState : public GlobalTableFunctionState {
@@ -195,7 +195,7 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 		result->inclusive_bound = false;
 		names.emplace_back("range");
 	}
-	return std::move(result);
+	return Move(result);
 }
 
 struct RangeDateTimeState : public GlobalTableFunctionState {

@@ -20,9 +20,9 @@ class TableCatalogEntry;
 class LogicalPrepare : public LogicalOperator {
 public:
 	LogicalPrepare(string name, shared_ptr<PreparedStatementData> prepared, unique_ptr<LogicalOperator> logical_plan)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(name), prepared(std::move(prepared)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(name), prepared(Move(prepared)) {
 		if (logical_plan) {
-			children.push_back(std::move(logical_plan));
+			children.push_back(Move(logical_plan));
 		}
 	}
 

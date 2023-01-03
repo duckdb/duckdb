@@ -62,7 +62,7 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
-	return std::move(result);
+	return Move(result);
 }
 
 void BoundParameterExpression::Serialize(FieldWriter &writer) const {
@@ -87,8 +87,8 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
 		// we have! use the previously deserialized entry
 		parameter_data = entry->second;
 	}
-	result->parameter_data = std::move(parameter_data);
-	return std::move(result);
+	result->parameter_data = Move(parameter_data);
+	return Move(result);
 }
 
 } // namespace duckdb

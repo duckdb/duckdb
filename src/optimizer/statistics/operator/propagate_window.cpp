@@ -19,7 +19,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}
-	return std::move(node_stats);
+	return Move(node_stats);
 }
 
 } // namespace duckdb

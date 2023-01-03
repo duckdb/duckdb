@@ -42,7 +42,7 @@ private:
 //! The ManyExpressionTypeMatcher class matches a set of ExpressionTypes
 class ManyExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
-	explicit ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(std::move(types)) {
+	explicit ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(Move(types)) {
 	}
 
 	bool Match(ExpressionType type) override {

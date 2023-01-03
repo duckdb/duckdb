@@ -6,10 +6,9 @@ namespace duckdb {
 
 LogicalColumnDataGet::LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types,
                                            unique_ptr<ColumnDataCollection> collection)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index),
-      collection(std::move(collection)) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index), collection(Move(collection)) {
 	D_ASSERT(types.size() > 0);
-	chunk_types = std::move(types);
+	chunk_types = Move(types);
 }
 
 vector<ColumnBinding> LogicalColumnDataGet::GetColumnBindings() {
@@ -35,7 +34,7 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(LogicalDeserializa
 		chunk.Deserialize(reader.GetSource());
 		collection->Append(chunk);
 	}
-	return make_unique<LogicalColumnDataGet>(table_index, std::move(chunk_types), std::move(collection));
+	return make_unique<LogicalColumnDataGet>(table_index, Move(chunk_types), Move(collection));
 }
 
 vector<idx_t> LogicalColumnDataGet::GetTableIndex() const {

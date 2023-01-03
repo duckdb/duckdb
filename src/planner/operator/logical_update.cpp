@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
-	return std::move(result);
+	return Move(result);
 }
 
 idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {

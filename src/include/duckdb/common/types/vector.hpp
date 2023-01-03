@@ -143,7 +143,7 @@ public:
 	DUCKDB_API void SetValue(idx_t index, const Value &val);
 
 	inline void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
-		auxiliary = std::move(new_buffer);
+		auxiliary = Move(new_buffer);
 	};
 
 	//! This functions resizes the vector
@@ -203,7 +203,7 @@ protected:
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(Move(vector)) {
 	}
 
 public:

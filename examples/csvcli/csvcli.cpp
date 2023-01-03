@@ -26,12 +26,12 @@ int main(int argc, const char **argv) {
 	auto filename = std::string(argv[1]);
 
 	BufferedCSVReaderOptions options;
-	options.file_path = std::move(filename);
+	options.file_path = Move(filename);
 	options.compression = "none";
 	options.auto_detect = true;
 
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	BufferedCSVReader reader(*fs, std::move(options));
+	BufferedCSVReader reader(*fs, Move(options));
 
 	if (reader.sql_types.empty()) {
 		throw std::runtime_error("Failed to auto-detect types for CSV file");

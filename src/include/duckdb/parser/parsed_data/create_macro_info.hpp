@@ -28,7 +28,7 @@ public:
 		result->function = function->Copy();
 		result->name = name;
 		CopyProperties(*result);
-		return std::move(result);
+		return Move(result);
 	}
 };
 

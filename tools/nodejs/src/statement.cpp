@@ -267,7 +267,7 @@ struct StatementParam {
 
 struct RunPreparedTask : public Task {
 	RunPreparedTask(Statement &statement, duckdb::unique_ptr<StatementParam> params, RunType run_type)
-	    : Task(statement, params->callback), params(std::move(params)), run_type(run_type) {
+	    : Task(statement, params->callback), params(Move(params)), run_type(run_type) {
 	}
 
 	void DoWork() override {
@@ -362,7 +362,7 @@ struct RunPreparedTask : public Task {
 				delete static_cast<std::shared_ptr<duckdb::QueryResult> *>(hint);
 			};
 
-			std::shared_ptr<duckdb::QueryResult> result_ptr = std::move(result);
+			std::shared_ptr<duckdb::QueryResult> result_ptr = Move(result);
 
 			duckdb::idx_t out_idx = 1;
 			while (true) {
@@ -418,7 +418,7 @@ struct RunPreparedTask : public Task {
 
 struct RunQueryTask : public Task {
 	RunQueryTask(Statement &statement, duckdb::unique_ptr<StatementParam> params, Napi::Promise::Deferred deferred)
-	    : Task(statement), deferred(deferred), params(std::move(params)) {
+	    : Task(statement), deferred(deferred), params(Move(params)) {
 	}
 
 	void DoWork() override {
@@ -445,7 +445,7 @@ struct RunQueryTask : public Task {
 			auto db = statement.connection_ref->database_ref->Value();
 			auto query_result = QueryResult::constructor.New({db});
 			auto unwrapped = Napi::ObjectWrap<QueryResult>::Unwrap(query_result);
-			unwrapped->result = std::move(result);
+			unwrapped->result = Move(result);
 			deferred.Resolve(query_result);
 		}
 	}
@@ -617,7 +617,7 @@ struct GetNextArrowIpcTask : public Task {
 
 		// Transfer ownership and Construct ArrayBuffer
 		auto data_chunk_ptr = new std::unique_ptr<duckdb::DataChunk>();
-		*data_chunk_ptr = std::move(chunk);
+		*data_chunk_ptr = Move(chunk);
 		auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
 			delete static_cast<std::unique_ptr<duckdb::DataChunk> *>(hint);
 		};

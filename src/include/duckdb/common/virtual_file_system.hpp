@@ -92,11 +92,11 @@ public:
 	}
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
-		sub_systems.push_back(std::move(fs));
+		sub_systems.push_back(Move(fs));
 	}
 
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
-		compressed_fs[compression_type] = std::move(fs);
+		compressed_fs[compression_type] = Move(fs);
 	}
 
 	std::string GetName() const override {

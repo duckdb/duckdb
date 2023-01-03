@@ -20,11 +20,10 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 	auto result = make_unique<BoundConjunctionExpression>(expr.type);
 	for (auto &child_expr : expr.children) {
 		auto &child = (BoundExpression &)*child_expr;
-		result->children.push_back(
-		    BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN));
+		result->children.push_back(BoundCastExpression::AddCastToType(context, Move(child.expr), LogicalType::BOOLEAN));
 	}
 	// now create the bound conjunction expression
-	return BindResult(std::move(result));
+	return BindResult(Move(result));
 }
 
 } // namespace duckdb

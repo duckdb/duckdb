@@ -17,7 +17,7 @@ template <class T, class INDEX_TYPE>
 class IndexVector {
 public:
 	void push_back(T element) {
-		internal_vector.push_back(std::move(element));
+		internal_vector.push_back(Move(element));
 	}
 
 	T &operator[](INDEX_TYPE idx) {

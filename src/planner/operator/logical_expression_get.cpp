@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(LogicalDeserializa
 		expressions.push_back(reader.ReadRequiredSerializableList<Expression>(state.gstate));
 	}
 
-	return make_unique<LogicalExpressionGet>(table_index, expr_types, std::move(expressions));
+	return make_unique<LogicalExpressionGet>(table_index, expr_types, Move(expressions));
 }
 
 vector<idx_t> LogicalExpressionGet::GetTableIndex() const {

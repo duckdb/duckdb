@@ -10,21 +10,21 @@
 namespace duckdb {
 
 TableRelation::TableRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
-    : Relation(context, RelationType::TABLE_RELATION), description(std::move(description)) {
+    : Relation(context, RelationType::TABLE_RELATION), description(Move(description)) {
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return std::move(result);
+	return Move(result);
 }
 
 unique_ptr<TableRef> TableRelation::GetTableRef() {
 	auto table_ref = make_unique<BaseTableRef>();
 	table_ref->schema_name = description->schema;
 	table_ref->table_name = description->table;
-	return std::move(table_ref);
+	return Move(table_ref);
 }
 
 string TableRelation::GetAlias() {
@@ -45,7 +45,7 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 		if (expression_list.size() != 1) {
 			throw ParserException("Expected a single expression as filter condition");
 		}
-		return std::move(expression_list[0]);
+		return Move(expression_list[0]);
 	} else {
 		return nullptr;
 	}
@@ -56,14 +56,14 @@ void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	auto cond = ParseCondition(*context.GetContext(), condition);
 	Parser::ParseUpdateList(update_list, update_columns, expressions, context.GetContext()->GetParserOptions());
-	auto update = make_shared<UpdateRelation>(context, std::move(cond), description->schema, description->table,
-	                                          std::move(update_columns), std::move(expressions));
+	auto update = make_shared<UpdateRelation>(context, Move(cond), description->schema, description->table,
+	                                          Move(update_columns), Move(expressions));
 	update->Execute();
 }
 
 void TableRelation::Delete(const string &condition) {
 	auto cond = ParseCondition(*context.GetContext(), condition);
-	auto del = make_shared<DeleteRelation>(context, std::move(cond), description->schema, description->table);
+	auto del = make_shared<DeleteRelation>(context, Move(cond), description->schema, description->table);
 	del->Execute();
 }
 

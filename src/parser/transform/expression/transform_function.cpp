@@ -143,12 +143,12 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		auto expr = make_unique<WindowExpression>(win_fun_type, Move(catalog), Move(schema), lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
 
 		if (root->agg_filter) {
 			auto filter_expr = TransformExpression(root->agg_filter);
-			expr->filter_expr = std::move(filter_expr);
+			expr->filter_expr = Move(filter_expr);
 		}
 
 		if (root->args) {
@@ -157,25 +157,25 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
 				for (auto &child : function_list) {
-					expr->children.push_back(std::move(child));
+					expr->children.push_back(Move(child));
 				}
 			} else {
 				if (!function_list.empty()) {
-					expr->children.push_back(std::move(function_list[0]));
+					expr->children.push_back(Move(function_list[0]));
 				}
 				if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
 					if (function_list.size() > 1) {
-						expr->offset_expr = std::move(function_list[1]);
+						expr->offset_expr = Move(function_list[1]);
 					}
 					if (function_list.size() > 2) {
-						expr->default_expr = std::move(function_list[2]);
+						expr->default_expr = Move(function_list[2]);
 					}
 					if (function_list.size() > 3) {
 						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
 					}
 				} else if (win_fun_type == ExpressionType::WINDOW_NTH_VALUE) {
 					if (function_list.size() > 1) {
-						expr->children.push_back(std::move(function_list[1]));
+						expr->children.push_back(Move(function_list[1]));
 					}
 					if (function_list.size() > 2) {
 						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
@@ -208,7 +208,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		TransformWindowDef(window_ref, expr.get());
 		TransformWindowFrame(window_spec, expr.get());
 		expr->query_location = root->location;
-		return std::move(expr);
+		return Move(expr);
 	}
 
 	if (root->agg_ignore_nulls) {
@@ -220,7 +220,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
 			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value);
-			children.push_back(std::move(child_expr));
+			children.push_back(Move(child_expr));
 		}
 	}
 	unique_ptr<ParsedExpression> filter_expr;
@@ -270,15 +270,15 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		auto expr = make_unique<CaseExpression>();
 		CaseCheck check;
-		check.when_expr = std::move(children[0]);
-		check.then_expr = std::move(children[1]);
-		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(children[2]);
-		return std::move(expr);
+		check.when_expr = Move(children[0]);
+		check.then_expr = Move(children[1]);
+		expr->case_checks.push_back(Move(check));
+		expr->else_expr = Move(children[2]);
+		return Move(expr);
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		construct_array->children = std::move(children);
-		return std::move(construct_array);
+		construct_array->children = Move(children);
+		return Move(construct_array);
 	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
@@ -286,17 +286,17 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		//  Two-argument COALESCE
 		auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(children[0]));
-		coalesce_op->children.push_back(std::move(children[1]));
-		return std::move(coalesce_op);
+		coalesce_op->children.push_back(Move(children[0]));
+		coalesce_op->children.push_back(Move(children[1]));
+		return Move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
-	                                                std::move(children), std::move(filter_expr), std::move(order_bys),
-	                                                root->agg_distinct, false, root->export_state);
+	auto function = make_unique<FunctionExpression>(Move(catalog), Move(schema), lowercase_name.c_str(), Move(children),
+	                                                Move(filter_expr), Move(order_bys), root->agg_distinct, false,
+	                                                root->export_state);
 	function->query_location = root->location;
 
-	return std::move(function);
+	return Move(function);
 }
 
 static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
@@ -340,7 +340,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpg
 	D_ASSERT(node);
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(fname, std::move(children));
+	return make_unique<FunctionExpression>(fname, Move(children));
 }
 
 } // namespace duckdb

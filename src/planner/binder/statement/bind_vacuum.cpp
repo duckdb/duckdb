@@ -19,7 +19,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");
 		}
-		auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
+		auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(Move(bound_table));
 		stmt.info->table = ref->table;
 
 		auto &columns = stmt.info->columns;
@@ -51,9 +51,9 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			if (result.HasError()) {
 				throw BinderException(result.error);
 			}
-			select_list.push_back(std::move(result.expression));
+			select_list.push_back(Move(result.expression));
 		}
-		stmt.info->columns = std::move(non_generated_column_names);
+		stmt.info->columns = Move(non_generated_column_names);
 		if (!select_list.empty()) {
 			auto table_scan = CreatePlan(*ref);
 			D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
@@ -67,10 +67,10 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 				    ref->table->columns.LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
 			}
 
-			auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
-			projection->children.push_back(std::move(table_scan));
+			auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), Move(select_list));
+			projection->children.push_back(Move(table_scan));
 
-			root = std::move(projection);
+			root = Move(projection);
 		} else {
 			// eg. CREATE TABLE test (x AS (1));
 			//     ANALYZE test;
@@ -78,14 +78,14 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			stmt.info->has_table = false;
 		}
 	}
-	auto vacuum = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_VACUUM, std::move(stmt.info));
+	auto vacuum = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_VACUUM, Move(stmt.info));
 	if (root) {
-		vacuum->children.push_back(std::move(root));
+		vacuum->children.push_back(Move(root));
 	}
 
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = std::move(vacuum);
+	result.plan = Move(vacuum);
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

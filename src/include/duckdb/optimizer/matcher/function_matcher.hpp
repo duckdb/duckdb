@@ -33,7 +33,7 @@ public:
 //! The SpecificFunctionMatcher class matches a single specified function name
 class SpecificFunctionMatcher : public FunctionMatcher {
 public:
-	explicit SpecificFunctionMatcher(string name) : name(std::move(name)) {
+	explicit SpecificFunctionMatcher(string name) : name(Move(name)) {
 	}
 
 	bool Match(string &name) override {
@@ -47,7 +47,7 @@ private:
 //! The ManyFunctionMatcher class matches a set of functions
 class ManyFunctionMatcher : public FunctionMatcher {
 public:
-	explicit ManyFunctionMatcher(unordered_set<string> names) : names(std::move(names)) {
+	explicit ManyFunctionMatcher(unordered_set<string> names) : names(Move(names)) {
 	}
 
 	bool Match(string &name) override {

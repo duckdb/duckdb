@@ -13,7 +13,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 	for (auto &bound_order : order.orders) {
 		PropagateAndCompress(bound_order.expression, bound_order.stats);
 	}
-	return std::move(node_stats);
+	return Move(node_stats);
 }
 
 } // namespace duckdb

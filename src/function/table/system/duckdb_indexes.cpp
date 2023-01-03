@@ -67,7 +67,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-	return std::move(result);
+	return Move(result);
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

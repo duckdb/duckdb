@@ -321,9 +321,9 @@ template <bool LAST, bool SKIP_NULLS>
 unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &function,
                                    vector<unique_ptr<Expression>> &arguments) {
 	auto input_type = arguments[0]->return_type;
-	auto name = std::move(function.name);
+	auto name = Move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
-	function.name = std::move(name);
+	function.name = Move(name);
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

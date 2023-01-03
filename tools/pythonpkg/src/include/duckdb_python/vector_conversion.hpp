@@ -18,7 +18,7 @@
 namespace duckdb {
 
 struct NumPyArrayWrapper {
-	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(std::move(numpy_array)) {
+	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(Move(numpy_array)) {
 	}
 
 	py::array numpy_array;

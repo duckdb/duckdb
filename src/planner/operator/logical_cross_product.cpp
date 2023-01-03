@@ -6,8 +6,8 @@ LogicalCrossProduct::LogicalCrossProduct(unique_ptr<LogicalOperator> left, uniqu
     : LogicalOperator(LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 	D_ASSERT(left);
 	D_ASSERT(right);
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(Move(left));
+	children.push_back(Move(right));
 }
 
 vector<ColumnBinding> LogicalCrossProduct::GetColumnBindings() {
@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperat
 	if (right->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 		return left;
 	}
-	return make_unique<LogicalCrossProduct>(std::move(left), std::move(right));
+	return make_unique<LogicalCrossProduct>(Move(left), Move(right));
 }
 
 void LogicalCrossProduct::Serialize(FieldWriter &writer) const {
@@ -39,7 +39,7 @@ void LogicalCrossProduct::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalCrossProduct::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
 	auto result = unique_ptr<LogicalCrossProduct>(new LogicalCrossProduct());
-	return std::move(result);
+	return Move(result);
 }
 
 } // namespace duckdb

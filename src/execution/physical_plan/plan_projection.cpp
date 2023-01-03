@@ -36,9 +36,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		}
 	}
 
-	auto projection = make_unique<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
-	projection->children.push_back(std::move(plan));
-	return std::move(projection);
+	auto projection = make_unique<PhysicalProjection>(op.types, Move(op.expressions), op.estimated_cardinality);
+	projection->children.push_back(Move(plan));
+	return Move(projection);
 }
 
 } // namespace duckdb

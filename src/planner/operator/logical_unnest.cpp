@@ -27,8 +27,8 @@ unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(LogicalDeserializationSta
 	auto unnest_index = reader.ReadRequired<idx_t>();
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto result = make_unique<LogicalUnnest>(unnest_index);
-	result->expressions = std::move(expressions);
-	return std::move(result);
+	result->expressions = Move(expressions);
+	return Move(result);
 }
 
 vector<idx_t> LogicalUnnest::GetTableIndex() const {

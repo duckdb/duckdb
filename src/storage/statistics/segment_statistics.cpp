@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-SegmentStatistics::SegmentStatistics(LogicalType type) : type(std::move(type)) {
+SegmentStatistics::SegmentStatistics(LogicalType type) : type(Move(type)) {
 	Reset();
 }
 
 SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics> stats)
-    : type(std::move(type)), statistics(std::move(stats)) {
+    : type(Move(type)), statistics(Move(stats)) {
 	if (!statistics) {
 		Reset();
 	}

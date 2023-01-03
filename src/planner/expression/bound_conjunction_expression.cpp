@@ -12,8 +12,8 @@ BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
     : BoundConjunctionExpression(type) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(Move(left));
+	children.push_back(Move(right));
 }
 
 string BoundConjunctionExpression::ToString() const {
@@ -38,7 +38,7 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 		copy->children.push_back(expr->Copy());
 	}
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return Move(copy);
 }
 
 void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
@@ -49,8 +49,8 @@ unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeseria
                                                                FieldReader &reader) {
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto res = make_unique<BoundConjunctionExpression>(state.type);
-	res->children = std::move(children);
-	return std::move(res);
+	res->children = Move(children);
+	return Move(res);
 }
 
 } // namespace duckdb

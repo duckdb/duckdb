@@ -20,13 +20,13 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	if (expr.try_cast) {
 		if (child.expr->return_type == expr.cast_type) {
 			// no cast required: type matches
-			return BindResult(std::move(child.expr));
+			return BindResult(Move(child.expr));
 		}
-		child.expr = BoundCastExpression::AddCastToType(context, std::move(child.expr), expr.cast_type, true);
+		child.expr = BoundCastExpression::AddCastToType(context, Move(child.expr), expr.cast_type, true);
 	} else {
 		// otherwise add a cast to the target type
-		child.expr = BoundCastExpression::AddCastToType(context, std::move(child.expr), expr.cast_type);
+		child.expr = BoundCastExpression::AddCastToType(context, Move(child.expr), expr.cast_type);
 	}
-	return BindResult(std::move(child.expr));
+	return BindResult(Move(child.expr));
 }
 } // namespace duckdb

@@ -23,16 +23,16 @@ struct DuckDBPyConnection;
 class PythonDependencies : public ExternalDependency {
 public:
 	explicit PythonDependencies(py::function map_function)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
+	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(Move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object));
+		py_object_list.push_back(Move(py_object));
 	};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
 	                            unique_ptr<RegisteredObject> py_object_copy)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object_original));
-		py_object_list.push_back(std::move(py_object_copy));
+		py_object_list.push_back(Move(py_object_original));
+		py_object_list.push_back(Move(py_object_copy));
 	};
 	py::function map_function;
 	vector<unique_ptr<RegisteredObject>> py_object_list;

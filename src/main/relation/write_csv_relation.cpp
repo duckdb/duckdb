@@ -7,8 +7,7 @@
 namespace duckdb {
 
 WriteCSVRelation::WriteCSVRelation(shared_ptr<Relation> child_p, string csv_file_p)
-    : Relation(child_p->context, RelationType::WRITE_CSV_RELATION), child(std::move(child_p)),
-      csv_file(std::move(csv_file_p)) {
+    : Relation(child_p->context, RelationType::WRITE_CSV_RELATION), child(Move(child_p)), csv_file(Move(csv_file_p)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
@@ -19,7 +18,7 @@ BoundStatement WriteCSVRelation::Bind(Binder &binder) {
 	info->is_from = false;
 	info->file_path = csv_file;
 	info->format = "csv";
-	copy.info = std::move(info);
+	copy.info = Move(info);
 	return binder.Bind((SQLStatement &)copy);
 }
 

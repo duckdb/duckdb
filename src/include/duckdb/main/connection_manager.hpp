@@ -40,7 +40,7 @@ public:
 				connections.erase(it.first);
 				continue;
 			} else {
-				result.push_back(std::move(connection));
+				result.push_back(Move(connection));
 			}
 		}
 
