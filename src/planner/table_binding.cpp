@@ -10,6 +10,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/generated_expression_visitor.hpp"
 
 namespace duckdb {
 
@@ -95,41 +96,6 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 	}
 }
 
-static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
-                           const unordered_map<idx_t, string> &alias_map) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
-		D_ASSERT(col_names.size() == 1);
-		auto idx_entry = list.GetColumnIndex(col_names[0]);
-		auto &alias = alias_map.at(idx_entry.index);
-		col_names = {alias};
-	}
-	if (expr.type == ExpressionType::LAMBDA) {
-		// auto& lambda_expr = (LambdaExpression&)expr;
-		// ReplaceAliases(*lambda_expr.lhs, list, alias_map);
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { ReplaceAliases((ParsedExpression &)child, list, alias_map); });
-}
-
-static void BakeTableName(ParsedExpression &expr, const string &table_name) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
-		col_names.insert(col_names.begin(), table_name);
-	}
-	if (expr.type == ExpressionType::LAMBDA) {
-		// Don't qualify the parameters of the lambda expression
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
-}
-
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
 	auto catalog_entry = GetStandardEntry();
 	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
@@ -146,8 +112,10 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	for (auto &entry : name_map) {
 		alias_map[entry.second] = entry.first;
 	}
-	ReplaceAliases(*expression, table_entry->columns, alias_map);
-	BakeTableName(*expression, alias);
+	AliasReplacer alias_replacer(table_entry->columns, alias_map);
+	alias_replacer.VisitExpression(*expression);
+	ColumnQualifier column_qualifier(alias);
+	column_qualifier.VisitExpression(*expression);
 	return (expression);
 }
 

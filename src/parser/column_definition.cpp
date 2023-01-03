@@ -5,6 +5,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/parser/generated_expression_visitor.hpp"
 
 namespace duckdb {
 
@@ -155,24 +156,11 @@ static void VerifyColumnRefs(ParsedExpression &expr) {
 	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs((ParsedExpression &)child); });
 }
 
-static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto columnref = (ColumnRefExpression &)expr;
-		auto &name = columnref.GetColumnName();
-		dependencies.push_back(name);
-	}
-	if (expr.type == ExpressionType::LAMBDA) {
-		// Skip it so we don't register lambda column references as dependencies
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);
-	});
-}
-
 void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const {
 	D_ASSERT(Generated());
-	InnerGetListOfDependencies(*generated_expression, dependencies);
+	unordered_set<string> excludes;
+	ColumnDependencyLister dependency_lister(dependencies, excludes);
+	dependency_lister.VisitExpression(*generated_expression);
 }
 
 string ColumnDefinition::GetName() const {
