@@ -1908,12 +1908,13 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			bool is_key = i == 0;
 			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
 			                                          max_repeat + 1, max_define + 2, !is_key);
-			auto list_writer = make_unique<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
-			                                                 move(child_writer), can_have_nulls);
-			child_writers.push_back(move(list_writer));
+
+			child_writers.push_back(move(child_writer));
 		}
-		return make_unique<StructColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
-		                                       move(child_writers), can_have_nulls);
+		auto struct_writer = make_unique<StructColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
+		                                                     move(child_writers), can_have_nulls);
+		return make_unique<ListColumnWriter>(writer, schema_idx, schema_path, max_repeat, max_define,
+		                                     move(struct_writer), can_have_nulls);
 	}
 	duckdb_parquet::format::SchemaElement schema_element;
 	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);

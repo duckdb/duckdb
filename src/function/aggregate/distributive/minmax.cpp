@@ -268,7 +268,6 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 		return TemplatedOptimumType<string_t, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::LIST:
 		return TemplatedOptimumList<OP>(left, lidx, lcount, right, ridx, rcount);
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return TemplatedOptimumStruct<OP>(left, lidx, lcount, right, ridx, rcount);
 	default:

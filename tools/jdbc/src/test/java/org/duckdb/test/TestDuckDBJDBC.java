@@ -406,7 +406,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
 		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10+02')");
-		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:10Z')");
 
 		PreparedStatement ps = conn.prepareStatement("INSERT INTO T (id, t1) VALUES (?, ?)");
 
@@ -446,6 +446,27 @@ public class TestDuckDBJDBC {
 		assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
 				((DuckDBResultSetMetaData) meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_timestamp_as_long() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMP)");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:11')");
+
+		rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039070000000L);
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039071000000L);
 
 		rs.close();
 		stmt.close();
