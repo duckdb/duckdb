@@ -18,11 +18,16 @@ class GeneratedExpressionVisitor {
 public:
 	void VisitExpression(ParsedExpression &expr);
 	virtual void Visit(ColumnRefExpression &expr) = 0;
-	virtual void Visit(LambdaExpression &expr) = 0;
 
 protected:
 	GeneratedExpressionVisitor() {
 	}
+
+protected:
+	unordered_set<string> lambda_parameters;
+
+private:
+	void ExtractLambdaParameters(ParsedExpression &expr);
 };
 
 //===--------------------------------------------------------------------===//
@@ -34,7 +39,6 @@ public:
 	AliasReplacer(ColumnList &list, unordered_map<idx_t, string> &alias_map) : list(list), alias_map(alias_map) {
 	}
 	void Visit(ColumnRefExpression &expr) override;
-	void Visit(LambdaExpression &expr) override;
 
 private:
 	const ColumnList &list;
@@ -50,7 +54,6 @@ public:
 	ColumnQualifier(const string &table_name) : table_name(table_name) {
 	}
 	void Visit(ColumnRefExpression &expr) final override;
-	void Visit(LambdaExpression &expr) final override;
 
 private:
 	const string &table_name;
@@ -62,15 +65,12 @@ private:
 
 class ColumnDependencyLister : public GeneratedExpressionVisitor {
 public:
-	ColumnDependencyLister(vector<string> &dependencies, unordered_set<string> &excludes)
-	    : dependencies(dependencies), excludes(excludes) {
+	ColumnDependencyLister(vector<string> &dependencies) : dependencies(dependencies) {
 	}
 	void Visit(ColumnRefExpression &expr) final override;
-	void Visit(LambdaExpression &expr) final override;
 
 private:
 	vector<string> &dependencies;
-	unordered_set<string> &excludes;
 };
 
 } // namespace duckdb

@@ -158,8 +158,7 @@ static void VerifyColumnRefs(ParsedExpression &expr) {
 
 void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const {
 	D_ASSERT(Generated());
-	unordered_set<string> excludes;
-	ColumnDependencyLister dependency_lister(dependencies, excludes);
+	ColumnDependencyLister dependency_lister(dependencies);
 	dependency_lister.VisitExpression(*generated_expression);
 }
 
