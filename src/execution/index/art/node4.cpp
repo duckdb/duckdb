@@ -136,7 +136,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 	// erase the child and decrease the count
 	n->children[pos].Reset();
 	n->count--;
-	D_ASSERT(n->count > 1);
+	D_ASSERT(n->count >= 1);
 
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
