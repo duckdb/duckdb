@@ -241,10 +241,6 @@ timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, timestamp_t timestamp, int
 	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
-timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, interval_t interval, timestamp_t timestamp) {
-	return ICUCalendarAdd::Operation<interval_t, timestamp_t, timestamp_t>(interval, timestamp, calendar);
-}
-
 timestamp_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
 	return ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
