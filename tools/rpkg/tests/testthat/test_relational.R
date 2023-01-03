@@ -126,11 +126,11 @@ test_that("we can get the relation object back from an altrep df", {
 
 test_that("Inner join returns all inner relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-    left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_b=c(1, 3), right_c=c(4, 5)))
-    cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("left_b", left), duckdb:::expr_reference("right_b", right))))
-    rel2 <- duckdb:::rel_inner_join(left, right, cond)
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+    right <- rel_from_df(con, data.frame(right_b=c(1, 3), right_c=c(4, 5)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_inner_join(left, right, cond)
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_a=c(1, 2), left_b=c(1, 1), right_b=c(1, 1), right_c=c(4, 4))
     expect_equal(rel_df, expected_result)
@@ -139,11 +139,11 @@ test_that("Inner join returns all inner relations", {
 
 test_that("Left join returns all left relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-    left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_b=c(1)))
-    cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("left_b", left), duckdb:::expr_reference("right_b", right))))
-    rel2 <- duckdb:::rel_left_join(left, right, cond)
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+    right <- rel_from_df(con, data.frame(right_b=c(1)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_left_join(left, right, cond)
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2), right_b=c(1, 1, NA))
     expect_equal(rel_df, expected_result)
@@ -151,11 +151,11 @@ test_that("Left join returns all left relations", {
 
 test_that("Right join returns all right relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("left_b", left), duckdb:::expr_reference("right_b", right))))
-    rel2 <- duckdb:::rel_right_join(left, right, cond)
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    left <- rel_from_df(con, data.frame(left_b=c(1)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_right_join(left, right, cond)
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(1, 1, NA), right_a=c(1, 2, 3), right_b=c(1, 1, 2))
     expect_equal(rel_df, expected_result)
@@ -163,11 +163,11 @@ test_that("Right join returns all right relations", {
 
 test_that("Full join returns all outer relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-    left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 5), left_b=c(4, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    cond <- list(duckdb:::expr_function("eq", list(duckdb:::expr_reference("left_a", left), duckdb:::expr_reference("right_a", right))))
-    rel2 <- duckdb:::rel_full_join(left, right, cond)
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 5), left_b=c(4, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    cond <- list(expr_function("eq", list(expr_reference("left_a", left), expr_reference("right_a", right))))
+    rel2 <- rel_full_join(left, right, cond)
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_a=c(1, 2, 5, NA),
                                   left_b=c(4, 5, 6, NA),
