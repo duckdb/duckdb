@@ -277,11 +277,6 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_intersect(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
-	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::INTERSECT);
-	return make_external<RelationWrapper>("duckdb_relation", res);
-}
-
 [[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
 	return make_external<RelationWrapper>("duckdb_relation", std::make_shared<LimitRelation>(rel->rel, n, 0));
 }

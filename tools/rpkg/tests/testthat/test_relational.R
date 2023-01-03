@@ -210,7 +210,6 @@ test_that("Union all keeps duplicates", {
     expect_equal(rel_df, expected_result)
 })
 
-
 # nobody should do this in reality. It's a pretty dumb idea
 test_that("we can union the same relation to itself", {
      test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))

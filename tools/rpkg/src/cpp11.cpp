@@ -174,13 +174,6 @@ extern "C" SEXP _duckdb_rapi_rel_union_all(SEXP rel_a, SEXP rel_b) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_rel_intersect(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b);
-extern "C" SEXP _duckdb_rapi_rel_intersect(SEXP rel_a, SEXP rel_b) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_intersect(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_a), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel_b)));
-  END_CPP11
-}
-// relational.cpp
 SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n);
 extern "C" SEXP _duckdb_rapi_rel_limit(SEXP rel, SEXP n) {
   BEGIN_CPP11
@@ -374,7 +367,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_from_df",            (DL_FUNC) &_duckdb_rapi_rel_from_df,            3},
     {"_duckdb_rapi_rel_full_join",          (DL_FUNC) &_duckdb_rapi_rel_full_join,          3},
     {"_duckdb_rapi_rel_inner_join",         (DL_FUNC) &_duckdb_rapi_rel_inner_join,         3},
-    {"_duckdb_rapi_rel_intersect",          (DL_FUNC) &_duckdb_rapi_rel_intersect,          2},
     {"_duckdb_rapi_rel_left_join",          (DL_FUNC) &_duckdb_rapi_rel_left_join,          3},
     {"_duckdb_rapi_rel_limit",              (DL_FUNC) &_duckdb_rapi_rel_limit,              2},
     {"_duckdb_rapi_rel_names",              (DL_FUNC) &_duckdb_rapi_rel_names,              1},
