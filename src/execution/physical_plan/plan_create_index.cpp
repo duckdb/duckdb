@@ -26,8 +26,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		auto &expr = op.unbound_expressions[i];
 		if (expr->expression_class == ExpressionClass::BOUND_FUNCTION) {
 			auto &func_expr = (BoundFunctionExpression &)*expr;
-			if (func_expr.function.name == "get_current_timestamp" || func_expr.function.name == "random" ||
-			    func_expr.function.name == "nextval") {
+			if (func_expr.function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS) {
 				throw BinderException("Index keys cannot contain the \"%s\" function.", func_expr.function.name);
 			}
 		}
