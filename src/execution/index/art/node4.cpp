@@ -112,6 +112,7 @@ void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child
 		}
 		n->count = 0;
 
+		D_ASSERT(art.memory_size >= node->MemorySize(art, false));
 		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;
@@ -128,6 +129,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 	// adjust the ART size
 	if (n->GetARTPointer(pos)) {
 		auto child = n->GetChild(art, pos);
+		D_ASSERT(art.memory_size >= child->MemorySize(art, true));
 		art.memory_size -= child->MemorySize(art, true);
 	}
 
@@ -156,6 +158,8 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 		// free this node
 		n->children[0] = nullptr;
 		n->prefix.SetEmpty();
+
+		D_ASSERT(art.memory_size >= n->MemorySize(art, false));
 		art.memory_size -= n->MemorySize(art, false);
 		Node::Delete(node);
 		node = child_ref;

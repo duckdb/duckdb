@@ -90,6 +90,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	// adjust the ART size
 	if (n->GetARTPointer(pos)) {
 		auto child = n->GetChild(art, pos);
+		D_ASSERT(art.memory_size >= child->MemorySize(art, true));
 		art.memory_size -= child->MemorySize(art, true);
 	}
 
@@ -112,6 +113,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 			}
 		}
 
+		D_ASSERT(art.memory_size >= node->MemorySize(art, false));
 		art.memory_size -= node->MemorySize(art, false);
 		Node::Delete(node);
 		node = new_node;

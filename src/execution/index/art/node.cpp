@@ -305,6 +305,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		auto leaf = Leaf::New();
 		leaf->Deserialize(art, reader);
 		art.memory_size += leaf->MemorySize(art, false);
+		D_ASSERT(art.memory_size >= old_memory_size);
 		if (art.track_memory) {
 			art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
 		}
@@ -329,6 +330,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	}
 	deserialized_node->DeserializeInternal(art, reader);
 	art.memory_size += deserialized_node->MemorySize(art, false);
+	D_ASSERT(art.memory_size >= old_memory_size);
 	if (art.track_memory) {
 		art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
 	}
@@ -397,6 +399,7 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 			Node::InsertChild(*info.l_art, info.l_node, key_byte, r_child);
 
 			info.l_art->memory_size += r_memory_size;
+			D_ASSERT(info.r_art->memory_size >= r_memory_size);
 			info.r_art->memory_size -= r_memory_size;
 			if (parents.l_parent) {
 				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
@@ -475,6 +478,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 			Node::InsertChild(*info.l_art, l_node, mismatch_byte, r_node);
 
 			info.l_art->memory_size += r_memory_size;
+			D_ASSERT(info.r_art->memory_size >= r_memory_size);
 			info.r_art->memory_size -= r_memory_size;
 			UpdateParentsOfNodes(l_node, null_parent, parents);
 			r_node = nullptr;
@@ -514,6 +518,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	Node4::InsertChild(*info.l_art, new_node, key_byte, r_node);
 
 	info.l_art->memory_size += r_memory_size;
+	D_ASSERT(info.r_art->memory_size >= r_memory_size);
 	info.r_art->memory_size -= r_memory_size;
 
 	l_node = new_node;

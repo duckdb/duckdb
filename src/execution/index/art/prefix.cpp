@@ -139,6 +139,7 @@ void Prefix::Concatenate(uint8_t key, Prefix &other) {
 
 uint8_t Prefix::Reduce(ART &art, uint32_t n) {
 	auto new_size = size - n - 1;
+	D_ASSERT(art.memory_size >= size - new_size);
 	art.memory_size -= size - new_size;
 	auto prefix = GetPrefixData();
 	auto partial_key = prefix[n];

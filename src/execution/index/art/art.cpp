@@ -546,6 +546,7 @@ void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		leaf->Remove(*this, row_id);
 
 		if (leaf->count == 0) {
+			D_ASSERT(this->memory_size >= leaf->MemorySize(*this, false));
 			this->memory_size -= leaf->MemorySize(*this, false);
 			Node::Delete(node);
 			node = nullptr;

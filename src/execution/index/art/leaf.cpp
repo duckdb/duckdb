@@ -136,7 +136,6 @@ void Leaf::Remove(ART &art, row_t row_id) {
 	if (IsInlined()) {
 		D_ASSERT(count == 1);
 		count--;
-		art.memory_size -= sizeof(row_t);
 		return;
 	}
 
@@ -147,7 +146,8 @@ void Leaf::Remove(ART &art, row_t row_id) {
 		auto remaining_row_id = row_ids[0] == row_id ? row_ids[1] : row_ids[0];
 		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.inlined = remaining_row_id;
-		art.memory_size -= sizeof(row_t) * 2;
+		D_ASSERT(art.memory_size >= sizeof(row_t));
+		art.memory_size -= sizeof(row_t);
 		return;
 	}
 
@@ -155,6 +155,7 @@ void Leaf::Remove(ART &art, row_t row_id) {
 	auto capacity = GetCapacity();
 	if (capacity > 2 && count < capacity / 2) {
 
+		D_ASSERT(art.memory_size >= capacity * sizeof(row_t));
 		art.memory_size -= capacity * sizeof(row_t);
 		auto new_capacity = capacity / 2;
 		auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
