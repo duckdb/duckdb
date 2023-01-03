@@ -121,40 +121,26 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 	auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
 	auto &mask = FlatVector::Validity(result);
-
-	auto &child_entries = StructVector::GetEntries(result);
-	auto &bucket_list = child_entries[0];
-	auto &count_list = child_entries[1];
-
-	auto old_len = ListVector::GetListSize(*bucket_list);
-
-	auto &bucket_validity = FlatVector::Validity(*bucket_list);
-	auto &count_validity = FlatVector::Validity(*count_list);
+	auto old_len = ListVector::GetListSize(result);
 
 	for (idx_t i = 0; i < count; i++) {
-
 		const auto rid = i + offset;
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->hist) {
 			mask.SetInvalid(rid);
-			bucket_validity.SetInvalid(rid);
-			count_validity.SetInvalid(rid);
 			continue;
 		}
 
 		for (auto &entry : *state->hist) {
 			Value bucket_value = OP::template HistogramFinalize<T>(entry.first);
-			ListVector::PushBack(*bucket_list, bucket_value);
 			auto count_value = Value::CreateValue(entry.second);
-			ListVector::PushBack(*count_list, count_value);
+			auto struct_value =
+			    Value::STRUCT({std::make_pair("key", bucket_value), std::make_pair("value", count_value)});
+			ListVector::PushBack(result, struct_value);
 		}
 
-		auto list_struct_data = FlatVector::GetData<list_entry_t>(*bucket_list);
-		list_struct_data[rid].length = ListVector::GetListSize(*bucket_list) - old_len;
-		list_struct_data[rid].offset = old_len;
-
-		list_struct_data = FlatVector::GetData<list_entry_t>(*count_list);
-		list_struct_data[rid].length = ListVector::GetListSize(*count_list) - old_len;
+		auto list_struct_data = ListVector::GetData(result);
+		list_struct_data[rid].length = ListVector::GetListSize(result) - old_len;
 		list_struct_data[rid].offset = old_len;
 		old_len += list_struct_data[rid].length;
 	}
@@ -171,10 +157,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 		throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
 	}
 
-	child_list_t<LogicalType> struct_children;
-	struct_children.push_back({"key", LogicalType::LIST(arguments[0]->return_type)});
-	struct_children.push_back({"value", LogicalType::LIST(LogicalType::UBIGINT)});
-	auto struct_type = LogicalType::MAP(move(struct_children));
+	auto struct_type = LogicalType::MAP(arguments[0]->return_type, LogicalType::UBIGINT);
 
 	function.return_type = struct_type;
 	return make_unique<VariableReturnBindData>(function.return_type);

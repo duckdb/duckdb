@@ -177,9 +177,20 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 
 	// map
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	auto min_map_value = Value::MAP(Value::EMPTYLIST(LogicalType::VARCHAR), Value::EMPTYLIST(LogicalType::VARCHAR));
-	auto max_map_value = Value::MAP(Value::LIST({Value("key1"), Value("key2")}),
-	                                Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose")}));
+	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), std::vector<Value>());
+
+	child_list_t<Value> map_struct1;
+	map_struct1.push_back(make_pair("key", Value("key1")));
+	map_struct1.push_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
+	child_list_t<Value> map_struct2;
+	map_struct2.push_back(make_pair("key", Value("key2")));
+	map_struct2.push_back(make_pair("key", Value("goose")));
+
+	std::vector<Value> map_values;
+	map_values.push_back(Value::STRUCT(map_struct1));
+	map_values.push_back(Value::STRUCT(map_struct2));
+
+	auto max_map_value = Value::MAP(ListType::GetChildType(map_type), map_values);
 	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
 
 	return result;
