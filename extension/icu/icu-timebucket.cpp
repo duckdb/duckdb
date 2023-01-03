@@ -58,17 +58,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 		return (ExtractField(calendar, UCAL_YEAR) - 1970) * 12 + ExtractField(calendar, UCAL_MONTH);
 	}
 
-	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros,
-	                                                  int64_t origin_micros, icu::Calendar *calendar) {
-		origin_micros %= bucket_width_micros;
-		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
-			throw OutOfRangeException("Timestamp out of range");
-		}
-		if (origin_micros < 0 && ts_micros > NumericLimits<int64_t>::Maximum() + origin_micros) {
-			throw OutOfRangeException("Timestamp out of range");
-		}
-		ts_micros -= origin_micros;
-
+	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, timestamp_t ts, timestamp_t origin,
+	                                                  icu::Calendar *calendar) {
+		int64_t ts_micros = Interval::GetMicro(Sub(calendar, ts, origin));
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
 		if (ts_micros < 0 && ts_micros % bucket_width_micros != 0) {
 			if (result_micros < NumericLimits<int64_t>::Minimum() + bucket_width_micros) {
@@ -76,9 +68,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 			}
 			result_micros -= bucket_width_micros;
 		}
-		result_micros += origin_micros;
 
-		return Add(calendar, timestamp_t::epoch(), Interval::FromMicro(result_micros));
+		return Add(calendar, origin, Interval::FromMicro(result_micros));
 	}
 
 	static inline timestamp_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months,
@@ -142,8 +133,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 				return ts;
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(ts);
-			return WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS_1, calendar);
+			timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			return WidthLessThanDaysCommon(bucket_width_micros, ts, origin, calendar);
 		}
 	};
 
@@ -176,9 +167,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 				return ts;
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Sub(calendar, ts, offset));
+			timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return Add(calendar,
-			           WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS_1, calendar),
+			           WidthLessThanDaysCommon(bucket_width_micros, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
 		}
 	};
@@ -216,9 +207,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				return ts;
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(ts);
-			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(origin);
-			return WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros, calendar);
+			return WidthLessThanDaysCommon(bucket_width_micros, ts, origin, calendar);
 		}
 	};
 
@@ -258,9 +247,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				return ts;
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(ts);
-			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(origin);
-			return WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros, calendar);
+			return WidthLessThanDaysCommon(bucket_width_micros, ts, origin, calendar);
 		}
 	};
 
