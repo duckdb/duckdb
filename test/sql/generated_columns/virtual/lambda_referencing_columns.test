@@ -1,0 +1,38 @@
+# name: test/sql/generated_columns/virtual/lambda_referencing_columns.test
+# group: [virtual]
+
+statement ok
+pragma enable_verification;
+
+#TODO: turn the 'list_count(...)' into another generated column?
+statement ok
+create table tbl (
+	i BIGINT,
+	j BIGINT[],
+	k as (
+		list_count(
+			list_filter(
+				j,
+				y -> y > i
+			)
+		)
+	)
+);
+
+statement ok
+insert into tbl values (7, [4,8,6,1,2,4,5,8,5])
+
+query III
+select * from tbl;
+----
+7	[4, 8, 6, 1, 2, 4, 5, 8, 5]	2
+
+query III
+select a,b,c from tbl as not_tbl(c,b,a)
+----
+13	[4, 8, 6, 1, 2, 4, 5, 8, 5]	7
+
+query III
+select i,j,k from tbl as not_tbl(k,j,i)
+----
+13	[4, 8, 6, 1, 2, 4, 5, 8, 5]	7
