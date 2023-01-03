@@ -410,6 +410,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	for (auto &type_pair : child_types) {
 		names.push_back(type_pair.first);
 		return_types.push_back(type_pair.second);
+		union_null_cols.push_back(false);
 	}
 
 	// Add generated constant column for filename
@@ -922,9 +923,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	if (state.finished) {
 		return false;
 	}
-
-	union_null_cols = union_null_cols.empty() ? vector<bool>(result.ColumnCount(), false) : union_null_cols;
-	D_ASSERT(union_null_cols.size() == result.ColumnCount());
 
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
