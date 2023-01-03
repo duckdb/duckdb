@@ -1,0 +1,11 @@
+# name: test/sql/attach/attach_httpfs.test
+# description: Test attach using httpfs
+# group: [attach]
+
+require skip_reload
+
+require httpfs
+
+# ATTACH over HTTPFS is not supported yet
+statement error
+ATTACH 'https://github.com/duckdb/duckdb/raw/master/test/sql/storage_version/storage_version.db' AS db;

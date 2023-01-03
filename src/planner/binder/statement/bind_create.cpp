@@ -176,24 +176,26 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog, const string &schema) {
-	if (type.id() == LogicalTypeId::LIST) {
+	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		type = LogicalType::LIST(child_type);
+		if (type.id() == LogicalTypeId::LIST) {
+			type = LogicalType::LIST(child_type);
+		} else {
+			D_ASSERT(child_type.id() == LogicalTypeId::STRUCT); // map must be list of structs
+			type = LogicalType::MAP(child_type);
+		}
+
 		type.SetAlias(alias);
-	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			BindLogicalType(context, child_type.second, catalog, schema);
 		}
-		// Generate new Struct/Map Type
+		// Generate new Struct Type
 		auto alias = type.GetAlias();
-		if (type.id() == LogicalTypeId::STRUCT) {
-			type = LogicalType::STRUCT(child_types);
-		} else {
-			type = LogicalType::MAP(child_types);
-		}
+		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
