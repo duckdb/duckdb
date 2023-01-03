@@ -6,19 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers2(j INTEGER)
-
-statement ok
-INSERT INTO integers2 VALUES (1), (2),  (4), (5)
-
-statement ok
 CREATE TABLE integers(i INTEGER)
 
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
-
-
-mode skip
 
 # test filter pushdown into cross product
 # single filter that matches both sides
@@ -100,22 +91,12 @@ SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) ORDER BY i
 2
 3
 
-mode unskip
-
-statement ok
-PRAGMA enable_profiling='json'
-
-statement ok
-PRAGMA profiling_output='whatever_man.json'
-
 # transform into ANTI join
 query I
 SELECT * FROM integers WHERE i NOT IN ((SELECT * FROM integers WHERE i=1)) ORDER BY i
 ----
 2
 3
-
-mode skip
 
 # condition pushdown
 query I
