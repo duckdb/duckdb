@@ -116,9 +116,10 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(make_unique<ColumnDataCollection>(context, types)) {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
 	}
-	unique_ptr<ColumnDataCollection> buffer;
+
+	ColumnDataCollection buffer;
 };
 
 void ParquetOptions::Serialize(FieldWriter &writer) const {
@@ -704,12 +705,12 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 
 	// append data to the local (buffered) chunk collection
-	local_state.buffer->Append(input);
-	if (local_state.buffer->Count() > bind_data.row_group_size) {
+	local_state.buffer.Append(input);
+	if (local_state.buffer.Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
-		global_state.writer->Flush(*local_state.buffer);
+		global_state.writer->Flush(local_state.buffer);
 		// and reset the buffer
-		local_state.buffer = make_unique<ColumnDataCollection>(context.client, bind_data.sql_types);
+		local_state.buffer.Reset();
 	}
 }
 
@@ -718,7 +719,7 @@ void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, Glo
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 	// flush any data left in the local state to the file
-	global_state.writer->Flush(*local_state.buffer);
+	global_state.writer->Flush(local_state.buffer);
 }
 
 void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
