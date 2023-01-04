@@ -54,6 +54,8 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 	D_ASSERT(insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto projection_index = insert->children[0]->GetTableIndex()[0];
 
+	vector<column_t> logical_column_ids;
+	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
@@ -69,6 +71,8 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 		columns.push_back(column.Physical());
+		logical_column_ids.push_back(column.Oid());
+		column_names.push_back(colname);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			insert->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
 		} else {
@@ -90,6 +94,23 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 			insert->expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(table_index, column.Physical().index)));
 			insert->set_expressions.push_back(move(bound_expr));
+		}
+	}
+
+	// Verify that none of the columns that are targeted with a SET expression are indexed on
+
+	unordered_set<column_t> indexed_columns;
+	auto &indexes = table->storage->info->indexes.Indexes();
+	for (auto &index : indexes) {
+		for (auto &column_id : index->column_id_set) {
+			indexed_columns.insert(column_id);
+		}
+	}
+
+	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
+		auto &column = logical_column_ids[i];
+		if (indexed_columns.count(column)) {
+			throw BinderException("Can not assign to column '%s' because an Index exists on it", column_names[i]);
 		}
 	}
 }

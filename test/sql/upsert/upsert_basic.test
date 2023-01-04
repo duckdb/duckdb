@@ -8,6 +8,8 @@
 statement ok
 SET preserve_insertion_order=false;
 
+
+
 statement ok
 create table tbl(
 	i integer PRIMARY KEY,
@@ -17,6 +19,10 @@ create table tbl(
 
 statement ok
 insert into tbl VALUES (1, 10, 1), (2, 20, 1), (3, 30, 2);
+
+# assigned-to column is indexed on
+statement error
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET i = i;
 
 query III
 select * from tbl;
