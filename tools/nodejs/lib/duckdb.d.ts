@@ -63,7 +63,7 @@ export class IpcResultStreamIterator implements AsyncIterator<Uint8Array>, Async
 
 export interface ReplacementScanResult {
   function: string;
-  parameter: string;
+  parameters: Array<unknown>;
 }
 
 export type ReplacementScanCallback = (

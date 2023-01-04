@@ -277,7 +277,7 @@ Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
 struct JSRSArgs {
 	std::string table = "";
 	std::string function = "";
-	duckdb::Value parameter;
+	std::vector<duckdb::Value> parameters;
 	bool done = false;
 	duckdb::PreservedError error;
 };
@@ -295,7 +295,15 @@ void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, 
 		if (result && result.IsObject()) {
 			auto obj = result.As<Napi::Object>();
 			jsargs->function = obj.Get("function").ToString().Utf8Value();
-			jsargs->parameter = duckdb::Value(obj.Get("parameter").ToString().Utf8Value());
+			auto parameters = obj.Get("parameters");
+			if (parameters.IsArray()) {
+				auto paramArray = parameters.As<Napi::Array>();
+				for (uint32_t i = 0; i < paramArray.Length(); i++) {
+					jsargs->parameters.push_back(Utils::BindParameter(paramArray.Get(i)));
+				}
+			} else {
+				throw duckdb::Exception("Expected parameter array");
+			}
 		} else if (!result.IsNull()) {
 			throw duckdb::Exception("Invalid scan replacement result");
 		}
@@ -320,12 +328,10 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 	}
 	if (jsargs.function != "") {
 		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
-		std::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
-		duckdb::vector<duckdb::Value> params;
-
-		params.push_back(jsargs.parameter);
-		children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(duckdb::Value::LIST(std::move(params))));
-
+		std::vector<std::unique_ptr<duckdb::ParsedExpression>> children;
+		for (auto &param : jsargs.parameters) {
+			children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(std::move(param)));
+		}
 		table_function->function =
 		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
 		return table_function;
@@ -351,7 +357,7 @@ struct RegisterRsTask : public Task {
 Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	if (info.Length() < 1) {
-		Napi::TypeError::New(env, "Holding it wrong").ThrowAsJavaScriptException();
+		Napi::TypeError::New(env, "Replacement scan callback expected").ThrowAsJavaScriptException();
 		return env.Null();
 	}
 	Napi::Function rs_callback = info[0].As<Napi::Function>();

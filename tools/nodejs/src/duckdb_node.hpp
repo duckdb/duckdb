@@ -205,6 +205,7 @@ public:
 		auto obj = T::constructor.New(args);
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}
+	static duckdb::Value BindParameter(const Napi::Value source);
 };
 
 Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_types, bool with_data);

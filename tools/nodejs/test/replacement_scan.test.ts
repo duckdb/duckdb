@@ -8,7 +8,7 @@ const replacementScan = (table: string) => {
   } else {
     return {
       function: "read_csv_auto",
-      parameter: `test/support/${table}.csv`,
+      parameters: [`test/support/${table}.csv`],
     };
   }
 };
@@ -16,7 +16,7 @@ const replacementScan = (table: string) => {
 const invalidTableFunction = (table: string) => {
   return {
     function: "foo",
-    parameter: "bar",
+    parameters: ["bar"],
   };
 };
 
@@ -134,7 +134,7 @@ describe("replacement scan", () => {
             function (err: null | Error, rows: TableData) {
               expect(err).not.to.be.null;
               expect(err!.message).to.match(
-                /Table Function with name undefined does not exist/
+                /Expected parameter array/
               );
               done();
             }
