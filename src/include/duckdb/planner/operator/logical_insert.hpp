@@ -47,14 +47,10 @@ public:
 	unique_ptr<Expression> on_conflict_condition;
 	// The WHERE clause of the DO UPDATE clause
 	unique_ptr<Expression> do_update_condition;
-	// The table_index for the 'excluded' qualified columns
-	idx_t excluded_table_index;
-	// The table_index for the regular columns
-	idx_t non_excluded_table_index;
 	// The DO UPDATE SET expressions
 	vector<unique_ptr<Expression>> set_expressions;
-	// The binding for the 'excluded' table
-	unique_ptr<TableRef> excluded_table_ref;
+	// The table_index referring to the column references qualified with 'excluded'
+	idx_t excluded_table_index;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

@@ -29,6 +29,7 @@ public:
 
 public:
 	bool IsQualified() const;
+	void SetTableName(string table_name);
 	const string &GetColumnName() const;
 	const string &GetTableName() const;
 	bool IsScalar() const override {

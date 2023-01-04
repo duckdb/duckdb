@@ -908,6 +908,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 
 void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<PhysicalIndex> &column_ids) {
+	// FIXME: double usage of 'i'?
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
 		auto &constraint = table.bound_constraints[i];
@@ -916,6 +917,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
+			// FIXME: double usage of 'i'?
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
@@ -960,6 +962,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
+	D_ASSERT(column_ids.size() == updates.ColumnCount());
 	auto count = updates.size();
 	updates.Verify();
 	if (count == 0) {

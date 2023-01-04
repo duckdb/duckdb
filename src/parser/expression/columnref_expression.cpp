@@ -38,6 +38,15 @@ const string &ColumnRefExpression::GetTableName() const {
 	return column_names.size() == 3 ? column_names[1] : column_names[0];
 }
 
+void ColumnRefExpression::SetTableName(string table_name) {
+	if (IsQualified()) {
+		auto &name = column_names.size() == 3 ? column_names[1] : column_names[0];
+		name = move(table_name);
+		return;
+	}
+	column_names.insert(column_names.begin(), move(table_name));
+}
+
 string ColumnRefExpression::GetName() const {
 	return !alias.empty() ? alias : column_names.back();
 }

@@ -26,8 +26,20 @@ select * from tbl;
 3	30	2
 
 statement ok
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = k;
+
+# Keep the value the same, essentially a do nothing
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	2
+
+statement ok
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = excluded.k;
 
+# Update to the new value
 query III
 select * from tbl;
 ----
@@ -38,6 +50,7 @@ select * from tbl;
 statement ok
 insert into tbl VALUES (4,2,3), (3,5,10) ON CONFLICT (i) DO NOTHING;
 
+# Don't alter the existing row
 query III
 select * from tbl;
 ----

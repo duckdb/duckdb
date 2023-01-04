@@ -22,6 +22,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 
 namespace duckdb {
 
@@ -38,11 +40,20 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 
 void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table,
                                         vector<PhysicalIndex> &columns) {
-	insert->excluded_table_index = GenerateTableIndex();
-	insert->non_excluded_table_index = GenerateTableIndex();
 
-	// TODO: need to register which columnref expressions are 'excluded'
-	//  and then later change the BoundReferenceExpression index of these later
+	// add the 'excluded' dummy table binding
+	AddTableName("excluded");
+	// add a bind context entry for it
+	auto excluded_index = GenerateTableIndex();
+	insert->excluded_table_index = excluded_index;
+	auto table_column_names = table->columns.GetColumnNames();
+	auto table_column_types = table->columns.GetColumnTypes();
+	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
+
+	D_ASSERT(insert->children.size() == 1);
+	D_ASSERT(insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
+	auto projection_index = insert->children[0]->GetTableIndex()[0];
+
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
@@ -63,37 +74,40 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
-			// TODO: temporarily remove the 'excluded' qualification before binding
 			D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
 			auto &column_ref = (ColumnRefExpression &)*expr;
+			if (!column_ref.IsQualified()) {
+				// Qualify all column references to avoid ambiguity with 'excluded'
+				column_ref.SetTableName(table->name);
+			}
+			auto &table_name = column_ref.GetTableName();
+			auto table_index = table_name == "excluded" ? insert->excluded_table_index : projection_index;
 			auto bound_expr = binder.Bind(expr);
 			D_ASSERT(bound_expr);
 			if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 				throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
 			}
 			insert->expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    bound_expr->return_type, ColumnBinding(insert->excluded_table_index, insert->set_expressions.size())));
+			    bound_expr->return_type, ColumnBinding(table_index, column.Physical().index)));
 			insert->set_expressions.push_back(move(bound_expr));
 		}
 	}
 }
 
 void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt) {
-	LogicalGet *get;
-
 	if (!stmt.on_conflict_info) {
 		insert->action_type = OnConflictAction::THROW;
 		return;
 	}
-	insert->excluded_table_ref = stmt.table_ref->Copy();
 	D_ASSERT(stmt.table_ref->type == TableReferenceType::BASE_TABLE);
-	((BaseTableRef &)*insert->excluded_table_ref).alias = "excluded";
+
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table_ref);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
-	auto bound_excluded_table = Bind(*insert->excluded_table_ref);
+
+	auto &bound_base_tableref = (BoundBaseTableRef &)*bound_table;
 
 	auto &on_conflict = *stmt.on_conflict_info;
 	insert->action_type = on_conflict.action_type;
@@ -159,6 +173,8 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 				insert->on_conflict_filter.push_back(entry->second);
 			}
 		}
+		// TODO: verify that no columns that are indexed on appear as target of a SET expression (<indexed_on_column> =
+		// <expression>)
 		auto &indexes = table->storage->info->indexes;
 		bool index_references_columns = false;
 		indexes.Scan([&](Index &index) {
@@ -352,8 +368,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// FIXME: this creates a projection, with a child LogicalExpressionGet
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-	BindOnConflictClause(insert, table, stmt);
 	insert->AddChild(move(root));
+	BindOnConflictClause(insert, table, stmt);
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;

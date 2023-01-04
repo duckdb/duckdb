@@ -25,8 +25,11 @@ public:
 	unique_ptr<UpdateSetInfo> Copy() const;
 
 public:
+	// The condition that needs to be met to perform the update
 	unique_ptr<ParsedExpression> condition;
+	// The columns to update
 	vector<string> columns;
+	// The set expressions to execute
 	vector<unique_ptr<ParsedExpression>> expressions;
 
 protected:

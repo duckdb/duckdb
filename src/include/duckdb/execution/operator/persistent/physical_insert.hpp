@@ -21,8 +21,8 @@ class PhysicalInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk,
-	               bool parallel, OnConflictAction action_type);
+	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
+	               idx_t estimated_cardinality, bool return_chunk, bool parallel, OnConflictAction action_type);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -46,6 +46,18 @@ public:
 	bool parallel;
 	// Which action to perform on conflict
 	OnConflictAction action_type;
+	// The DO UPDATE set expressions, if 'action_type' is UPDATE
+	vector<unique_ptr<Expression>> set_expressions;
+	// Indices of the columns of the table
+	vector<column_t> column_indices;
+	// Types of the columns of the table that are not indexed on
+	vector<LogicalType> filtered_types;
+	// Indices of the columns of the table that are not indexed on
+	vector<column_t> filtered_ids;
+	// Physical indices of the columns of the table that are not indexed on
+	vector<PhysicalIndex> filtered_physical_ids;
+	// Column indices that are indexed on
+	unordered_set<column_t> indexed_on_columns;
 
 public:
 	// Source interface

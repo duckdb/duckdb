@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -59,6 +60,19 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		bindings = op.GetColumnBindings();
 		VisitOperatorExpressions(op);
 		return;
+	} else if (op.type == LogicalOperatorType::LOGICAL_INSERT) {
+		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
+		// ON CONFLICT DO UPDATE clause
+		auto &insert_op = (LogicalInsert &)op;
+		if (insert_op.action_type == OnConflictAction::UPDATE) {
+			VisitOperatorChildren(op);
+			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(
+			    insert_op.excluded_table_index, insert_op.table->columns.PhysicalColumnCount());
+			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
+			VisitOperatorExpressions(op);
+			bindings = op.GetColumnBindings();
+			return;
+		}
 	}
 	// general case
 	// first visit the children of this operator
