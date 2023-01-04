@@ -26,9 +26,6 @@ public:
 	vector<unique_ptr<PhysicalOperator>> child_tables;
 
 public:
-	string GetName() const override;
-	string ParamsToString() const override;
-
 	bool Equals(const PhysicalOperator &other) const override;
 
 public:

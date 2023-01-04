@@ -85,14 +85,6 @@ double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceS
 	                child_tables[1]->GetProgress(context, *gstate.global_states[1]));
 }
 
-string PhysicalPositionalScan::GetName() const {
-	return child_tables[0]->GetName() + " " + PhysicalOperatorToString(type) + " " + child_tables[1]->GetName();
-}
-
-string PhysicalPositionalScan::ParamsToString() const {
-	return child_tables[0]->ParamsToString() + "\n" + child_tables[1]->ParamsToString();
-}
-
 bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 	if (type != other_p.type) {
 		return false;

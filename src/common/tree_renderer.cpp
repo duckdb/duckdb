@@ -6,6 +6,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 #include "utf8proc_wrapper.hpp"
@@ -378,10 +379,13 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+	switch (op.type) {
+	case PhysicalOperatorType::DELIM_JOIN:
+	case PhysicalOperatorType::POSITIONAL_SCAN:
 		return true;
+	default:
+		return !op.children.empty();
 	}
-	return !op.children.empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
@@ -392,6 +396,11 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
 		auto &delim = (PhysicalDelimJoin &)op;
 		callback(*delim.join);
+	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
+		auto &pscan = (PhysicalPositionalScan &)op;
+		for (auto &table : pscan.child_tables) {
+			callback(*table);
+		}
 	}
 }
 
