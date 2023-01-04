@@ -191,7 +191,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert->on_conflict_filter.push_back(entry->second);
+				insert->on_conflict_filter.push_back(col.Oid());
 			}
 		}
 		// TODO: verify that no columns that are indexed on appear as target of a SET expression (<indexed_on_column> =

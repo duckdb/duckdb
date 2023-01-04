@@ -111,4 +111,18 @@ public:
 	idx_t count;
 };
 
+class ConflictInfo {
+public:
+	ConflictInfo(idx_t count, const string &constraint_name, const vector<column_t> &column_ids)
+	    : constraint_conflicts(count), constraint_name(constraint_name), column_ids(column_ids) {
+	}
+	UniqueConstraintConflictInfo constraint_conflicts;
+	const string &constraint_name;
+	const vector<column_t> &column_ids;
+
+public:
+	bool ConflictTargetMatches(Index &index) const;
+	void VerifyAllConflictsMeetCondition() const;
+};
+
 } // namespace duckdb

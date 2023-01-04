@@ -178,7 +178,7 @@ public:
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                             UniqueConstraintConflictInfo *conflict_info = nullptr);
+	                             ConflictInfo *conflict_info = nullptr);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

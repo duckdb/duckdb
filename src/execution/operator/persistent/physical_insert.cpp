@@ -31,11 +31,16 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<Expression>> set_expressions, idx_t estimated_cardinality,
-                               bool return_chunk, bool parallel, OnConflictAction action_type)
+                               bool return_chunk, bool parallel, OnConflictAction action_type,
+                               unique_ptr<Expression> on_conflict_condition_p,
+                               unique_ptr<Expression> do_update_condition_p, vector<column_t> on_conflict_filter_p,
+                               string constraint_name_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type),
-      set_expressions(move(set_expressions)) {
+      set_expressions(move(set_expressions)), on_conflict_condition(move(on_conflict_condition_p)),
+      do_update_condition(move(do_update_condition_p)), on_conflict_filter(move(on_conflict_filter_p)),
+      constraint_name(move(constraint_name_p)) {
 
 	indexed_on_columns = GetIndexedOnColumns(table);
 
@@ -151,6 +156,19 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 	}
 }
 
+void VerifyAllConflictsMeetCondition(ExecutionContext &context, DataChunk &conflicts,
+                                     const unique_ptr<Expression> &condition) {
+	if (!condition) {
+		return;
+	}
+	ExpressionExecutor executor(context.client, *condition);
+	DataChunk result;
+	result.Initialize(context.client, {LogicalType::BOOLEAN});
+	executor.Execute(conflicts, result);
+
+	// Check that the condition holds true for all conflicts;
+}
+
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                     DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
@@ -187,23 +205,30 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		if (action_type == OnConflictAction::THROW) {
 			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
 		} else {
+			// Check whether any conflicts arise, and if they all meet the conflict_target + condition
+			// If that's not the case - We throw the first error
+
 			// We either want to do nothing, or perform an update when conflicts arise
-			UniqueConstraintConflictInfo conflict_info(lstate.insert_chunk.size());
+			ConflictInfo conflict_info(lstate.insert_chunk.size(), constraint_name, on_conflict_filter);
 			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
-			if (conflict_info.matches.Count() != 0) {
+			auto &conflicts = conflict_info.constraint_conflicts;
+			if (conflicts.matches.Count() != 0) {
 				DataChunk conflict_chunk; // contains only the conflicting values
 				DataChunk scan_chunk;     // contains the original values, that caused the conflict
 				DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
 				DataChunk update_chunk;   // contains only the to-update columns
-				if (action_type == OnConflictAction::NOTHING ||
-				    indexed_on_columns.size() == lstate.insert_chunk.ColumnCount()) {
-					// DO NOTHING or DO UPDATE, but all columns are indexed on, so we can't update anything
-				} else {
-					// Filter out everything but the conflicting rows
-					conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
-					conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
-					conflict_chunk.Slice(conflict_info.matches.Selection(), conflict_info.matches.Count());
-					conflict_chunk.SetCardinality(conflict_info.matches.Count());
+
+				// Filter out everything but the conflicting rows
+				conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
+				conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
+				conflict_chunk.Slice(conflicts.matches.Selection(), conflicts.matches.Count());
+				conflict_chunk.SetCardinality(conflicts.matches.Count());
+
+				// todo: pass the on_conflict condition
+				VerifyAllConflictsMeetCondition(context, conflict_chunk, on_conflict_condition);
+
+				if (action_type != OnConflictAction::NOTHING &&
+				    indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
 
 					auto &data_table = table->storage;
 
@@ -211,7 +236,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 					scan_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
 					auto fetch_state = make_unique<ColumnFetchState>();
 					data_table->Fetch(Transaction::GetTransaction(context.client), scan_chunk, column_indices,
-					                  conflict_info.row_ids, conflict_info.matches.Count(), *fetch_state);
+					                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
 
 					// Splice the Input chunk and the fetched chunk together
 					D_ASSERT(scan_chunk.ColumnCount() == conflict_chunk.ColumnCount());
@@ -245,13 +270,12 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 					executor.Execute(combined_chunk, update_chunk);
 
 					// Perform the update, using the results of the SET expressions
-					data_table->Update(*table, context.client, conflict_info.row_ids, filtered_physical_ids,
-					                   update_chunk);
+					data_table->Update(*table, context.client, conflicts.row_ids, filtered_physical_ids, update_chunk);
 				}
 				// Cut out the conflicting columns from the insert chunk
 				SelectionVector sel_vec(lstate.insert_chunk.size());
-				idx_t new_size = SelectionVector::Inverted(conflict_info.matches.Selection(), sel_vec,
-				                                           conflict_info.matches.Count(), lstate.insert_chunk.size());
+				idx_t new_size = SelectionVector::Inverted(conflicts.matches.Selection(), sel_vec,
+				                                           conflicts.matches.Count(), lstate.insert_chunk.size());
 				lstate.insert_chunk.Slice(sel_vec, new_size);
 				lstate.insert_chunk.SetCardinality(new_size);
 			}

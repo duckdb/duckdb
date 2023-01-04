@@ -487,7 +487,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                                        UniqueConstraintConflictInfo *conflict_info) {
+                                        ConflictInfo *conflict_info) {
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
@@ -523,12 +523,13 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
 			info->indexes.Scan([&](Index &index) {
-				if (conflict_info) {
-					UniqueConstraintConflictInfo info(chunk.size());
-					index.VerifyAppend(chunk, info);
-					if (info.matches.Count() != 0) {
+				if (conflict_info && conflict_info->ConflictTargetMatches(index)) {
+					UniqueConstraintConflictInfo temp(chunk.size());
+					index.VerifyAppend(chunk, temp);
+					if (temp.matches.Count() != 0) {
+						auto &conflicts = conflict_info->constraint_conflicts;
 						// Found actual conflicts, merge it into the conflict_info
-						conflict_info->AddConflicts(info);
+						conflicts.AddConflicts(temp);
 					}
 				} else {
 					index.VerifyAppend(chunk);
