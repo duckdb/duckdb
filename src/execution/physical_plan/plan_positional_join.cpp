@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_pos_join.hpp"
+#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_pos_join.hpp"
 
@@ -9,7 +10,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPositional
 
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
-	return make_unique<PhysicalPositionalJoin>(op.types, move(left), move(right), op.estimated_cardinality);
+	if (left->type == PhysicalOperatorType::TABLE_SCAN && right->type == PhysicalOperatorType::TABLE_SCAN) {
+		return make_unique<PhysicalPositionalScan>(op.types, move(left), move(right));
+	} else {
+		return make_unique<PhysicalPositionalJoin>(op.types, move(left), move(right), op.estimated_cardinality);
+	}
 }
 
 } // namespace duckdb

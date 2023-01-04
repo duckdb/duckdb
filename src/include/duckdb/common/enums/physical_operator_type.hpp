@@ -43,6 +43,7 @@ enum class PhysicalOperatorType : uint8_t {
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
 	EXPRESSION_SCAN,
+	POSITIONAL_SCAN,
 	// -----------------------------
 	// Joins
 	// -----------------------------
