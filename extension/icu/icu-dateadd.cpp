@@ -57,10 +57,18 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	const auto udate = UDate(millis);
 	calendar->setTime(udate, status);
 
-	// Add interval fields from lowest to highest
-	calendar->add(UCAL_MILLISECOND, interval.micros / Interval::MICROS_PER_MSEC, status);
-	calendar->add(UCAL_DATE, interval.days, status);
-	calendar->add(UCAL_MONTH, interval.months, status);
+	const auto interval_ms = interval.micros / Interval::MICROS_PER_MSEC;
+	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
+		// Add interval fields from lowest to highest (non-ragged to ragged)
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->add(UCAL_MONTH, interval.months, status);
+	} else {
+		// Add interval fields from highest to lowest (ragged to non-ragged)
+		calendar->add(UCAL_MONTH, interval.months, status);
+		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+	}
 
 	return ICUDateFunc::GetTime(calendar, micros);
 }
