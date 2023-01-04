@@ -13,18 +13,18 @@ const replacementScan = (table: string) => {
   }
 };
 
-const badReplacementScan1 = (table: string) => {
+const invalidTableFunction = (table: string) => {
   return {
     function: "foo",
     parameter: "bar",
   };
 };
 
-const badReplacementScan2 = (table: string) => {
+const invalidResultType = (table: string) => {
   return "hello" as unknown as sqlite3.ReplacementScanResult;
 };
 
-const badReplacementScan3 = (table: string) => {
+const invalidResultKeys = (table: string) => {
   return {
     foo: "foo",
     bar: "bar",
@@ -96,7 +96,7 @@ describe("replacement scan", () => {
   describe("with invalid replacement scan functions", () => {
     it("does not crash with bad return values", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(badReplacementScan1, () => {
+        db.register_replacement_scan(invalidTableFunction, () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
@@ -113,7 +113,7 @@ describe("replacement scan", () => {
 
     it("does not crash with invalid response", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(badReplacementScan2, () => {
+        db.register_replacement_scan(invalidResultType, () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
@@ -128,7 +128,7 @@ describe("replacement scan", () => {
 
     it("does not crash with invalid response object", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(badReplacementScan3, () => {
+        db.register_replacement_scan(invalidResultKeys, () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
