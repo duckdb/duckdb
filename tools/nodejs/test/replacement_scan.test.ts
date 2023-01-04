@@ -1,6 +1,6 @@
 import * as sqlite3 from "../lib/duckdb";
 import type { TableData } from "../lib/duckdb";
-import * as assert from "assert";
+import { expect } from "chai";
 
 const replacementScan = (table: string) => {
   if (table.endsWith(".csv")) {
@@ -42,9 +42,9 @@ describe("replacement scan", () => {
       db.all(
         "SELECT * FROM 'prepare' LIMIT 5",
         function (err: null | Error, rows: TableData) {
-          assert.notEqual(err, null);
-          assert.ok(
-            err!.message.match(/Table with name prepare does not exist/)
+          expect(err).not.to.be.null;
+          expect(err!.message).to.match(
+            /Table with name prepare does not exist/
           );
           done();
         }
@@ -63,7 +63,7 @@ describe("replacement scan", () => {
       db.all(
         "SELECT * FROM 'prepare' LIMIT 5",
         function (err: null | Error, rows: TableData) {
-          assert.equal(rows.length, 5);
+          expect(rows.length).to.equal(5);
           done();
         }
       );
@@ -73,7 +73,7 @@ describe("replacement scan", () => {
       db.all(
         "SELECT * FROM 'test/support/prepare.csv' LIMIT 5",
         function (err: null | Error, rows: TableData) {
-          assert.equal(rows.length, 5);
+          expect(rows.length).to.equal(5);
           done();
         }
       );
@@ -83,11 +83,9 @@ describe("replacement scan", () => {
       db.all(
         "SELECT * FROM 'missing' LIMIT 5",
         function (err: null | Error, rows: TableData) {
-          assert.notEqual(err, null);
-          assert.ok(
-            err!.message.match(
-              /No files found that match the pattern "test\/support\/missing.csv"/
-            )
+          expect(err).not.to.be.null;
+          expect(err!.message).to.match(
+            /No files found that match the pattern "test\/support\/missing.csv"/
           );
           done();
         }
@@ -102,11 +100,9 @@ describe("replacement scan", () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
-              assert.notEqual(err, null);
-              assert.ok(
-                err!.message.match(
-                  /Table Function with name foo does not exist/
-                )
+              expect(err).not.to.be.null;
+              expect(err!.message).to.match(
+                /Table Function with name foo does not exist/
               );
               done();
             }
@@ -121,8 +117,8 @@ describe("replacement scan", () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
-              assert.notEqual(err, null);
-              assert.ok(err!.message.match(/Invalid scan replacement result/));
+              expect(err).not.to.be.null;
+              expect(err!.message).to.match(/Invalid scan replacement result/);
               done();
             }
           );
@@ -136,11 +132,9 @@ describe("replacement scan", () => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
-              assert.notEqual(err, null);
-              assert.ok(
-                err!.message.match(
-                  /Table Function with name undefined does not exist/
-                )
+              expect(err).not.to.be.null;
+              expect(err!.message).to.match(
+                /Table Function with name undefined does not exist/
               );
               done();
             }
