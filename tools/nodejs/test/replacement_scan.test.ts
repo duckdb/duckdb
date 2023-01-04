@@ -43,7 +43,9 @@ describe("replacement scan", () => {
         "SELECT * FROM 'prepare' LIMIT 5",
         function (err: null | Error, rows: TableData) {
           assert.notEqual(err, null);
-          assert.match(err!.message, /Table with name prepare does not exist/);
+          assert.ok(
+            err!.message.match(/Table with name prepare does not exist/)
+          );
           done();
         }
       );
@@ -82,9 +84,10 @@ describe("replacement scan", () => {
         "SELECT * FROM 'missing' LIMIT 5",
         function (err: null | Error, rows: TableData) {
           assert.notEqual(err, null);
-          assert.match(
-            err!.message,
-            /No files found that match the pattern "test\/support\/missing.csv"/
+          assert.ok(
+            err!.message.match(
+              /No files found that match the pattern "test\/support\/missing.csv"/
+            )
           );
           done();
         }
@@ -100,9 +103,10 @@ describe("replacement scan", () => {
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
               assert.notEqual(err, null);
-              assert.match(
-                err!.message,
-                /Table Function with name foo does not exist/
+              assert.ok(
+                err!.message.match(
+                  /Table Function with name foo does not exist/
+                )
               );
               done();
             }
@@ -118,7 +122,7 @@ describe("replacement scan", () => {
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
               assert.notEqual(err, null);
-              assert.match(err!.message, /Invalid scan replacement result/);
+              assert.ok(err!.message.match(/Invalid scan replacement result/));
               done();
             }
           );
@@ -133,9 +137,10 @@ describe("replacement scan", () => {
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
               assert.notEqual(err, null);
-              assert.match(
-                err!.message,
-                /Table Function with name undefined does not exist/
+              assert.ok(
+                err!.message.match(
+                  /Table Function with name undefined does not exist/
+                )
               );
               done();
             }
