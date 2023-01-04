@@ -48,7 +48,7 @@ public:
 
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
 	//! Used when deleting a node
-	void Concatenate(uint8_t key, Prefix &other);
+	void Concatenate(ART &art, uint8_t key, Prefix &other);
 	//! Reduces the prefix in n bytes, and returns the new first byte
 	uint8_t Reduce(ART &art, uint32_t n);
 

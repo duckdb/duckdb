@@ -829,12 +829,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		return;
 	}
 
+	// don't alter the index during constraint checking
+	lock_guard<mutex> l(lock);
+
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-
-	// unique index, check
-	lock_guard<mutex> l(lock);
-	// first resolve the expressions for the index
 	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
@@ -846,12 +845,19 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		if (keys[i].Empty()) {
 			continue;
 		}
+
 		Node *node_ptr = Lookup(tree, keys[i], 0);
-		bool throw_exception =
-		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
-		if (!throw_exception) {
+
+		// APPEND_FK, i.e., the key must exist in the PK/UNIQUE table
+		if (verify_type == VerifyExistenceType::APPEND_FK && node_ptr) {
 			continue;
 		}
+		// APPEND only valid if no node with same key exists yet in PK/UNIQUE table
+		// DELETE_FK only valid if key does not exist in any FK table
+		if (verify_type != VerifyExistenceType::APPEND_FK && !node_ptr) {
+			continue;
+		}
+
 		string key_name;
 		for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
 			if (k > 0) {
@@ -859,33 +865,34 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			}
 			key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(i).ToString();
 		}
+
 		string exception_msg;
 		switch (verify_type) {
 		case VerifyExistenceType::APPEND: {
-			// node already exists in tree
+			// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table
 			string type = IsPrimary() ? "primary key" : "unique";
 			exception_msg = "duplicate key \"" + key_name + "\" violates ";
 			exception_msg += type + " constraint";
 			break;
 		}
 		case VerifyExistenceType::APPEND_FK: {
-			// found node no exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
+			// APPEND_FK to FK table, node/key does not exist in PK/UNIQUE table
+			exception_msg = "violates foreign key constraint because the key \"" + key_name +
+			                "\" does not exist in the referenced table";
 			break;
 		}
 		case VerifyExistenceType::DELETE_FK: {
-			// found node exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" exist in table has foreign key";
+			// DELETE_FK that still exists in a FK table, i.e., not a valid delete
+			exception_msg = "violates foreign key constraint because the key \"" + key_name +
+			                "\" is still referenced by a foreign key in a different table";
 			break;
 		}
 		}
-		if (err_msg_ptr) {
-			err_msg_ptr[i] = exception_msg;
-		} else {
+
+		if (!err_msg_ptr) {
 			throw ConstraintException(exception_msg);
 		}
+		err_msg_ptr[i] = exception_msg;
 	}
 }
 

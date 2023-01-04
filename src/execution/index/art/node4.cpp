@@ -154,7 +154,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 		// get only child and concatenate prefixes
 		auto child_ref = n->GetChild(art, 0);
 		// concatenate prefixes
-		child_ref->prefix.Concatenate(n->key[0], node->prefix);
+		child_ref->prefix.Concatenate(art, n->key[0], node->prefix);
 		// free this node
 		n->children[0] = nullptr;
 		n->prefix.SetEmpty();
