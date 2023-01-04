@@ -72,20 +72,8 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
-rapi_rel_inner_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
-}
-
-rapi_rel_left_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_left_join`, left, right, conds)
-}
-
-rapi_rel_right_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_right_join`, left, right, conds)
-}
-
-rapi_rel_full_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_full_join`, left, right, conds)
+rapi_rel_join <- function(left, right, conds, join) {
+  .Call(`_duckdb_rapi_rel_join`, left, right, conds, join)
 }
 
 rapi_rel_union_all <- function(rel_a, rel_b) {
