@@ -169,6 +169,7 @@ rel_inner_join <- rapi_rel_inner_join
 #' UNION ALL on two DuckDB relation objects
 #' @param rel_a a DuckDB relation object
 #' @param rel_b a DuckDB relation object
+#' @return a new `duckdb_relation` object resulting from the union
 #' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
@@ -186,6 +187,39 @@ rel_union_all <- rapi_rel_union_all
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_distinct(rel)
 rel_distinct <- rapi_rel_distinct
+
+#' SET INTERSECT on two DuckDB relation objects
+#' @param rel_a a DuckDB relation object
+#' @param rel_b a DuckDB relation object
+#' @return a new `duckdb_relation` object resulting from the intersection
+#' @noRd
+#' @examples
+#' rel_a <- rel_from_df(con, mtcars)
+#' rel_b <- rel_from_df(con, mtcars)
+#' rel_set_intersect_all(rel_a, rel_b)
+rel_set_intersect <- rapi_rel_set_intersect
+
+#' SET DIFF on two DuckDB relation objects
+#' @param rel_a a DuckDB relation object
+#' @param rel_b a DuckDB relation object
+#' @return a new `duckdb_relation` object resulting from the set difference
+#' @noRd
+#' @examples
+#' rel_a <- rel_from_df(con, mtcars)
+#' rel_b <- rel_from_df(con, mtcars)
+#' rel_set_diff(rel_a, rel_b)
+rel_set_diff <- rapi_rel_set_diff
+
+#' SET SYMDIFF on two DuckDB relation objects
+#' @param rel_a a DuckDB relation object
+#' @param rel_b a DuckDB relation object
+#' @return a new `duckdb_relation` object resulting from the SYMDIFF
+#' @noRd
+#' @examples
+#' rel_a <- rel_from_df(con, mtcars)
+#' rel_b <- rel_from_df(con, mtcars)
+#' rel_set_symdiff(rel_a, rel_b)
+rel_set_symdiff <- rapi_rel_set_symdiff
 
 #' Run a SQL query on a DuckDB relation object
 #' @param rel the DuckDB relation object
