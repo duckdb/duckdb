@@ -169,7 +169,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds, std::string join) {
+[[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
+                                       std::string join) {
 	unique_ptr<ParsedExpression> cond;
 
 	if (conds.size() == 0) { // nop
@@ -185,7 +186,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	auto join_type = JoinType::INNER;
-	std::transform(join.begin(), join.end(), join.begin(), [](unsigned char c){return std::tolower(c);});
+	std::transform(join.begin(), join.end(), join.begin(), [](unsigned char c) { return std::tolower(c); });
 	if (join == "left") {
 		join_type = JoinType::LEFT;
 	} else if (join == "right") {
