@@ -10,15 +10,15 @@
 namespace duckdb {
 
 PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-	unique_ptr<PhysicalOperator> right)
+                                               unique_ptr<PhysicalOperator> right)
     : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, move(types),
-    				   MinValue(left->estimated_cardinality, right->estimated_cardinality)) {
+                       MinValue(left->estimated_cardinality, right->estimated_cardinality)) {
 
-    // Manage the children ourselves
-    D_ASSERT(left->type == PhysicalOperatorType::TABLE_SCAN);
-    D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-    child_tables.emplace_back(move(left));
-    child_tables.emplace_back(move(right));
+	// Manage the children ourselves
+	D_ASSERT(left->type == PhysicalOperatorType::TABLE_SCAN);
+	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
+	child_tables.emplace_back(move(left));
+	child_tables.emplace_back(move(right));
 }
 
 class PositionalScanGlobalSourceState : public GlobalSourceState {
@@ -39,7 +39,7 @@ public:
 class PositionalScanLocalSourceState : public LocalSourceState {
 public:
 	PositionalScanLocalSourceState(ExecutionContext &context, PositionalScanGlobalSourceState &gstate,
-	                          const PhysicalPositionalScan &op) {
+	                               const PhysicalPositionalScan &op) {
 		for (size_t i = 0; i < op.child_tables.size(); ++i) {
 			const auto &child = op.child_tables[i];
 			auto &global_state = *gstate.global_states[i];
@@ -51,7 +51,7 @@ public:
 };
 
 unique_ptr<LocalSourceState> PhysicalPositionalScan::GetLocalSourceState(ExecutionContext &context,
-                                                                    GlobalSourceState &gstate) const {
+                                                                         GlobalSourceState &gstate) const {
 	return make_unique<PositionalScanLocalSourceState>(context, (PositionalScanGlobalSourceState &)gstate, *this);
 }
 
@@ -60,9 +60,9 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 }
 
 void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                LocalSourceState &lstate_p) const {
-    auto &gstate = (PositionalScanGlobalSourceState&) gstate_p;
-    auto &lstate = (PositionalScanLocalSourceState&) lstate_p;
+                                     LocalSourceState &lstate_p) const {
+	auto &gstate = (PositionalScanGlobalSourceState &)gstate_p;
+	auto &lstate = (PositionalScanLocalSourceState &)lstate_p;
 
 	auto &left = *child_tables[0];
 	auto &right = *child_tables[1];
@@ -82,7 +82,7 @@ void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &chunk
 double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = (PositionalScanGlobalSourceState &)gstate_p;
 	return MaxValue(child_tables[0]->GetProgress(context, *gstate.global_states[0]),
-					child_tables[1]->GetProgress(context, *gstate.global_states[1]));
+	                child_tables[1]->GetProgress(context, *gstate.global_states[1]));
 }
 
 string PhysicalPositionalScan::GetName() const {

@@ -20,7 +20,7 @@ class PhysicalPositionalScan : public PhysicalOperator {
 public:
 	//! Regular Table Scan
 	PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-	unique_ptr<PhysicalOperator> right);
+	                       unique_ptr<PhysicalOperator> right);
 
 	//! The child table functions
 	vector<unique_ptr<PhysicalOperator>> child_tables;
