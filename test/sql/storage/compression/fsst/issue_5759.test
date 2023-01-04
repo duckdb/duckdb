@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/fsst/issue_5759.test_slow
+# name: test/sql/storage/compression/fsst/issue_5759.test
 # description: Issue #5759: segfault on sample creation
-# group: [aggregates]
+# group: [fsst]
 
 load __TEST_DIR__/issue_5759.db
 
