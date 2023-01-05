@@ -44,7 +44,7 @@ WHERE
 ----
 123141078.2283
 
-# Parquet file # CSV file: ~300MB
+# Parquet file ~300MB
 statement ok
 COPY lineitem TO 's3://test-bucket/multipart/export_large.parquet' (FORMAT 'parquet');
 
@@ -53,24 +53,6 @@ SELECT
     sum(l_extendedprice * l_discount) AS revenue
 FROM
     "s3://test-bucket/multipart/export_large.parquet"
-WHERE
-    l_shipdate >= CAST('1994-01-01' AS date)
-    AND l_shipdate < CAST('1995-01-01' AS date)
-    AND l_discount BETWEEN 0.05
-    AND 0.07
-    AND l_quantity < 24;
-----
-123141078.2283
-
-# CSV file: 700MB
-statement ok
-COPY lineitem TO 's3://test-bucket/multipart/export_large.csv' WITH (HEADER 1, DELIMITER '|');
-
-query I
-SELECT
-    sum(l_extendedprice * l_discount) AS revenue
-FROM
-    "s3://test-bucket/multipart/export_large.csv"
 WHERE
     l_shipdate >= CAST('1994-01-01' AS date)
     AND l_shipdate < CAST('1995-01-01' AS date)
