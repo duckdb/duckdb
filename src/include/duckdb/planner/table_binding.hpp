@@ -25,6 +25,7 @@ class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
 class StandardEntry;
+struct ColumnBinding;
 
 enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
@@ -81,6 +82,9 @@ public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	StandardEntry *GetStandardEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;
+
+protected:
+	ColumnBinding GetColumnBinding(column_t column_index);
 };
 
 //! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro

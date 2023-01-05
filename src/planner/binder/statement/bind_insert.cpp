@@ -24,6 +24,7 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,31 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 		                                tname, expected_columns, result_columns);
 		throw BinderException(msg);
 	}
+}
+
+void QualifyColumnReferences(ParsedExpression &expr, const string &table_name) {
+	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)expr;
+		if (column_ref.IsQualified()) {
+			return;
+		}
+		column_ref.SetTableName(table_name);
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(*child, table_name); });
+}
+
+// FIXME: this is dumb, doesn't work and is all-in-all just an attempt at a bandaid fix
+void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_columnref = (BoundColumnRefExpression &)expr;
+		if (bound_columnref.binding.table_index == source) {
+			bound_columnref.binding.table_index = dest;
+		}
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](unique_ptr<Expression> &child) { ReplaceColumnBindings(*child, source, dest); });
 }
 
 void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table,
@@ -57,6 +83,13 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
+
+	string unused;
+	auto original_binding = bind_context.GetBinding(table->name, unused);
+	D_ASSERT(original_binding);
+
+	auto table_index = original_binding->index;
+
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -78,22 +111,20 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
-			D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
-			auto &column_ref = (ColumnRefExpression &)*expr;
-			if (!column_ref.IsQualified()) {
-				// Qualify all column references to avoid ambiguity with 'excluded'
-				column_ref.SetTableName(table->name);
-			}
-			auto &table_name = column_ref.GetTableName();
-			auto table_index = table_name == "excluded" ? insert->excluded_table_index : projection_index;
+
+			// Avoid ambiguity issues
+			QualifyColumnReferences(*expr, table->name);
+
 			auto bound_expr = binder.Bind(expr);
 			D_ASSERT(bound_expr);
 			if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 				throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
 			}
-			insert->expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    bound_expr->return_type, ColumnBinding(table_index, column.Physical().index)));
-			insert->set_expressions.push_back(move(bound_expr));
+
+			// Change the non-excluded column references to refer to the projection index
+			ReplaceColumnBindings(*bound_expr, table_index, projection_index);
+
+			insert->expressions.push_back(move(bound_expr));
 		}
 	}
 
@@ -253,25 +284,25 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	D_ASSERT(!set_info.columns.empty());
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
-	if (on_conflict.condition) {
-		// Bind the ON CONFLICT ... WHERE clause
-		WhereBinder where_binder(*this, context);
-		auto condition = where_binder.Bind(on_conflict.condition);
-		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-			throw BinderException("conflict_target WHERE clause can not be a subquery");
-		}
-		insert->on_conflict_condition = move(condition);
-	}
+	// if (on_conflict.condition) {
+	//	// Bind the ON CONFLICT ... WHERE clause
+	//	WhereBinder where_binder(*this, context);
+	//	auto condition = where_binder.Bind(on_conflict.condition);
+	//	if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	//		throw BinderException("conflict_target WHERE clause can not be a subquery");
+	//	}
+	//	insert->on_conflict_condition = move(condition);
+	// }
 
-	if (set_info.condition) {
-		// Bind the SET ... WHERE clause
-		WhereBinder where_binder(*this, context);
-		auto condition = where_binder.Bind(set_info.condition);
-		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-			throw BinderException("conflict_target WHERE clause can not be a subquery");
-		}
-		insert->do_update_condition = move(condition);
-	}
+	// if (set_info.condition) {
+	//	// Bind the SET ... WHERE clause
+	//	WhereBinder where_binder(*this, context);
+	//	auto condition = where_binder.Bind(set_info.condition);
+	//	if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	//		throw BinderException("conflict_target WHERE clause can not be a subquery");
+	//	}
+	//	insert->do_update_condition = move(condition);
+	// }
 
 	// Instead of this, it should probably be a DummyTableRef
 	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
@@ -382,6 +413,15 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// parse select statement and add to logical plan
 	auto select_binder = Binder::CreateBinder(context, this);
 	auto root_select = select_binder->Bind(*stmt.select_statement);
+	if (stmt.on_conflict_info) {
+		ExpressionBinder expr_binder(*select_binder, context);
+		if (stmt.on_conflict_info->condition) {
+			insert->on_conflict_condition = expr_binder.Bind(stmt.on_conflict_info->condition);
+		}
+		if (stmt.on_conflict_info->set_info && stmt.on_conflict_info->set_info->condition) {
+			insert->do_update_condition = expr_binder.Bind(stmt.on_conflict_info->set_info->condition);
+		}
+	}
 	MoveCorrelatedExpressions(*select_binder);
 
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),

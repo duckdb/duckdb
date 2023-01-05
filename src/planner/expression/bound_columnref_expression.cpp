@@ -36,10 +36,11 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
+	string representation;
 	if (!alias.empty()) {
-		return alias;
+		representation += "(" + alias + ") ";
 	}
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
+	return representation + "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
 
 void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
