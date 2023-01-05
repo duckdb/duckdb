@@ -12,6 +12,14 @@ statement ok
 INSERT INTO two VALUES (11, 1), (12, 2);
 
 statement ok
+CREATE TABLE three AS 
+	SELECT * FROM (VALUES
+		(11, 1),
+		(12, 2),
+		(13, 3)
+	) tbl(a, b);
+
+statement ok
 CREATE TABLE threek AS
 	SELECT * FROM generate_series(0, 3001) tbl(id);
 
@@ -23,7 +31,6 @@ CREATE TABLE threek AS
 query IIII
 SELECT * 
 FROM two t1 POSITIONAL JOIN two t2 
-ORDER BY 1, 2, 3, 4;
 ----
 11	1	11	1
 12	2	12	2
@@ -34,6 +41,23 @@ SELECT *
 FROM threek t1 POSITIONAL JOIN threek t2
 WHERE t1.id <> t2.id
 ----
+
+# Outer semantics
+query IIII
+SELECT * 
+FROM two t1 POSITIONAL JOIN three t2 
+----
+11	1	11	1
+12	2	12	2
+NULL	NULL	13	3
+
+query IIII
+SELECT * 
+FROM three t1 POSITIONAL JOIN two t2 
+----
+11	1	11	1
+12	2	12	2
+13	3	NULL	NULL
 
 #
 # Positional Join

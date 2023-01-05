@@ -36,18 +36,86 @@ public:
 	}
 };
 
+class PositionalTableScanner {
+public:
+	PositionalTableScanner(ExecutionContext &context, PhysicalOperator &table_p, GlobalSourceState &gstate_p)
+	    : table(table_p), global_state(gstate_p), source_offset(0), exhausted(false) {
+		local_state = table.GetLocalSourceState(context, gstate_p);
+		source.Initialize(Allocator::Get(context.client), table.types);
+	}
+
+	idx_t Refill(ExecutionContext &context) {
+		if (source_offset >= source.size()) {
+			if (!exhausted) {
+				source.Reset();
+				table.GetData(context, source, global_state, *local_state);
+			}
+			source_offset = 0;
+		}
+
+		const auto available = source.size() - source_offset;
+		if (!available) {
+			if (!exhausted) {
+				source.Reset();
+				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+					auto &vec = source.data[i];
+					vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+					ConstantVector::SetNull(vec, true);
+				}
+				exhausted = true;
+			}
+		}
+
+		return available;
+	}
+
+	idx_t CopyData(ExecutionContext &context, DataChunk &output, const idx_t count, const idx_t col_offset) {
+		if (!source_offset && (source.size() >= count || exhausted)) {
+			//	Fast track: aligned and has enough data
+			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+				output.data[col_offset + i].Reference(source.data[i]);
+			}
+			source_offset += count;
+		} else {
+			// Copy data
+			for (idx_t target_offset = 0; target_offset < count;) {
+				const auto needed = count - target_offset;
+				const auto available = exhausted ? needed : (source.size() - source_offset);
+				const auto copy_size = MinValue(needed, available);
+				const auto source_count = source_offset + copy_size;
+				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+					VectorOperations::Copy(source.data[i], output.data[col_offset + i], source_count, source_offset,
+					                       target_offset);
+				}
+				target_offset += copy_size;
+				source_offset += copy_size;
+				Refill(context);
+			}
+		}
+
+		return source.ColumnCount();
+	}
+
+	PhysicalOperator &table;
+	GlobalSourceState &global_state;
+	unique_ptr<LocalSourceState> local_state;
+	DataChunk source;
+	idx_t source_offset;
+	bool exhausted;
+};
+
 class PositionalScanLocalSourceState : public LocalSourceState {
 public:
 	PositionalScanLocalSourceState(ExecutionContext &context, PositionalScanGlobalSourceState &gstate,
 	                               const PhysicalPositionalScan &op) {
 		for (size_t i = 0; i < op.child_tables.size(); ++i) {
-			const auto &child = op.child_tables[i];
+			auto &child = *op.child_tables[i];
 			auto &global_state = *gstate.global_states[i];
-			local_states.emplace_back(child->GetLocalSourceState(context, global_state));
+			scanners.emplace_back(make_unique<PositionalTableScanner>(context, child, global_state));
 		}
 	}
 
-	vector<unique_ptr<LocalSourceState>> local_states;
+	vector<unique_ptr<PositionalTableScanner>> scanners;
 };
 
 unique_ptr<LocalSourceState> PhysicalPositionalScan::GetLocalSourceState(ExecutionContext &context,
@@ -59,24 +127,28 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 	return make_unique<PositionalScanGlobalSourceState>(context, *this);
 }
 
-void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output, GlobalSourceState &gstate_p,
                                      LocalSourceState &lstate_p) const {
-	auto &gstate = (PositionalScanGlobalSourceState &)gstate_p;
 	auto &lstate = (PositionalScanLocalSourceState &)lstate_p;
 
-	auto &left = *child_tables[0];
-	auto &right = *child_tables[1];
-	DataChunk right_chunk;
-	chunk.Split(right_chunk, left.types.size());
+	// Find the longest source block
+	idx_t count = 0;
+	for (auto &scanner : lstate.scanners) {
+		count = MaxValue(count, scanner->Refill(context));
+	}
 
-	left.GetData(context, chunk, *gstate.global_states[0], *lstate.local_states[0]);
-	right.GetData(context, right_chunk, *gstate.global_states[1], *lstate.local_states[1]);
+	//	All done?
+	if (!count) {
+		return;
+	}
 
-	const auto count = MinValue(chunk.size(), right_chunk.size());
-	chunk.SetCardinality(count);
-	right_chunk.SetCardinality(count);
+	// Copy or reference the source columns
+	idx_t col_offset = 0;
+	for (auto &scanner : lstate.scanners) {
+		col_offset += scanner->CopyData(context, output, count, col_offset);
+	}
 
-	chunk.Fuse(right_chunk);
+	output.SetCardinality(count);
 }
 
 double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

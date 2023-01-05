@@ -112,9 +112,9 @@ OperatorResultType PositionalJoinExecutor::Execute(DataChunk &input, DataChunk &
 		if (scan_chunk.size() == 0) {
 			break;
 		}
-		const auto remaining = chunk_size - target_offset;
+		const auto needed = chunk_size - target_offset;
 		const auto available = scan_chunk.size() - source_offset;
-		const auto copy_size = MinValue(remaining, available);
+		const auto copy_size = MinValue(needed, available);
 		const auto source_count = source_offset + copy_size;
 		for (idx_t i = 0; i < scan_chunk.ColumnCount(); ++i) {
 			VectorOperations::Copy(scan_chunk.data[i], output.data[input_column_count + i], source_count, source_offset,
