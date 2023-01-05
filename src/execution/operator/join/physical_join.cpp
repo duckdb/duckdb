@@ -47,8 +47,11 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	op.children[0]->BuildPipelines(current, meta_pipeline);
 
 	switch (op.type) {
-	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::POSITIONAL_JOIN:
+		// Positional joins are always outer
+		meta_pipeline.CreateChildPipeline(current, &op, last_pipeline);
+		return;
+	case PhysicalOperatorType::CROSS_PRODUCT:
 		return;
 	default:
 		break;

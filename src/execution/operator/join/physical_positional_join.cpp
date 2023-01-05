@@ -8,7 +8,7 @@ namespace duckdb {
 
 PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, move(types), estimated_cardinality) {
+    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, move(types), estimated_cardinality) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
@@ -19,13 +19,25 @@ PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique
 class PositionalJoinGlobalState : public GlobalSinkState {
 public:
 	explicit PositionalJoinGlobalState(ClientContext &context, const PhysicalPositionalJoin &op)
-	    : rhs_materialized(context, op.children[1]->GetTypes()) {
-		rhs_materialized.InitializeAppend(append_state);
+	    : rhs(context, op.children[1]->GetTypes()), initialized(false), source_offset(0), exhausted(false) {
+		rhs.InitializeAppend(append_state);
 	}
 
-	ColumnDataCollection rhs_materialized;
+	ColumnDataCollection rhs;
 	ColumnDataAppendState append_state;
 	mutex rhs_lock;
+
+	bool initialized;
+	ColumnDataScanState scan_state;
+	DataChunk source;
+	idx_t source_offset;
+	bool exhausted;
+
+	void InitializeScan();
+	idx_t Refill();
+	idx_t CopyData(DataChunk &output, const idx_t count, const idx_t col_offset);
+	void Execute(DataChunk &input, DataChunk &output);
+	void GetData(DataChunk &output);
 };
 
 unique_ptr<GlobalSinkState> PhysicalPositionalJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -36,121 +48,133 @@ SinkResultType PhysicalPositionalJoin::Sink(ExecutionContext &context, GlobalSin
                                             DataChunk &input) const {
 	auto &sink = (PositionalJoinGlobalState &)state;
 	lock_guard<mutex> client_guard(sink.rhs_lock);
-	sink.rhs_materialized.Append(sink.append_state, input);
+	sink.rhs.Append(sink.append_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class PositionalJoinExecutor {
-public:
-	explicit PositionalJoinExecutor(ColumnDataCollection &rhs);
-
-	OperatorResultType Execute(DataChunk &input, DataChunk &output);
-
-private:
-	void Reset(DataChunk &input, DataChunk &output);
-
-private:
-	ColumnDataCollection &rhs;
-	ColumnDataScanState scan_state;
-	DataChunk scan_chunk;
-	idx_t source_offset;
-	bool initialized;
-	bool scan_input_chunk;
-};
-
-PositionalJoinExecutor::PositionalJoinExecutor(ColumnDataCollection &rhs)
-    : rhs(rhs), source_offset(0), initialized(false) {
-	rhs.InitializeScanChunk(scan_chunk);
-}
-
-void PositionalJoinExecutor::Reset(DataChunk &input, DataChunk &output) {
-	initialized = true;
-	scan_input_chunk = false;
-	rhs.InitializeScan(scan_state);
-	source_offset = 0;
-	scan_chunk.Reset();
-}
-
-OperatorResultType PositionalJoinExecutor::Execute(DataChunk &input, DataChunk &output) {
+void PositionalJoinGlobalState::InitializeScan() {
 	if (!initialized) {
 		// not initialized yet: initialize the scan
-		Reset(input, output);
+		initialized = true;
+		rhs.InitializeScanChunk(source);
+		rhs.InitializeScan(scan_state);
 	}
+}
 
-	// Consume the entire input by repeatedly scanning
-	// Stop if we run out of scan and return a truncated block
-
-	// Reference the input and assume it will be full
-	const auto input_column_count = input.ColumnCount();
-	auto chunk_size = input.size();
-	for (idx_t i = 0; i < input_column_count; ++i) {
-		output.data[i].Reference(input.data[i]);
-	}
-
-	if (source_offset >= scan_chunk.size()) {
-		scan_chunk.Reset();
-		rhs.Scan(scan_state, scan_chunk);
+idx_t PositionalJoinGlobalState::Refill() {
+	if (source_offset >= source.size()) {
+		if (!exhausted) {
+			source.Reset();
+			rhs.Scan(scan_state, source);
+		}
 		source_offset = 0;
 	}
 
-	// Fast track: aligned chunks
-	if (!source_offset && scan_chunk.size() >= chunk_size) {
-		for (idx_t i = 0; i < scan_chunk.ColumnCount(); ++i) {
-			output.data[input_column_count + i].Reference(scan_chunk.data[i]);
-		}
-		output.SetCardinality(chunk_size);
-		source_offset = chunk_size;
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
-
-	// Ragged values from scan - append until we are done
-	idx_t target_offset = 0;
-	while (target_offset < chunk_size) {
-		if (scan_chunk.size() == 0) {
-			break;
-		}
-		const auto needed = chunk_size - target_offset;
-		const auto available = scan_chunk.size() - source_offset;
-		const auto copy_size = MinValue(needed, available);
-		const auto source_count = source_offset + copy_size;
-		for (idx_t i = 0; i < scan_chunk.ColumnCount(); ++i) {
-			VectorOperations::Copy(scan_chunk.data[i], output.data[input_column_count + i], source_count, source_offset,
-			                       target_offset);
-		}
-		source_offset += copy_size;
-		target_offset += copy_size;
-		if (source_offset >= scan_chunk.size()) {
-			scan_chunk.Reset();
-			rhs.Scan(scan_state, scan_chunk);
-			source_offset = 0;
+	const auto available = source.size() - source_offset;
+	if (!available) {
+		if (!exhausted) {
+			source.Reset();
+			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+				auto &vec = source.data[i];
+				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(vec, true);
+			}
+			exhausted = true;
 		}
 	}
-	output.SetCardinality(target_offset);
 
-	return target_offset > 0 ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::FINISHED;
+	return available;
 }
 
-class PositionalJoinOperatorState : public CachingOperatorState {
-public:
-	explicit PositionalJoinOperatorState(ColumnDataCollection &rhs) : executor(rhs) {
+idx_t PositionalJoinGlobalState::CopyData(DataChunk &output, const idx_t count, const idx_t col_offset) {
+	if (!source_offset && (source.size() >= count || exhausted)) {
+		//	Fast track: aligned and has enough data
+		for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+			output.data[col_offset + i].Reference(source.data[i]);
+		}
+		source_offset += count;
+	} else {
+		// Copy data
+		for (idx_t target_offset = 0; target_offset < count;) {
+			const auto needed = count - target_offset;
+			const auto available = exhausted ? needed : (source.size() - source_offset);
+			const auto copy_size = MinValue(needed, available);
+			const auto source_count = source_offset + copy_size;
+			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
+				VectorOperations::Copy(source.data[i], output.data[col_offset + i], source_count, source_offset,
+				                       target_offset);
+			}
+			target_offset += copy_size;
+			source_offset += copy_size;
+			Refill();
+		}
 	}
 
-	PositionalJoinExecutor executor;
-};
+	return source.ColumnCount();
+}
 
-unique_ptr<OperatorState> PhysicalPositionalJoin::GetOperatorState(ExecutionContext &context) const {
+void PositionalJoinGlobalState::Execute(DataChunk &input, DataChunk &output) {
+	lock_guard<mutex> client_guard(rhs_lock);
+
+	// Reference the input and assume it will be full
+	const auto col_offset = input.ColumnCount();
+	for (idx_t i = 0; i < col_offset; ++i) {
+		output.data[i].Reference(input.data[i]);
+	}
+
+	// Copy or reference the RHS columns
+	const auto count = input.size();
+	InitializeScan();
+	Refill();
+	CopyData(output, count, col_offset);
+
+	output.SetCardinality(count);
+}
+
+OperatorResultType PhysicalPositionalJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &sink = (PositionalJoinGlobalState &)*sink_state;
-	return make_unique<PositionalJoinOperatorState>(sink.rhs_materialized);
+	sink.Execute(input, chunk);
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-OperatorResultType PhysicalPositionalJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
-                                                           DataChunk &chunk, GlobalOperatorState &gstate,
-                                                           OperatorState &state_p) const {
-	auto &state = (PositionalJoinOperatorState &)state_p;
-	return state.executor.Execute(input, chunk);
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+void PositionalJoinGlobalState::GetData(DataChunk &output) {
+	lock_guard<mutex> client_guard(rhs_lock);
+
+	InitializeScan();
+	Refill();
+
+	//	LHS exhausted
+	if (exhausted) {
+		//	RHS exhausted too, so we are done
+		output.SetCardinality(0);
+		return;
+	}
+
+	//	LHS is all NULL
+	const auto col_offset = output.ColumnCount() - source.ColumnCount();
+	for (idx_t i = 0; i < col_offset; ++i) {
+		auto &vec = output.data[i];
+		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(vec, true);
+	}
+
+	//	RHS still has data, so copy it
+	const auto count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, source.size() - source_offset);
+	CopyData(output, count, col_offset);
+	output.SetCardinality(count);
+}
+
+void PhysicalPositionalJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
+	auto &sink = (PositionalJoinGlobalState &)*sink_state;
+	sink.GetData(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -161,7 +185,11 @@ void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 }
 
 vector<const PhysicalOperator *> PhysicalPositionalJoin::GetSources() const {
-	return children[0]->GetSources();
+	auto result = children[0]->GetSources();
+	if (IsSource()) {
+		result.push_back(this);
+	}
+	return result;
 }
 
 } // namespace duckdb

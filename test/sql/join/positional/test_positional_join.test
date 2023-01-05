@@ -63,6 +63,16 @@ FROM three t1 POSITIONAL JOIN two t2
 # Positional Join
 #
 
+# Basic test
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM two WHERE a % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM two WHERE a % 2 = 1) t2
+----
+12	2	11	1
+
 # Multiple blocks
 query II
 SELECT *
@@ -71,3 +81,24 @@ FROM
 	POSITIONAL JOIN
 	(SELECT * FROM threek WHERE id % 2 = 1) t2
 WHERE t1.id + 1 <> t2.id
+
+# Outer semantics
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM three WHERE a % 2 = 1) t1
+	POSITIONAL JOIN
+	(SELECT * FROM two WHERE a % 2 = 0) t2
+----
+11	1	12	2	
+13	3	NULL	NULL
+
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM two WHERE a % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM three WHERE a % 2 = 1) t2
+----
+12	2	11	1
+NULL	NULL	13	3

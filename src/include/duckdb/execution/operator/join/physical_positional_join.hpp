@@ -14,25 +14,22 @@
 namespace duckdb {
 
 //! PhysicalPositionalJoin represents a cross product between two tables
-class PhysicalPositionalJoin : public CachingPhysicalOperator {
+class PhysicalPositionalJoin : public PhysicalOperator {
 public:
 	PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                       unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 
 public:
 	// Operator Interface
-	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool ParallelOperator() const override {
-		return false;
-	}
+public:
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
-protected:
-	// CachingOperator Interface
-	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
-
-	bool IsOrderPreserving() const override {
+	bool IsSource() const override {
 		return true;
 	}
 
