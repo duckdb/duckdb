@@ -21,13 +21,13 @@ struct TimeBucket {
 	// There are 360 months between 1970-01-01 and 2000-01-01
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
-	enum struct BucketWidthType { LESS_THAN_DAYS, MORE_THAN_MONTHS, UNCLASSIFIED };
+	enum struct BucketWidthType { CONVERTIBLE_TO_MICROS, CONVERTIBLE_TO_MONTHS, UNCLASSIFIED };
 
 	static inline BucketWidthType ClassifyBucketWidth(const interval_t bucket_width) {
 		if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {
-			return BucketWidthType::LESS_THAN_DAYS;
+			return BucketWidthType::CONVERTIBLE_TO_MICROS;
 		} else if (bucket_width.months > 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
-			return BucketWidthType::MORE_THAN_MONTHS;
+			return BucketWidthType::CONVERTIBLE_TO_MONTHS;
 		} else {
 			return BucketWidthType::UNCLASSIFIED;
 		}
@@ -39,12 +39,12 @@ struct TimeBucket {
 			if (bucket_width_micros <= 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::LESS_THAN_DAYS;
+			return BucketWidthType::CONVERTIBLE_TO_MICROS;
 		} else if (bucket_width.months != 0 && bucket_width.days == 0 && bucket_width.micros == 0) {
 			if (bucket_width.months < 0) {
 				throw NotImplementedException("Period must be greater than 0");
 			}
-			return BucketWidthType::MORE_THAN_MONTHS;
+			return BucketWidthType::CONVERTIBLE_TO_MONTHS;
 		} else {
 			throw NotImplementedException("Month intervals cannot have day or time component");
 		}
@@ -56,8 +56,8 @@ struct TimeBucket {
 		return (Date::ExtractYear(ts_date) - 1970) * 12 + Date::ExtractMonth(ts_date) - 1;
 	}
 
-	static inline timestamp_t WidthLessThanDaysCommon(int64_t bucket_width_micros, int64_t ts_micros,
-	                                                  int64_t origin_micros) {
+	static inline timestamp_t WidthConvertibleToMicrosCommon(int64_t bucket_width_micros, int64_t ts_micros,
+	                                                         int64_t origin_micros) {
 		origin_micros %= bucket_width_micros;
 		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
 			throw OutOfRangeException("Timestamp out of range");
@@ -79,8 +79,8 @@ struct TimeBucket {
 		return Timestamp::FromEpochMicroSeconds(result_micros);
 	}
 
-	static inline date_t WidthMoreThanMonthsCommon(int32_t bucket_width_months, int32_t ts_months,
-	                                               int32_t origin_months) {
+	static inline date_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, int32_t ts_months,
+	                                                    int32_t origin_months) {
 		origin_months %= bucket_width_months;
 		if (origin_months > 0 && ts_months < NumericLimits<int32_t>::Minimum() + origin_months) {
 			throw NotImplementedException("Timestamp out of range");
@@ -107,7 +107,7 @@ struct TimeBucket {
 		return Date::FromDate(year, month, 1);
 	}
 
-	struct WidthLessThanDaysBinaryOperator {
+	struct WidthConvertibleToMicrosBinaryOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA bucket_width, TB ts) {
 			if (!Value::IsFinite(ts)) {
@@ -116,11 +116,11 @@ struct TimeBucket {
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
 			return Cast::template Operation<timestamp_t, TR>(
-			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS));
+			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS));
 		}
 	};
 
-	struct WidthMoreThanMonthsBinaryOperator {
+	struct WidthConvertibleToMonthsBinaryOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA bucket_width, TB ts) {
 			if (!Value::IsFinite(ts)) {
@@ -128,7 +128,7 @@ struct TimeBucket {
 			}
 			int32_t ts_months = EpochMonths(ts);
 			return Cast::template Operation<date_t, TR>(
-			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS));
+			    WidthConvertibleToMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS));
 		}
 	};
 
@@ -137,15 +137,15 @@ struct TimeBucket {
 		static inline TR Operation(TA bucket_width, TB ts) {
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LESS_THAN_DAYS:
-				return WidthLessThanDaysBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
+			case BucketWidthType::CONVERTIBLE_TO_MICROS:
+				return WidthConvertibleToMicrosBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
 			default:
-				return WidthMoreThanMonthsBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
+				return WidthConvertibleToMonthsBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
 			}
 		}
 	};
 
-	struct OffsetWidthLessThanDaysTernaryOperator {
+	struct OffsetWidthConvertibleToMicrosTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
 			if (!Value::IsFinite(ts)) {
@@ -154,20 +154,20 @@ struct TimeBucket {
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(
 			    Interval::Add(Cast::template Operation<TB, timestamp_t>(ts), Interval::Invert(offset)));
-			return Cast::template Operation<timestamp_t, TR>(
-			    Interval::Add(WidthLessThanDaysCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS), offset));
+			return Cast::template Operation<timestamp_t, TR>(Interval::Add(
+			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS), offset));
 		}
 	};
 
-	struct OffsetWidthMoreThanMonthsTernaryOperator {
+	struct OffsetWidthConvertibleToMonthsTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
 			if (!Value::IsFinite(ts)) {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int32_t ts_months = EpochMonths(Interval::Add(ts, Interval::Invert(offset)));
-			return Interval::Add(Cast::template Operation<date_t, TR>(
-			                         WidthMoreThanMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS)),
+			return Interval::Add(Cast::template Operation<date_t, TR>(WidthConvertibleToMonthsCommon(
+			                         bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS)),
 			                     offset);
 		}
 	};
@@ -177,15 +177,17 @@ struct TimeBucket {
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LESS_THAN_DAYS:
-				return OffsetWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
+			case BucketWidthType::CONVERTIBLE_TO_MICROS:
+				return OffsetWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
+				                                                                                offset);
 			default:
-				return OffsetWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, offset);
+				return OffsetWidthConvertibleToMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
+				                                                                                offset);
 			}
 		}
 	};
 
-	struct OriginWidthLessThanDaysTernaryOperator {
+	struct OriginWidthConvertibleToMicrosTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC origin) {
 			if (!Value::IsFinite(ts)) {
@@ -195,11 +197,11 @@ struct TimeBucket {
 			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
 			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(origin));
 			return Cast::template Operation<timestamp_t, TR>(
-			    WidthLessThanDaysCommon(bucket_width_micros, ts_micros, origin_micros));
+			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, origin_micros));
 		}
 	};
 
-	struct OriginWidthMoreThanMonthsTernaryOperator {
+	struct OriginWidthConvertibleToMonthsTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC origin) {
 			if (!Value::IsFinite(ts)) {
@@ -208,7 +210,7 @@ struct TimeBucket {
 			int32_t ts_months = EpochMonths(ts);
 			int32_t origin_months = EpochMonths(origin);
 			return Cast::template Operation<date_t, TR>(
-			    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months));
+			    WidthConvertibleToMonthsCommon(bucket_width.months, ts_months, origin_months));
 		}
 	};
 
@@ -221,10 +223,12 @@ struct TimeBucket {
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
-			case BucketWidthType::LESS_THAN_DAYS:
-				return OriginWidthLessThanDaysTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
+			case BucketWidthType::CONVERTIBLE_TO_MICROS:
+				return OriginWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
+				                                                                                origin);
 			default:
-				return OriginWidthMoreThanMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts, origin);
+				return OriginWidthConvertibleToMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
+				                                                                                origin);
 			}
 		}
 	};
@@ -245,15 +249,15 @@ static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
-				    TimeBucket::WidthLessThanDaysBinaryOperator::Operation<interval_t, T, T>);
+				    TimeBucket::WidthConvertibleToMicrosBinaryOperator::Operation<interval_t, T, T>);
 				break;
-			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				BinaryExecutor::Execute<interval_t, T, T>(
 				    bucket_width_arg, ts_arg, result, args.size(),
-				    TimeBucket::WidthMoreThanMonthsBinaryOperator::Operation<interval_t, T, T>);
+				    TimeBucket::WidthConvertibleToMonthsBinaryOperator::Operation<interval_t, T, T>);
 				break;
 			default:
 				BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result, args.size(),
@@ -283,15 +287,15 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-				    TimeBucket::OffsetWidthLessThanDaysTernaryOperator::Operation<interval_t, T, interval_t, T>);
+				    TimeBucket::OffsetWidthConvertibleToMicrosTernaryOperator::Operation<interval_t, T, interval_t, T>);
 				break;
-			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
-				    TimeBucket::OffsetWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
+				    TimeBucket::OffsetWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
 				break;
 			default:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
@@ -325,15 +329,15 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
 			switch (bucket_width_type) {
-			case TimeBucket::BucketWidthType::LESS_THAN_DAYS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MICROS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-				    TimeBucket::OriginWidthLessThanDaysTernaryOperator::Operation<interval_t, T, T, T>);
+				    TimeBucket::OriginWidthConvertibleToMicrosTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
-			case TimeBucket::BucketWidthType::MORE_THAN_MONTHS:
+			case TimeBucket::BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-				    TimeBucket::OriginWidthMoreThanMonthsTernaryOperator::Operation<interval_t, T, T, T>);
+				    TimeBucket::OriginWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
 			default:
 				TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(

@@ -259,8 +259,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 			}
 			int32_t ts_months = EpochMonths(ts, calendar);
 			int32_t origin_months = EpochMonths(origin, calendar);
-			return ICUFromNaive(calendar,
-			                    WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months, calendar));
+			return FromNaive(calendar,
+			                 WidthMoreThanMonthsCommon(bucket_width.months, ts_months, origin_months, calendar));
 		}
 	};
 
@@ -273,10 +273,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::LESS_THAN_DAYS:
-				origin = ICUDateFunc::ICUFromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
+				origin = ICUDateFunc::FromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
 				return TimeZoneWidthLessThanDaysBinaryOperator::Operation(bucket_width, ts, origin, calendar);
 			default:
-				origin = ICUDateFunc::ICUFromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2));
+				origin = ICUDateFunc::FromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2));
 				return TimeZoneWidthMoreThanMonthsBinaryOperator::Operation(bucket_width, ts, origin, calendar);
 			}
 		}
@@ -468,7 +468,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				switch (bucket_width_type) {
 				case BucketWidthType::LESS_THAN_DAYS:
 					origin =
-					    ICUDateFunc::ICUFromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
+					    ICUDateFunc::FromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
 					BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 						    return TimeZoneWidthLessThanDaysBinaryOperator::Operation(bucket_width, ts, origin,
@@ -477,7 +477,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 					break;
 				case BucketWidthType::MORE_THAN_MONTHS:
 					origin =
-					    ICUDateFunc::ICUFromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2));
+					    ICUDateFunc::FromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2));
 					BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 						    return TimeZoneWidthMoreThanMonthsBinaryOperator::Operation(bucket_width, ts, origin,
