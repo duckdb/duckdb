@@ -6,15 +6,44 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test (a INTEGER, b INTEGER);
+CREATE TABLE two (a INTEGER, b INTEGER);
 
 statement ok
-INSERT INTO test VALUES (11, 1), (12, 2);
+INSERT INTO two VALUES (11, 1), (12, 2);
 
+statement ok
+CREATE TABLE threek AS
+	SELECT * FROM generate_series(0, 3001) tbl(id);
+
+#
+# Positional Scan
+#
+
+# Basic test
 query IIII
 SELECT * 
-FROM test t1 POSITIONAL JOIN test t2 
+FROM two t1 POSITIONAL JOIN two t2 
 ORDER BY 1, 2, 3, 4;
 ----
 11	1	11	1
 12	2	12	2
+
+# Multiple blocks
+query II
+SELECT *
+FROM threek t1 POSITIONAL JOIN threek t2
+WHERE t1.id <> t2.id
+----
+
+#
+# Positional Join
+#
+
+# Multiple blocks
+query II
+SELECT *
+FROM 
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 2 = 1) t2
+WHERE t1.id + 1 <> t2.id

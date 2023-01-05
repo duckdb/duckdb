@@ -56,13 +56,13 @@ private:
 	ColumnDataCollection &rhs;
 	ColumnDataScanState scan_state;
 	DataChunk scan_chunk;
-	idx_t position_in_chunk;
+	idx_t source_offset;
 	bool initialized;
 	bool scan_input_chunk;
 };
 
 PositionalJoinExecutor::PositionalJoinExecutor(ColumnDataCollection &rhs)
-    : rhs(rhs), position_in_chunk(0), initialized(false) {
+    : rhs(rhs), source_offset(0), initialized(false) {
 	rhs.InitializeScanChunk(scan_chunk);
 }
 
@@ -70,7 +70,7 @@ void PositionalJoinExecutor::Reset(DataChunk &input, DataChunk &output) {
 	initialized = true;
 	scan_input_chunk = false;
 	rhs.InitializeScan(scan_state);
-	position_in_chunk = 0;
+	source_offset = 0;
 	scan_chunk.Reset();
 }
 
@@ -90,43 +90,47 @@ OperatorResultType PositionalJoinExecutor::Execute(DataChunk &input, DataChunk &
 		output.data[i].Reference(input.data[i]);
 	}
 
-	if (position_in_chunk >= scan_chunk.size()) {
+	if (source_offset >= scan_chunk.size()) {
+		scan_chunk.Reset();
 		rhs.Scan(scan_state, scan_chunk);
-		position_in_chunk = 0;
+		source_offset = 0;
 	}
 
 	// Fast track: aligned chunks
-	if (!position_in_chunk && scan_chunk.size() >= chunk_size) {
+	if (!source_offset && scan_chunk.size() >= chunk_size) {
 		for (idx_t i = 0; i < scan_chunk.ColumnCount(); ++i) {
 			output.data[input_column_count + i].Reference(scan_chunk.data[i]);
 		}
 		output.SetCardinality(chunk_size);
-		position_in_chunk = chunk_size;
+		source_offset = chunk_size;
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	// Ragged values from scan - append until we are done
-	idx_t scanned_size = 0;
-	while (scanned_size < chunk_size) {
+	idx_t target_offset = 0;
+	while (target_offset < chunk_size) {
 		if (scan_chunk.size() == 0) {
 			break;
 		}
-		auto missing_size = chunk_size - scanned_size;
-		auto copy_size = MinValue(missing_size, scan_chunk.size());
+		const auto remaining = chunk_size - target_offset;
+		const auto available = scan_chunk.size() - source_offset;
+		const auto copy_size = MinValue(remaining, available);
+		const auto source_count = source_offset + copy_size;
 		for (idx_t i = 0; i < scan_chunk.ColumnCount(); ++i) {
-			VectorOperations::Copy(output.data[input_column_count + i], scan_chunk.data[i], copy_size,
-			                       position_in_chunk, scanned_size);
+			VectorOperations::Copy(scan_chunk.data[i], output.data[input_column_count + i], source_count, source_offset,
+			                       target_offset);
 		}
-		scanned_size += copy_size;
-		position_in_chunk += copy_size;
-		if (position_in_chunk >= scan_chunk.size()) {
+		source_offset += copy_size;
+		target_offset += copy_size;
+		if (source_offset >= scan_chunk.size()) {
+			scan_chunk.Reset();
 			rhs.Scan(scan_state, scan_chunk);
-			position_in_chunk = 0;
+			source_offset = 0;
 		}
 	}
-	output.SetCardinality(scanned_size);
+	output.SetCardinality(target_offset);
 
-	return scanned_size > 0 ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::FINISHED;
+	return target_offset > 0 ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::FINISHED;
 }
 
 class PositionalJoinOperatorState : public CachingOperatorState {
