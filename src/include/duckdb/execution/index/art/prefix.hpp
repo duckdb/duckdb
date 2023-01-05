@@ -30,8 +30,6 @@ public:
 	inline uint32_t Size() const {
 		return size;
 	}
-	//! Sets the size of a prefix to 0
-	void SetEmpty();
 	//! Returns the memory size of the prefix
 	idx_t MemorySize();
 	//! Returns a pointer to the prefix data

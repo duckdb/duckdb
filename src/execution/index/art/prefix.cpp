@@ -62,10 +62,6 @@ idx_t Prefix::MemorySize() {
 	return sizeof(*this) + sizeof(uint8_t) * size;
 }
 
-void Prefix::SetEmpty() {
-	size = 0;
-}
-
 void Prefix::Destroy() {
 	if (!IsInlined()) {
 		DeleteArray<uint8_t>(value.ptr, size);
