@@ -143,7 +143,6 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 				ComputeStringEntrySizes(col, entry_sizes, sel, count);
 				break;
 			case PhysicalType::LIST:
-			case PhysicalType::MAP:
 			case PhysicalType::STRUCT:
 				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
@@ -215,7 +214,6 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;

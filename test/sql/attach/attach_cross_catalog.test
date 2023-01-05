@@ -1,0 +1,51 @@
+# name: test/sql/attach/attach_cross_catalog.test
+# description: Cross catalog dependencies should not be allowed
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE test(a INTEGER);
+
+# indexes always go in the same schema/catalog as the table
+statement ok
+CREATE INDEX index ON test(a)
+
+# we cannot specify a database or schema when creating an index
+statement error
+CREATE INDEX db1.index ON test(a)
+----
+syntax error
+
+# types can be created in different catalogs
+statement ok
+CREATE TYPE db1.mood AS ENUM('ok', 'sad', 'happy');
+
+# but we can only use types from our own catalog
+# cross-catalog dependencies are not allowed
+statement ok
+CREATE TABLE db1.integers(i mood)
+
+statement error
+CREATE TABLE integers(i mood)
+----
+does not exist
+
+# casts search in the default catalog
+# this does not work
+statement error
+SELECT 'happy'::mood
+----
+does not exist
+
+# until we specify that we are using db1
+statement ok
+USE db1
+
+query I
+SELECT 'happy'::mood
+----
+happy

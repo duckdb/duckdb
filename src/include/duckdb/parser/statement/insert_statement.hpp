@@ -52,6 +52,8 @@ public:
 	string table;
 	//! Schema name to insert to
 	string schema;
+	//! The catalog name to insert to
+	string catalog;
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;

@@ -8,7 +8,7 @@ namespace duckdb {
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
                                      shared_ptr<ClientContext> context_p, vector<LogicalType> types,
                                      vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, properties, move(types), move(names),
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(properties), move(types), move(names),
                   context_p->GetClientProperties()),
       context(move(context_p)) {
 	D_ASSERT(context);

@@ -18,6 +18,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->file_path = op.file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->per_thread_output = op.per_thread_output;
+	if (op.function.parallel) {
+		copy->parallel = op.function.parallel(context, *copy->bind_data);
+	}
 
 	copy->children.push_back(move(plan));
 	return move(copy);

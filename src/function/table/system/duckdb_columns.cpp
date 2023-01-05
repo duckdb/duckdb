@@ -23,17 +23,23 @@ struct DuckDBColumnsData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("schema_oid");
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("table_oid");
+	names.emplace_back("schema_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("table_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("table_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("column_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -75,14 +81,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 	auto result = make_unique<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	}
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -186,36 +188,41 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		auto index = start_index + (i - start_col);
 		auto &entry = *Entry();
 
-		// schema_oid, BIGINT
-		output.SetValue(0, index, Value::BIGINT(entry.schema->oid));
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, index, entry.catalog->GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.catalog->GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(1, index, entry.schema->name);
-		// table_oid, BIGINT
-		output.SetValue(2, index, Value::BIGINT(entry.oid));
+		output.SetValue(col++, index, entry.schema->name);
+		// schema_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.schema->oid));
 		// table_name, VARCHAR
-		output.SetValue(3, index, entry.name);
+		output.SetValue(col++, index, entry.name);
+		// table_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.oid));
 		// column_name, VARCHAR
-		output.SetValue(4, index, Value(ColumnName(i)));
+		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER
-		output.SetValue(5, index, Value::INTEGER(i + 1));
+		output.SetValue(col++, index, Value::INTEGER(i + 1));
 		// internal, BOOLEAN
-		output.SetValue(6, index, Value::BOOLEAN(entry.internal));
+		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR
-		output.SetValue(7, index, Value(ColumnDefault(i)));
+		output.SetValue(col++, index, Value(ColumnDefault(i)));
 		// is_nullable, BOOLEAN
-		output.SetValue(8, index, Value::BOOLEAN(IsNullable(i)));
+		output.SetValue(col++, index, Value::BOOLEAN(IsNullable(i)));
 		// data_type, VARCHAR
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(9, index, Value(type.ToString()));
+		output.SetValue(col++, index, Value(type.ToString()));
 		// data_type_id, BIGINT
-		output.SetValue(10, index, Value::BIGINT(int(type.id())));
+		output.SetValue(col++, index, Value::BIGINT(int(type.id())));
 		if (type == LogicalType::VARCHAR) {
 			// FIXME: need check constraints in place to set this correctly
 			// character_maximum_length, INTEGER
-			output.SetValue(11, index, Value());
+			output.SetValue(col++, index, Value());
 		} else {
 			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(11, index, Value());
+			output.SetValue(col++, index, Value());
 		}
 
 		Value numeric_precision, numeric_scale, numeric_precision_radix;
@@ -268,11 +275,11 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		}
 
 		// numeric_precision, INTEGER
-		output.SetValue(12, index, numeric_precision);
+		output.SetValue(col++, index, numeric_precision);
 		// numeric_precision_radix, INTEGER
-		output.SetValue(13, index, numeric_precision_radix);
+		output.SetValue(col++, index, numeric_precision_radix);
 		// numeric_scale, INTEGER
-		output.SetValue(14, index, numeric_scale);
+		output.SetValue(col++, index, numeric_scale);
 	}
 }
 

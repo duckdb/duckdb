@@ -110,8 +110,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = Catalog::GetCatalog(context);
-		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
+		auto &catalog = *schema->catalog;
+		result->table =
+		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
 		result->table = insert_table;
@@ -235,7 +236,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 					// Scan the existing table for the conflicting tuples, using the rowids
 					scan_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
 					auto fetch_state = make_unique<ColumnFetchState>();
-					data_table->Fetch(Transaction::GetTransaction(context.client), scan_chunk, column_indices,
+					data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, column_indices,
 					                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
 
 					// Splice the Input chunk and the fetched chunk together
@@ -314,7 +315,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		gstate.insert_count += append_count;
 		auto table = gstate.table;
 		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = Transaction::GetTransaction(context.client);
+		auto &transaction = Transaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;

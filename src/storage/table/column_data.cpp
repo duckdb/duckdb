@@ -14,6 +14,7 @@
 
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ ColumnData::~ColumnData() {
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return info.db;
+	return info.db.GetDatabase();
 }
 
 DataTableInfo &ColumnData::GetTableInfo() const {

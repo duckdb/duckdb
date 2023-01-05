@@ -29,13 +29,19 @@ bool ColumnRefExpression::IsQualified() const {
 }
 
 const string &ColumnRefExpression::GetColumnName() const {
-	D_ASSERT(column_names.size() <= 3);
+	D_ASSERT(column_names.size() <= 4);
 	return column_names.back();
 }
 
 const string &ColumnRefExpression::GetTableName() const {
-	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 3);
-	return column_names.size() == 3 ? column_names[1] : column_names[0];
+	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
+	if (column_names.size() == 4) {
+		return column_names[2];
+	}
+	if (column_names.size() == 3) {
+		return column_names[1];
+	}
+	return column_names[0];
 }
 
 void ColumnRefExpression::SetTableName(string table_name) {

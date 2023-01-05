@@ -49,7 +49,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		}
 		throw IOException("Extension \"%s\" not found.\n%s", filename, message);
 	}
-	{
+	if (!config.options.allow_unsigned_extensions) {
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
 
 		// signature is the last 265 bytes of the file
@@ -75,7 +75,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 				break;
 			}
 		}
-		if (!any_valid && !config.options.allow_unsigned_extensions) {
+		if (!any_valid) {
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
@@ -174,6 +174,22 @@ void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, e.what());
 	}
+}
+
+string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
+	auto first_colon = path.find(':');
+	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
+		return "";
+	}
+	auto extension = path.substr(0, first_colon);
+	D_ASSERT(extension.size() > 1);
+	// needs to be alphanumeric
+	for (auto &ch : extension) {
+		if (!isalnum(ch) && ch != '_') {
+			return "";
+		}
+	}
+	return extension;
 }
 
 } // namespace duckdb

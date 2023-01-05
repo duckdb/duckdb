@@ -13,7 +13,7 @@ namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	explicit DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	explicit DependencyExtractor(DependencyList &dependencies) : dependencies(dependencies) {
 	}
 
 protected:
@@ -26,7 +26,7 @@ protected:
 	}
 
 private:
-	unordered_set<CatalogEntry *> &dependencies;
+	DependencyList &dependencies;
 };
 
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
@@ -180,6 +180,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
 		plan = CreatePlan((LogicalSimple &)op);
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:

@@ -25,6 +25,7 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
+class BoundForeignKeyConstraint;
 class ClientContext;
 class ColumnDataCollection;
 class ColumnDefinition;
@@ -42,7 +43,7 @@ class TableDataWriter;
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
+	DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
 	          const string &table, vector<ColumnDefinition> column_definitions_p,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
@@ -60,7 +61,7 @@ public:
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
 	//! A reference to the database instance
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 
 public:
 	//! Returns a list of types of the table
@@ -191,6 +192,13 @@ private:
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
+
+	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
+	                                bool is_append);
+	void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	                                      DataChunk &chunk);
+	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	                                      DataChunk &chunk);
 
 private:
 	//! Lock for appending entries to the table

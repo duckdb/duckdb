@@ -14,9 +14,8 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	auto &create_info = (CreateTableInfo &)*op.info->base;
-	auto &catalog = Catalog::GetCatalog(context);
-	auto existing_entry =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
+	auto &catalog = *op.info->schema->catalog;
+	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table, true);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);

@@ -96,15 +96,16 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.names = {"Success"};
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto copy_function =
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
 	// gather a list of all the tables
+	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
 	vector<TableCatalogEntry *> tables;
-	auto schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
@@ -153,6 +154,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
+		info->catalog = catalog;
 		info->schema = table->schema->name;
 		info->table = table->name;
 
@@ -161,6 +163,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			info->select_list.push_back(col.GetName());
 		}
 
+		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;

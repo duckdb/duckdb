@@ -13,6 +13,7 @@ add_library_unity(
   duckdb_main
   OBJECT
   appender.cpp
+  attached_database.cpp
   client_context_file_opener.cpp
   client_context.cpp
   client_data.cpp
@@ -20,6 +21,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp

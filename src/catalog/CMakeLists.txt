@@ -8,6 +8,8 @@ add_library_unity(
   catalog.cpp
   catalog_search_path.cpp
   catalog_set.cpp
+  catalog_transaction.cpp
+  dependency_list.cpp
   dependency_manager.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_catalog>

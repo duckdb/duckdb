@@ -69,7 +69,7 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	CreateTableFunctionInfo info(scan_fun);
 	Connection conn(*wrapper->db);
 	auto &context = *conn.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 
 	catalog.CreateTableFunction(context, &info);

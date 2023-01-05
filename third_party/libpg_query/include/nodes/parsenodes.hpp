@@ -1326,6 +1326,7 @@ typedef enum PGObjectType {
  */
 typedef struct PGCreateSchemaStmt {
 	PGNodeTag type;
+	char *catalogname;                    /* the name of the catalog in which to create the schema */
 	char *schemaname;                     /* the name of the schema to create */
 	PGList *schemaElts;                   /* schema components (list of parsenodes) */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
@@ -1895,6 +1896,7 @@ typedef struct PGCreateTableAsStmt {
 typedef struct PGCheckPointStmt {
 	PGNodeTag type;
 	bool force;
+	char *name;
 } PGCheckPointStmt;
 
 /* ----------------------
@@ -1963,6 +1965,7 @@ typedef struct PGCallStmt {
 
 typedef struct PGExportStmt {
 	PGNodeTag type;
+	char *database;       /* database name */
 	char *filename;       /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGExportStmt;
@@ -2046,13 +2049,36 @@ typedef struct PGCreateTypeStmt
 {
 	PGNodeTag		type;
 	PGNewTypeKind	kind;
-	PGList	   *typeName;		/* qualified name (list of Value strings) */
+	PGRangeVar	   *typeName;	/* qualified name (list of Value strings) */
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
 } PGCreateTypeStmt;
 
+/* ----------------------
+ *		Attach Statement
+ * ----------------------
+ */
 
+typedef struct PGAttachStmt
+{
+	PGNodeTag		type;
+	char *path;			/* The file path of the to-be-attached database */
+	char *name;			/* The name of the attached database */
+	PGList *options;      /* PGList of PGDefElem nodes */
+    PGNode *query;
+} PGAttachStmt;
+
+
+/* ----------------------
+ *		Use Statement
+ * ----------------------
+ */
+
+typedef struct PGUseStmt {
+	PGNodeTag type;
+	PGRangeVar *name;    /* variable to be set */
+} PGUseStmt;
 
 
 

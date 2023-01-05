@@ -58,6 +58,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 		result->on_conflict_info = TransformOnConflictClause(stmt->onConflictClause, result->schema);
 		result->table_ref = TransformRangeVar(stmt->relation);
 	}
+	result->catalog = qname.catalog;
 	return result;
 }
 

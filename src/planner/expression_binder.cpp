@@ -120,8 +120,7 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 		return true;
 	}
 	switch (type.id()) {
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP: {
+	case LogicalTypeId::STRUCT: {
 		auto child_count = StructType::GetChildCount(type);
 		for (idx_t i = 0; i < child_count; i++) {
 			if (ContainsType(StructType::GetChildType(type, i), target)) {
@@ -140,6 +139,7 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 		return false;
 	}
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
 		return ContainsType(ListType::GetChildType(type), target);
 	default:
 		return false;
@@ -151,15 +151,13 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		return new_type;
 	}
 	switch (type.id()) {
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP: {
+	case LogicalTypeId::STRUCT: {
 		// we make a copy of the child types of the struct here
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
-		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
-		                                       : LogicalType::STRUCT(move(child_types));
+		return LogicalType::STRUCT(move(child_types));
 	}
 	case LogicalTypeId::UNION: {
 		auto member_types = UnionType::CopyMemberTypes(type);
@@ -170,6 +168,8 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 	}
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
+	case LogicalTypeId::MAP:
+		return LogicalType::MAP(ExchangeType(ListType::GetChildType(type), target, new_type));
 	default:
 		return type;
 	}

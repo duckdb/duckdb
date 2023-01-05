@@ -29,8 +29,10 @@ enum class WindowBoundary : uint8_t {
 //! they inherit from them.
 class WindowExpression : public ParsedExpression {
 public:
-	WindowExpression(ExpressionType type, string schema_name, const string &function_name);
+	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 
+	//! Catalog of the aggregate function
+	string catalog;
 	//! Schema of the aggregate function
 	string schema;
 	//! Name of the aggregate function
