@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
-#include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {

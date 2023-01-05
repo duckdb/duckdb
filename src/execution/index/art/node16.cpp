@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/node16.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
