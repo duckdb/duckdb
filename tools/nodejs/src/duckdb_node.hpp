@@ -103,6 +103,7 @@ private:
 	static Napi::FunctionReference constructor;
 	Napi::Env env;
 	int64_t bytes_allocated = 0;
+	int replacement_scan_count = 0;
 };
 
 struct JSArgs;

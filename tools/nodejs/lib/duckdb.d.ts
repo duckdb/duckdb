@@ -109,10 +109,9 @@ export class Database {
 
   unregister_buffer(name: string, callback?: Callback<void>): void;
 
-  register_replacement_scan(
-    replacementScan: ReplacementScanCallback,
-    callback?: Callback<void>
-  ): void;
+  registerReplacementScan(
+    replacementScan: ReplacementScanCallback
+  ): Promise<void>;
 }
 
 export class Statement {

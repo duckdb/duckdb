@@ -616,7 +616,7 @@ Database.prototype.unregister_udf = function () {
  * @return {this}
  */
 
-Database.prototype.register_replacement_scan;
+Database.prototype.registerReplacementScan;
 
 /**
  * Not implemented

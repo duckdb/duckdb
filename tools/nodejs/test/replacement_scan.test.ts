@@ -55,7 +55,7 @@ describe("replacement scan", () => {
   describe("with replacement scan", () => {
     before((done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(replacementScan, done);
+        db.registerReplacementScan(replacementScan).then(done);
       });
     });
 
@@ -96,7 +96,7 @@ describe("replacement scan", () => {
   describe("with invalid replacement scan functions", () => {
     it("does not crash with bad return values", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(invalidTableFunction, () => {
+        db.registerReplacementScan(invalidTableFunction).then(() => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
@@ -113,7 +113,7 @@ describe("replacement scan", () => {
 
     it("does not crash with invalid response", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(invalidResultType, () => {
+        db.registerReplacementScan(invalidResultType).then(() => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
@@ -128,14 +128,12 @@ describe("replacement scan", () => {
 
     it("does not crash with invalid response object", (done) => {
       db = new sqlite3.Database(":memory:", () => {
-        db.register_replacement_scan(invalidResultKeys, () => {
+        db.registerReplacementScan(invalidResultKeys).then(() => {
           db.all(
             "SELECT * FROM 'missing' LIMIT 5",
             function (err: null | Error, rows: TableData) {
               expect(err).not.to.be.null;
-              expect(err!.message).to.match(
-                /Expected parameter array/
-              );
+              expect(err!.message).to.match(/Expected parameter array/);
               done();
             }
           );
