@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/join/physical_pos_join.hpp
+// duckdb/execution/operator/join/physical_positional_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
