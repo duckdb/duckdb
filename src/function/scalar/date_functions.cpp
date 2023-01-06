@@ -15,7 +15,6 @@ void BuiltinFunctions::RegisterDateFunctions() {
 	Register<MakeDateFun>();
 	Register<StrfTimeFun>();
 	Register<StrpTimeFun>();
-	Register<TimeBucketFun>();
 	Register<ToIntervalFun>();
 }
 
