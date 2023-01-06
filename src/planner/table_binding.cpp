@@ -141,6 +141,23 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	return (expression);
 }
 
+const vector<column_t> &TableBinding::GetBoundColumnIds() const {
+#ifdef DEBUG
+	unordered_set<column_t> column_ids;
+	for (auto &id : bound_column_ids) {
+		auto result = column_ids.insert(id);
+		// assert that all entries in the bound_column_ids are unique
+		D_ASSERT(result.second);
+		auto it = std::find_if(name_map.begin(), name_map.end(),
+		                       [&](const std::pair<const string, column_t> &it) { return it.second == id; });
+		// assert that every id appears in the name_map
+		D_ASSERT(it != name_map.end());
+		// the order that they appear in is not guaranteed to be sequential
+	}
+#endif
+	return bound_column_ids;
+}
+
 ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	auto &column_ids = bound_column_ids;
 	ColumnBinding binding;

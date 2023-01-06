@@ -82,6 +82,8 @@ public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	StandardEntry *GetStandardEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;
+	// These are columns that are present in the name_map, appearing in the order that they're bound
+	const vector<column_t> &GetBoundColumnIds() const;
 
 protected:
 	ColumnBinding GetColumnBinding(column_t column_index);

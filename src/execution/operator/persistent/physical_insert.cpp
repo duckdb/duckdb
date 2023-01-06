@@ -34,13 +34,13 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
                                bool return_chunk, bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, vector<column_t> on_conflict_filter_p,
-                               string constraint_name_p)
+                               string constraint_name_p, vector<column_t> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(move(set_expressions)), on_conflict_condition(move(on_conflict_condition_p)),
       do_update_condition(move(do_update_condition_p)), on_conflict_filter(move(on_conflict_filter_p)),
-      constraint_name(move(constraint_name_p)) {
+      constraint_name(move(constraint_name_p)), columns_to_fetch(move(columns_to_fetch_p)) {
 
 	indexed_on_columns = GetIndexedOnColumns(table);
 
@@ -53,6 +53,13 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
 		filtered_types.push_back(insert_types[i]);
 		filtered_ids.push_back(i);
 		filtered_physical_ids.push_back(PhysicalIndex(i));
+	}
+
+	types_to_fetch = vector<LogicalType>(columns_to_fetch.size(), LogicalType::SQLNULL);
+	for (idx_t i = 0; i < columns_to_fetch.size(); i++) {
+		auto &id = columns_to_fetch[i];
+		D_ASSERT(id < insert_types.size());
+		types_to_fetch[i] = insert_types[id];
 	}
 }
 
@@ -167,7 +174,47 @@ void VerifyAllConflictsMeetCondition(ExecutionContext &context, DataChunk &confl
 	result.Initialize(context.client, {LogicalType::BOOLEAN});
 	executor.Execute(conflicts, result);
 
-	// Check that the condition holds true for all conflicts;
+	// TODO: this expression should probably be analyzed to see if it's never true? in which case this turns into a DO
+	// THROW instead
+	// TODO: Check that the condition holds true for all conflicts
+	//  if not, we throw the first one that isn't
+}
+
+void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
+                                                  ClientContext &client) const {
+	if (types_to_fetch.empty()) {
+		// We have not scanned the initial table, so we can just duplicate the initial chunk
+		result.Initialize(client, input_chunk.GetTypes());
+		result.Reference(input_chunk);
+		result.SetCardinality(input_chunk);
+		return;
+	}
+	vector<LogicalType> combined_types;
+	combined_types.reserve(insert_types.size() + types_to_fetch.size());
+	combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());
+	combined_types.insert(combined_types.end(), types_to_fetch.begin(), types_to_fetch.end());
+
+	result.Initialize(client, combined_types);
+	result.Reset();
+	// Add the VALUES list
+	for (idx_t i = 0; i < insert_types.size(); i++) {
+		idx_t col_idx = i;
+		auto &other_col = input_chunk.data[i];
+		auto &this_col = result.data[col_idx];
+		D_ASSERT(other_col.GetType() == this_col.GetType());
+		this_col.Reference(other_col);
+	}
+	// Add the columns from the original conflicting tuples
+	for (idx_t i = 0; i < types_to_fetch.size(); i++) {
+		idx_t col_idx = i + insert_types.size();
+		auto &other_col = scan_chunk.data[i];
+		auto &this_col = result.data[col_idx];
+		D_ASSERT(other_col.GetType() == this_col.GetType());
+		this_col.Reference(other_col);
+	}
+	// FIXME: this is not necessarily true, we could have more to-insert values than we have conflicts ?
+	D_ASSERT(input_chunk.size() == scan_chunk.size());
+	result.SetCardinality(input_chunk.size());
 }
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
@@ -233,42 +280,24 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 					auto &data_table = table->storage;
 
-					// Scan the existing table for the conflicting tuples, using the rowids
-					scan_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
-					auto fetch_state = make_unique<ColumnFetchState>();
-					data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, column_indices,
-					                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
+					if (types_to_fetch.size()) {
+						// When these values are required for the conditions or the SET expressions,
+						// then we scan the existing table for the conflicting tuples, using the rowids
+						scan_chunk.Initialize(context.client, types_to_fetch);
+						auto fetch_state = make_unique<ColumnFetchState>();
+						data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk,
+						                  columns_to_fetch, conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
+					}
 
 					// Splice the Input chunk and the fetched chunk together
-					D_ASSERT(scan_chunk.ColumnCount() == conflict_chunk.ColumnCount());
-					vector<LogicalType> combined_types;
-					combined_types.reserve(insert_types.size() * 2);
-					combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());
-					combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());
-
-					combined_chunk.Initialize(context.client, combined_types);
-					combined_chunk.Reset();
-					for (idx_t i = 0; i < insert_types.size(); i++) {
-						idx_t col_idx = i;
-						auto &other_col = conflict_chunk.data[i];
-						auto &this_col = combined_chunk.data[col_idx];
-						D_ASSERT(other_col.GetType() == this_col.GetType());
-						this_col.Reference(other_col);
-					}
-					for (idx_t i = 0; i < insert_types.size(); i++) {
-						idx_t col_idx = i + insert_types.size();
-						auto &other_col = scan_chunk.data[i];
-						auto &this_col = combined_chunk.data[col_idx];
-						D_ASSERT(other_col.GetType() == this_col.GetType());
-						this_col.Reference(other_col);
-					}
-					D_ASSERT(conflict_chunk.size() == scan_chunk.size());
-					combined_chunk.SetCardinality(conflict_chunk.size());
+					DataChunk combined_chunk;
+					CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
 
 					// Execute the SET expressions
 					update_chunk.Initialize(context.client, filtered_types);
 					ExpressionExecutor executor(context.client, set_expressions);
 					executor.Execute(combined_chunk, update_chunk);
+					update_chunk.SetCardinality(combined_chunk);
 
 					// Perform the update, using the results of the SET expressions
 					data_table->Update(*table, context.client, conflicts.row_ids, filtered_physical_ids, update_chunk);

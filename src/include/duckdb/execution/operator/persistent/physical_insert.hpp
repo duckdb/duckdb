@@ -24,7 +24,7 @@ public:
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
 	               idx_t estimated_cardinality, bool return_chunk, bool parallel, OnConflictAction action_type,
 	               unique_ptr<Expression> on_conflict_condition, unique_ptr<Expression> do_update_condition,
-	               vector<column_t> on_conflict_filter, string constraint_name);
+	               vector<column_t> on_conflict_filter, string constraint_name, vector<column_t> columns_to_fetch);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -68,6 +68,10 @@ public:
 	vector<column_t> on_conflict_filter;
 	// The Index name to apply the ON CONFLICT on
 	string constraint_name;
+	// Column ids from the original table to fetch
+	vector<column_t> columns_to_fetch;
+	// Matching types to the column ids to fetch
+	vector<LogicalType> types_to_fetch;
 
 public:
 	// Source interface
@@ -99,6 +103,10 @@ public:
 	static void ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 	                            const physical_index_vector_t<idx_t> &column_index_map,
 	                            ExpressionExecutor &defaults_executor, DataChunk &result);
+
+protected:
+	void CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
+	                                  ClientContext &client) const;
 };
 
 } // namespace duckdb

@@ -51,6 +51,10 @@ public:
 	vector<unique_ptr<Expression>> set_expressions;
 	// The table_index referring to the column references qualified with 'excluded'
 	idx_t excluded_table_index;
+	// The columns to fetch from the 'destination' table
+	vector<column_t> columns_to_fetch;
+	// The columns to fetch from the 'source' table
+	vector<column_t> source_columns;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

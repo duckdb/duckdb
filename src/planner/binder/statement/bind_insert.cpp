@@ -128,8 +128,13 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		}
 	}
 
-	// Verify that none of the columns that are targeted with a SET expression are indexed on
+	// Get the column_ids we need to fetch later on from the conflicting tuples
+	// of the original table, to execute the expressions
+	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
+	auto table_binding = (TableBinding *)original_binding;
+	insert->columns_to_fetch = table_binding->GetBoundColumnIds();
 
+	// Figure out which columns are indexed on
 	unordered_set<column_t> indexed_columns;
 	auto &indexes = table->storage->info->indexes.Indexes();
 	for (auto &index : indexes) {
@@ -138,6 +143,7 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		}
 	}
 
+	// Verify that none of the columns that are targeted with a SET expression are indexed on
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
