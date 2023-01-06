@@ -116,10 +116,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	unique_ptr<GlobalSortState> global_sort_state;
-	global_sort_state = make_unique<GlobalSortState>(buffer_manager, info.orders, info.payload_layout);
+	GlobalSortState global_sort_state(buffer_manager, info.orders, info.payload_layout);
 	LocalSortState local_sort_state;
-	local_sort_state.Initialize(*global_sort_state, buffer_manager);
+	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
 	// this ensures that we do not change the order of the entries in the input chunk
 	VectorOperations::Copy(input_lists, result, count, 0, 0);
@@ -194,15 +193,15 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	if (data_to_sort) {
 		// add local state to global state, which sorts the data
-		global_sort_state->AddLocalState(local_sort_state);
-		global_sort_state->PrepareMergePhase();
+		global_sort_state.AddLocalState(local_sort_state);
+		global_sort_state.PrepareMergePhase();
 
 		// selection vector that is to be filled with the 'sorted' payload
 		SelectionVector sel_sorted(incr_payload_count);
 		idx_t sel_sorted_idx = 0;
 
 		// scan the sorted row data
-		PayloadScanner scanner(*global_sort_state->sorted_blocks[0]->payload_data, *global_sort_state);
+		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
 			result_chunk.Initialize(Allocator::DefaultAllocator(), info.payload_types);
