@@ -61,8 +61,7 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 				result->condition = TransformExpression(stmt->infer->whereClause);
 			}
 		} else {
-			// A constraint name is specified
-			result->constraint_name = stmt->infer->conname;
+			throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 		}
 	} else if (result->action_type == OnConflictAction::UPDATE) {
 		// This is SQLite behavior, though I'm not entirely sure why they do this

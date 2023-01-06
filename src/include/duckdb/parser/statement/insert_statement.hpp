@@ -28,7 +28,6 @@ public:
 public:
 	OnConflictAction action_type;
 
-	string constraint_name;
 	vector<string> indexed_columns;
 	//! The SET information (if action_type == UPDATE)
 	unique_ptr<UpdateSetInfo> set_info;

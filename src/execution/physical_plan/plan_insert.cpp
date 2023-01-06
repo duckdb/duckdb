@@ -66,11 +66,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		insert = make_unique<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),
 		                                          op.estimated_cardinality);
 	} else {
-		insert = make_unique<PhysicalInsert>(
-		    op.types, op.table, op.column_index_map, move(op.bound_defaults), move(op.expressions),
-		    op.estimated_cardinality, op.return_chunk, parallel_streaming_insert && num_threads > 1, op.action_type,
-		    move(op.on_conflict_condition), move(op.do_update_condition), move(op.on_conflict_filter),
-		    op.constraint_name, move(op.columns_to_fetch));
+		insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, move(op.bound_defaults),
+		                                     move(op.expressions), op.estimated_cardinality, op.return_chunk,
+		                                     parallel_streaming_insert && num_threads > 1, op.action_type,
+		                                     move(op.on_conflict_condition), move(op.do_update_condition),
+		                                     move(op.on_conflict_filter), move(op.columns_to_fetch));
 	}
 	D_ASSERT(plan);
 	insert->children.push_back(move(plan));

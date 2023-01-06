@@ -34,13 +34,13 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
                                bool return_chunk, bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p, vector<column_t> on_conflict_filter_p,
-                               string constraint_name_p, vector<column_t> columns_to_fetch_p)
+                               vector<column_t> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(move(set_expressions)), on_conflict_condition(move(on_conflict_condition_p)),
       do_update_condition(move(do_update_condition_p)), on_conflict_filter(move(on_conflict_filter_p)),
-      constraint_name(move(constraint_name_p)), columns_to_fetch(move(columns_to_fetch_p)) {
+      columns_to_fetch(move(columns_to_fetch_p)) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
@@ -269,7 +269,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			// If that's not the case - We throw the first error
 
 			// We either want to do nothing, or perform an update when conflicts arise
-			ConflictInfo conflict_info(lstate.insert_chunk.size(), constraint_name, on_conflict_filter);
+			ConflictInfo conflict_info(lstate.insert_chunk.size(), on_conflict_filter);
 			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
 			auto &conflicts = conflict_info.constraint_conflicts;
 			if (conflicts.matches.Count() != 0) {

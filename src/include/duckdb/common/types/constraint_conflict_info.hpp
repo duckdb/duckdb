@@ -113,11 +113,10 @@ public:
 
 class ConflictInfo {
 public:
-	ConflictInfo(idx_t count, const string &constraint_name, const vector<column_t> &column_ids)
-	    : constraint_conflicts(count), constraint_name(constraint_name), column_ids(column_ids) {
+	ConflictInfo(idx_t count, const vector<column_t> &column_ids)
+	    : constraint_conflicts(count), column_ids(column_ids) {
 	}
 	UniqueConstraintConflictInfo constraint_conflicts;
-	const string &constraint_name;
 	const vector<column_t> &column_ids;
 
 public:

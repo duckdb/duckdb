@@ -149,50 +149,10 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		throw BinderException("Can only update base table!");
 	}
 
-	auto &bound_base_tableref = (BoundBaseTableRef &)*bound_table;
-
 	auto &on_conflict = *stmt.on_conflict_info;
 	insert->action_type = on_conflict.action_type;
 
-	// Bind the indexed columns
-	if (!on_conflict.constraint_name.empty()) {
-		// Bind the ON CONFLICT ON CONSTRAINT <constraint name>
-		insert->constraint_name = on_conflict.constraint_name;
-		// FIXME: do we need to grab a lock on the indexes here?
-		auto &catalog = Catalog::GetCatalog(context, stmt.catalog);
-		auto catalog_entry = (IndexCatalogEntry *)catalog.GetEntry(
-		    context, CatalogType::INDEX_ENTRY, insert->table->schema->name, insert->constraint_name, true);
-		if (!catalog_entry) {
-			throw BinderException("No INDEX by the name '%s' exists in the schema '%s'", insert->constraint_name,
-			                      insert->table->schema->name);
-		}
-		// Verify that this index is part of the table
-		auto &found_index = catalog_entry->index;
-		bool index_located = false;
-		for (auto &index : table->storage->info->indexes.Indexes()) {
-			if (index.get() == found_index) {
-				index_located = true;
-				break;
-			}
-		}
-		if (!index_located) {
-			throw BinderException("INDEX '%s' is not part of the table '%s'", insert->constraint_name, table->name);
-		}
-		// Lastly, verify that at least one of the columns of the table is referenced by this Index
-		bool index_references_table = false;
-		auto &indexed_columns = found_index->column_id_set;
-		for (auto &column : table->columns.Physical()) {
-			if (indexed_columns.count(column.Physical().index)) {
-				index_references_table = true;
-				break;
-			}
-		}
-		if (!index_references_table) {
-			// The index does not reference this table at all, do we just turn it into a DO THROW
-			// or should we throw because the conflict target makes no sense?
-			throw BinderException("The specified INDEX does not apply to this table");
-		}
-	} else if (!on_conflict.indexed_columns.empty()) {
+	if (!on_conflict.indexed_columns.empty()) {
 		// Bind the ON CONFLICT (<columns>)
 
 		// create a mapping of (list index) -> (column index)x

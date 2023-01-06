@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class Index;
+
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
 public:
@@ -41,8 +43,6 @@ public:
 	vector<LogicalType> expected_set_types;
 	// The column ids to apply the ON CONFLICT on
 	vector<column_t> on_conflict_filter;
-	// The Index name to apply the ON CONFLICT on
-	string constraint_name;
 	// The WHERE clause of the conflict_target (ON CONFLICT .. WHERE <condition>)
 	unique_ptr<Expression> on_conflict_condition;
 	// The WHERE clause of the DO UPDATE clause
