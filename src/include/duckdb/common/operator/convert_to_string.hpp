@@ -17,44 +17,44 @@ namespace duckdb {
 
 struct ConvertToString {
 	template <class SRC>
-	DUCKDB_API static inline string Operation(SRC input) {
+	static inline string Operation(SRC input) {
 		throw InternalException("Unrecognized type for ConvertToString %s", GetTypeId<SRC>());
 	}
 };
 
 template <>
-DUCKDB_API string ConvertToString::Operation(bool input);
+string ConvertToString::Operation(bool input);
 template <>
-DUCKDB_API string ConvertToString::Operation(int8_t input);
+string ConvertToString::Operation(int8_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(int16_t input);
+string ConvertToString::Operation(int16_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(int32_t input);
+string ConvertToString::Operation(int32_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(int64_t input);
+string ConvertToString::Operation(int64_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(uint8_t input);
+string ConvertToString::Operation(uint8_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(uint16_t input);
+string ConvertToString::Operation(uint16_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(uint32_t input);
+string ConvertToString::Operation(uint32_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(uint64_t input);
+string ConvertToString::Operation(uint64_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(hugeint_t input);
+string ConvertToString::Operation(hugeint_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(float input);
+string ConvertToString::Operation(float input);
 template <>
-DUCKDB_API string ConvertToString::Operation(double input);
+string ConvertToString::Operation(double input);
 template <>
-DUCKDB_API string ConvertToString::Operation(interval_t input);
+string ConvertToString::Operation(interval_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(date_t input);
+string ConvertToString::Operation(date_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(dtime_t input);
+string ConvertToString::Operation(dtime_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(timestamp_t input);
+string ConvertToString::Operation(timestamp_t input);
 template <>
-DUCKDB_API string ConvertToString::Operation(string_t input);
+string ConvertToString::Operation(string_t input);
 
 } // namespace duckdb

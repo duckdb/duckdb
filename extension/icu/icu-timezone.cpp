@@ -338,10 +338,6 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 	}
 };
 
-timestamp_t ICUDateFunc::FromNaive(icu::Calendar *calendar, timestamp_t naive) {
-	return ICUFromNaiveTimestamp::Operation(calendar, naive);
-}
-
 void RegisterICUTimeZoneFunctions(ClientContext &context) {
 	//	Table functions
 	auto &catalog = Catalog::GetSystemCatalog(context);

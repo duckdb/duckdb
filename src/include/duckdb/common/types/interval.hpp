@@ -78,7 +78,7 @@ public:
 	static int64_t GetMilli(const interval_t &val);
 
 	//! Get Interval in microseconds
-	DUCKDB_API static int64_t GetMicro(const interval_t &val);
+	static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds
 	static int64_t GetNanoseconds(const interval_t &val);
