@@ -139,8 +139,10 @@ struct TimeBucket {
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return WidthConvertibleToMicrosBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
-			default:
+			case BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				return WidthConvertibleToMonthsBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	};
@@ -180,9 +182,11 @@ struct TimeBucket {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OffsetWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
 				                                                                                offset);
-			default:
+			case BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				return OffsetWidthConvertibleToMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
 				                                                                                offset);
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	};
@@ -226,9 +230,11 @@ struct TimeBucket {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OriginWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
 				                                                                                origin);
-			default:
+			case BucketWidthType::CONVERTIBLE_TO_MONTHS:
 				return OriginWidthConvertibleToMonthsTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
 				                                                                                origin);
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	};
@@ -259,10 +265,12 @@ static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &
 				    bucket_width_arg, ts_arg, result, args.size(),
 				    TimeBucket::WidthConvertibleToMonthsBinaryOperator::Operation<interval_t, T, T>);
 				break;
-			default:
+			case TimeBucket::BucketWidthType::UNCLASSIFIED:
 				BinaryExecutor::Execute<interval_t, T, T>(bucket_width_arg, ts_arg, result, args.size(),
 				                                          TimeBucket::BinaryOperator::Operation<interval_t, T, T>);
 				break;
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	} else {
@@ -297,11 +305,13 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, interval_t, T>);
 				break;
-			default:
+			case TimeBucket::BucketWidthType::UNCLASSIFIED:
 				TernaryExecutor::Execute<interval_t, T, interval_t, T>(
 				    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 				    TimeBucket::OffsetTernaryOperator::Operation<interval_t, T, interval_t, T>);
 				break;
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	} else {
@@ -339,11 +349,13 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
-			default:
+			case TimeBucket::BucketWidthType::UNCLASSIFIED:
 				TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
+			default:
+				throw NotImplementedException("Bucket type not implemented for TIME_BUCKET");
 			}
 		}
 	} else {
