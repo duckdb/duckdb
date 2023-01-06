@@ -21,6 +21,9 @@ struct ExportedTableData {
 	//! Name of the schema
 	string schema_name;
 
+	//! Name of the database
+	string database_name;
+
 	//! Path to be exported
 	string file_path;
 };

@@ -44,7 +44,7 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 		throw InvalidInputException("The provided struct type should only contain 2 fields, a key and a value");
 	}
 
-	bound_function.return_type = LogicalType::MAP(children[0].second, children[1].second);
+	bound_function.return_type = LogicalType::MAP(elem_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

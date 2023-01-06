@@ -8,6 +8,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/main/config.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -390,6 +391,17 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	global_state.handle.reset();
 }
 
+//===--------------------------------------------------------------------===//
+// Parallel
+//===--------------------------------------------------------------------===//
+bool WriteCSVIsParallel(ClientContext &context, FunctionData &bind_data) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.preserve_insertion_order) {
+		return false;
+	}
+	return true;
+}
+
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
 	info.copy_to_bind = WriteCSVBind;
@@ -398,6 +410,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_sink = WriteCSVSink;
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
+	info.parallel = WriteCSVIsParallel;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

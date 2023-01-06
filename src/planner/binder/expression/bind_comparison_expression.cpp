@@ -33,7 +33,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		// binary collation: just skip
 		return source;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
 	vector<CollateCatalogEntry *> entries;
 	for (auto &collation_argument : splits) {

@@ -54,7 +54,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto key_value = key.GetValue(key_index);
 
 		list_entry_t entry = ListVector::GetData(map)[row_index];
-		auto offsets = FlatVector::Search(map_keys, args.size(), key_value, entry);
+		auto offsets = MapVector::Search(map_keys, args.size(), key_value, entry);
 		auto values = FlatVector::GetValuesFromOffsets(map_values, offsets);
 		FillResult(values, result, row);
 	}

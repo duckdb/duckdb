@@ -142,22 +142,35 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
-	D_ASSERT(colref.column_names.size() <= 2);
+	D_ASSERT(colref.column_names.size() <= 3);
 	string error_message;
 	auto &table_name = colref.column_names.back();
 	auto binding = binder.bind_context.GetBinding(table_name, error_message);
 	if (!binding) {
 		return nullptr;
 	}
-	if (colref.column_names.size() == 2) {
+	if (colref.column_names.size() >= 2) {
 		// "schema_name.table_name"
 		auto catalog_entry = binding->GetStandardEntry();
 		if (!catalog_entry) {
 			return nullptr;
 		}
-		auto &schema_name = colref.column_names[0];
-		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
+		if (catalog_entry->name != table_name) {
 			return nullptr;
+		}
+		if (colref.column_names.size() == 2) {
+			auto &qualifier = colref.column_names[0];
+			if (catalog_entry->catalog->GetName() != qualifier && catalog_entry->schema->name != qualifier) {
+				return nullptr;
+			}
+		} else if (colref.column_names.size() == 3) {
+			auto &catalog_name = colref.column_names[0];
+			auto &schema_name = colref.column_names[1];
+			if (catalog_entry->catalog->GetName() != catalog_name || catalog_entry->schema->name != schema_name) {
+				return nullptr;
+			}
+		} else {
+			throw InternalException("Expected 2 or 3 column names for CreateStructPack");
 		}
 	}
 	// We found the table, now create the struct_pack expression
@@ -207,22 +220,39 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		}
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
+		// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
+		// struct fields
+		// -> part1 is a catalog, part2 is a table, part3 is a column name, part4 and beyond are struct fields
 		// -> part1 is a schema, part2 is a table, part3 is a column name, part4 and beyond are struct fields
 		// -> part1 is a table, part2 is a column name, part3 and beyond are struct fields
 		// -> part1 is a column, part2 and beyond are struct fields
 
 		// we always prefer the most top-level view
 		// i.e. in case of multiple resolution options, we resolve in order:
-		// -> 1. resolve "part1" as a schema
-		// -> 2. resolve "part1" as a table
-		// -> 3. resolve "part1" as a column
+		// -> 1. resolve "part1" as a catalog
+		// -> 2. resolve "part1" as a schema
+		// -> 3. resolve "part1" as a table
+		// -> 4. resolve "part1" as a column
 
 		unique_ptr<ParsedExpression> result_expr;
 		idx_t struct_extract_start;
-		// first check if part1 is a schema
-		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2],
-		                              error_message)) {
-			// it is! the column reference is "schema.table.column"
+		// first check if part1 is a catalog
+		if (colref.column_names.size() > 3 &&
+		    binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2],
+		                              colref.column_names[3], error_message)) {
+			// part1 is a catalog - the column reference is "catalog.schema.table.column"
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1],
+			                                                        colref.column_names[2], colref.column_names[3]);
+			struct_extract_start = 4;
+		} else if (binder.HasMatchingBinding(colref.column_names[0], INVALID_SCHEMA, colref.column_names[1],
+		                                     colref.column_names[2], error_message)) {
+			// part1 is a catalog - the column reference is "catalog.table.column"
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], INVALID_SCHEMA,
+			                                                        colref.column_names[1], colref.column_names[2]);
+			struct_extract_start = 3;
+		} else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2],
+		                                     error_message)) {
+			// part1 is a schema - the column reference is "schema.table.column"
 			// any additional fields are turned into struct_extract calls
 			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1],
 			                                                        colref.column_names[2]);
@@ -238,8 +268,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			string col_error;
 			result_expr = QualifyColumnName(colref.column_names[0], col_error);
 			if (!result_expr) {
-				// it is not! return the error
-				return nullptr;
+				// it is not! Try creating an implicit struct_pack
+				return CreateStructPack(colref);
 			}
 			// it is! add the struct extract calls
 			struct_extract_start = 1;

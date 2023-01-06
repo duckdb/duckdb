@@ -54,6 +54,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	auto qname = TransformQualifiedName(stmt->relation);
 	result->table = qname.name;
 	result->schema = qname.schema;
+	result->catalog = qname.catalog;
 	return result;
 }
 

@@ -185,7 +185,7 @@ ColumnWriterState::~ColumnWriterState() {
 
 void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
                                 unique_ptr<data_t[]> &compressed_buf) {
-	switch (writer.codec) {
+	switch (writer.GetCodec()) {
 	case CompressionCodec::UNCOMPRESSED:
 		compressed_size = temp_writer.blob.size;
 		compressed_data = temp_writer.blob.data.get();
@@ -396,10 +396,10 @@ unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_par
 void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group) {
 	format::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
-	column_chunk.meta_data.codec = writer.codec;
+	column_chunk.meta_data.codec = writer.GetCodec();
 	column_chunk.meta_data.path_in_schema = schema_path;
 	column_chunk.meta_data.num_values = 0;
-	column_chunk.meta_data.type = writer.file_meta_data.schema[schema_idx].type;
+	column_chunk.meta_data.type = writer.GetType(schema_idx);
 	row_group.columns.push_back(move(column_chunk));
 }
 
@@ -645,7 +645,8 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	// flush the last page (if any remains)
 	FlushPage(state);
 
-	auto start_offset = writer.writer->GetTotalWritten();
+	auto &column_writer = writer.GetWriter();
+	auto start_offset = column_writer.GetTotalWritten();
 	auto page_offset = start_offset;
 	// flush the dictionary
 	if (HasDictionary(state)) {
@@ -665,14 +666,14 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
-		auto header_start_offset = writer.writer->GetTotalWritten();
-		write_info.page_header.write(writer.protocol.get());
+		auto header_start_offset = column_writer.GetTotalWritten();
+		write_info.page_header.write(writer.GetProtocol());
 		// total uncompressed size in the column chunk includes the header size (!)
-		total_uncompressed_size += writer.writer->GetTotalWritten() - header_start_offset;
+		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		writer.writer->WriteData(write_info.compressed_data, write_info.compressed_size);
+		column_writer.WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
-	column_chunk.meta_data.total_compressed_size = writer.writer->GetTotalWritten() - start_offset;
+	column_chunk.meta_data.total_compressed_size = column_writer.GetTotalWritten() - start_offset;
 	column_chunk.meta_data.total_uncompressed_size = total_uncompressed_size;
 }
 

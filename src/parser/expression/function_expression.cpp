@@ -8,13 +8,14 @@
 
 namespace duckdb {
 
-FunctionExpression::FunctionExpression(string schema, const string &function_name,
+FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
-      distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)), export_state(export_state_p) {
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(move(catalog)),
+      schema(std::move(schema)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
+      children(move(children_p)), distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)),
+      export_state(export_state_p) {
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
 		order_bys = make_unique<OrderModifier>();
@@ -24,8 +25,8 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
 FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : FunctionExpression(INVALID_SCHEMA, function_name, move(children_p), move(filter), move(order_bys), distinct,
-                         is_operator, export_state_p) {
+    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, move(children_p), move(filter),
+                         move(order_bys), distinct, is_operator, export_state_p) {
 }
 
 string FunctionExpression::ToString() const {
@@ -34,7 +35,8 @@ string FunctionExpression::ToString() const {
 }
 
 bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
-	if (a->schema != b->schema || a->function_name != b->function_name || b->distinct != a->distinct) {
+	if (a->catalog != b->catalog || a->schema != b->schema || a->function_name != b->function_name ||
+	    b->distinct != a->distinct) {
 		return false;
 	}
 	if (b->children.size() != a->children.size()) {
@@ -80,9 +82,8 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 		order_copy.reset(static_cast<OrderModifier *>(order_bys->Copy().release()));
 	}
 
-	auto copy = make_unique<FunctionExpression>(function_name, move(copy_children), move(filter_copy), move(order_copy),
-	                                            distinct, is_operator, export_state);
-	copy->schema = schema;
+	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, move(copy_children), move(filter_copy),
+	                                            move(order_copy), distinct, is_operator, export_state);
 	copy->CopyProperties(*this);
 	return move(copy);
 }
@@ -96,6 +97,7 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(distinct);
 	writer.WriteField<bool>(is_operator);
 	writer.WriteField<bool>(export_state);
+	writer.WriteString(catalog);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -107,11 +109,11 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
 	auto export_state = reader.ReadField<bool>(false);
+	auto catalog = reader.ReadField<string>(INVALID_CATALOG);
 
 	unique_ptr<FunctionExpression> function;
-	function = make_unique<FunctionExpression>(function_name, move(children), move(filter), move(order_bys), distinct,
-	                                           is_operator, export_state);
-	function->schema = schema;
+	function = make_unique<FunctionExpression>(catalog, schema, function_name, move(children), move(filter),
+	                                           move(order_bys), distinct, is_operator, export_state);
 	return move(function);
 }
 

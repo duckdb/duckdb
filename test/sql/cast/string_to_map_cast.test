@@ -33,6 +33,10 @@ SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 ----
 {key=A=Duck, key=B=hello=world}
 
+statement error
+SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
+----
+Invalid Input Error: Map keys have to be unique
 
 
 #               Nested Maps
@@ -141,6 +145,10 @@ SELECT CAST('{12=34, 56=NULL, 910=1112, 1314=NULL}' AS MAP(INT, INT));
 ----
 {12=34, 56=NULL, 910=1112, 1314=NULL}
 
+statement error
+SELECT CAST('{NULL=5}' AS MAP(INT, INT));
+----
+Conversion Error: Type VARCHAR with value '{NULL=5}' can't be cast to the destination type MAP
 
 #               Try Cast
 # ---------------------------------------------------

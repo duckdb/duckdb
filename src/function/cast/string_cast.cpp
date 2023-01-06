@@ -2,6 +2,7 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -221,8 +222,6 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 		auto &varchar_vector = *child_vectors[child_idx];
 		auto &result_child_vector = *result_children[child_idx];
 		auto &child_cast_info = cast_data.child_cast_info[child_idx];
-		// get the correct casting function (VARCHAR -> result_child_type) from cast_data
-		// casting functions are determined by BindStructtoStructCast
 		CastParameters child_parameters(parameters, child_cast_info.cast_data.get());
 		if (!child_cast_info.function(varchar_vector, result_child_vector, count, child_parameters)) {
 			all_converted = false;
@@ -231,6 +230,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 	return all_converted;
 }
 
+// string -> map casting
 bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
                                                    ValidityMask &result_mask, idx_t count, CastParameters &parameters,
                                                    const SelectionVector *sel) {
@@ -246,23 +246,14 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, Validi
 		total_elements += (VectorStringToMap::CountPartsMap(source_data[idx]) + 1) / 2;
 	}
 
-	Vector varchar_key_vector(LogicalType::VARCHAR,
-	                          total_elements); // temporary store the key elem as varchar in this flatvector
-	Vector varchar_val_vector(LogicalType::VARCHAR, total_elements); // and store corresponding values
+	Vector varchar_key_vector(LogicalType::VARCHAR, total_elements);
+	Vector varchar_val_vector(LogicalType::VARCHAR, total_elements);
 	auto child_key_data = FlatVector::GetData<string_t>(varchar_key_vector);
 	auto child_val_data = FlatVector::GetData<string_t>(varchar_val_vector);
 
-	// allocate the resulting key list
-	// auto &key_list = MapVector::GetKeys(result);
 	ListVector::Reserve(result, total_elements);
 	ListVector::SetListSize(result, total_elements);
 	auto list_data = ListVector::GetData(result);
-
-	// allocate the resulting value list
-	//    auto &val_list = MapVector::GetValues(result);
-	//    ListVector::Reserve(val_list, total_elements);
-	//    ListVector::SetListSize(val_list, total_elements);
-	//    auto list_val_data = ListVector::GetData(val_list);
 
 	bool all_converted = true;
 	idx_t total = 0;
@@ -273,7 +264,6 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, Validi
 		}
 		if (!source_mask.RowIsValid(idx)) {
 			result_mask.SetInvalid(idx);
-			// FlatVector::SetNull(result, idx, true);
 			continue;
 		}
 
@@ -317,7 +307,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, Validi
 			}
 		}
 	}
-
+	MapConversionVerify(result, count);
 	return all_converted;
 }
 

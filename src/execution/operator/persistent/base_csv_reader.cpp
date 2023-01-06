@@ -160,7 +160,6 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	} else {
 		row_empty = false;
 	}
-
 	if (!sql_types.empty() && column == sql_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
@@ -249,7 +248,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 				return false;
 			} else {
 				throw InvalidInputException(
-				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d. (%s)",
+				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
 				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
 				    options.ToString());
 			}
@@ -309,7 +308,7 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, i
 		int64_t error_line = linenr - (chunk.size() - row_idx) + 1 + offset;
 		D_ASSERT(error_line >= 0);
 		throw InvalidInputException("Error in file \"%s\" at line %llu in column \"%s\": "
-		                            "%s. Parser options: %s",
+		                            "%s. Parser options:\n%s",
 		                            options.file_path, error_line, col_name,
 		                            ErrorManager::InvalidUnicodeError(s.GetString(), "CSV file"), options.ToString());
 	}
@@ -332,29 +331,27 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
-		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
+		auto insert_idx = insert_cols_idx[col_idx];
+		auto &type = sql_types[col_idx];
+		if (type.id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			VerifyUTF8(col_idx);
-			insert_chunk.data[insert_cols_idx[col_idx]].Reference(parse_chunk.data[col_idx]);
+			insert_chunk.data[insert_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			string error_message;
 			bool success;
-			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success =
-				    TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_cols_idx[col_idx]],
-				                      parse_chunk.size(), error_message);
-			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+				                            parse_chunk.size(), error_message);
+			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx],
-				                                 insert_chunk.data[insert_cols_idx[col_idx]], parse_chunk.size(),
-				                                 error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+				                                 parse_chunk.size(), error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx],
-				                                           insert_chunk.data[insert_cols_idx[col_idx]],
+				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
 				                                           parse_chunk.size(), &error_message);
 			}
 			if (success) {
@@ -385,13 +382,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
 
 			if (options.auto_detect) {
-				throw InvalidInputException("%s in column %s, at line %llu. Parser "
-				                            "options: %s. Consider either increasing the sample size "
+				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
+				                            "options:\n%s.\n\nConsider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 				                            "or skipping column conversion (ALL_VARCHAR=1)",
 				                            error_message, col_name, error_line, options.ToString());
 			} else {
-				throw InvalidInputException("%s at line %llu in column %s. Parser options: %s ", error_message,
+				throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ", error_message,
 				                            error_line, col_name, options.ToString());
 			}
 		}

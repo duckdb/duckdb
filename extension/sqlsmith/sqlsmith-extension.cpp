@@ -120,7 +120,7 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
 void SQLSmithExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
 	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;

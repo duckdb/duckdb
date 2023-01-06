@@ -198,7 +198,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getCatalog() throws SQLException {
-		return null;
+		return DuckDBNative.duckdb_jdbc_get_catalog(conn_ref);
 	}
 
 	public void setSchema(String schema) throws SQLException {

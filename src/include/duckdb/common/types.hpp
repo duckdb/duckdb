@@ -195,9 +195,6 @@ enum class PhysicalType : uint8_t {
 	///// ArrayData struct
 	//DICTIONARY = 26,
 
-	/// Map, a repeated struct logical type
-	MAP = 27,
-
 	///// Custom data type, implemented by user
 	//EXTENSION = 28,
 

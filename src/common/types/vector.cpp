@@ -1634,7 +1634,7 @@ void SearchStringInMap(Vector &keys, idx_t count, const string &key, vector<idx_
 	}
 }
 
-vector<idx_t> FlatVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
+vector<idx_t> MapVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
 	vector<idx_t> offsets;
 
 	switch (keys.GetType().InternalType()) {
@@ -1671,6 +1671,9 @@ vector<idx_t> FlatVector::Search(Vector &keys, idx_t count, const Value &key, li
 		break;
 	case PhysicalType::DOUBLE:
 		TemplatedSearchInMap<double>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedSearchInMap<interval_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
 		break;
 	case PhysicalType::VARCHAR:
 		SearchStringInMap(keys, count, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);

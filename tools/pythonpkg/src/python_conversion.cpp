@@ -124,7 +124,29 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 	// dict == { 'key': [ ... ], 'value' : [ ... ] }
 	auto key_list = TransformPythonValue(keys);
 	auto value_list = TransformPythonValue(values);
-	return Value::MAP(key_list, value_list);
+
+	LogicalType key_type = LogicalType::SQLNULL;
+	LogicalType value_type = LogicalType::SQLNULL;
+
+	vector<Value> elements;
+	for (idx_t i = 0; i < key_size; i++) {
+
+		Value new_key = ListValue::GetChildren(key_list)[i];
+		Value new_value = ListValue::GetChildren(value_list)[i];
+
+		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
+		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
+
+		child_list_t<Value> struct_values;
+		struct_values.emplace_back(make_pair("key", move(new_key)));
+		struct_values.emplace_back(make_pair("value", move(new_value)));
+
+		elements.push_back(Value::STRUCT(move(struct_values)));
+	}
+
+	LogicalType map_type = LogicalType::MAP(key_type, value_type);
+
+	return Value::MAP(ListType::GetChildType(map_type), move(elements));
 }
 
 Value TransformListValue(py::handle ele) {

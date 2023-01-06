@@ -223,7 +223,6 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::STRUCT:
 		StructLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
@@ -352,7 +351,6 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 	case PhysicalType::VARCHAR:
 		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		StructLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;

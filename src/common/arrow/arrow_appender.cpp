@@ -474,7 +474,7 @@ struct ArrowMapData {
 
 		SelectionVector child_sel(child_indices.data());
 		auto &key_vector = MapVector::GetKeys(input);
-		auto &value_vector = MapVector::GetKeys(input);
+		auto &value_vector = MapVector::GetValues(input);
 		auto list_size = child_indices.size();
 		key_vector.Slice(child_sel, list_size);
 		value_vector.Slice(child_sel, list_size);
@@ -484,7 +484,6 @@ struct ArrowMapData {
 		auto &value_data = *struct_data.child_data[1];
 		key_data.append_vector(key_data, key_vector, list_size);
 		value_data.append_vector(value_data, value_vector, list_size);
-
 		append_data.row_count += size;
 		struct_data.row_count += size;
 	}

@@ -77,13 +77,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qname.schema, qname.name);
-	if (entry->type != CatalogType::TABLE_ENTRY) {
-		throw Exception("storage_info requires a table as parameter");
-	}
-	auto table_entry = (TableCatalogEntry *)entry;
-
+	auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
 	result->storage_info = table_entry->storage->GetStorageInfo();
 	return move(result);

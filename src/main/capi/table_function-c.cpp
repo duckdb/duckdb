@@ -274,7 +274,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		return DuckDBError;
 	}
 	con->context->RunFunctionInTransaction([&]() {
-		auto &catalog = duckdb::Catalog::GetCatalog(*con->context);
+		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 		duckdb::CreateTableFunctionInfo tf_info(*tf);
 
 		// create the function in the catalog

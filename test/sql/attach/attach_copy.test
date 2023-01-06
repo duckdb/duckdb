@@ -1,0 +1,32 @@
+# name: test/sql/attach/attach_copy.test
+# description: Test attach mixed with the COPY statement
+# group: [attach]
+
+require skip_reload
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY db1.test FROM 'test/sql/copy/csv/data/test/test.csv';
+----
+5000
+
+query I
+COPY db1.main.test FROM 'test/sql/copy/csv/data/test/test.csv';
+----
+5000
+
+statement ok
+COPY db1.main.test TO '__TEST_DIR__/test.csv';
+
+statement ok
+USE db1
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/test.csv';
+----
+5000

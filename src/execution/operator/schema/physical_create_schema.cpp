@@ -24,7 +24,11 @@ void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, 
 	if (state.finished) {
 		return;
 	}
-	Catalog::GetCatalog(context.client).CreateSchema(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+	if (catalog.IsSystemCatalog()) {
+		throw BinderException("Cannot create schema in system catalog");
+	}
+	catalog.CreateSchema(context.client, info.get());
 	state.finished = true;
 }
 

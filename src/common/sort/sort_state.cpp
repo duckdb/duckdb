@@ -24,7 +24,6 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 			return col_size - size_before_str;
 		}
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 			// Lists get 2 bytes (null and empty list)
 			col_size += 2;
 			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));

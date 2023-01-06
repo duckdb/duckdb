@@ -304,7 +304,6 @@ struct FlatVector {
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
-	static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
 	static Value GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets);
 };
 
@@ -332,7 +331,6 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
-	DUCKDB_API static vector<idx_t> Search(Vector &list, const Value &key, idx_t row);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 };
@@ -410,6 +408,7 @@ struct MapVector {
 	DUCKDB_API static const Vector &GetValues(const Vector &vector);
 	DUCKDB_API static Vector &GetKeys(Vector &vector);
 	DUCKDB_API static Vector &GetValues(Vector &vector);
+	static vector<idx_t> Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry);
 };
 
 struct StructVector {
