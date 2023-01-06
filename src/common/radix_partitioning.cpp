@@ -435,6 +435,9 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
 
 RadixPartitionedColumnData::RadixPartitionedColumnData(const RadixPartitionedColumnData &other)
     : PartitionedColumnData(other), radix_bits(other.radix_bits), hash_col_idx(other.hash_col_idx) {
+
+	// TODO: can we move this to the PartitionedColumnData(const PartitionedColumnData& other) constructor?
+	// 		 if the size of partitions = RadixPartitioning::NumberOfPartitions(radix_bits) yes. Are there lazy partitions though?
 	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
 		partitions.emplace_back(CreatePartitionCollection(i));
 	}

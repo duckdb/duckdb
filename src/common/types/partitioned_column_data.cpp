@@ -138,6 +138,8 @@ void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &s
 	}
 }
 
+// TODO: What happens when partition counts do not match? We may need this when we may have mismatching partition counts?
+// TODO: also shouldn't we lock the other PartitionedColumnData here too? Or should other always be a local PartitionedColumnData here?
 void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
