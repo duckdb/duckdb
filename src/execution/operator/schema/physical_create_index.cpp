@@ -111,12 +111,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	// here, we just set the resulting global index as the newly created index of the table
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
-	if (state.global_index->track_memory) {
-		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
-	}
-
 	if (!table.storage->IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
+
+	if (state.global_index->track_memory) {
+		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
 
 	auto &schema = *table.schema;

@@ -234,7 +234,7 @@ void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 		for (idx_t i = 0; i < count; i++) {
 			row_ids[i + 1] = reader.Read<row_t>();
 		}
-		Resize(row_ids, count, count);
+		rowids.ptr = row_ids;
 	}
 }
 
