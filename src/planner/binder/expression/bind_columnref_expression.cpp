@@ -318,6 +318,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (table_name == (*lambda_bindings)[i].alias) {
 				result = (*lambda_bindings)[i].Bind(colref, depth);
+				auto &bound_col_ref = (BoundColumnRefExpression &)*result.expression;
+				bound_col_ref.binding.lambda_index = i;
 				found_lambda_binding = true;
 				break;
 			}

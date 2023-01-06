@@ -1,0 +1,23 @@
+# name: test/sql/function/list/lambdas/rhs_parameters.test
+# description: Test nested lambda parameters in the rhs of lambda expressions
+# group: [lambdas]
+
+# issue #5795
+query I
+SELECT list_apply([1,2], x -> list_apply([3,4], y -> (x,y))) AS bug;
+----
+[[{'x': 1, 'y': 3}, {'x': 1, 'y': 4}], [{'x': 2, 'y': 3}, {'x': 2, 'y': 4}]]
+
+# arbitrary other nested lambdas
+
+query I
+select list_transform([1,2], x -> list_transform([3,4], y -> x + y));
+----
+[[4, 5], [5, 6]]
+
+query I
+select list_transform([1,2], x -> list_transform([3,4], y -> list_transform([5,6], z -> z + y + x)));
+----
+[[[9, 10], [10, 11]], [[10, 11], [11, 12]]]
+
+# TODO: more tests, also with list_filter and other nested scalar functions

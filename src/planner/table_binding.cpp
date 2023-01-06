@@ -200,7 +200,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, move(types_p), move(names_p), -1),
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, move(types_p), move(names_p),
+              DConstants::INVALID_INDEX),
       dummy_name(move(dummy_name_p)) {
 }
 

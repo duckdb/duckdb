@@ -40,6 +40,7 @@ struct Binding {
 	string alias;
 	//! The table index of the binding
 	idx_t index;
+	//! The types of the bound columns
 	vector<LogicalType> types;
 	//! Column names of the subquery
 	vector<string> names;

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -155,8 +156,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = (BoundLambdaExpression &)*children.back();
-	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr,
-	                     children[0]->alias);
+	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr);
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
@@ -165,11 +165,27 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		throw BinderException(binder.FormatError(function, error));
 	}
 
-	// remove the lambda expression from the children
 	auto &bound_function_expr = (BoundFunctionExpression &)*result;
+	D_ASSERT(bound_function_expr.children.size() == 2);
+
+	// remove the lambda expression from the children
 	auto lambda = move(bound_function_expr.children.back());
 	bound_function_expr.children.pop_back();
 	auto &bound_lambda = (BoundLambdaExpression &)*lambda;
+
+	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda expression
+	// (rhs)
+	if (lambda_bindings) {
+		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
+			D_ASSERT((*lambda_bindings)[i - 1].names.size() == 1);
+			D_ASSERT((*lambda_bindings)[i - 1].types.size() == 1);
+			bound_function_expr.function.arguments.push_back((*lambda_bindings)[i - 1].types[0]);
+			auto bound_lambda_param = make_unique<BoundReferenceExpression>((*lambda_bindings)[i - 1].names[0],
+			                                                                (*lambda_bindings)[i - 1].types[0],
+			                                                                lambda_bindings->size() - i + 1);
+			bound_function_expr.children.push_back(move(bound_lambda_param));
+		}
+	}
 
 	// push back the captures into the children vector and the correct return types into the bound_function arguments
 	for (auto &capture : bound_lambda.captures) {
