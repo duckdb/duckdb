@@ -305,6 +305,29 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 				if (action_type != OnConflictAction::NOTHING &&
 				    indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
 
+					// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
+					if (do_update_condition) {
+						DataChunk do_update_filter_result;
+						do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
+						ExpressionExecutor where_executor(context.client, *do_update_condition);
+						where_executor.Execute(combined_chunk, do_update_filter_result);
+						do_update_filter_result.SetCardinality(combined_chunk.size());
+
+						ManagedSelection selection(combined_chunk.size());
+
+						auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
+						for (idx_t i = 0; i < combined_chunk.size(); i++) {
+							if (where_data[i]) {
+								selection.Append(i);
+							}
+						}
+						if (selection.Count() != selection.Size()) {
+							// Not all conflicts met the condition, need to filter out the ones that don't
+							combined_chunk.Slice(selection.Selection(), selection.Count());
+							combined_chunk.SetCardinality(selection.Count());
+						}
+					}
+
 					// Execute the SET expressions
 					update_chunk.Initialize(context.client, filtered_types);
 					ExpressionExecutor executor(context.client, set_expressions);

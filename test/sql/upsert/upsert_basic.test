@@ -92,21 +92,48 @@ select * from tbl;
 3	30	5
 4	2	3
 
-# Only perform the DO UPDATE when the WHERE clause evaluates to true for the found conflicts
+# Throw an error if the condition is not met by all found conflicts
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k < 5 DO UPDATE SET k = 1;
 ----
 Constraint Error: TODO: find the first conflict that doesn't meet the condition
 
-# Only perform the DO UPDATE when the WHERE clause evaluates to true for the found conflicts
+# When the condition is met, the DO is performed
 statement ok
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k >= 5 DO UPDATE SET k = 1;
 
-# Table unchanged
+# 'k' in row_id:3 is updated to 1
 query III
 select * from tbl;
 ----
 1	10	1
 2	20	1
 3	30	1
+4	2	3
+
+# When the condition is on the DO UPDATE part,
+# it will always succeed, but turn into a DO NOTHING for the conflicts that don't meet the condition
+
+statement ok
+insert into tbl VALUES (3,5,3) on conflict (i) do update set k = 10 WHERE k != 1;
+
+# Unchanged, because the where clause is not met
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	1
+4	2	3
+
+statement ok
+insert into tbl VALUES (3,5,3) on conflict (i) do update set k = 10 WHERE k == 1;
+
+# Changed, because the where clause is met
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	10
 4	2	3
