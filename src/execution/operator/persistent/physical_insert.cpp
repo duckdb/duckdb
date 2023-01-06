@@ -42,6 +42,10 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
       do_update_condition(move(do_update_condition_p)), on_conflict_filter(move(on_conflict_filter_p)),
       constraint_name(move(constraint_name_p)), columns_to_fetch(move(columns_to_fetch_p)) {
 
+	if (action_type == OnConflictAction::THROW) {
+		return;
+	}
+
 	indexed_on_columns = GetIndexedOnColumns(table);
 
 	// Figure out which columns are indexed on, and will be excluded from a DO UPDATE set expression
@@ -166,18 +170,26 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 
 void VerifyAllConflictsMeetCondition(ExecutionContext &context, DataChunk &conflicts,
                                      const unique_ptr<Expression> &condition) {
-	if (!condition) {
-		return;
-	}
+
 	ExpressionExecutor executor(context.client, *condition);
 	DataChunk result;
 	result.Initialize(context.client, {LogicalType::BOOLEAN});
 	executor.Execute(conflicts, result);
+	result.SetCardinality(conflicts.size());
 
-	// TODO: this expression should probably be analyzed to see if it's never true? in which case this turns into a DO
-	// THROW instead
-	// TODO: Check that the condition holds true for all conflicts
-	//  if not, we throw the first one that isn't
+	auto data = FlatVector::GetData<bool>(result.data[0]);
+	bool condition_met = true;
+	for (idx_t i = 0; i < result.size(); i++) {
+		if (!data[i]) {
+			condition_met = false;
+			break;
+		}
+	}
+	if (condition_met) {
+		return;
+	}
+	// Not all conflicts found meet the condition, we need to throw the error instead
+	throw ConstraintException("TODO: find the first conflict that doesn't meet the condition");
 }
 
 void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -272,26 +284,26 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 				conflict_chunk.Slice(conflicts.matches.Selection(), conflicts.matches.Count());
 				conflict_chunk.SetCardinality(conflicts.matches.Count());
 
-				// todo: pass the on_conflict condition
-				VerifyAllConflictsMeetCondition(context, conflict_chunk, on_conflict_condition);
+				auto &data_table = table->storage;
+				if (types_to_fetch.size()) {
+					// When these values are required for the conditions or the SET expressions,
+					// then we scan the existing table for the conflicting tuples, using the rowids
+					scan_chunk.Initialize(context.client, types_to_fetch);
+					auto fetch_state = make_unique<ColumnFetchState>();
+					data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, columns_to_fetch,
+					                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
+				}
+
+				// Splice the Input chunk and the fetched chunk together
+				CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
+
+				if (on_conflict_condition) {
+					// todo: pass the on_conflict condition
+					VerifyAllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
+				}
 
 				if (action_type != OnConflictAction::NOTHING &&
 				    indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
-
-					auto &data_table = table->storage;
-
-					if (types_to_fetch.size()) {
-						// When these values are required for the conditions or the SET expressions,
-						// then we scan the existing table for the conflicting tuples, using the rowids
-						scan_chunk.Initialize(context.client, types_to_fetch);
-						auto fetch_state = make_unique<ColumnFetchState>();
-						data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk,
-						                  columns_to_fetch, conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
-					}
-
-					// Splice the Input chunk and the fetched chunk together
-					DataChunk combined_chunk;
-					CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
 
 					// Execute the SET expressions
 					update_chunk.Initialize(context.client, filtered_types);

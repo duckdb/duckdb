@@ -8,8 +8,7 @@
 statement ok
 SET preserve_insertion_order=false;
 
-
-
+# Create a table, most columns are indexed on
 statement ok
 create table tbl(
 	i integer PRIMARY KEY,
@@ -17,10 +16,14 @@ create table tbl(
 	k integer
 );
 
+# Populate the table
 statement ok
-insert into tbl VALUES (1, 10, 1), (2, 20, 1), (3, 30, 2);
+insert into tbl VALUES
+	(1, 10, 1),
+	(2, 20, 1),
+	(3, 30, 2);
 
-# assigned-to column is indexed on
+# The column referenced in the SET expression is indexed on, can't be updated
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET i = i;
 
@@ -31,6 +34,8 @@ select * from tbl;
 2	20	1
 3	30	2
 
+# 'excluded' refers to the VALUES list, turning this into:
+# (k)2 + (k.excluded)1 = 3
 statement ok
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = k + excluded.k;
 
@@ -41,15 +46,16 @@ select * from tbl;
 2	20	1
 3	30	3
 
+# The ON CONFLICT does not refer to a column that's indexed on, so it's never true
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (k) DO UPDATE SET k = excluded.k;
 ----
 Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT/INDEX
 
+# Overwrite the existing value with the new value
 statement ok
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET k = excluded.k;
 
-# Update to the new value
 query III
 select * from tbl;
 ----
@@ -57,10 +63,10 @@ select * from tbl;
 2	20	1
 3	30	1
 
+# Don't alter the existing row, but still insert the non-conflicting row
 statement ok
 insert into tbl VALUES (4,2,3), (3,5,10) ON CONFLICT (i) DO NOTHING;
 
-# Don't alter the existing row
 query III
 select * from tbl;
 ----
@@ -69,14 +75,38 @@ select * from tbl;
 3	30	1
 4	2	3
 
-# I verify in the UPSERT that no conflict is caused by the inserted values on 'j'
-# Then, because a conflict arises on 'i', we transform it into an update instead
-# Since this is a unique/primary key constraint, there is only ever one tuple that contains this conflicting value
+# Two rows cause a conflict, on the same existing row (on the same indexed column)
+statement ok
+insert into tbl VALUES
+	(3,1,5),
+	(3,3,1)
+ON CONFLICT (i) DO UPDATE SET
+	k = excluded.k;
 
-# But we can make no assumptions about this in the inserted VALUES
-# For example there could be a conflict on '5', and our inserted values has 2 tuples containing '5'
+# For now, only the first value in a chunk gets registered for the UPDATE
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	5
+4	2	3
 
-# If we transform this into an update, we can guarantee no order of operations if this insert happens multi-threaded
+# Only perform the DO UPDATE when the WHERE clause evaluates to true for the found conflicts
+statement error
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k < 5 DO UPDATE SET k = 1;
+----
+Constraint Error: TODO: find the first conflict that doesn't meet the condition
 
-# We assert in VerifyUpdateConstraints on debug that none of the columns that are updated are part of an index
-# But we have already verified that this value does not cause a conflict in this index, so we can safely insert it
+# Only perform the DO UPDATE when the WHERE clause evaluates to true for the found conflicts
+statement ok
+insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k >= 5 DO UPDATE SET k = 1;
+
+# Table unchanged
+query III
+select * from tbl;
+----
+1	10	1
+2	20	1
+3	30	1
+4	2	3

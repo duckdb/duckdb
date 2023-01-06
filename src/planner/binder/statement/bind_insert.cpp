@@ -64,9 +64,9 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	    expr, [&](unique_ptr<Expression> &child) { ReplaceColumnBindings(*child, source, dest); });
 }
 
-void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table,
-                                        vector<PhysicalIndex> &columns) {
+void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table) {
 
+	vector<PhysicalIndex> columns;
 	// add the 'excluded' dummy table binding
 	AddTableName("excluded");
 	// add a bind context entry for it
@@ -78,17 +78,10 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 
 	D_ASSERT(insert->children.size() == 1);
 	D_ASSERT(insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto projection_index = insert->children[0]->GetTableIndex()[0];
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
-
-	string unused;
-	auto original_binding = bind_context.GetBinding(table->name, unused);
-	D_ASSERT(original_binding);
-
-	auto table_index = original_binding->index;
 
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
@@ -121,18 +114,9 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 				throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
 			}
 
-			// Change the non-excluded column references to refer to the projection index
-			ReplaceColumnBindings(*bound_expr, table_index, projection_index);
-
 			insert->expressions.push_back(move(bound_expr));
 		}
 	}
-
-	// Get the column_ids we need to fetch later on from the conflicting tuples
-	// of the original table, to execute the expressions
-	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
-	auto table_binding = (TableBinding *)original_binding;
-	insert->columns_to_fetch = table_binding->GetBoundColumnIds();
 
 	// Figure out which columns are indexed on
 	unordered_set<column_t> indexed_columns;
@@ -290,30 +274,54 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	D_ASSERT(!set_info.columns.empty());
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
-	// if (on_conflict.condition) {
-	//	// Bind the ON CONFLICT ... WHERE clause
-	//	WhereBinder where_binder(*this, context);
-	//	auto condition = where_binder.Bind(on_conflict.condition);
-	//	if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-	//		throw BinderException("conflict_target WHERE clause can not be a subquery");
-	//	}
-	//	insert->on_conflict_condition = move(condition);
-	// }
+	if (on_conflict.condition) {
+		// Bind the ON CONFLICT ... WHERE clause
+		WhereBinder where_binder(*this, context);
+		auto condition = where_binder.Bind(on_conflict.condition);
+		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+			throw BinderException("conflict_target WHERE clause can not be a subquery");
+		}
+		insert->on_conflict_condition = move(condition);
+	}
 
-	// if (set_info.condition) {
-	//	// Bind the SET ... WHERE clause
-	//	WhereBinder where_binder(*this, context);
-	//	auto condition = where_binder.Bind(set_info.condition);
-	//	if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-	//		throw BinderException("conflict_target WHERE clause can not be a subquery");
-	//	}
-	//	insert->do_update_condition = move(condition);
-	// }
+	if (set_info.condition) {
+		// Bind the SET ... WHERE clause
+		WhereBinder where_binder(*this, context);
+		auto condition = where_binder.Bind(set_info.condition);
+		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+			throw BinderException("conflict_target WHERE clause can not be a subquery");
+		}
+		insert->do_update_condition = move(condition);
+	}
 
 	// Instead of this, it should probably be a DummyTableRef
 	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
-	vector<PhysicalIndex> set_columns;
-	BindDoUpdateSetExpressions(insert.get(), set_info, table, set_columns);
+	BindDoUpdateSetExpressions(insert.get(), set_info, table);
+
+	auto projection_index = insert->children[0]->GetTableIndex()[0];
+
+	string unused;
+	auto original_binding = bind_context.GetBinding(table->name, unused);
+	D_ASSERT(original_binding);
+	auto table_index = original_binding->index;
+	// Get the column_ids we need to fetch later on from the conflicting tuples
+	// of the original table, to execute the expressions
+	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
+	auto table_binding = (TableBinding *)original_binding;
+	insert->columns_to_fetch = table_binding->GetBoundColumnIds();
+
+	// Replace the column bindings to refer to the child operator
+	for (auto &expr : insert->expressions) {
+		// Change the non-excluded column references to refer to the projection index
+		ReplaceColumnBindings(*expr, table_index, projection_index);
+	}
+	// Do the same for the conditions
+	if (insert->on_conflict_condition) {
+		ReplaceColumnBindings(*insert->on_conflict_condition, table_index, projection_index);
+	}
+	if (insert->do_update_condition) {
+		ReplaceColumnBindings(*insert->do_update_condition, table_index, projection_index);
+	}
 }
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
@@ -419,15 +427,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// parse select statement and add to logical plan
 	auto select_binder = Binder::CreateBinder(context, this);
 	auto root_select = select_binder->Bind(*stmt.select_statement);
-	if (stmt.on_conflict_info) {
-		ExpressionBinder expr_binder(*select_binder, context);
-		if (stmt.on_conflict_info->condition) {
-			insert->on_conflict_condition = expr_binder.Bind(stmt.on_conflict_info->condition);
-		}
-		if (stmt.on_conflict_info->set_info && stmt.on_conflict_info->set_info->condition) {
-			insert->do_update_condition = expr_binder.Bind(stmt.on_conflict_info->set_info->condition);
-		}
-	}
 	MoveCorrelatedExpressions(*select_binder);
 
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
