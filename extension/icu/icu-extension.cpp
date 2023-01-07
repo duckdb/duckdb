@@ -14,6 +14,7 @@
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-makedate.hpp"
 #include "include/icu-strptime.hpp"
+#include "include/icu-timezone.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -162,83 +163,6 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
-struct ICUTimeZoneData : public GlobalTableFunctionState {
-	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
-		UErrorCode status = U_ZERO_ERROR;
-		std::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
-		now = calendar->getNow();
-	}
-
-	std::unique_ptr<icu::StringEnumeration> tzs;
-	UDate now;
-};
-
-static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("name");
-	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("abbrev");
-	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("utc_offset");
-	return_types.emplace_back(LogicalType::INTERVAL);
-	names.emplace_back("is_dst");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	return nullptr;
-}
-
-static unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<ICUTimeZoneData>();
-}
-
-static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ICUTimeZoneData &)*data_p.global_state;
-	idx_t index = 0;
-	while (index < STANDARD_VECTOR_SIZE) {
-		UErrorCode status = U_ZERO_ERROR;
-		auto long_id = data.tzs->snext(status);
-		if (U_FAILURE(status) || !long_id) {
-			break;
-		}
-
-		//	The LONG name is the one we looked up
-		std::string utf8;
-		long_id->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
-
-		//	We don't have the zone tree for determining abbreviated names,
-		//	so the SHORT name is the shortest, lexicographically first equivalent TZ without a slash.
-		std::string short_id;
-		long_id->toUTF8String(short_id);
-		const auto nIDs = icu::TimeZone::countEquivalentIDs(*long_id);
-		for (int32_t idx = 0; idx < nIDs; ++idx) {
-			const auto eid = icu::TimeZone::getEquivalentID(*long_id, idx);
-			if (eid.indexOf(char16_t('/')) >= 0) {
-				continue;
-			}
-			utf8.clear();
-			eid.toUTF8String(utf8);
-			if (utf8.size() < short_id.size() || (utf8.size() == short_id.size() && utf8 < short_id)) {
-				short_id = utf8;
-			}
-		}
-		output.SetValue(1, index, Value(short_id));
-
-		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
-		int32_t raw_offset_ms;
-		int32_t dst_offset_ms;
-		tz->getOffset(data.now, false, raw_offset_ms, dst_offset_ms, status);
-		if (U_FAILURE(status)) {
-			break;
-		}
-
-		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
-		output.SetValue(3, index, Value(dst_offset_ms != 0));
-		++index;
-	}
-	output.SetCardinality(index);
-}
-
 struct ICUCalendarData : public GlobalTableFunctionState {
 	ICUCalendarData() {
 		// All calendars are available in all locales
@@ -301,7 +225,7 @@ void ICUExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	// iterate over all the collations
 	int32_t count;
@@ -329,16 +253,12 @@ void ICUExtension::Load(DuckDB &db) {
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
-	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
 	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
-	config.options.set_variables["TimeZone"] = Value(tz_string);
-
-	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
-	CreateTableFunctionInfo tz_names_info(move(tz_names));
-	catalog.CreateTableFunction(*con.context, &tz_names_info);
+	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
+	                          SetICUTimeZone);
 
 	RegisterICUDateAddFunctions(*con.context);
 	RegisterICUDatePartFunctions(*con.context);
@@ -346,12 +266,13 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
 	RegisterICUStrptimeFunctions(*con.context);
+	RegisterICUTimeZoneFunctions(*con.context);
 
 	// Calendars
-	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
 	UErrorCode status = U_ZERO_ERROR;
 	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.options.set_variables["Calendar"] = Value(cal->getType());
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
+	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(move(cal_names));

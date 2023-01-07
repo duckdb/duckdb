@@ -345,22 +345,37 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
+	const auto unswizzle = external && !layout.AllConstant();
 	vector<BufferHandle> local_pinned_handles;
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
-	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	for (idx_t block_idx = block_idx_start; block_idx < block_idx_end; block_idx++) {
 		auto &block = block_collection->blocks[block_idx];
 		auto handle = buffer_manager.Pin(block->block);
 		data_ptr_t dataptr = handle.Ptr();
+
+		data_ptr_t heap_ptr = nullptr;
+		if (unswizzle) {
+			auto &heap_block = string_heap->blocks[block_idx];
+			auto heap_handle = buffer_manager.Pin(heap_block->block);
+			heap_ptr = heap_handle.Ptr();
+			local_pinned_handles.push_back(move(heap_handle));
+		}
+
 		idx_t entry = 0;
 		while (entry < block->count) {
-			// fetch the next vector of entries from the blocks
 			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block->count - entry);
+
+			if (unswizzle) {
+				RowOperations::UnswizzlePointers(layout, dataptr, heap_ptr, next);
+			}
+
+			// fetch the next vector of entries from the blocks
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
@@ -986,45 +1001,6 @@ void JoinHashTable::SwizzleBlocks() {
 	string_heap->Clear();
 }
 
-void JoinHashTable::UnswizzleBlocks() {
-	auto &blocks = swizzled_block_collection->blocks;
-	auto &heap_blocks = swizzled_string_heap->blocks;
-#ifdef DEBUG
-	if (!layout.AllConstant()) {
-		D_ASSERT(blocks.size() == heap_blocks.size());
-		D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
-	}
-#endif
-
-	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
-		auto &data_block = blocks[block_idx];
-
-		if (!layout.AllConstant()) {
-			auto block_handle = buffer_manager.Pin(data_block->block);
-
-			auto &heap_block = heap_blocks[block_idx];
-			D_ASSERT(data_block->count == heap_block->count);
-			auto heap_handle = buffer_manager.Pin(heap_block->block);
-
-			// Unswizzle and move
-			RowOperations::UnswizzlePointers(layout, block_handle.Ptr(), heap_handle.Ptr(), data_block->count);
-			string_heap->blocks.push_back(move(heap_block));
-			string_heap->pinned_blocks.push_back(move(heap_handle));
-		}
-
-		// Fixed size stuff can just be moved
-		block_collection->blocks.push_back(move(data_block));
-	}
-
-	// Update counts and clean up
-	block_collection->count = swizzled_block_collection->count;
-	string_heap->count = swizzled_string_heap->count;
-	swizzled_block_collection->Clear();
-	swizzled_string_heap->Clear();
-
-	D_ASSERT(SwizzledCount() == 0);
-}
-
 void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts,
                                           idx_t max_ht_size) {
 	external = true;
@@ -1044,12 +1020,12 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 	}
 
 	total_size += PointerTableCapacity(total_count) * sizeof(data_ptr_t);
-	idx_t avg_tuple_size = total_size / total_count;
-	tuples_per_round = max_ht_size / avg_tuple_size;
+	double avg_tuple_size = double(total_size) / double(total_count);
+	tuples_per_round = double(max_ht_size) / avg_tuple_size;
 
 	if (config.force_external) {
-		// For force_external we do three rounds to test all code paths
-		tuples_per_round = (total_count + 2) / 3;
+		// For force_external we do at least three rounds to test all code paths
+		tuples_per_round = MinValue<idx_t>((total_count + 2) / 3, tuples_per_round);
 	}
 
 	// Set the number of radix bits (minimum 4, maximum 8)
@@ -1134,7 +1110,9 @@ bool JoinHashTable::PrepareExternalFinalize() {
 
 	// Unswizzle them
 	D_ASSERT(Count() == 0);
-	UnswizzleBlocks();
+	// Move swizzled data to regular data (will be unswizzled in 'Finalize()')
+	block_collection->Merge(*swizzled_block_collection);
+	string_heap->Merge(*swizzled_string_heap);
 	D_ASSERT(count == Count());
 
 	return true;

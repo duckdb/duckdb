@@ -124,17 +124,13 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		return LogicalType::STRUCT(move(child_types));
 
 	} else if (format == "+m") {
-		child_list_t<LogicalType> child_types;
-		//! First type will be struct, so we skip it
-		auto &struct_schema = *schema.children[0];
-		for (idx_t type_idx = 0; type_idx < (idx_t)struct_schema.n_children; type_idx++) {
-			//! The other types must be added on lists
-			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_convert_data, col_idx);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 
-			auto list_type = LogicalType::LIST(child_type);
-			child_types.push_back({struct_schema.children[type_idx]->name, list_type});
-		}
-		return LogicalType::MAP(move(child_types));
+		auto &arrow_struct_type = *schema.children[0];
+		D_ASSERT(arrow_struct_type.n_children == 2);
+		auto key_type = GetArrowLogicalType(*arrow_struct_type.children[0], arrow_convert_data, col_idx);
+		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1], arrow_convert_data, col_idx);
+		return LogicalType::MAP(key_type, value_type);
 	} else if (format == "z") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		return LogicalType::BLOB;
@@ -354,6 +350,15 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;
 	set.AddFunction(arrow);
+
+	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
+	                         ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
+	arrow_dumb.cardinality = ArrowScanCardinality;
+	arrow_dumb.get_batch_index = ArrowGetBatchIndex;
+	arrow_dumb.projection_pushdown = false;
+	arrow_dumb.filter_pushdown = false;
+	arrow_dumb.filter_prune = false;
+	set.AddFunction(arrow_dumb);
 }
 
 void BuiltinFunctions::RegisterArrowFunctions() {

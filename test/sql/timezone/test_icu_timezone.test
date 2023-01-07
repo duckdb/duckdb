@@ -7,6 +7,9 @@ require icu
 statement ok
 SET Calendar = 'gregorian';
 
+statement error
+SET TimeZone = 'Europe/Duck';
+
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
@@ -15,9 +18,152 @@ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
 ----
 TimeZone	America/Los_Angeles	The current time zone	VARCHAR
 
-statement error
-SET TimeZone = 'fnord';
+#
+# AT TIME ZONE
+#
 
+# Single row
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Denver';
+----
+2001-02-16 19:38:40-08
+
+query I
+SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
+----
+2001-02-16 18:38:40
+
+# Invalid time zone
+# (ICU treats thesed as UTC.)
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'Europe/Duck';
+----
+2001-02-16 12:38:40-08
+
+query I
+SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'Europe/Duck';
+----
+2001-02-17 01:38:40
+
+# Infinities
+foreach datatype TIMESTAMP TIMESTAMPTZ
+
+query I
+SELECT 'infinity'::${datatype} AT TIME ZONE 'America/Denver';
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} AT TIME ZONE 'America/Denver';
+----
+-infinity
+
+query I
+SELECT 'infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+----
+-infinity
+
+endloop
+
+# NULLs
+query I
+SELECT  NULL::TIMESTAMP AT TIME ZONE 'America/Denver';
+----
+NULL
+
+query I
+SELECT NULL::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
+----
+NULL
+
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE NULL;
+----
+NULL
+
+query I
+SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE NULL;
+----
+NULL
+
+# Table
+statement ok
+CREATE TABLE attimezone (ts TIMESTAMP, tstz TIMESTAMPTZ, tz VARCHAR);
+
+statement ok
+INSERT INTO attimezone (VALUES
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', 'America/Denver'),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', 'America/Denver'),
+	('infinity', 'infinity', 'America/Denver'),
+	('-infinity', '-infinity', 'America/Denver'),
+	(NULL, NULL, 'America/Denver'),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', 'Europe/Duck'),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', 'Europe/Duck'),
+	('infinity', 'infinity', 'Europe/Duck'),
+	('-infinity', '-infinity', 'Europe/Duck'),
+	(NULL, NULL, 'Europe/Duck'),
+	('2001-02-16 20:38:40', '2001-02-16 19:38:40-08', NULL),
+	('2001-02-16 18:38:40', '2001-02-16 20:38:40-05', NULL),
+	('infinity', 'infinity', NULL),
+	('-infinity', '-infinity', NULL),
+);
+
+# By Row
+query II
+SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz
+FROM attimezone
+----
+2001-02-16 19:38:40-08	2001-02-16 20:38:40
+2001-02-16 17:38:40-08	2001-02-16 18:38:40
+infinity	infinity
+-infinity	-infinity
+NULL	NULL
+2001-02-16 12:38:40-08	2001-02-17 03:38:40
+2001-02-16 10:38:40-08	2001-02-17 01:38:40
+infinity	infinity
+-infinity	-infinity
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# Filtered
+query II
+SELECT ts AT TIME ZONE tz, tstz AT TIME ZONE tz
+FROM attimezone
+WHERE ts > '2001-02-16 18:38:40'::TIMESTAMP
+----
+2001-02-16 19:38:40-08	2001-02-16 20:38:40
+infinity	infinity
+2001-02-16 12:38:40-08	2001-02-17 03:38:40
+infinity	infinity
+NULL	NULL
+NULL	NULL
+
+#
+# Verify local time functions are implemented.
+#
+statement ok
+select localtimestamp;
+
+statement ok
+select localtime;
+
+statement ok
+select current_localtimestamp();
+
+statement ok
+select current_localtime();
+
+#
+# ICU time zone list
+#
 query III
 SELECT name, abbrev, utc_offset FROM pg_timezone_names() ORDER BY name;
 ----
@@ -121,6 +267,7 @@ America/Cayenne	America/Cayenne	-03:00:00
 America/Cayman	America/Cayman	-05:00:00
 America/Chicago	CST	-06:00:00
 America/Chihuahua	America/Chihuahua	-06:00:00
+America/Ciudad_Juarez	America/Ciudad_Juarez	-07:00:00
 America/Coral_Harbour	America/Coral_Harbour	-05:00:00
 America/Cordoba	America/Cordoba	-03:00:00
 America/Costa_Rica	America/Costa_Rica	-06:00:00
@@ -658,6 +805,12 @@ W-SU	W-SU	03:00:00
 WET	WET	00:00:00
 Zulu	UCT	00:00:00
 
+#
+# Time Zone Rule updates
+#
+# These are conventionally named YYYYx, where x is a lower case letter.
+#
+
 # 2022e
 # Jordan and Syria are abandoning the DST regime and are changing to
 # permanent +03, so they will not fall back from +03 to +02 on
@@ -679,3 +832,13 @@ query I
 SELECT '2022-11-01 00:00:00+00'::TIMESTAMPTZ;
 ----
 2022-10-31 18:00:00-06
+
+# 2022g
+# The northern edge of Chihuahua changes to US timekeeping (DST).
+statement ok
+SET TimeZone = 'America/Ciudad_Juarez';
+
+query I
+SELECT '2023-05-01 12:00:00+00'::TIMESTAMPTZ;
+----
+2023-05-01 06:00:00-06

@@ -32,6 +32,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 
 	auto info =
 	    make_unique<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
+	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
 

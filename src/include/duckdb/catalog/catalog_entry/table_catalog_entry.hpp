@@ -36,6 +36,10 @@ struct DropNotNullInfo;
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::TABLE_ENTRY;
+	static constexpr const char *Name = "table";
+
+public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
 	                  std::shared_ptr<DataTable> inherited_storage = nullptr);

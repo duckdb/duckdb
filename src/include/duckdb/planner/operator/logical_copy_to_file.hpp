@@ -24,6 +24,7 @@ public:
 	std::string file_path;
 	bool use_tmp_file;
 	bool is_file_and_exists;
+	bool per_thread_output;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

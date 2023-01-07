@@ -185,6 +185,9 @@ bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 }
 
 bool PhysicalOperator::AllOperatorsPreserveOrder() const {
+	if (type == PhysicalOperatorType::ORDER_BY) {
+		return true;
+	}
 	if (!IsOrderPreserving()) {
 		return false;
 	}

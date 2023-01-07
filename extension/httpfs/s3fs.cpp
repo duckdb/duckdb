@@ -3,6 +3,7 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -138,6 +139,20 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 	return result;
 }
 
+void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
+	static char *evar;
+
+	if ((evar = std::getenv(env_var_name)) != NULL)
+		this->config.SetOption(key, Value(evar));
+}
+
+void AWSEnvironmentCredentialsProvider::SetAll() {
+	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
+}
+
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	string region;
 	string access_key_id;
@@ -264,70 +279,67 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	                     S3FileSystem::UrlEncode("uploadId") + "=" +
 	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
+	case_insensitive_map_t<string>::iterator etag_lookup;
 
-	bool success = false;
-	string last_error = "";
-	auto time_at_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	try {
+		res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
+		                      (char *)write_buffer->Ptr(), write_buffer->idx);
 
-	// Retry loop to make large uploads resilient to brief connection issues
-	while (true) {
-		try {
-			res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
-			                      (char *)write_buffer->Ptr(), write_buffer->idx);
-			if (res->code == 200) {
-				success = true;
-				break;
-			} else {
-				last_error = res->error + " (HTTP code " + to_string(res->code) + ")";
-			}
-		} catch (std::runtime_error &e) {
-			if (strncmp(e.what(), "HTTP PUT error", 14) != 0) {
-				throw e;
-			}
-			last_error = e.what();
+		if (res->code != 200) {
+			throw IOException("Unable to connect  to URL " + file_handle.path + " " + res->error + " (HTTP code " +
+			                  to_string(res->code) + ")");
 		}
 
-		// If there are no parts uploaded yet, failing immediately makes more sense than waiting for the time-out
-		if (file_handle.parts_uploaded.load() == 0) {
-			break;
+		etag_lookup = res->headers.find("ETag");
+		if (etag_lookup == res->headers.end()) {
+			throw IOException("Unexpected response when uploading part to S3");
 		}
 
-		auto current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-		if ((uint64_t)(current_time - time_at_start) > file_handle.http_params.timeout) {
-			break;
+	} catch (IOException &ex) {
+		// Ensure only one thread sets the exception
+		bool f = false;
+		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong(f, true);
+		if (exchanged) {
+			file_handle.upload_exception = std::current_exception();
 		}
 
-		std::this_thread::sleep_for(milliseconds(MULTIPART_UPLOAD_WAIT_BETWEEN_RETRIES_MS + 1));
-	}
+		{
+			unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+			file_handle.uploads_in_progress--;
+		}
+		file_handle.uploads_in_progress_cv.notify_one();
 
-	if (!success) {
-		throw std::runtime_error("Unable to connect to URL \"" + file_handle.path + "\"(last attempt failed with: \"" +
-		                         last_error + "\")");
-	}
-
-	auto etag_lookup = res->headers.find("ETag");
-	if (etag_lookup == res->headers.end()) {
-		throw std::runtime_error("Unexpected reponse when uploading part to S3");
+		return;
 	}
 
 	// Insert etag
-	file_handle.part_etags_lock.lock();
-	file_handle.part_etags.insert(std::pair<uint16_t, string>(write_buffer->part_no, etag_lookup->second));
-	file_handle.part_etags_lock.unlock();
+	{
+		unique_lock<mutex> lck(file_handle.part_etags_lock);
+		file_handle.part_etags.insert(std::pair<uint16_t, string>(write_buffer->part_no, etag_lookup->second));
+	}
 
 	file_handle.parts_uploaded++;
 
 	// Free up space for another thread to acquire an S3WriteBuffer
 	write_buffer.reset();
-	s3fs.buffers_available++;
+
+	// Signal a buffer has become available
+	{
+		unique_lock<mutex> lck(s3fs.buffers_available_lock);
+		s3fs.buffers_in_use--;
+	}
 	s3fs.buffers_available_cv.notify_one();
 
-	// Update uploads in progress
-	file_handle.uploads_in_progress--;
+	// Signal a thread has finished
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress--;
+	}
 	file_handle.uploads_in_progress_cv.notify_one();
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
+
 	if (write_buffer->idx == 0) {
 		return;
 	}
@@ -341,10 +353,17 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuff
 		return;
 	}
 
-	file_handle.write_buffers_lock.lock();
-	file_handle.write_buffers.erase(write_buffer->part_no);
-	file_handle.write_buffers_lock.unlock();
-	file_handle.uploads_in_progress++;
+	file_handle.RethrowIOError();
+
+	{
+		unique_lock<mutex> lck(file_handle.write_buffers_lock);
+		file_handle.write_buffers.erase(write_buffer->part_no);
+	}
+
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress++;
+	}
 
 	thread upload_thread(UploadBuffer, std::ref(file_handle), write_buffer);
 	upload_thread.detach();
@@ -369,8 +388,9 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 		}
 	}
 	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-	file_handle.uploads_in_progress_cv.wait(lck,
-	                                        [&file_handle] { return file_handle.uploads_in_progress.load() == 0; });
+	file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
+
+	file_handle.RethrowIOError();
 }
 
 void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
@@ -383,7 +403,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	for (auto i = 0; i < parts; i++) {
 		auto etag_lookup = file_handle.part_etags.find(i);
 		if (etag_lookup == file_handle.part_etags.end()) {
-			throw std::runtime_error("Unknown part number");
+			throw IOException("Unknown part number");
 		}
 		ss << "<Part><ETag>" << etag_lookup->second << "</ETag><PartNumber>" << i + 1 << "</PartNumber></Part>";
 	}
@@ -401,29 +421,20 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw std::runtime_error("Unexpected response during S3 multipart upload finalization");
+		throw IOException("Unexpected response during S3 multipart upload finalization");
 	}
 	file_handle.upload_finalized = true;
 }
 
-shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx) {
-	auto &s3fs = (S3FileSystem &)file_handle.file_system;
-	// Check if write buffer already exists
-	{
-		unique_lock<mutex> lck(file_handle.write_buffers_lock);
-		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
-		if (lookup_result != file_handle.write_buffers.end()) {
-			shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
-			return buffer;
-		}
-	}
+// Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
+BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
+	unique_lock<mutex> lck(buffers_available_lock);
 
 	// Wait for a buffer to become available
-	{
-		unique_lock<mutex> lck(s3fs.buffers_available_lock);
-		s3fs.buffers_available_cv.wait(lck, [&s3fs] { return s3fs.buffers_available > 0; });
-		s3fs.buffers_available--;
+	if (buffers_in_use + threads_waiting_for_memory >= max_threads) {
+		buffers_available_cv.wait(lck, [&] { return buffers_in_use + threads_waiting_for_memory < max_threads; });
 	}
+	buffers_in_use++;
 
 	// Try to allocate a buffer from the buffer manager
 	BufferHandle duckdb_buffer;
@@ -431,7 +442,7 @@ shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uin
 
 	while (true) {
 		try {
-			duckdb_buffer = buffer_manager.Allocate(file_handle.part_size);
+			duckdb_buffer = buffer_manager.Allocate(part_size);
 
 			if (set_waiting_for_memory) {
 				threads_waiting_for_memory--;
@@ -442,38 +453,47 @@ shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uin
 				threads_waiting_for_memory++;
 				set_waiting_for_memory = true;
 			}
-			auto buffers_available = s3fs.buffers_available.load();
 
-			if (buffers_available >= file_handle.config_params.max_upload_threads - threads_waiting_for_memory) {
+			auto currently_in_use = buffers_in_use;
+			if (currently_in_use == 0) {
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
 				throw e;
 			} else {
-
 				// Wait for more buffers to become available before trying again
-				{
-					unique_lock<mutex> lck(s3fs.buffers_available_lock);
-					s3fs.buffers_available_cv.wait(
-					    lck, [&s3fs, &buffers_available] { return s3fs.buffers_available > buffers_available; });
-				}
+				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
 			}
 		}
 	}
 
-	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size,
-	                                                   move(duckdb_buffer));
+	return duckdb_buffer;
+}
 
+shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
+	auto &s3fs = (S3FileSystem &)file_system;
+
+	// Check if write buffer already exists
 	{
-		unique_lock<mutex> lck(file_handle.write_buffers_lock);
-		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
+		unique_lock<mutex> lck(write_buffers_lock);
+		auto lookup_result = write_buffers.find(write_buffer_idx);
+		if (lookup_result != write_buffers.end()) {
+			shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
+			return buffer;
+		}
+	}
+
+	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
+	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, move(buffer_handle));
+	{
+		unique_lock<mutex> lck(write_buffers_lock);
+		auto lookup_result = write_buffers.find(write_buffer_idx);
 
 		// Check if other thread has created the same buffer, if so we return theirs and drop ours.
-		if (lookup_result != file_handle.write_buffers.end()) {
+		if (lookup_result != write_buffers.end()) {
 			// write_buffer_idx << std::endl;
 			shared_ptr<S3WriteBuffer> write_buffer = lookup_result->second;
-			file_handle.write_buffers_lock.unlock();
 			return write_buffer;
 		}
-		file_handle.write_buffers.insert(pair<uint16_t, shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
+		write_buffers.insert(pair<uint16_t, shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
 	}
 
 	return new_write_buffer;
@@ -507,14 +527,13 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 		} else if (found_param->second == "false") {
 			params.use_ssl = false;
 		} else {
-			throw std::runtime_error("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
+			throw IOException("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
 		}
 		query_params.erase(found_param);
 	}
 	if (!query_params.empty()) {
-		throw std::runtime_error(
-		    "Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
-		    "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
+		throw IOException("Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
+		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
 	}
 }
 
@@ -522,18 +541,16 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 	string http_proto, host, bucket, path, query_param;
 
 	if (url.rfind("s3://", 0) != 0) {
-		throw std::runtime_error("URL needs to start with s3://");
+		throw IOException("URL needs to start with s3://");
 	}
 	auto slash_pos = url.find('/', 5);
 	if (slash_pos == string::npos) {
-		throw std::runtime_error("URL needs to contain a '/' after the host");
+		throw IOException("URL needs to contain a '/' after the host");
 	}
 	bucket = url.substr(5, slash_pos - 5);
 	if (bucket.empty()) {
-		throw std::runtime_error("URL needs to contain a bucket name");
+		throw IOException("URL needs to contain a bucket name");
 	}
-
-	auto question_pos = url.find_last_of('?');
 
 	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
 	if (params.url_style == "path") {
@@ -542,15 +559,20 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		path = "";
 	}
 
-	if (question_pos == string::npos) {
-		path += url.substr(slash_pos);
-		query_param = "";
-	} else {
-		path += url.substr(slash_pos, question_pos - slash_pos);
+	auto question_pos = url.find_last_of('?');
+	if (question_pos != string::npos) {
 		query_param = url.substr(question_pos + 1);
 	}
+
+	if (!query_param.empty() && query_param.find('.') == string::npos) {
+		path += url.substr(slash_pos, question_pos - slash_pos);
+	} else {
+		path += url.substr(slash_pos);
+		query_param = "";
+	}
+
 	if (path.empty()) {
-		throw std::runtime_error("URL needs to contain key");
+		throw IOException("URL needs to contain key");
 	}
 
 	if (params.url_style == "vhost" || params.url_style == "") {
@@ -577,7 +599,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 }
 
 static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url) {
-	string full_url = parsed_url.http_proto + parsed_url.host + parsed_url.path;
+	string full_url = parsed_url.http_proto + parsed_url.host + S3FileSystem::UrlEncode(parsed_url.path);
 
 	if (!parsed_url.query_param.empty()) {
 		full_url += "?" + parsed_url.query_param;
@@ -639,7 +661,7 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const 
                                                       FileLockType lock, FileCompressionType compression,
                                                       FileOpener *opener) {
 	if (!opener) {
-		throw std::runtime_error("CreateHandle called on S3FileSystem without FileOpener");
+		throw IOException("CreateHandle called on S3FileSystem without FileOpener");
 	}
 	auto s3authparams = S3AuthParams::ReadFrom(opener);
 	ReadQueryParams(query_param, s3authparams);
@@ -736,8 +758,8 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
-	auto res = HTTPFileHandle::Initialize();
+void S3FileHandle::Initialize(FileOpener *opener) {
+	HTTPFileHandle::Initialize(opener);
 
 	auto &s3fs = (S3FileSystem &)file_system;
 
@@ -753,14 +775,10 @@ unique_ptr<ResponseWrapper> S3FileHandle::Initialize() {
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
 
-		// Threads are limited by limiting the amount of write buffers available, since each
-		s3fs.buffers_available = config_params.max_upload_threads;
 		uploads_in_progress = 0;
 		parts_uploaded = 0;
 		upload_finalized = false;
 	}
-
-	return res;
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
@@ -793,7 +811,7 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 		auto write_buffer_idx = curr_location / s3fh.part_size;
 
 		// Get write buffer, may block until buffer is available
-		auto write_buffer = GetBuffer(s3fh, write_buffer_idx);
+		auto write_buffer = s3fh.GetBuffer(write_buffer_idx);
 
 		// Writing to buffer
 		auto idx_to_write = curr_location - write_buffer->buffer_start;
@@ -834,6 +852,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Parse pattern
 	auto parsed_url = S3UrlParse(glob_pattern, s3_auth_params);
 
+	ReadQueryParams(parsed_url.query_param, s3_auth_params);
+
 	// Do main listobjectsv2 request
 	vector<string> s3_keys;
 	string main_continuation_token = "";
@@ -841,8 +861,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// Main paging loop
 	do {
 		// main listobject call, may
-		string response_str =
-		    AWSListObjectV2::Request(shared_path, http_params, s3_auth_params, main_continuation_token);
+		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
+		                                               main_continuation_token, HTTPStats::TryGetStats(opener));
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -856,8 +876,9 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			// Paging loop for common prefix requests
 			string common_prefix_continuation_token = "";
 			do {
-				auto prefix_res = AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params,
-				                                           common_prefix_continuation_token);
+				auto prefix_res =
+				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
+				                             HTTPStats::TryGetStats(opener));
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -873,11 +894,6 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_url.bucket.length() + 1);
 	}
 
-	// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
-	if (parsed_url.query_param != "") {
-		pattern_trimmed += '?' + parsed_url.query_param;
-	}
-
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
 
@@ -885,6 +901,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_url.bucket + "/" + s3_key;
+			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
+			if (parsed_url.query_param != "") {
+				result_full_url += '?' + parsed_url.query_param;
+			}
 			result.push_back(result_full_url);
 		}
 	}
@@ -892,7 +912,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, bool use_delimiter) {
+                                string &continuation_token, HTTPStats *stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
@@ -936,18 +956,23 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    std::cerr << response.reason << std::endl;
-			    throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                             std::to_string(response.status) + ")");
+			    throw IOException("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
+			                      std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
+		    if (stats) {
+			    stats->total_bytes_received += data_length;
+		    }
 		    response << string(data, data_length);
 		    return true;
 	    });
+	if (stats) {
+		stats->get_count++;
+	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + listobjectv2_url + "' (Error code " +
-		                         to_string((int)res.error()) + ")");
+		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + listobjectv2_url + "'");
 	}
 
 	return response.str();

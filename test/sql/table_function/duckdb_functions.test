@@ -24,3 +24,9 @@ query I
 select distinct function_name from duckdb_functions() where function_name='sqrt';
 ----
 sqrt
+
+query I
+select function_name from duckdb_functions() where not internal order by 1;
+----
+add_default1
+add_default2

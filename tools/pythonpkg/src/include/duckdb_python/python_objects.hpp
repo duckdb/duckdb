@@ -170,4 +170,9 @@ public:
 	DUCKDB_API static interval_t GetUTCOffset(PyObject *tzone_obj);
 };
 
+struct PythonObject {
+	static void Initialize();
+	static py::object FromValue(const Value &value, const LogicalType &id);
+};
+
 } // namespace duckdb

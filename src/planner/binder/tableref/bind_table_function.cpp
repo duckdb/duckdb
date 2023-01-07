@@ -29,20 +29,22 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
                                          unique_ptr<BoundSubqueryRef> &subquery, string &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
+	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		// general case: argument is a subquery, bind it as part of the node
 		auto &se = (SubqueryExpression &)*expressions[0];
-		auto node = binder->BindNode(*se.subquery->node);
-		subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
-		return true;
+		subquery_node = move(se.subquery->node);
+	} else {
+		// special case: non-subquery parameter to table-in table-out function
+		// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
+		auto select_node = make_unique<SelectNode>();
+		select_node->select_list = move(expressions);
+		select_node->from_table = make_unique<EmptyTableRef>();
+		subquery_node = move(select_node);
 	}
-	// special case: non-subquery parameter to table-in table-out function
-	// generate a subquery and bind that (i.e. UNNEST([1,2,3]) becomes UNNEST((SELECT [1,2,3]))
-	auto select_node = make_unique<SelectNode>();
-	select_node->select_list = move(expressions);
-	select_node->from_table = make_unique<EmptyTableRef>();
-	auto node = binder->BindNode(*select_node);
+	auto node = binder->BindNode(*subquery_node);
 	subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
+	MoveCorrelatedExpressions(*subquery->binder);
 	return true;
 }
 
@@ -92,11 +94,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
-		if (!expr->IsFoldable()) {
+		if (!expr->IsScalar()) {
 			error = "Table function requires a constant parameter";
 			return false;
 		}
-		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr);
+		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (!named_parameters.empty()) {
@@ -154,6 +156,12 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	if (table_function.in_out_function && !table_function.projection_pushdown) {
+		get->column_ids.reserve(return_types.size());
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			get->column_ids.push_back(i);
+		}
+	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
 	                              get->GetTable());
@@ -178,10 +186,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	TableFunctionCatalogEntry *function = nullptr;
 
 	// fetch the function from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-
-	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->schema,
-	                                     fexpr->function_name, false, error_context);
+	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->catalog, fexpr->schema,
+	                                      fexpr->function_name, false, error_context);
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 		function = (TableFunctionCatalogEntry *)func_catalog;

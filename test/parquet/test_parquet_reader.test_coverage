@@ -1109,8 +1109,6 @@ SELECT * FROM parquet_scan('data/parquet-testing/decimal/pandas_decimal.parquet'
 0.0	0.00	0.0000	0E-8	0E-17	
 NULL	NULL	NULL	NULL	0E-17	
 
-mode skip 
-
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/decimal/arrow/byte_array_decimal.parquet') limit 50;
 ----
@@ -1138,8 +1136,6 @@ SELECT * FROM parquet_scan('data/parquet-testing/decimal/arrow/byte_array_decima
 22.00	
 23.00	
 24.00	
-
-mode unskip 
 
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/decimal/decimal_dc.parquet') limit 50

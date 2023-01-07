@@ -8,6 +8,7 @@ add_library_unity(
   constant_binder.cpp
   group_binder.cpp
   having_binder.cpp
+  lateral_binder.cpp
   qualify_binder.cpp
   index_binder.cpp
   insert_binder.cpp

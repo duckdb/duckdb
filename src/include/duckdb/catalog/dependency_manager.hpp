@@ -11,12 +11,14 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/dependency.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 
 #include <functional>
 
 namespace duckdb {
 class Catalog;
 class ClientContext;
+class DependencyList;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -31,7 +33,7 @@ public:
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
 
-	void AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry);
+	void AddOwnership(CatalogTransaction transaction, CatalogEntry *owner, CatalogEntry *entry);
 
 private:
 	Catalog &catalog;
@@ -43,9 +45,9 @@ private:
 	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
 
 private:
-	void AddObject(ClientContext &context, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);
-	void DropObject(ClientContext &context, CatalogEntry *object, bool cascade);
-	void AlterObject(ClientContext &context, CatalogEntry *old_obj, CatalogEntry *new_obj);
+	void AddObject(CatalogTransaction transaction, CatalogEntry *object, DependencyList &dependencies);
+	void DropObject(CatalogTransaction transaction, CatalogEntry *object, bool cascade);
+	void AlterObject(CatalogTransaction transaction, CatalogEntry *old_obj, CatalogEntry *new_obj);
 	void EraseObjectInternal(CatalogEntry *object);
 };
 } // namespace duckdb

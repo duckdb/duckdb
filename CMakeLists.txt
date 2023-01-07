@@ -84,7 +84,7 @@ option(FORCE_COLORED_OUTPUT
 if(${FORCE_COLORED_OUTPUT})
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fdiagnostics-color=always)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
     add_compile_options(-fcolor-diagnostics)
   endif()
 endif()
@@ -126,13 +126,13 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_R OR CONFIGURE_R)
+if((BUILD_PYTHON OR BUILD_R OR BUILD_NODE OR CONFIGURE_R)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
     message(
       WARNING
-        "FORCE_SANITIZER is set and the Python/R builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
+        "FORCE_SANITIZER is set and the Python/R/Node builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
     )
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -shared-libasan")
   else()
@@ -301,6 +301,7 @@ option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(BUILD_NODE "Build the DuckDB Node extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -333,6 +334,7 @@ endif()
 
 if(BUILD_PYTHON
    OR BUILD_R
+   OR BUILD_NODE
    OR CONFIGURE_R
    OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
@@ -396,7 +398,7 @@ if(NOT MSVC)
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                                    VERSION_GREATER 8.0)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
   else()
@@ -524,7 +526,7 @@ endfunction()
 function(disable_target_warnings NAME)
   if(MSVC)
     target_compile_options(${NAME} PRIVATE "/W0")
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
          OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     target_compile_options(${NAME} PRIVATE "-w")
   endif()
@@ -757,24 +759,26 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if (EXTENSION_STATIC_BUILD)
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-      # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      if (APPLE)
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+      else()
+        # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+      endif()
     elseif (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
-    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
   else()
     if (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
-    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
       set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
     endif()
   endif()

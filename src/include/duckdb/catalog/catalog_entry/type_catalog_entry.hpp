@@ -19,6 +19,10 @@ class Deserializer;
 //! A type catalog entry
 class TypeCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::TYPE_ENTRY;
+	static constexpr const char *Name = "type";
+
+public:
 	//! Create a TypeCatalogEntry and initialize storage for it
 	TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 

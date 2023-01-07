@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "utf8proc.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace re2 {
 class RE2;
@@ -146,6 +147,10 @@ struct ReplaceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TranslateFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -165,6 +170,10 @@ struct ContainsFun {
 	static idx_t Find(const string_t &haystack, const string_t &needle);
 	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
 	                  idx_t needle_size);
+};
+
+struct StartsWithFun {
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct UnicodeFun {

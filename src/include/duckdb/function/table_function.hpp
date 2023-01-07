@@ -18,6 +18,7 @@
 namespace duckdb {
 
 class BaseStatistics;
+class DependencyList;
 class LogicalGet;
 class TableFilterSet;
 
@@ -95,6 +96,44 @@ public:
 	GlobalTableFunctionState *global_state;
 };
 
+enum ScanType { TABLE, PARQUET };
+
+struct BindInfo {
+public:
+	explicit BindInfo(ScanType type_p) : type(type_p) {};
+	unordered_map<string, Value> options;
+	ScanType type;
+	void InsertOption(string name, Value value) {
+		if (options.find(name) != options.end()) {
+			throw InternalException("This option already exists");
+		}
+		options[name] = value;
+	}
+	template <class T>
+	T GetOption(string name) {
+		if (options.find(name) == options.end()) {
+			throw InternalException("This option does not exist");
+		}
+		return options[name].GetValue<T>();
+	}
+	template <class T>
+	vector<T> GetOptionList(string name) {
+		if (options.find(name) == options.end()) {
+			throw InternalException("This option does not exist");
+		}
+		auto option = options[name];
+		if (option.type().id() != LogicalTypeId::LIST) {
+			throw InternalException("This option is not a list");
+		}
+		vector<T> result;
+		auto list_children = ListValue::GetChildren(option);
+		for (auto &child : list_children) {
+			result.emplace_back(child.GetValue<T>());
+		}
+		return result;
+	}
+};
+
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
@@ -113,9 +152,12 @@ typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionCon
 typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
+
+typedef BindInfo (*table_function_get_bind_info)(const FunctionData *bind_data);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -176,6 +218,8 @@ public:
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the current batch index of the current scan operator
 	table_function_get_batch_index_t get_batch_index;
+	//! (Optional) returns the extra batch info, currently only used for the substrait extension
+	table_function_get_bind_info get_batch_info;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

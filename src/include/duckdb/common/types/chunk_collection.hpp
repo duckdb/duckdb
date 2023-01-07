@@ -26,8 +26,8 @@ class ClientContext;
 */
 class ChunkCollection {
 public:
-	ChunkCollection(Allocator &allocator);
-	ChunkCollection(ClientContext &context);
+	explicit ChunkCollection(Allocator &allocator);
+	explicit ChunkCollection(ClientContext &context);
 
 	//! The types of columns in the ChunkCollection
 	DUCKDB_API vector<LogicalType> &Types() {
@@ -113,13 +113,6 @@ public:
 		chunks.erase(chunks.begin() + 0);
 		return res;
 	}
-
-	DUCKDB_API void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
-	//! Reorders the rows in the collection according to the given indices.
-	DUCKDB_API void Reorder(idx_t order[]);
-
-	//! Returns true if the ChunkCollections are equivalent
-	DUCKDB_API bool Equals(ChunkCollection &other);
 
 	//! Locates the chunk that belongs to the specific index
 	DUCKDB_API idx_t LocateChunk(idx_t index) {

@@ -528,17 +528,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(Value key, Value value) {
+Value Value::MAP(LogicalType child_type, vector<Value> values) {
 	Value result;
-	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", key.type()});
-	child_types.push_back({"value", value.type()});
 
-	result.type_ = LogicalType::MAP(move(child_types));
-
-	result.struct_value.push_back(move(key));
-	result.struct_value.push_back(move(value));
+	result.type_ = LogicalType::MAP(move(child_type));
 	result.is_null = false;
+	if (values.empty()) {
+		return result;
+	}
+	result.list_value = move(values);
 	return result;
 }
 
@@ -644,9 +642,6 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 		break;
 	case PhysicalType::UINT32:
 		result.value_.uinteger = value;
-		break;
-	case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
-		result.value_.ubigint = value;
 		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
