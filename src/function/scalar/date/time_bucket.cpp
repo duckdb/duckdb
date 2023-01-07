@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -33,7 +34,7 @@ struct TimeBucket {
 		}
 	}
 
-	static inline BucketWidthType ClassifyBucketWidthWithThrowingError(const interval_t bucket_width) {
+	static inline BucketWidthType ClassifyBucketWidthErrorThrow(const interval_t bucket_width) {
 		if (bucket_width.months == 0) {
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
 			if (bucket_width_micros <= 0) {
@@ -59,20 +60,12 @@ struct TimeBucket {
 	static inline timestamp_t WidthConvertibleToMicrosCommon(int64_t bucket_width_micros, int64_t ts_micros,
 	                                                         int64_t origin_micros) {
 		origin_micros %= bucket_width_micros;
-		if (origin_micros > 0 && ts_micros < NumericLimits<int64_t>::Minimum() + origin_micros) {
-			throw OutOfRangeException("Timestamp out of range");
-		}
-		if (origin_micros < 0 && ts_micros > NumericLimits<int64_t>::Maximum() + origin_micros) {
-			throw OutOfRangeException("Timestamp out of range");
-		}
-		ts_micros -= origin_micros;
+		ts_micros = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(ts_micros, origin_micros);
 
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
 		if (ts_micros < 0 && ts_micros % bucket_width_micros != 0) {
-			if (result_micros < NumericLimits<int64_t>::Minimum() + bucket_width_micros) {
-				throw OutOfRangeException("Timestamp out of range");
-			}
-			result_micros -= bucket_width_micros;
+			result_micros =
+			    SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(result_micros, bucket_width_micros);
 		}
 		result_micros += origin_micros;
 
@@ -82,20 +75,12 @@ struct TimeBucket {
 	static inline date_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, int32_t ts_months,
 	                                                    int32_t origin_months) {
 		origin_months %= bucket_width_months;
-		if (origin_months > 0 && ts_months < NumericLimits<int32_t>::Minimum() + origin_months) {
-			throw NotImplementedException("Timestamp out of range");
-		}
-		if (origin_months < 0 && ts_months > NumericLimits<int32_t>::Maximum() + origin_months) {
-			throw NotImplementedException("Timestamp out of range");
-		}
-		ts_months -= origin_months;
+		ts_months = SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(ts_months, origin_months);
 
 		int32_t result_months = (ts_months / bucket_width_months) * bucket_width_months;
 		if (ts_months < 0 && ts_months % bucket_width_months != 0) {
-			if (result_months < NumericLimits<int32_t>::Minimum() + bucket_width_months) {
-				throw OutOfRangeException("Timestamp out of range");
-			}
-			result_months -= bucket_width_months;
+			result_months =
+			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_months, bucket_width_months);
 		}
 		result_months += origin_months;
 
@@ -135,7 +120,7 @@ struct TimeBucket {
 	struct BinaryOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA bucket_width, TB ts) {
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return WidthConvertibleToMicrosBinaryOperator::Operation<TA, TB, TR>(bucket_width, ts);
@@ -177,7 +162,7 @@ struct TimeBucket {
 	struct OffsetTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
 		static inline TR Operation(TA bucket_width, TB ts, TC offset) {
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OffsetWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
@@ -225,7 +210,7 @@ struct TimeBucket {
 				mask.SetInvalid(idx);
 				return TR();
 			}
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OriginWidthConvertibleToMicrosTernaryOperator::Operation<TA, TB, TC, TR>(bucket_width, ts,
