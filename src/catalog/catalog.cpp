@@ -741,7 +741,7 @@ idx_t Catalog::GetCatalogVersion() {
 }
 
 idx_t Catalog::ModifyCatalog() {
-	return GetDatabase().GetDatabaseManager().catalog_version++;
+	return GetDatabase().GetDatabaseManager().ModifyCatalog();
 }
 
 bool Catalog::IsSystemCatalog() const {
