@@ -16,8 +16,8 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-rapi_register_df <- function(conn, name, value, integer64, overwrite) {
-  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite))
+rapi_register_df <- function(conn, name, value, integer64, overwrite, experimental) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64, overwrite, experimental))
 }
 
 rapi_unregister_df <- function(conn, name) {
@@ -52,8 +52,8 @@ rapi_expr_tostring <- function(expr) {
   .Call(`_duckdb_rapi_expr_tostring`, expr)
 }
 
-rapi_rel_from_df <- function(con, df) {
-  .Call(`_duckdb_rapi_rel_from_df`, con, df)
+rapi_rel_from_df <- function(con, df, experimental) {
+  .Call(`_duckdb_rapi_rel_from_df`, con, df, experimental)
 }
 
 rapi_rel_filter <- function(rel, exprs) {
@@ -74,6 +74,10 @@ rapi_rel_order <- function(rel, orders) {
 
 rapi_rel_inner_join <- function(left, right, conds) {
   .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
+}
+
+rapi_rel_union_all <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_union_all`, rel_a, rel_b)
 }
 
 rapi_rel_limit <- function(rel, n) {
@@ -112,6 +116,18 @@ rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
 }
 
+rapi_rel_to_altrep <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_altrep`, rel)
+}
+
+rapi_rel_from_altrep_df <- function(df) {
+  .Call(`_duckdb_rapi_rel_from_altrep_df`, df)
+}
+
+rapi_df_is_materialized <- function(df) {
+  .Call(`_duckdb_rapi_df_is_materialized`, df)
+}
+
 rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }
@@ -126,6 +142,10 @@ rapi_get_substrait_json <- function(conn, query) {
 
 rapi_prepare_substrait <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare_substrait`, conn, query)
+}
+
+rapi_prepare_substrait_json <- function(conn, json) {
+  .Call(`_duckdb_rapi_prepare_substrait_json`, conn, json)
 }
 
 rapi_prepare <- function(conn, query) {

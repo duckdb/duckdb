@@ -12,4 +12,8 @@ unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(LogicalDeserializati
 	return make_unique<LogicalCreateTable>(schema, move(info));
 }
 
+idx_t LogicalCreateTable::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
+
 } // namespace duckdb

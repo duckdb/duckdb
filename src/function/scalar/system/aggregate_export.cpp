@@ -47,7 +47,8 @@ struct CombineState : public FunctionLocalState {
 	}
 };
 
-static unique_ptr<FunctionLocalState> InitCombineState(const BoundFunctionExpression &expr, FunctionData *bind_data_p) {
+static unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                       FunctionData *bind_data_p) {
 	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
 	return make_unique<CombineState>(bind_data.state_size);
 }
@@ -64,7 +65,7 @@ struct FinalizeState : public FunctionLocalState {
 	}
 };
 
-static unique_ptr<FunctionLocalState> InitFinalizeState(const BoundFunctionExpression &expr,
+static unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                         FunctionData *bind_data_p) {
 	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
 	return make_unique<FinalizeState>(bind_data.state_size);
@@ -198,8 +199,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto state_type = AggregateStateType::GetStateType(arg_return_type);
 
 	// now we can look up the function in the catalog again and bind it
-	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA,
-	                                                  state_type.function_name);
+	auto func = Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA,
+	                                                        state_type.function_name);
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", state_type.function_name);
 	}
@@ -218,6 +219,7 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
 		vector<unique_ptr<Expression>> args;
+		args.reserve(state_type.bound_argument_types.size());
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_unique<BoundConstantExpression>(Value(arg_type)));
 		}
@@ -301,7 +303,6 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	// this should be required
 	D_ASSERT(bound_function.state_size);
 	D_ASSERT(bound_function.finalize);
-	D_ASSERT(!bound_function.window);
 
 	D_ASSERT(child_aggregate->function.return_type.id() != LogicalTypeId::INVALID);
 #ifdef DEBUG

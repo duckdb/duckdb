@@ -75,7 +75,8 @@ enum class ExceptionType {
 	OUT_OF_MEMORY = 33,   // out of memory
 	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
-	PARAMETER_NOT_ALLOWED = 36   // parameter types not allowed
+	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
+	DEPENDENCY = 37              // dependency
 };
 
 class Exception : public std::exception {
@@ -239,6 +240,16 @@ public:
 	template <typename... Args>
 	explicit ConstraintException(const string &msg, Args... params)
 	    : ConstraintException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class DependencyException : public Exception {
+public:
+	DUCKDB_API explicit DependencyException(const string &msg);
+
+	template <typename... Args>
+	explicit DependencyException(const string &msg, Args... params)
+	    : DependencyException(ConstructMessage(msg, params...)) {
 	}
 };
 

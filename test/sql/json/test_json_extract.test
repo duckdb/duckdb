@@ -251,3 +251,19 @@ query T
 SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false
+
+# can't deal with force reload / force storage (#5132)
+
+require skip_reload
+
+# test issue #5063
+statement ok
+create table test5063 as select '{"a": 1, "b": 2}' js
+
+statement ok
+prepare q1 as SELECT js->CAST(? AS STRING) FROM test5063
+
+query T
+execute q1('a')
+----
+1

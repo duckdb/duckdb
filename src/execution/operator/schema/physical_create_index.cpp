@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -21,7 +22,7 @@ public:
 
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
-	explicit CreateIndexLocalSinkState(ExpressionExecutor executor) : executor(move(executor)) {
+	explicit CreateIndexLocalSinkState(const vector<unique_ptr<Expression>> &expressions) : executor(expressions) {
 	}
 
 	//! Local indexes build from chunks of the scanned data
@@ -38,14 +39,13 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-
 	auto state = make_unique<CreateIndexGlobalSinkState>();
 
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, *context.db);
+		                                       info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -56,16 +56,15 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 }
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
-
 	auto &allocator = Allocator::Get(table.storage->db);
-	ExpressionExecutor executor(allocator, expressions);
-	auto state = make_unique<CreateIndexLocalSinkState>(move(executor));
+
+	auto state = make_unique<CreateIndexLocalSinkState>(expressions);
 
 	// create the local index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, *context.client.db);
+		                                      info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -101,6 +100,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 
 	// resolve the expressions for this chunk
+	D_ASSERT(!lstate.executor.HasContext());
 	lstate.key_chunk.Reset();
 	lstate.executor.Execute(input, lstate.key_chunk);
 

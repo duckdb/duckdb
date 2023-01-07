@@ -21,6 +21,7 @@ add_library_unity(
   logical_explain.cpp
   logical_export.cpp
   logical_expression_get.cpp
+  logical_extension_operator.cpp
   logical_filter.cpp
   logical_get.cpp
   logical_insert.cpp
@@ -34,6 +35,7 @@ add_library_unity(
   logical_recursive_cte.cpp
   logical_sample.cpp
   logical_set.cpp
+  logical_reset.cpp
   logical_set_operation.cpp
   logical_show.cpp
   logical_simple.cpp

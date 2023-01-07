@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/random_engine_use_after_free.test
+# description: Random engine heap use after free
+# group: [pedro]
+
+load __TEST_DIR__/random_engine_use_after_free.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (c0 INT CHECK (current_schema()='main'));
+
+restart
+
+statement ok
+INSERT INTO t1 VALUES(0);

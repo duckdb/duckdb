@@ -41,6 +41,5 @@ DBItest::test_all(c(
   "write_table_row_names_na_missing",
   "append_roundtrip_factor",
   "bind_factor",
-
   NULL
 ))

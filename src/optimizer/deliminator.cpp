@@ -233,6 +233,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 
 		// Create a vector of all exprs in the agg
 		vector<Expression *> all_agg_exprs;
+		all_agg_exprs.reserve(agg.groups.size() + agg.expressions.size());
 		for (auto &expr : agg.groups) {
 			all_agg_exprs.push_back(expr.get());
 		}
@@ -415,7 +416,8 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			}
 			parent_expr =
 			    make_unique<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
-			parent_cond.comparison = child_cond.comparison;
+			parent_cond.comparison =
+			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisionExpression(child_cond.comparison);
 			break;
 		}
 	}

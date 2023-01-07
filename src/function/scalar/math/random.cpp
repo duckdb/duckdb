@@ -9,21 +9,6 @@
 
 namespace duckdb {
 
-struct RandomBindData : public FunctionData {
-	ClientContext &context;
-
-	explicit RandomBindData(ClientContext &context) : context(context) {
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<RandomBindData>(context);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		return true;
-	}
-};
-
 struct RandomLocalState : public FunctionLocalState {
 	explicit RandomLocalState(uint32_t seed) : random_engine(seed) {
 	}
@@ -42,21 +27,15 @@ static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 }
 
-unique_ptr<FunctionData> RandomBind(ClientContext &context, ScalarFunction &bound_function,
-                                    vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<RandomBindData>(context);
-}
-
-static unique_ptr<FunctionLocalState> RandomInitLocalState(const BoundFunctionExpression &expr,
+static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                            FunctionData *bind_data) {
-	auto &info = (RandomBindData &)*bind_data;
-	auto &random_engine = RandomEngine::Get(info.context);
+	auto &random_engine = RandomEngine::Get(state.GetContext());
 	lock_guard<mutex> guard(random_engine.lock);
 	return make_unique<RandomLocalState>(random_engine.NextRandomInteger());
 }
 
 void RandomFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, RandomBind, nullptr, nullptr,
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
 	                      RandomInitLocalState);
 	random.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction(random);
@@ -75,7 +54,7 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 void UUIDFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, RandomBind, nullptr, nullptr,
+	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, nullptr, nullptr, nullptr,
 	                             RandomInitLocalState);
 	// generate a random uuid
 	uuid_function.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;

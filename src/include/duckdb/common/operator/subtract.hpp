@@ -10,8 +10,14 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
+
+struct interval_t;
+struct date_t;
+struct timestamp_t;
+struct dtime_t;
 
 struct SubtractOperator {
 	template <class TA, class TB, class TR>

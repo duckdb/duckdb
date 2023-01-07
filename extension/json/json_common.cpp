@@ -48,7 +48,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	size_t len = 0;
 	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
 		constant = true;
-		const auto path_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		CheckPath(path_val, path, len);
 	}
 	return make_unique<JSONReadFunctionData>(constant, move(path), len);
@@ -85,7 +85,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 
 	vector<string> paths;
 	vector<size_t> lens;
-	auto paths_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);

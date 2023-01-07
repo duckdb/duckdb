@@ -9,11 +9,22 @@ PRAGMA enable_verification
 statement error
 CREATE TEMP TABLE t0(c0 AS (1));
 
-#Function doesnt exist, neither does the referenced column
+# Function doesn't exist
 statement error
 CREATE TABLE unit (
+	price INTEGER,
 	total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL,
 );
+----
+non_existant_function
+
+# Column doesn't exist
+statement error
+CREATE TABLE unit (
+	total_profit BOOLEAN GENERATED ALWAYS AS(price * 2) VIRTUAL,
+);
+----
+price
 
 #Expression (word) is cast to BOOLEAN
 statement ok

@@ -15,9 +15,9 @@
 
 namespace duckdb {
 
-PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(Allocator &allocator, const PhysicalRangeJoin &op,
+PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ClientContext &context, const PhysicalRangeJoin &op,
                                                       const idx_t child)
-    : op(op), executor(allocator), has_null(0), count(0) {
+    : op(op), executor(context), has_null(0), count(0) {
 	// Initialize order clause expression executor and key DataChunk
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
@@ -26,6 +26,7 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(Allocator &allocator, cons
 
 		types.push_back(expr->return_type);
 	}
+	auto &allocator = Allocator::Get(context);
 	keys.Initialize(allocator, types);
 }
 

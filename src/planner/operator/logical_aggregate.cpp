@@ -100,4 +100,20 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	return move(result);
 }
 
+idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
+	if (groups.empty()) {
+		// ungrouped aggregate
+		return 1;
+	}
+	return LogicalOperator::EstimateCardinality(context);
+}
+
+vector<idx_t> LogicalAggregate::GetTableIndex() const {
+	vector<idx_t> result {group_index, aggregate_index};
+	if (groupings_index != DConstants::INVALID_INDEX) {
+		result.push_back(groupings_index);
+	}
+	return result;
+}
+
 } // namespace duckdb

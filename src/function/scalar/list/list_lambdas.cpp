@@ -196,7 +196,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// get the expression executor
-	ExpressionExecutor expr_executor(Allocator::DefaultAllocator(), *lambda_expr);
+	ExpressionExecutor expr_executor(state.GetContext(), *lambda_expr);
 
 	// these are only for the list_filter
 	vector<idx_t> lists_len;

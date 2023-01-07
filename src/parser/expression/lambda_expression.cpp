@@ -18,7 +18,6 @@ bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression 
 }
 
 hash_t LambdaExpression::Hash() const {
-
 	hash_t result = lhs->Hash();
 	ParsedExpression::Hash();
 	result = CombineHash(result, expr->Hash());
@@ -26,7 +25,9 @@ hash_t LambdaExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	return make_unique<LambdaExpression>(lhs->Copy(), expr->Copy());
+	auto copy = make_unique<LambdaExpression>(lhs->Copy(), expr->Copy());
+	copy->CopyProperties(*this);
+	return move(copy);
 }
 
 void LambdaExpression::Serialize(FieldWriter &writer) const {

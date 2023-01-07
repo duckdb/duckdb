@@ -132,7 +132,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 
 	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
-	auto main_ht = (data_ptr_t *)hash_map.Ptr();
+	auto main_ht = (data_ptr_t *)hash_map.get();
 	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
@@ -314,7 +314,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	hashes.Flatten(count);
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto pointers = (atomic<data_ptr_t> *)hash_map.Ptr();
+	auto pointers = (atomic<data_ptr_t> *)hash_map.get();
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 
 	if (parallel) {
@@ -331,36 +331,51 @@ void JoinHashTable::InitializePointerTable() {
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
 
-	if (!hash_map.IsValid()) {
+	if (!hash_map.get()) {
 		// allocate the HT if not yet done
-		hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+		hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
 	}
-	D_ASSERT(hash_map.GetFileBuffer().size >= capacity * sizeof(data_ptr_t));
+	D_ASSERT(hash_map.GetSize() == capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
-	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));
+	memset(hash_map.get(), 0, capacity * sizeof(data_ptr_t));
 }
 
 void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel) {
 	// Pointer table should be allocated
-	D_ASSERT(hash_map.IsValid());
+	D_ASSERT(hash_map.get());
 
+	const auto unswizzle = external && !layout.AllConstant();
 	vector<BufferHandle> local_pinned_handles;
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
-	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	for (idx_t block_idx = block_idx_start; block_idx < block_idx_end; block_idx++) {
 		auto &block = block_collection->blocks[block_idx];
 		auto handle = buffer_manager.Pin(block->block);
 		data_ptr_t dataptr = handle.Ptr();
+
+		data_ptr_t heap_ptr = nullptr;
+		if (unswizzle) {
+			auto &heap_block = string_heap->blocks[block_idx];
+			auto heap_handle = buffer_manager.Pin(heap_block->block);
+			heap_ptr = heap_handle.Ptr();
+			local_pinned_handles.push_back(move(heap_handle));
+		}
+
 		idx_t entry = 0;
 		while (entry < block->count) {
-			// fetch the next vector of entries from the blocks
 			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block->count - entry);
+
+			if (unswizzle) {
+				RowOperations::UnswizzlePointers(layout, dataptr, heap_ptr, next);
+			}
+
+			// fetch the next vector of entries from the blocks
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
@@ -891,6 +906,12 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	return key_count;
 }
 
+void JoinHashTable::PinAllBlocks() {
+	for (auto &block : block_collection->blocks) {
+		pinned_handles.push_back(buffer_manager.Pin(block->block));
+	}
+}
+
 void JoinHashTable::SwizzleBlocks() {
 	if (block_collection->count == 0) {
 		return;
@@ -980,45 +1001,6 @@ void JoinHashTable::SwizzleBlocks() {
 	string_heap->Clear();
 }
 
-void JoinHashTable::UnswizzleBlocks() {
-	auto &blocks = swizzled_block_collection->blocks;
-	auto &heap_blocks = swizzled_string_heap->blocks;
-#ifdef DEBUG
-	if (!layout.AllConstant()) {
-		D_ASSERT(blocks.size() == heap_blocks.size());
-		D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
-	}
-#endif
-
-	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
-		auto &data_block = blocks[block_idx];
-
-		if (!layout.AllConstant()) {
-			auto block_handle = buffer_manager.Pin(data_block->block);
-
-			auto &heap_block = heap_blocks[block_idx];
-			D_ASSERT(data_block->count == heap_block->count);
-			auto heap_handle = buffer_manager.Pin(heap_block->block);
-
-			// Unswizzle and move
-			RowOperations::UnswizzlePointers(layout, block_handle.Ptr(), heap_handle.Ptr(), data_block->count);
-			string_heap->blocks.push_back(move(heap_block));
-			string_heap->pinned_blocks.push_back(move(heap_handle));
-		}
-
-		// Fixed size stuff can just be moved
-		block_collection->blocks.push_back(move(data_block));
-	}
-
-	// Update counts and clean up
-	block_collection->count = swizzled_block_collection->count;
-	string_heap->count = swizzled_string_heap->count;
-	swizzled_block_collection->Clear();
-	swizzled_string_heap->Clear();
-
-	D_ASSERT(SwizzledCount() == 0);
-}
-
 void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts,
                                           idx_t max_ht_size) {
 	external = true;
@@ -1038,12 +1020,12 @@ void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_pt
 	}
 
 	total_size += PointerTableCapacity(total_count) * sizeof(data_ptr_t);
-	idx_t avg_tuple_size = total_size / total_count;
-	tuples_per_round = max_ht_size / avg_tuple_size;
+	double avg_tuple_size = double(total_size) / double(total_count);
+	tuples_per_round = double(max_ht_size) / avg_tuple_size;
 
 	if (config.force_external) {
-		// For force_external we do three rounds to test all code paths
-		tuples_per_round = (total_count + 2) / 3;
+		// For force_external we do at least three rounds to test all code paths
+		tuples_per_round = MinValue<idx_t>((total_count + 2) / 3, tuples_per_round);
 	}
 
 	// Set the number of radix bits (minimum 4, maximum 8)
@@ -1128,7 +1110,9 @@ bool JoinHashTable::PrepareExternalFinalize() {
 
 	// Unswizzle them
 	D_ASSERT(Count() == 0);
-	UnswizzleBlocks();
+	// Move swizzled data to regular data (will be unswizzled in 'Finalize()')
+	block_collection->Merge(*swizzled_block_collection);
+	string_heap->Merge(*swizzled_string_heap);
 	D_ASSERT(count == Count());
 
 	return true;
@@ -1219,7 +1203,8 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 		result.local_partition = local_partitions.back().get();
 		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
-		local_spill_collections.emplace_back(make_unique<ColumnDataCollection>(context, probe_types));
+		local_spill_collections.emplace_back(
+		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
 		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 
@@ -1250,7 +1235,8 @@ void ProbeSpill::Finalize() {
 		local_partition_append_states.clear();
 	} else {
 		if (local_spill_collections.empty()) {
-			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+			global_spill_collection =
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			global_spill_collection = move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1267,7 +1253,8 @@ void ProbeSpill::PrepareNextProbe() {
 		auto &partitions = global_partitions->GetPartitions();
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
 			// Can't probe, just make an empty one
-			global_spill_collection = make_unique<ColumnDataCollection>(context, probe_types);
+			global_spill_collection =
+			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = move(partitions[ht.partition_start]);

@@ -28,26 +28,43 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	}
 }
 
-BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-	shared_ptr<BlockHandle> *block_handle;
-	if (shared) {
-		// need to grab handle from the vector within a lock else threadsan will complain
-		lock_guard<mutex> guard(lock);
-		block_handle = &blocks[block_id].handle;
-	} else {
-		block_handle = &blocks[block_id].handle;
+ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
+	type = other.GetType();
+	switch (type) {
+	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+		alloc.allocator = other.alloc.allocator;
+		break;
+	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
+		alloc.buffer_manager = other.alloc.buffer_manager;
+		break;
+	default:
+		throw InternalException("Unrecognized column data allocator type");
 	}
-	return alloc.buffer_manager->Pin(*block_handle);
 }
 
-void ColumnDataAllocator::AllocateBlock() {
+BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	shared_ptr<BlockHandle> handle;
+	if (shared) {
+		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
+		// the vector can be resized by another thread while we try to access it
+		lock_guard<mutex> guard(lock);
+		handle = blocks[block_id].handle;
+	} else {
+		handle = blocks[block_id].handle;
+	}
+	return alloc.buffer_manager->Pin(handle);
+}
+
+BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = Storage::BLOCK_SIZE;
-	data.handle = alloc.buffer_manager->RegisterMemory(Storage::BLOCK_SIZE, false);
+	data.capacity = block_size;
+	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
 	blocks.push_back(move(data));
+	return pin;
 }
 
 void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
@@ -81,17 +98,20 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
                                          ChunkManagementState *chunk_state) {
 	D_ASSERT(allocated_data.empty());
 	if (blocks.empty() || blocks.back().Capacity() < size) {
-		AllocateBlock();
-		if (chunk_state && !blocks.empty()) {
-			auto &last_block = blocks.back();
+		auto pinned_block = AllocateBlock(size);
+		if (chunk_state) {
+			D_ASSERT(!blocks.empty());
 			auto new_block_id = blocks.size() - 1;
-			auto pinned_block = alloc.buffer_manager->Pin(last_block.handle);
 			chunk_state->handles[new_block_id] = move(pinned_block);
 		}
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
 	block_id = blocks.size() - 1;
+	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
+		// not guaranteed to be pinned already by this thread (if shared allocator)
+		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
+	}
 	offset = block.size;
 	block.size += size;
 }
@@ -151,6 +171,47 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
 	return state.handles[block_id].Ptr() + offset;
+}
+
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset,
+                                            uint16_t count, uint32_t block_id, uint32_t offset) {
+	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
+	lock_guard<mutex> guard(lock);
+
+	auto &validity = FlatVector::Validity(result);
+	auto strings = FlatVector::GetData<string_t>(result);
+
+	// find first non-inlined string
+	auto i = v_offset;
+	const auto end = v_offset + count;
+	for (; i < end; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
+		if (!strings[i].IsInlined()) {
+			break;
+		}
+	}
+	// at least one string must be non-inlined, otherwise this function should not be called
+	D_ASSERT(i < end);
+
+	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
+	if (strings[i].GetDataUnsafe() == base_ptr) {
+		// pointers are still valid
+		return;
+	}
+
+	// pointer mismatch! pointers are invalid, set them correctly
+	for (; i < end; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
+		if (strings[i].IsInlined()) {
+			continue;
+		}
+		strings[i].SetPointer(base_ptr);
+		base_ptr += strings[i].GetSize();
+	}
 }
 
 void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {

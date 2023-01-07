@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/rename_table_index_storage.test
+# description: Index not correctly serialized after rename table
+# group: [pedro]
+
+load __TEST_DIR__/wal_rename_table.db
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+ALTER TABLE t0 RENAME TO t1;
+
+statement ok
+CREATE INDEX i0 ON t1 (c0);
+
+statement ok
+CREATE OR REPLACE VIEW t0 AS (SELECT 1);
+
+restart
+
+statement ok
+SELECT * FROM t1

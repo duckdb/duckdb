@@ -54,6 +54,9 @@ public:
 	const storage_t &StorageOid() const;
 	void SetStorageOid(storage_t storage_oid);
 
+	LogicalIndex Logical() const;
+	PhysicalIndex Physical() const;
+
 	//! oid
 	const column_t &Oid() const;
 	void SetOid(column_t oid);
@@ -77,9 +80,9 @@ public:
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
-	string GetName();
+	string GetName() const;
 
-	LogicalType GetType();
+	LogicalType GetType() const;
 
 private:
 	//! The name of the entry
@@ -89,9 +92,9 @@ private:
 	//! Compression Type used for this column
 	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
 	//! The index of the column in the storage of the table
-	storage_t storage_oid;
+	storage_t storage_oid = DConstants::INVALID_INDEX;
 	//! The index of the column in the table
-	idx_t oid;
+	idx_t oid = DConstants::INVALID_INDEX;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
 	//! Used by Generated Columns

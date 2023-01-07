@@ -14,14 +14,16 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb_python/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pyrelation.hpp"
 
 namespace duckdb {
 
+enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
+
 struct DuckDBPyRelation;
-struct DuckDBPyResult;
 
 class RegisteredArrow : public RegisteredObject {
 
@@ -31,11 +33,11 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
-struct DuckDBPyConnection {
+struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
 public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	unique_ptr<DuckDBPyResult> result;
+	unique_ptr<DuckDBPyRelation> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
@@ -48,21 +50,24 @@ public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
-	DuckDBPyConnection *Enter();
+	shared_ptr<DuckDBPyConnection> Enter();
 
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
-	static DuckDBPyConnection *DefaultConnection();
+	static bool DetectAndGetEnvironment();
+	static bool IsJupyter();
+	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static PythonImportCache *ImportCache();
+	static bool IsInteractive();
 
-	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
+	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
-	DuckDBPyConnection *Execute(const string &query, py::object params = py::list(), bool many = false);
+	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	DuckDBPyConnection *Append(const string &name, DataFrame value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
 
-	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -83,7 +88,11 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
+	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
+	                                         bool filename, bool hive_partitioning);
+
+	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                          bool file_row_number, bool filename, bool hive_partitioning);
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
@@ -93,15 +102,17 @@ public:
 
 	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
 
+	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
+
 	unordered_set<string> GetTableNames(const string &query);
 
-	DuckDBPyConnection *UnregisterPythonObject(const string &name);
+	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);
 
-	DuckDBPyConnection *Begin();
+	shared_ptr<DuckDBPyConnection> Begin();
 
-	DuckDBPyConnection *Commit();
+	shared_ptr<DuckDBPyConnection> Commit();
 
-	DuckDBPyConnection *Rollback();
+	shared_ptr<DuckDBPyConnection> Rollback();
 
 	void Close();
 
@@ -128,7 +139,7 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
-	static vector<Value> TransformPythonParamList(py::handle params);
+	static vector<Value> TransformPythonParamList(const py::handle &params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
@@ -140,6 +151,9 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
+	unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
+	static PythonEnvironmentType environment;
+	static void DetectEnvironment();
 };
 
 } // namespace duckdb

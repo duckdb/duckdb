@@ -20,6 +20,7 @@
 #include <map>
 
 namespace duckdb {
+class Optimizer;
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
 enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
@@ -30,6 +31,12 @@ enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
 //! (2) it generates new filters for expressions in the same equivalence set: i.e. [X = Y and X = 500] => [Y = 500]
 //! (3) it prunes branches that have unsatisfiable filters: i.e. [X = 5 AND X > 6] => FALSE, prune branch
 class FilterCombiner {
+public:
+	explicit FilterCombiner(ClientContext &context);
+	explicit FilterCombiner(Optimizer &optimizer);
+
+	ClientContext &context;
+
 public:
 	struct ExpressionValueInformation {
 		Value constant;

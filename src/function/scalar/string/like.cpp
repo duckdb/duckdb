@@ -194,7 +194,7 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
-		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (pattern_str.IsNull()) {
 			return nullptr;
 		}

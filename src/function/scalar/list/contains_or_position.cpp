@@ -140,7 +140,6 @@ static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vect
 	case PhysicalType::VARCHAR:
 		TemplatedContainsOrPosition<string_t, T, OP>(args, state, result);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 		TemplatedContainsOrPosition<int8_t, T, OP>(args, state, result, true);

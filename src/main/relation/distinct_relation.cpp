@@ -13,7 +13,7 @@ DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p)
 
 unique_ptr<QueryNode> DistinctRelation::GetQueryNode() {
 	auto child_node = child->GetQueryNode();
-	child_node->modifiers.push_back(make_unique<DistinctModifier>());
+	child_node->AddDistinct();
 	return child_node;
 }
 

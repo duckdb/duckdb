@@ -1,0 +1,41 @@
+# name: test/sql/generated_columns/virtual/select_alias.test
+# group: [virtual]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	order_id BIGINT,
+	y as (order_id + total_profit - amount_sold)
+);
+
+foreach table_alias tbl t2 y order_id total_profit amount_sold price "a.b.c"
+
+# Alias all columns
+query IIIII nosort scrambled
+select * from tbl ${table_alias}(y, order_id, total_profit, amount_sold, price);
+----
+
+query IIIII nosort scrambled
+select * from tbl ${table_alias};
+----
+
+# Alias as completely different things
+query IIIII nosort scrambled
+select * from tbl ${table_alias}(a, b, c, d, e);
+----
+
+query II nosort swapped
+select a, b from tbl ${table_alias}(e, c, b, d, a);
+----
+
+query II nosort swapped
+select y, amount_sold from tbl;
+----
+
+#table_alias
+endloop

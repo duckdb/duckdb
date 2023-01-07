@@ -19,12 +19,16 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
+bool IsRegularCharacter(data_t c) {
+	return c >= 32 && c <= 127 && c != '\\' && c != '\'' && c != '"';
+}
+
 idx_t Blob::GetStringSize(string_t blob) {
 	auto data = (const_data_ptr_t)blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
-		if (data[i] >= 32 && data[i] <= 127 && data[i] != '\\') {
+		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
 			str_len++;
 		} else {
@@ -40,7 +44,7 @@ void Blob::ToString(string_t blob, char *output) {
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
-		if (data[i] >= 32 && data[i] <= 127 && data[i] != '\\') {
+		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
 			output[str_idx++] = data[i];
 		} else {

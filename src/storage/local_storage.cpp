@@ -30,17 +30,24 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWrite
 OptimisticDataWriter::~OptimisticDataWriter() {
 }
 
-void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
-	// we finished writing a complete row group
-	// check if we should pre-emptively write it to disk
-	if (table->info->IsTemporary() || StorageManager::GetStorageManager(table->db).InMemory()) {
-		return;
+bool OptimisticDataWriter::PrepareWrite() {
+	// check if we should pre-emptively write the table to disk
+	if (table->info->IsTemporary() || StorageManager::Get(table->info->db).InMemory()) {
+		return false;
 	}
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
 		partial_manager = make_unique<PartialBlockManager>(block_manager);
+	}
+	return true;
+}
+
+void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
+	// we finished writing a complete row group
+	if (!PrepareWrite()) {
+		return;
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups.GetRowGroup(-2);
@@ -64,10 +71,15 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	}
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
 	if (!partial_manager) {
-		// no partial manager - nothing to flush
-		return;
+		if (!force) {
+			// no partial manager - nothing to flush
+			return;
+		}
+		if (!PrepareWrite()) {
+			return;
+		}
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
@@ -120,12 +132,12 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	});
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t changed_idx,
-                                     const LogicalType &target_type, const vector<column_t> &bound_columns,
-                                     Expression &cast_expr)
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
+                                     idx_t changed_idx, const LogicalType &target_type,
+                                     const vector<column_t> &bound_columns, Expression &cast_expr)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
-	row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr);
+	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -138,11 +150,11 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 	indexes.Move(parent.indexes);
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column,
-                                     Expression *default_value)
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
+                                     ColumnDefinition &new_column, Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
-	row_groups = parent.row_groups->AddColumn(new_column, default_value);
+	row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -234,12 +246,21 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		                                       append_state.current_row);
 	}
 	if (constraint_violated) {
+		PreservedError error;
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			table->RemoveFromIndexes(append_state, chunk, current_row);
+			try {
+				table->RemoveFromIndexes(append_state, chunk, current_row);
+			} catch (Exception &ex) {
+				error = PreservedError(ex);
+				return false;
+			} catch (std::exception &ex) {
+				error = PreservedError(ex);
+				return false;
+			}
 
 			current_row += chunk.size();
 			if (current_row >= append_state.current_row) {
@@ -250,6 +271,9 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 		});
 		if (append_to_table) {
 			table->RevertAppendInternal(append_state.row_start, append_count);
+		}
+		if (error) {
+			error.Throw();
 		}
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
@@ -330,15 +354,20 @@ void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStora
 //===--------------------------------------------------------------------===//
 // LocalStorage
 //===--------------------------------------------------------------------===//
-LocalStorage::LocalStorage(Transaction &transaction) : transaction(transaction) {
+LocalStorage::LocalStorage(ClientContext &context, Transaction &transaction)
+    : context(context), transaction(transaction) {
 }
 
 LocalStorage &LocalStorage::Get(Transaction &transaction) {
 	return transaction.GetLocalStorage();
 }
 
-LocalStorage &LocalStorage::Get(ClientContext &context) {
-	return Transaction::GetTransaction(context).GetLocalStorage();
+LocalStorage &LocalStorage::Get(ClientContext &context, AttachedDatabase &db) {
+	return Transaction::Get(context, db).GetLocalStorage();
+}
+
+LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
+	return LocalStorage::Get(context, catalog.GetAttached());
 }
 
 void LocalStorage::InitializeScan(DataTable *table, CollectionScanState &state, TableFilterSet *table_filters) {
@@ -381,7 +410,7 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable *table) {
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
 	auto storage = state.storage;
-	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
+	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
 	if (!DataTable::AppendToIndexes(storage->indexes, chunk, base_id)) {
 		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 	}
@@ -444,7 +473,8 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	return delete_count;
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &updates) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
+                          DataChunk &updates) {
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 
@@ -539,7 +569,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, new_column, default_value);
+	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 
@@ -561,7 +591,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	auto new_storage =
-	    make_unique<LocalTableStorage>(*new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, move(new_storage));
 }
 

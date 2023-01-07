@@ -92,7 +92,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 		throw BinderException("ConstantOrNull requires a constant input");
 	}
 	D_ASSERT(arguments.size() >= 2);
-	auto value = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	bound_function.return_type = arguments[0]->return_type;
 	return make_unique<ConstantOrNullBindData>(move(value));
 }

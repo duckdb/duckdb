@@ -10,13 +10,14 @@
 
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 
 class BoundForeignKeyConstraint : public BoundConstraint {
 public:
-	BoundForeignKeyConstraint(ForeignKeyInfo info_p, unordered_set<idx_t> pk_key_set_p,
-	                          unordered_set<idx_t> fk_key_set_p)
+	BoundForeignKeyConstraint(ForeignKeyInfo info_p, physical_index_set_t pk_key_set_p,
+	                          physical_index_set_t fk_key_set_p)
 	    : BoundConstraint(ConstraintType::FOREIGN_KEY), info(move(info_p)), pk_key_set(move(pk_key_set_p)),
 	      fk_key_set(move(fk_key_set_p)) {
 #ifdef DEBUG
@@ -33,9 +34,9 @@ public:
 
 	ForeignKeyInfo info;
 	//! The same keys but stored as an unordered set
-	unordered_set<idx_t> pk_key_set;
+	physical_index_set_t pk_key_set;
 	//! The same keys but stored as an unordered set
-	unordered_set<idx_t> fk_key_set;
+	physical_index_set_t fk_key_set;
 };
 
 } // namespace duckdb

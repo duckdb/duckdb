@@ -14,8 +14,12 @@ namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-         DatabaseInstance &db, idx_t block_id, idx_t block_offset)
-    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db) {
+         AttachedDatabase &db, idx_t block_id, idx_t block_offset)
+    : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
+      estimated_art_size(0), estimated_key_size(16) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("ART indexes are not supported on big endian architectures");
+	}
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -26,17 +30,28 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		switch (types[i]) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-		case PhysicalType::INT16:
-		case PhysicalType::INT32:
-		case PhysicalType::INT64:
-		case PhysicalType::INT128:
 		case PhysicalType::UINT8:
+			estimated_key_size += sizeof(int8_t);
+			break;
+		case PhysicalType::INT16:
 		case PhysicalType::UINT16:
+			estimated_key_size += sizeof(int16_t);
+			break;
+		case PhysicalType::INT32:
 		case PhysicalType::UINT32:
-		case PhysicalType::UINT64:
 		case PhysicalType::FLOAT:
+			estimated_key_size += sizeof(int32_t);
+			break;
+		case PhysicalType::INT64:
+		case PhysicalType::UINT64:
 		case PhysicalType::DOUBLE:
+			estimated_key_size += sizeof(int64_t);
+			break;
+		case PhysicalType::INT128:
+			estimated_key_size += sizeof(hugeint_t);
+			break;
 		case PhysicalType::VARCHAR:
+			estimated_key_size += 16; // oh well
 			break;
 		default:
 			throw InvalidTypeException(logical_types[i], "Invalid type for index");
@@ -45,8 +60,12 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 }
 
 ART::~ART() {
+	if (estimated_art_size > 0) {
+		BufferManager::GetBufferManager(db).FreeReservedMemory(estimated_art_size);
+		estimated_art_size = 0;
+	}
 	if (tree) {
-		delete tree;
+		Node::Delete(tree);
 		tree = nullptr;
 	}
 }
@@ -249,7 +268,6 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 
 	// we reached a leaf, i.e. all the bytes of start_key and end_key match
 	if (start_key.len == key_section.depth) {
-
 		// end_idx is inclusive
 		auto num_row_ids = key_section.end - key_section.start + 1;
 
@@ -258,14 +276,7 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
-		// new row ids of this leaf
-		auto new_row_ids = unique_ptr<row_t[]>(new row_t[num_row_ids]);
-		for (idx_t i = 0; i < num_row_ids; i++) {
-			new_row_ids[i] = row_ids[key_section.start + i];
-		}
-
-		node = new Leaf(start_key, prefix_start, move(new_row_ids), num_row_ids);
-
+		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 	} else { // create a new node and recurse
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
@@ -292,7 +303,7 @@ void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator 
 	auto payload_types = logical_types;
 	payload_types.emplace_back(LogicalType::ROW_TYPE);
 
-	ArenaAllocator arena_allocator(allocator);
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(STANDARD_VECTOR_SIZE);
 
 	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
@@ -349,9 +360,13 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
 	// generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(input.size());
 	GenerateKeys(arena_allocator, input, keys);
+
+	idx_t extra_memory = estimated_key_size * input.size();
+	BufferManager::GetBufferManager(db).ReserveMemory(extra_memory);
+	estimated_art_size += extra_memory;
 
 	// now insert the elements into the index
 	row_ids.Flatten(input.size());
@@ -424,7 +439,7 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = new Leaf(key, depth, row_id);
+		node = Leaf::New(key, depth, row_id);
 		return true;
 	}
 
@@ -447,11 +462,11 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 			}
 		}
 
-		Node *new_node = new Node4();
+		Node *new_node = Node4::New();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
 		Node4::InsertChild(new_node, key_byte, node);
-		Node *leaf_node = new Leaf(key, depth + new_prefix_length + 1, row_id);
+		Node *leaf_node = Leaf::New(key, depth + new_prefix_length + 1, row_id);
 		Node4::InsertChild(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -462,13 +477,13 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			// Prefix differs, create new node
-			Node *new_node = new Node4();
+			Node *new_node = Node4::New();
 			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
 			auto key_byte = node->prefix.Reduce(mismatch_pos);
 			Node4::InsertChild(new_node, key_byte, node);
 
-			Node *leaf_node = new Leaf(key, depth + mismatch_pos + 1, row_id);
+			Node *leaf_node = Leaf::New(key, depth + mismatch_pos + 1, row_id);
 			Node4::InsertChild(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
@@ -485,7 +500,7 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		node->ReplaceChildPointer(pos, child);
 		return insertion_result;
 	}
-	Node *new_node = new Leaf(key, depth + 1, row_id);
+	Node *new_node = Leaf::New(key, depth + 1, row_id);
 	Node::InsertChild(node, key[depth], new_node);
 	return true;
 }
@@ -500,8 +515,12 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	// first resolve the expressions
 	ExecuteExpressions(input, expression);
 
+	idx_t released_memory = MinValue<idx_t>(estimated_art_size, estimated_key_size * input.size());
+	BufferManager::GetBufferManager(db).FreeReservedMemory(released_memory);
+	estimated_art_size -= released_memory;
+
 	// then generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
@@ -536,7 +555,7 @@ void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
 		auto leaf = static_cast<Leaf *>(node);
 		leaf->Remove(row_id);
 		if (leaf->count == 0) {
-			delete node;
+			Node::Delete(node);
 			node = nullptr;
 		}
 
@@ -745,7 +764,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 
 	// FIXME: the key directly owning the data for a single key might be more efficient
 	D_ASSERT(state->values[0].type().InternalType() == types[0]);
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(Allocator::Get(db));
 	auto key = CreateKey(arena_allocator, types[0], state->values[0]);
 
 	if (state->values[1].IsNull()) {
@@ -820,7 +839,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
-	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
+	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
@@ -888,9 +907,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 // Merge ARTs
 //===--------------------------------------------------------------------===//
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
-
 	auto other_art = (ART *)other_index;
-
+	estimated_art_size += other_art->estimated_art_size;
+	other_art->estimated_art_size = 0;
 	if (!this->tree) {
 		this->tree = other_art->tree;
 		other_art->tree = nullptr;

@@ -1,0 +1,11 @@
+# name: test/fuzzer/pedro/intersect_empty_array.test
+# description: Intersect empty array
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement error
+SELECT 2 INTERSECT VALUES([]);
+----
+Unimplemented

@@ -65,8 +65,8 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-JoinSide JoinSide::GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(idx_t table_binding, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
@@ -78,8 +78,8 @@ JoinSide JoinSide::GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_b
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
@@ -115,8 +115,8 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

@@ -17,6 +17,8 @@ CREATE TABLE tbl2 (
 	a INTEGER,
 	b AS (a) REFERENCES tbl1.a,
 );
+----
+the same
 
 #Creating a foreign key constraint on a generated column
 statement error
@@ -25,16 +27,26 @@ CREATE TABLE tbl2 (
 	b AS (a),
 	FOREIGN KEY (b) REFERENCES tbl1 (a)
 );
+----
+generated
 
 # Referencing a generated column is not supported because in order to do that
 # you have to create a UNIQUE/PRIMARY KEY constraint on a generated column first - which isn't supported (yet)
 
-##Create a table
-#statement ok
-#CREATE TABLE tbl2 (
-#	price INTEGER,
-#	also_price AS (price) UNIQUE
-#);
+#Create a table
+statement error
+CREATE TABLE tbl2 (
+	price INTEGER,
+	also_price AS (price) UNIQUE
+);
+----
+generated
+
+statement ok
+CREATE TABLE tbl2 (
+	price INTEGER,
+	also_price AS (price)
+);
 
 #Can not reference a generated column as foreign key
 statement error
@@ -42,6 +54,8 @@ CREATE TABLE tbl3 (
 	a INTEGER,
 	FOREIGN KEY (a) REFERENCES tbl2 (also_price)
 );
+----
+no primary key
 
 #Show that normal uses of FOREIGN_KEY constraint work mixed with generated columns
 statement ok

@@ -20,6 +20,10 @@ public:
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
+
+	// check certain column ref Names to make sure they are supported in the returning statement
+	// (i.e rowid)
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth);
 };
 
 } // namespace duckdb

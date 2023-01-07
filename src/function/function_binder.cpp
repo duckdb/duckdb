@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -246,7 +247,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
                                                           vector<unique_ptr<Expression>> children, string &error,
                                                           bool is_operator, Binder *binder) {
 	// bind the function
-	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
+	auto function =
+	    Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
 	D_ASSERT(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return BindScalarFunction((ScalarFunctionCatalogEntry &)*function, move(children), error, is_operator, binder);
 }

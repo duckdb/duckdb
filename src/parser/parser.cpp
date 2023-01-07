@@ -213,7 +213,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	return move(values_list.values);
 }
 
-vector<ColumnDefinition> Parser::ParseColumnList(const string &column_list, ParserOptions options) {
+ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions options) {
 	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
 	Parser parser(options);
 	parser.ParseQuery(mock_query);

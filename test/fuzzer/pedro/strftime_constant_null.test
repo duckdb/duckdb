@@ -1,0 +1,15 @@
+# name: test/fuzzer/pedro/strftime_constant_null.test
+# description: Strftime assertion trigger
+# group: [pedro]
+
+statement ok
+CREATE TABLE t0 (c1 TIMESTAMP);
+
+statement ok
+INSERT INTO t0 VALUES (TIMESTAMP '91288-5-25 0:5:30'),(TIMESTAMP '253915-8-21 3:7:0');
+
+statement ok
+PRAGMA DISABLE_OPTIMIZER;
+
+statement ok
+SELECT strftime(TIMESTAMP '2608-11-25 3:4:35',coalesce('a', 'b')) FROM t0;

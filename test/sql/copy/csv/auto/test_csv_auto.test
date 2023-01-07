@@ -4,6 +4,11 @@
 
 require vector_size 512
 
+
+statement ok
+SET experimental_parallel_csv=false;
+
+
 # CSV file with RFC-conform dialect
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/rfc_conform.csv');

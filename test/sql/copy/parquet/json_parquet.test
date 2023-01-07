@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/json_parquet.test
+# description: Test JSON Parquet
+# group: [parquet]
+
+require parquet
+
+require json
+
+statement ok
+CREATE TABLE json_tbl AS FROM 'data/parquet-testing/json_convertedtype.parquet';
+
+query I
+SELECT json_extract(TX_JSON[1], 'block_hash') FROM json_tbl
+----
+"0x95cc694a09424ba463e4b1b704b86a56a41521473b3b4875691383c3d5c799b3"
+"0x5aa34b59d13fc0c6c199c67451c5643ecfd905ee1ac940478b1e700203c707be"
+"0x987d9d3a51a630337cdbd78858676ca6237ea692306ebd3586b4c3cb79e3762c"
+"0x5f90325321b570ba4ade766478df3c73a5b89336c2b57b8fa8e64d2f937639d9"
+"0x48cb55cb6814a86cbba8e5e859df11bc8f01f772a3972fb5c22a31d1339c24e4"
+"0x059f581a8c9b196e0d11b462be0e194eb837922e17409c94c6888b72d0001b49"
+"0xa3855d62087826f46f97d6c90854c223f19bf95b2df0d2a446e5f00efbae8b80"
+"0x5193e56b142dfca5873d7272ea4892a83a74b3d4faa99f8e49ff83d7d4b53e0d"
+"0x099041d5e2b624f8be592db1d624998e06495f680c6134bf1d7401d919bd0af0"
+"0x2e5b481bba4f1596484c65ac5c36075d83eb0f85d10ee509d808d23f2f2af8e0"

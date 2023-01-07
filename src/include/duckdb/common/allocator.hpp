@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class Allocator;
+class AttachedDatabase;
 class ClientContext;
 class DatabaseInstance;
 class ExecutionContext;
@@ -61,6 +62,9 @@ private:
 };
 
 class Allocator {
+	// 281TB ought to be enough for anybody
+	static constexpr const idx_t MAXIMUM_ALLOC_SIZE = 281474976710656ULL;
+
 public:
 	DUCKDB_API Allocator();
 	DUCKDB_API Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
@@ -88,12 +92,14 @@ public:
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+	static Allocator &Get(AttachedDatabase &db);
 
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
 
-	static Allocator &DefaultAllocator();
+	DUCKDB_API static Allocator &DefaultAllocator();
+	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -103,6 +109,28 @@ private:
 	unique_ptr<PrivateAllocatorData> private_data;
 };
 
+template <class T>
+T *AllocateArray(idx_t size) {
+	return (T *)Allocator::DefaultAllocator().AllocateData(size * sizeof(T));
+}
+
+template <class T>
+void DeleteArray(T *ptr, idx_t size) {
+	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(T));
+}
+
+template <typename T, typename... ARGS>
+T *AllocateObject(ARGS &&...args) {
+	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
+	return new (data) T(std::forward<ARGS>(args)...);
+}
+
+template <typename T>
+void DestroyObject(T *ptr) {
+	ptr->~T();
+	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, sizeof(T));
+}
+
 //! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the
 //! buffer manager. This makes the buffer manager aware of the memory usage, allowing it to potentially free
 //! other blocks to make space in memory.
@@ -110,6 +138,8 @@ private:
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
+	DUCKDB_API static Allocator &Get(AttachedDatabase &db);
 };
 
 } // namespace duckdb

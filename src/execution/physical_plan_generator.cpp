@@ -1,16 +1,19 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/query_profiler.hpp"
+
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	explicit DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	explicit DependencyExtractor(DependencyList &dependencies) : dependencies(dependencies) {
 	}
 
 protected:
@@ -23,7 +26,7 @@ protected:
 	}
 
 private:
-	unordered_set<CatalogEntry *> &dependencies;
+	DependencyList &dependencies;
 };
 
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
@@ -177,6 +180,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
 		plan = CreatePlan((LogicalSimple &)op);
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
@@ -190,6 +194,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		plan = CreatePlan((LogicalSet &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		plan = CreatePlan((LogicalReset &)op);
+		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
+
+		if (!plan) {
+			throw InternalException("Missing PhysicalOperator for Extension Operator");
+		}
 		break;
 	default: {
 		throw NotImplementedException("Unimplemented logical operator type!");

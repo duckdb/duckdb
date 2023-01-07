@@ -1,9 +1,9 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -239,49 +239,189 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	DeleteDatabase(storage_database);
 	DuckDB db(storage_database, config.get());
 
-#if defined(DEBUG) || defined(DUCKDB_FORCE_ASSERT)
-	auto align = [](idx_t requested_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(requested_size);
-	};
-#endif
-
 	// 1GB limit
 	Connection con(db);
 	const idx_t limit = 1000000000;
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
-	auto block = buffer_manager.RegisterMemory(requested_size, false);
-	auto handle = buffer_manager.Pin(block);
-	D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+	shared_ptr<BlockHandle> block;
+	auto handle = buffer_manager.Allocate(requested_size, false, &block);
+	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
-		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	}
 	requested_size /= 2;
 	for (; requested_size > Storage::BLOCK_SIZE; requested_size /= 2) {
 		// decrease size
 		buffer_manager.ReAllocate(block, requested_size);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 		// unpin and make sure it's evicted
 		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
-		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		CHECK(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 		handle = buffer_manager.Pin(block);
-		D_ASSERT(buffer_manager.GetUsedMemory() == align(requested_size + Storage::BLOCK_HEADER_SIZE));
+		CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	}
+}
+
+TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	idx_t requested_size = 424242;
+	shared_ptr<BlockHandle> block;
+	auto pin = buffer_manager.Allocate(requested_size, false, &block);
+	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
+
+	pin.Destroy();
+	block.reset();
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+}
+
+TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	// Set memory limit to hold exactly 10 blocks
+	idx_t pin_count = 10;
+	REQUIRE_NO_FAIL(
+	    con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", Storage::BLOCK_ALLOC_SIZE * pin_count)));
+
+	// Create 40 blocks, but don't hold the pin
+	// They will be added to the eviction queue and the buffers will be re-used
+	idx_t block_count = 40;
+	vector<shared_ptr<BlockHandle>> blocks;
+	blocks.reserve(block_count);
+	for (idx_t i = 0; i < block_count; i++) {
+		blocks.emplace_back();
+		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &blocks.back());
+		// used memory should increment by exactly one block at a time, up to 10
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * Storage::BLOCK_ALLOC_SIZE);
+	}
+
+	// now pin them one by one - cycling through should trigger more buffer re-use
+	for (idx_t i = 0; i < block_count; i++) {
+		auto pin = buffer_manager.Pin(blocks[i]);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * Storage::BLOCK_ALLOC_SIZE);
+	}
+
+	// Clear all blocks and verify we go back down to 0 used memory
+	blocks.clear();
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	// now we do exactly the same, but with variable-sized blocks
+	idx_t block_size = 424242;
+	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
+	for (idx_t i = 0; i < block_count; i++) {
+		blocks.emplace_back();
+		buffer_manager.Allocate(block_size, false, &blocks.back());
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+	}
+	for (idx_t i = 0; i < block_count; i++) {
+		auto pin = buffer_manager.Pin(blocks[i]);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+	}
+	blocks.clear();
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	// again, the same but incrementing block_size by 1 for every block (has same alloc_size)
+	for (idx_t i = 0; i < block_count; i++) {
+		blocks.emplace_back();
+		buffer_manager.Allocate(block_size, false, &blocks.back());
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+		// increment block_size
+		block_size++;
+		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
+	}
+	for (idx_t i = 0; i < block_count; i++) {
+		auto pin = buffer_manager.Pin(blocks[i]);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+	}
+	blocks.clear();
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	// reset block size and do the same but decrement by 1 for every block (still same alloc_size)
+	block_size = 424242;
+	for (idx_t i = 0; i < block_count; i++) {
+		blocks.emplace_back();
+		buffer_manager.Allocate(block_size, false, &blocks.back());
+		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
+		// increment block_size
+		block_size--;
+		CHECK(BufferManager::GetAllocSize(block_size) == alloc_size);
+	}
+	for (idx_t i = 0; i < block_count; i++) {
+		auto pin = buffer_manager.Pin(blocks[i]);
+		CHECK(buffer_manager.GetUsedMemory() == pin_count * alloc_size);
+	}
+	blocks.clear();
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+}
+
+TEST_CASE("Test buffer allocator", "[storage][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	CHECK(buffer_manager.GetUsedMemory() == 0);
+
+	const idx_t limit = 1000000000;
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
+
+	auto &allocator = buffer_manager.GetBufferAllocator();
+	idx_t requested_size = Storage::BLOCK_SIZE;
+	auto pointer = allocator.AllocateData(requested_size);
+	idx_t current_size = requested_size;
+	CHECK(buffer_manager.GetUsedMemory() == requested_size);
+
+	// increase
+	for (; requested_size < limit; requested_size *= 2) {
+		pointer = allocator.ReallocateData(pointer, current_size, requested_size);
+		current_size = requested_size;
+		CHECK(buffer_manager.GetUsedMemory() == requested_size);
+	}
+
+	// decrease
+	for (; requested_size >= Storage::BLOCK_SIZE; requested_size /= 2) {
+		pointer = allocator.ReallocateData(pointer, current_size, requested_size);
+		current_size = requested_size;
+		CHECK(buffer_manager.GetUsedMemory() == requested_size);
+	}
+
+	allocator.FreeData(pointer, current_size);
 }

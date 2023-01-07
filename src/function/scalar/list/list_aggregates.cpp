@@ -411,14 +411,15 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 			throw InvalidInputException("Aggregate function name must be a constant");
 		}
 		// get the function name
-		Value function_value = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+		Value function_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		function_name = function_value.ToString();
 	}
 
 	// look up the aggregate function in the catalog
 	QueryErrorContext error_context(nullptr, 0);
-	auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, DEFAULT_SCHEMA, function_name, false, error_context);
+	auto func =
+	    (AggregateFunctionCatalogEntry *)Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	        context, DEFAULT_SCHEMA, function_name, false, error_context);
 	D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {

@@ -75,7 +75,7 @@ void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto new_node = new Node16();
+		auto new_node = Node16::New();
 		new_node->count = 4;
 		new_node->prefix = move(node->prefix);
 		for (idx_t i = 0; i < 4; i++) {
@@ -84,7 +84,7 @@ void Node4::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 			n->children[i] = nullptr;
 		}
 		// Delete old node and replace it with new Node16
-		delete node;
+		Node::Delete(node);
 		node = new_node;
 		Node16::InsertChild(node, key_byte, new_child);
 	}
@@ -112,7 +112,7 @@ void Node4::EraseChild(Node *&node, int pos, ART &art) {
 		// concatenate prefixes
 		child_ref->prefix.Concatenate(n->key[0], node->prefix);
 		n->children[0] = nullptr;
-		delete node;
+		Node::Delete(node);
 		node = child_ref;
 	}
 }

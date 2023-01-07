@@ -94,7 +94,7 @@ public:
 	virtual string ToString() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
-	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
+	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
 	//! Returns unique flag
 	bool IsUnique() {

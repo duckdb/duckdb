@@ -460,9 +460,16 @@ test_that("duckdb can read arrow timestamps", {
 
     if (unit == "ns") {
       # warning when precision loss
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") })
+      expect_warning({
+        res <- dbGetQuery(con, "SELECT t FROM timestamps")
+      })
     } else {
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
+      expect_warning(
+        {
+          res <- dbGetQuery(con, "SELECT t FROM timestamps")
+        },
+        regexp = NA
+      )
     }
     expect_equal(res[[1]], as.POSIXct(as.character(timestamp), tz = "UTC"))
 
@@ -492,9 +499,16 @@ test_that("duckdb can read arrow timestamptz", {
 
     if (unit == "ns") {
       # warning when precision loss
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") })
+      expect_warning({
+        res <- dbGetQuery(con, "SELECT t FROM timestamps")
+      })
     } else {
-      expect_warning({ res <- dbGetQuery(con, "SELECT t FROM timestamps") }, regexp = NA)
+      expect_warning(
+        {
+          res <- dbGetQuery(con, "SELECT t FROM timestamps")
+        },
+        regexp = NA
+      )
     }
     expect_equal(res[[1]], as.POSIXct(as.character(timestamp), tz = "UTC"))
 
@@ -510,5 +524,3 @@ test_that("duckdb can read arrow timestamptz", {
     duckdb_unregister_arrow(con, "timestamps")
   }
 })
-
-

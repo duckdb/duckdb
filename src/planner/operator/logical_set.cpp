@@ -16,4 +16,8 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(LogicalDeserializationState 
 	return make_unique<LogicalSet>(name, value, scope);
 }
 
+idx_t LogicalSet::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
+
 } // namespace duckdb

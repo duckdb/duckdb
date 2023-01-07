@@ -19,6 +19,12 @@ struct DuckDBViewsData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -50,14 +56,10 @@ unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, Tab
 	auto result = make_unique<DuckDBViewsData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-
-	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::VIEW_ENTRY,
-	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -79,22 +81,27 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		auto &view = (ViewCatalogEntry &)*entry;
 
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, entry->catalog->GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(view.schema->name));
+		output.SetValue(col++, count, Value(view.schema->name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(view.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(view.schema->oid));
 		// view_name, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(view.name));
+		output.SetValue(col++, count, Value(view.name));
 		// view_oid, LogicalType::BIGINT
-		output.SetValue(3, count, Value::BIGINT(view.oid));
+		output.SetValue(col++, count, Value::BIGINT(view.oid));
 		// internal, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(view.internal));
+		output.SetValue(col++, count, Value::BOOLEAN(view.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(5, count, Value::BOOLEAN(view.temporary));
+		output.SetValue(col++, count, Value::BOOLEAN(view.temporary));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(6, count, Value::BIGINT(view.types.size()));
+		output.SetValue(col++, count, Value::BIGINT(view.types.size()));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(7, count, Value(view.ToSQL()));
+		output.SetValue(col++, count, Value(view.ToSQL()));
 
 		count++;
 	}

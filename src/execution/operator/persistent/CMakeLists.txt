@@ -1,7 +1,11 @@
 add_library_unity(
   duckdb_operator_persistent
   OBJECT
+  base_csv_reader.cpp
   buffered_csv_reader.cpp
+  parallel_csv_reader.cpp
+  csv_buffer.cpp
+  csv_reader_options.cpp
   physical_batch_insert.cpp
   physical_copy_to_file.cpp
   physical_delete.cpp

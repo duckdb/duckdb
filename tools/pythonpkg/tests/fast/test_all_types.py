@@ -45,11 +45,11 @@ class TestAllTypes(object):
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
             'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
             'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
-            'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+            'timestamp_tz': "'1990-01-01 00:00:00Z'::TIMESTAMPTZ",
             'date': "'1990-01-01'::DATE",
             'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
-            'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+            'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
 
         correct_answer_map = {'bool':[(False,), (True,), (None,)]
@@ -85,6 +85,18 @@ class TestAllTypes(object):
                 result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
             correct_result = correct_answer_map[cur_type]
             assert recursive_equality(result, correct_result)
+
+    def test_bytearray_with_nulls(self):
+        con = duckdb.connect(database=':memory:')
+        con.execute("CREATE TABLE test (content BLOB)")
+        want = bytearray([1, 2, 0, 3, 4])
+        con.execute("INSERT INTO test VALUES (?)", [want])
+
+        con.execute("SELECT * from test")
+        got = bytearray(con.fetchall()[0][0])
+        # Don't truncate the array on the nullbyte
+        assert want == bytearray(got)
+
 
     def test_fetchnumpy(self, duckdb_cursor):
         conn = duckdb.connect()
@@ -362,11 +374,11 @@ class TestAllTypes(object):
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
             'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
             'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
-            'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+            'timestamp_tz': "'1990-01-01 00:00:00Z'::TIMESTAMPTZ",
             'date': "'1990-01-01'::DATE",
             'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
-            'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+            'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
             }
 
         conn = duckdb.connect()

@@ -18,6 +18,7 @@ public:
 	ARTPointer children[256];
 
 public:
+	static Node256 *New();
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
 	idx_t GetChildPos(uint8_t k) override;
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX

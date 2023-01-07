@@ -822,10 +822,21 @@ struct IntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
+		using result_t = typename T::Result;
+		if (state.result > (NumericLimits<result_t>::Maximum() - digit) / 2) {
+			return false;
+		}
+		state.result = state.result * 2 + digit;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
 		using result_t = typename T::Result;
 		double dbl_res = state.result * std::pow(10.0L, exponent);
-		if (dbl_res < NumericLimits<result_t>::Minimum() || dbl_res > NumericLimits<result_t>::Maximum()) {
+		if (dbl_res < (double)NumericLimits<result_t>::Minimum() ||
+		    dbl_res > (double)NumericLimits<result_t>::Maximum()) {
 			return false;
 		}
 		state.result = (result_t)std::nearbyint(dbl_res);
@@ -975,6 +986,43 @@ static bool IntegerHexCastLoop(const char *buf, idx_t len, T &result, bool stric
 	return pos > start_pos;
 }
 
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
+static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool strict) {
+	if (ALLOW_EXPONENT || NEGATIVE) {
+		return false;
+	}
+	idx_t start_pos = 1;
+	idx_t pos = start_pos;
+	uint8_t digit;
+	char current_char;
+	while (pos < len) {
+		current_char = buf[pos];
+		if (current_char == '_' && pos > start_pos) {
+			// skip underscore, if it is not the first character
+			pos++;
+			if (pos == len) {
+				// we cant end on an underscore either
+				return false;
+			}
+			continue;
+		} else if (current_char == '0') {
+			digit = 0;
+		} else if (current_char == '1') {
+			digit = 1;
+		} else {
+			return false;
+		}
+		pos++;
+		if (!OP::template HandleBinaryDigit<T, NEGATIVE>(result, digit)) {
+			return false;
+		}
+	}
+	if (!OP::template Finalize<T, NEGATIVE>(result)) {
+		return false;
+	}
+	return pos > start_pos;
+}
+
 template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
           bool ZERO_INITIALIZE = true>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
@@ -986,24 +1034,11 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (len == 0) {
 		return false;
 	}
-	int negative = *buf == '-';
-
-	// If it starts with 0x or 0X, we parse it as a hex value
-	int hex = len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X');
-
 	if (ZERO_INITIALIZE) {
 		memset(&result, 0, sizeof(T));
 	}
-	if (!negative) {
-		if (hex) {
-			// Skip the 0x
-			buf++;
-			len--;
-			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
-		} else {
-			return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
-		}
-	} else {
+	// if the number is negative, we set the negative flag and skip the negative sign
+	if (*buf == '-') {
 		if (!IS_SIGNED) {
 			// Need to check if its not -0
 			idx_t pos = 1;
@@ -1014,6 +1049,22 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 			}
 		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0x or 0X, we parse it as a hex value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X')) {
+		// Skip the 0x
+		buf++;
+		len--;
+		return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+	}
+	// If it starts with 0b or 0B, we parse it as a binary value
+	else if (len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
+		// Skip the 0b
+		buf++;
+		len--;
+		return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+	} else {
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
 
@@ -1387,7 +1438,8 @@ bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *erro
 template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
-	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+	bool special = false;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, special, strict);
 }
 
 template <>
@@ -1514,6 +1566,19 @@ struct HugeIntegerCastOperation {
 	}
 
 	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &result, uint8_t digit) {
+		if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
+			// intermediate is full: need to flush it
+			if (!result.Flush()) {
+				return false;
+			}
+		}
+		result.intermediate = result.intermediate * 2 + digit;
+		result.digits++;
+		return true;
+	}
+
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int32_t exponent) {
 		if (!result.Flush()) {
 			return false;
@@ -1576,16 +1641,23 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
-template <class T>
+
+template <class TYPE>
 struct DecimalCastData {
-	T result;
+	typedef TYPE type_t;
+	TYPE result;
 	uint8_t width;
 	uint8_t scale;
 	uint8_t digit_count;
 	uint8_t decimal_count;
+	//! Whether we have determined if the result should be rounded
+	bool round_set;
+	//! If the result should be rounded
+	bool should_round;
 	//! Only set when ALLOW_EXPONENT is enabled
+	enum class ExponentType : uint8_t { NONE, POSITIVE, NEGATIVE };
 	uint8_t excessive_decimals;
-	bool positive_exponent;
+	ExponentType exponent_type;
 };
 
 struct DecimalCastOperation {
@@ -1601,8 +1673,14 @@ struct DecimalCastOperation {
 		}
 		state.digit_count++;
 		if (NEGATIVE) {
+			if (state.result < (NumericLimits<typename T::type_t>::Minimum() / 10)) {
+				return false;
+			}
 			state.result = state.result * 10 - digit;
 		} else {
+			if (state.result > (NumericLimits<typename T::type_t>::Maximum() / 10)) {
+				return false;
+			}
 			state.result = state.result * 10 + digit;
 		}
 		return true;
@@ -1610,6 +1688,11 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleHexDigit(T &state, uint8_t digit) {
+		return false;
+	}
+
+	template <class T, bool NEGATIVE>
+	static bool HandleBinaryDigit(T &state, uint8_t digit) {
 		return false;
 	}
 
@@ -1626,17 +1709,19 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		auto decimal_excess = (state.decimal_count > state.scale) ? state.decimal_count - state.scale : 0;
 		if (exponent > 0) {
-			state.positive_exponent = true;
-			//! Positive exponents need up to 'exponent' amount of digits
-			//! Everything beyond that amount needs to be truncated
+			state.exponent_type = T::ExponentType::POSITIVE;
+			// Positive exponents need up to 'exponent' amount of digits
+			// Everything beyond that amount needs to be truncated
 			if (decimal_excess > exponent) {
-				//! We've allowed too many decimals
+				// We've allowed too many decimals
 				state.excessive_decimals = decimal_excess - exponent;
 				exponent = 0;
 			} else {
 				exponent -= decimal_excess;
 			}
 			D_ASSERT(exponent >= 0);
+		} else if (exponent < 0) {
+			state.exponent_type = T::ExponentType::NEGATIVE;
 		}
 		if (!Finalize<T, NEGATIVE>(state)) {
 			return false;
@@ -1668,6 +1753,11 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 	static bool HandleDecimal(T &state, uint8_t digit) {
+		if (state.decimal_count == state.scale && !state.round_set) {
+			// Determine whether the last registered decimal should be rounded or not
+			state.round_set = true;
+			state.should_round = digit >= 5;
+		}
 		if (!ALLOW_EXPONENT && state.decimal_count == state.scale) {
 			// we exceeded the amount of supported decimals
 			// however, we don't throw an error here
@@ -1698,7 +1788,7 @@ struct DecimalCastOperation {
 			state.result /= 10.0;
 		}
 		//! Only round up when exponents are involved
-		if (state.positive_exponent && round_up) {
+		if (state.exponent_type == T::ExponentType::POSITIVE && round_up) {
 			RoundUpResult<T, NEGATIVE>(state);
 		}
 		D_ASSERT(state.decimal_count > state.scale);
@@ -1708,12 +1798,15 @@ struct DecimalCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
-		if (!state.positive_exponent && state.decimal_count > state.scale) {
+		if (state.exponent_type != T::ExponentType::POSITIVE && state.decimal_count > state.scale) {
 			//! Did not encounter an exponent, but ALLOW_EXPONENT was on
 			state.excessive_decimals = state.decimal_count - state.scale;
 		}
 		if (state.excessive_decimals && !TruncateExcessiveDecimals<T, NEGATIVE>(state)) {
 			return false;
+		}
+		if (state.exponent_type == T::ExponentType::NONE && state.round_set && state.should_round) {
+			RoundUpResult<T, NEGATIVE>(state);
 		}
 		//  if we have not gotten exactly "scale" decimals, we need to multiply the result
 		//  e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
@@ -1734,7 +1827,9 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.digit_count = 0;
 	state.decimal_count = 0;
 	state.excessive_decimals = 0;
-	state.positive_exponent = false;
+	state.exponent_type = DecimalCastData<T>::ExponentType::NONE;
+	state.round_set = false;
+	state.should_round = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(),
 	                                                                                 input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),

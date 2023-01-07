@@ -28,6 +28,10 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 	)";
 }
 
+string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
+	return "SELECT name FROM pragma_database_list() ORDER BY name;";
+}
+
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
 	       "(pragma_last_profiling_output.operator_id);";
@@ -42,7 +46,11 @@ string PragmaCollations(ClientContext &context, const FunctionParameters &parame
 }
 
 string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_functions() ORDER BY 1;";
+	return "SELECT function_name AS name, upper(function_type) AS type, parameter_types AS parameters, varargs, "
+	       "return_type, has_side_effects AS side_effects"
+	       " FROM duckdb_functions()"
+	       " WHERE function_type IN ('scalar', 'aggregate')"
+	       " ORDER BY 1;";
 }
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
@@ -94,6 +102,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", PragmaShowTables));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables_expanded", PragmaShowTablesExpanded));
+	set.AddFunction(PragmaFunction::PragmaStatement("show_databases", PragmaShowDatabases));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_list", PragmaDatabaseList));
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));

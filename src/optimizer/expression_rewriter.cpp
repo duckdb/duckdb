@@ -87,4 +87,8 @@ void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
 	} while (changes_made);
 }
 
+ClientContext &Rule::GetContext() const {
+	return rewriter.context;
+}
+
 } // namespace duckdb

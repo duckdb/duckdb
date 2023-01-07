@@ -2,6 +2,9 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
 
 using namespace duckdb;
 
@@ -11,8 +14,14 @@ void duckdb::DBDeleter(DBWrapper *db) {
 	delete db;
 }
 
-[[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
+static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	GenericExecutor::ExecuteUnary<PrimitiveType<uintptr_t>, PrimitiveType<string_t>>(
+	    source, result, count,
+	    [&](PrimitiveType<uintptr_t> input) { return StringVector::AddString(result, (const char *)input.val); });
+	return true;
+}
 
+[[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {
 	const char *dbdirchar;
 
 	if (dbdir.length() == 0 || dbdir.compare(":memory:") == 0) {
@@ -60,9 +69,16 @@ void duckdb::DBDeleter(DBWrapper *db) {
 	CreateTableFunctionInfo info(scan_fun);
 	Connection conn(*wrapper->db);
 	auto &context = *conn.context;
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
+
 	catalog.CreateTableFunction(context, &info);
+
+	auto &runtime_config = DBConfig::GetConfig(context);
+
+	auto &casts = runtime_config.GetCastFunctions();
+	casts.RegisterCastFunction(RStringsType::Get(), LogicalType::VARCHAR, CastRstringToVarchar);
+
 	context.transaction.Commit();
 
 	return db_eptr_t(wrapper);

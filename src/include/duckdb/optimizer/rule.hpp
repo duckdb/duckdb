@@ -28,6 +28,7 @@ public:
 	//! The expression matcher of the rule
 	unique_ptr<ExpressionMatcher> root;
 
+	ClientContext &GetContext() const;
 	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &fixed_point,
 	                                     bool is_root) = 0;
 };

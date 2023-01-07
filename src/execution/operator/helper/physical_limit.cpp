@@ -208,7 +208,7 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, E
 	vector<LogicalType> types {expr->return_type};
 	auto &allocator = Allocator::Get(context.client);
 	limit_chunk.Initialize(allocator, types);
-	ExpressionExecutor limit_executor(allocator, expr);
+	ExpressionExecutor limit_executor(context.client, expr);
 	auto input_size = input.size();
 	input.SetCardinality(1);
 	limit_executor.Execute(input, limit_chunk);

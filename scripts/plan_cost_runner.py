@@ -98,7 +98,7 @@ def print_diffs(diffs):
 def cardinality_is_higher(card_a, card_b):
     # card_a > card_b?
     # add 20% threshold before we start caring
-    return card_a > (card_b + card_b / 5)
+    return card_a > (card_b + card_b / 5 + 5000)
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -115,9 +115,6 @@ def main():
     print("RUNNING BENCHMARK QUERIES")
     for f in tqdm(files):
         query_name = f.split("/")[-1].replace(".sql", "")
-
-        if query_name == "07c":
-            continue # FIXME: heap-use-after free on low-memory systems
 
         with open(f, "r") as file:
             query = file.read()

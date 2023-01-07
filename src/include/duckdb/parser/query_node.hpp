@@ -69,6 +69,9 @@ public:
 
 	string ResultModifiersToString() const;
 
+	//! Adds a distinct modifier to the query node
+	void AddDistinct();
+
 protected:
 	//! Copy base QueryNode properties from another expression to this one,
 	//! used in Copy method

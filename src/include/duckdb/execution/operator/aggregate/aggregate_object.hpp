@@ -36,7 +36,7 @@ public:
 };
 
 struct AggregateFilterData {
-	AggregateFilterData(Allocator &allocator, Expression &filter_expr, const vector<LogicalType> &payload_types);
+	AggregateFilterData(ClientContext &context, Expression &filter_expr, const vector<LogicalType> &payload_types);
 
 	idx_t ApplyFilter(DataChunk &payload);
 
@@ -51,7 +51,7 @@ struct AggregateFilterDataSet {
 	vector<unique_ptr<AggregateFilterData>> filter_data;
 
 public:
-	void Initialize(Allocator &allocator, const vector<AggregateObject> &aggregates,
+	void Initialize(ClientContext &context, const vector<AggregateObject> &aggregates,
 	                const vector<LogicalType> &payload_types);
 
 	AggregateFilterData &GetFilterData(idx_t aggr_idx);

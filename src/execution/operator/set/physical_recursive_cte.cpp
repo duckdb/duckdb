@@ -29,8 +29,7 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_unique<GroupedAggregateHashTable>(Allocator::Get(context), BufferManager::GetBufferManager(context),
-		                                            op.types, vector<LogicalType>(),
+		ht = make_unique<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
 		                                            vector<BoundAggregateExpression *>());
 	}
 
@@ -130,15 +129,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	for (auto &pipeline : pipelines) {
 		auto sink = pipeline->GetSink();
 		if (sink != this) {
-			// reset the sink state for any intermediate sinks
-			sink->sink_state = sink->GetGlobalSinkState(context.client);
+			sink->sink_state.reset();
 		}
 		for (auto &op : pipeline->GetOperators()) {
 			if (op) {
-				op->op_state = op->GetGlobalOperatorState(context.client);
+				op->op_state.reset();
 			}
 		}
-		pipeline->ResetSource(true);
+		pipeline->ClearSource();
 	}
 
 	// get the MetaPipelines in the recursive_meta_pipeline and reschedule them

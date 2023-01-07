@@ -1,0 +1,9 @@
+# name: test/fuzzer/pedro/concurrent_set_threads.test
+# group: [pedro]
+
+concurrentloop i 1 10
+
+statement ok
+SET threads=${i}
+
+endloop

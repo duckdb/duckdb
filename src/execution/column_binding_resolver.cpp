@@ -51,7 +51,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = (LogicalCreateIndex &)op;
-		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.size());
+		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.LogicalColumnCount());
 		VisitOperatorExpressions(op);
 		return;
 	} else if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -93,6 +93,35 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
 	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
 	// LCOV_EXCL_STOP
+}
+
+unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
+	unordered_set<idx_t> result;
+	for (auto &child : op.children) {
+		auto child_indexes = VerifyInternal(*child);
+		for (auto index : child_indexes) {
+			D_ASSERT(index != DConstants::INVALID_INDEX);
+			if (result.find(index) != result.end()) {
+				throw InternalException("Duplicate table index \"%lld\" found", index);
+			}
+			result.insert(index);
+		}
+	}
+	auto indexes = op.GetTableIndex();
+	for (auto index : indexes) {
+		D_ASSERT(index != DConstants::INVALID_INDEX);
+		if (result.find(index) != result.end()) {
+			throw InternalException("Duplicate table index \"%lld\" found", index);
+		}
+		result.insert(index);
+	}
+	return result;
+}
+
+void ColumnBindingResolver::Verify(LogicalOperator &op) {
+#ifdef DEBUG
+	VerifyInternal(op);
+#endif
 }
 
 } // namespace duckdb

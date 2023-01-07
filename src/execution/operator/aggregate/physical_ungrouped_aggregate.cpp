@@ -96,7 +96,7 @@ class UngroupedAggregateLocalState : public LocalSinkState {
 public:
 	UngroupedAggregateLocalState(const PhysicalUngroupedAggregate &op, const vector<LogicalType> &child_types,
 	                             GlobalSinkState &gstate_p, ExecutionContext &context)
-	    : state(op.aggregates), child_executor(Allocator::Get(context.client)), aggregate_input_chunk(), filter_set() {
+	    : state(op.aggregates), child_executor(context.client), aggregate_input_chunk(), filter_set() {
 		auto &gstate = (UngroupedAggregateGlobalState &)gstate_p;
 
 		auto &allocator = Allocator::Get(context.client);
@@ -117,7 +117,7 @@ public:
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
 			aggregate_input_chunk.Initialize(allocator, payload_types);
 		}
-		filter_set.Initialize(allocator, aggregate_objects, child_types);
+		filter_set.Initialize(context.client, aggregate_objects, child_types);
 	}
 
 	//! The local aggregate state

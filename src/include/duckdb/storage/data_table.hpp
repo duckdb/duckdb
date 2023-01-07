@@ -24,6 +24,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
+class BoundForeignKeyConstraint;
 class ClientContext;
 class ColumnDataCollection;
 class ColumnDefinition;
@@ -41,7 +42,7 @@ class TableDataWriter;
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
+	DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
 	          const string &table, vector<ColumnDefinition> column_definitions_p,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
@@ -59,7 +60,7 @@ public:
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
 	//! A reference to the database instance
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 
 public:
 	//! Returns a list of types of the table
@@ -103,8 +104,8 @@ public:
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_ids,
-	            DataChunk &data);
+	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+	            const vector<PhysicalIndex> &column_ids, DataChunk &data);
 	//! Update a single (sub-)column along a column path
 	//! The column_path vector is a *path* towards a column within the table
 	//! i.e. if we have a table with a single column S STRUCT(A INT, B INT)
@@ -168,7 +169,7 @@ public:
 	idx_t GetTotalRows();
 
 	vector<vector<Value>> GetStorageInfo();
-	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
+	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
@@ -182,12 +183,20 @@ private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
-	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
+	void VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
+	                             const vector<PhysicalIndex> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
 	void VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
+
+	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
+	                                bool is_append);
+	void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	                                      DataChunk &chunk);
+	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	                                      DataChunk &chunk);
 
 private:
 	//! Lock for appending entries to the table

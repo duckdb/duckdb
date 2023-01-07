@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/temp_table_cleanup.test
+# description: Use-after-free on temporary table after transaction has stopped running
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+concurrentloop i 0 10
+
+statement ok
+CREATE TEMP TABLE t2 AS (SELECT 1);
+
+statement ok
+INSERT INTO t2 VALUES (42);
+
+statement ok
+DELETE FROM t2
+
+endloop
+
+statement ok
+SELECT 42

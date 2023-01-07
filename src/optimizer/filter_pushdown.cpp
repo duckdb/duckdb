@@ -3,10 +3,14 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
+
+FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
+}
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
@@ -67,7 +71,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
-		D_ASSERT(result == FilterResult::SUCCESS);
+		D_ASSERT(result != FilterResult::UNSUPPORTED);
 		(void)result;
 	}
 	filters.clear();

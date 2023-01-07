@@ -32,7 +32,7 @@ string UpdateStatement::ToString() const {
 			result += ", ";
 		}
 		result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
-		result += "=";
+		result += " = ";
 		result += expressions[i]->ToString();
 	}
 	if (from_table) {

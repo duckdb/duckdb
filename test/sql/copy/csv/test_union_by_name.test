@@ -50,7 +50,7 @@ SELECT typeof(a), typeof(b), typeof(c)
 FROM read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
-BIGINT	INTEGER	INTEGER
+BIGINT	BIGINT	BIGINT
 
 # Test timestamp type
 statement error
@@ -80,7 +80,7 @@ SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
 FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
-VARCHAR	INTEGER	INTEGER	VARCHAR	INTEGER
+VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 
 
 # Test glob pattern [12] and union_by_name with filename options
@@ -102,7 +102,7 @@ SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
 FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
 LIMIT 1
 ----
-VARCHAR	INTEGER	INTEGER	TIMESTAMP
+VARCHAR	BIGINT	BIGINT	TIMESTAMP
 
 
 # Test ubn[23] timestamp type casting

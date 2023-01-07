@@ -16,11 +16,12 @@ static string fts_schema_name(const string &schema, const string &table) {
 
 string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
+	if (qname.schema == INVALID_SCHEMA) {
+		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+	}
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
-	auto &catalog = Catalog::GetCatalog(context);
-	if (!catalog.schemas->GetEntry(context, fts_schema)) {
+	if (!Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true)) {
 		throw CatalogException(
 		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
 		    qname.name);
@@ -232,13 +233,14 @@ static string indexing_script(const string &input_schema, const string &input_ta
 }
 
 void check_exists(ClientContext &context, QualifiedName &qname) {
-	auto &catalog = Catalog::GetCatalog(context);
-	catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
+	Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 }
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
+	if (qname.schema == INVALID_SCHEMA) {
+		qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+	}
 	check_exists(context, qname);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
@@ -255,7 +257,9 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		stopwords = StringValue::Get(stopword_entry->second);
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
-			stopwords_qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(stopwords_qname.schema);
+			if (qname.schema == INVALID_SCHEMA) {
+				qname.schema = ClientData::Get(context).catalog_search_path->GetDefaultSchema(INVALID_CATALOG);
+			}
 			check_exists(context, stopwords_qname);
 		}
 	}
@@ -281,8 +285,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// throw error if an index already exists on this table
-	auto &catalog = Catalog::GetCatalog(context);
-	if (catalog.schemas->GetEntry(context, fts_schema) && !overwrite) {
+	if (Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true) && !overwrite) {
 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);
@@ -291,14 +294,14 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	// positional parameters
 	auto doc_id = StringValue::Get(parameters.values[1]);
 	// check all specified columns
-	auto table = catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
 		string col_name = StringValue::Get(parameters.values[i]);
 		if (col_name == "*") {
 			// star found - get all columns
 			doc_values.clear();
-			for (auto &cd : table->columns) {
+			for (auto &cd : table->columns.Logical()) {
 				if (cd.Type() == LogicalType::VARCHAR) {
 					doc_values.push_back(cd.Name());
 				}

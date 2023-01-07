@@ -7,7 +7,7 @@ namespace duckdb {
 class ProjectionState : public OperatorState {
 public:
 	explicit ProjectionState(ExecutionContext &context, const vector<unique_ptr<Expression>> &expressions)
-	    : executor(Allocator::Get(context.client), expressions) {
+	    : executor(context.client, expressions) {
 	}
 
 	ExpressionExecutor executor;

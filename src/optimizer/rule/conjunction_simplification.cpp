@@ -38,7 +38,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr->IsFoldable());
 	Value constant_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(*constant_expr, constant_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_expr, constant_value)) {
 		return nullptr;
 	}
 	constant_value = constant_value.DefaultCastAs(LogicalType::BOOLEAN);

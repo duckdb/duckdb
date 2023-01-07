@@ -1,4 +1,5 @@
-#include "duckdb_python/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
+#include "duckdb_python/import_cache/python_import_cache_item.hpp"
 
 namespace duckdb {
 
@@ -10,10 +11,15 @@ py::handle PythonImportCacheItem::operator()(void) const {
 	return object;
 }
 
+bool PythonImportCacheItem::IsLoaded() const {
+	auto type = (*this)();
+	return type.ptr() != nullptr;
+}
+
 bool PythonImportCacheItem::IsInstance(py::handle object) const {
 	auto type = (*this)();
-	if (type.ptr() == nullptr) {
-		//! Type was not imported
+	if (!IsLoaded()) {
+		// Type was not imported
 		return false;
 	}
 	return py::isinstance(object, type);

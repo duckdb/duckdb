@@ -1,0 +1,47 @@
+# name: test/fuzzer/pedro/complex_type_all_subquery.test
+# description: Use complex types in ALL clause
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+# cast from struct to int not supported
+statement error
+VALUES((0, 0) = ALL(SELECT 2));
+----
+Unimplemented
+
+# use ALL with complex types
+query I
+SELECT {'a': 42} = ALL(SELECT {'a': '42'})
+----
+1
+
+foreach val 42 [1,2,3] {'a':42} {'a':[1,2,3],'b':'thisisalongstring'}
+
+query I
+SELECT ${val} = ALL(SELECT ${val})
+----
+1
+
+query I
+SELECT ${val} = ALL(SELECT ${val} UNION ALL SELECT NULL)
+----
+NULL
+
+query I
+SELECT ${val} = ALL(SELECT ${val} FROM range(3000))
+----
+1
+
+query I
+SELECT ${val} > ANY(SELECT ${val} FROM range(3000))
+----
+0
+
+query I
+SELECT ${val} >= ANY(SELECT ${val} FROM range(3000))
+----
+1
+
+endloop

@@ -191,14 +191,16 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto table_entry = (TableCatalogEntry *)catalog_entry;
-	D_ASSERT(table_entry->columns.size() >= index);
-	return table_entry->columns[index].Generated();
+	return table_entry->columns.GetColumn(LogicalIndex(index)).Generated();
 }
 
-unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
-                                                                const string &column_name) {
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &catalog_name, const string &schema_name,
+                                                                const string &table_name, const string &column_name) {
 	string error_message;
 	vector<string> names;
+	if (!catalog_name.empty()) {
+		names.push_back(catalog_name);
+	}
 	if (!schema_name.empty()) {
 		names.push_back(schema_name);
 	}
@@ -219,6 +221,12 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 		result->alias = binding->names[column_index];
 	}
 	return move(result);
+}
+
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
+                                                                const string &column_name) {
+	string catalog_name;
+	return CreateColumnReference(catalog_name, schema_name, table_name, column_name);
 }
 
 Binding *BindContext::GetCTEBinding(const string &ctename) {

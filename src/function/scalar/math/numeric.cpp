@@ -560,7 +560,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
-	Value val = ExpressionExecutor::EvaluateScalar(*arguments[1]).DefaultCastAs(LogicalType::INTEGER);
+	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
 	if (val.IsNull()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}

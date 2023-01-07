@@ -28,7 +28,7 @@ typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList; // NOLINT
 
 class PartitionableHashTable {
 public:
-	PartitionableHashTable(Allocator &allocator, BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
+	PartitionableHashTable(ClientContext &context, Allocator &allocator, RadixPartitionInfo &partition_info_p,
 	                       vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
 	                       vector<BoundAggregateExpression *> bindings_p);
 
@@ -42,8 +42,8 @@ public:
 	void Finalize();
 
 private:
+	ClientContext &context;
 	Allocator &allocator;
-	BufferManager &buffer_manager;
 	vector<LogicalType> group_types;
 	vector<LogicalType> payload_types;
 	vector<BoundAggregateExpression *> bindings;

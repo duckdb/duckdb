@@ -1,0 +1,18 @@
+# name: test/fuzzer/pedro/index_segment_tree_assertion.test
+# description: Index segment tree assertion error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (c1 INT);
+
+statement ok
+CREATE INDEX i1 ON t1 (c1, "decode"('\x00'::BLOB));
+
+statement ok
+INSERT INTO t1 VALUES (1);
+
+statement error
+CREATE INDEX i1 ON t1 (c1);

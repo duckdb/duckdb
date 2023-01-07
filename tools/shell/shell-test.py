@@ -476,7 +476,7 @@ SELECT 42;
 
 
 
-test('.databases', out='main:')
+test('.databases', out='memory')
 
 # .dump test
 test('''
@@ -849,6 +849,22 @@ test('''
 select 42 limit 0;
 ''', out='0 rows')
 
+# #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
+test('''
+.maxrows 2
+select * from range(4);
+''', out='1')
+
+outfile = tf()
+test('''
+.maxrows 2
+.output %s
+SELECT * FROM range(100);
+''' % outfile)
+outstr = open(outfile,'rb').read().decode('utf8')
+if '50' not in outstr:
+     raise Exception('.output test failed')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 
@@ -890,6 +906,14 @@ if os.name != 'nt':
           )
 
      shutil.rmtree(shell_test_dir)
+
+# test backwards compatibility
+test('.open test/storage/bc/db_dev.db', err='older development version')
+test('.open test/storage/bc/db_031.db', err='v0.3.1')
+test('.open test/storage/bc/db_032.db', err='v0.3.2')
+test('.open test/storage/bc/db_04.db', err='v0.4.0')
+test('.open test/storage/bc/db_051.db', err='v0.5.1')
+test('.open test/storage/bc/db_060.db', err='v0.6.0')
 
 if os.name != 'nt':
      test('''
@@ -944,3 +968,8 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
      copy (select 42) to '/dev/stdout'
      ''',
      out='''42''')
+
+     test('''
+     select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)
+     ''',
+     out='''thisisalongstring''')

@@ -32,7 +32,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
-		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr, true);
+		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 		bind_values.push_back(move(value));
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
@@ -45,6 +45,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = move(prepared_planner.plan);
 		D_ASSERT(prepared->properties.bound_all_parameters);
+		this->bound_tables = prepared_planner.binder->bound_tables;
 	}
 	// copy the properties of the prepared statement into the planner
 	this->properties = prepared->properties;

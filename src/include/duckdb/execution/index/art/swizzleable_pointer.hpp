@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 #pragma once
+
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {

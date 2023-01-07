@@ -593,15 +593,16 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 }
 
 struct StrfTimeBindData : public FunctionData {
-	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p)
-	    : format(move(format_p)), format_string(move(format_string_p)) {
+	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p, bool is_null)
+	    : format(move(format_p)), format_string(move(format_string_p)), is_null(is_null) {
 	}
 
 	StrfTimeFormat format;
 	string format_string;
+	bool is_null;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StrfTimeBindData>(format, format_string);
+		return make_unique<StrfTimeBindData>(format, format_string, is_null);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -621,16 +622,17 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	if (!format_arg->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*format_arg);
+	Value options_str = ExpressionExecutor::EvaluateScalar(context, *format_arg);
 	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
-	if (!options_str.IsNull()) {
+	bool is_null = options_str.IsNull();
+	if (!is_null) {
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
-	return make_unique<StrfTimeBindData>(format, format_string);
+	return make_unique<StrfTimeBindData>(format, format_string, is_null);
 }
 
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
@@ -657,7 +659,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
-	if (ConstantVector::IsNull(args.data[REVERSED ? 0 : 1])) {
+	if (info.is_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
@@ -691,7 +693,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
-	if (ConstantVector::IsNull(args.data[REVERSED ? 0 : 1])) {
+	if (info.is_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
@@ -1099,8 +1101,8 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					pos++;
 				}
 				const auto tz_begin = data + pos;
-				// stop when we encounter a space or the end of the string
-				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
+				// stop when we encounter a non-tz character
+				while (pos < size && Timestamp::CharacterIsTimeZone(data[pos])) {
 					pos++;
 				}
 				const auto tz_end = data + pos;
@@ -1209,7 +1211,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("strptime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	string format_string = options_str.ToString();
 	StrpTimeFormat format;
 	if (!options_str.IsNull()) {

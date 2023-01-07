@@ -10,12 +10,13 @@
 
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 
 class BoundUniqueConstraint : public BoundConstraint {
 public:
-	BoundUniqueConstraint(vector<idx_t> keys, unordered_set<idx_t> key_set, bool is_primary_key)
+	BoundUniqueConstraint(vector<LogicalIndex> keys, logical_index_set_t key_set, bool is_primary_key)
 	    : BoundConstraint(ConstraintType::UNIQUE), keys(move(keys)), key_set(move(key_set)),
 	      is_primary_key(is_primary_key) {
 #ifdef DEBUG
@@ -27,9 +28,9 @@ public:
 	}
 
 	//! The keys that define the unique constraint
-	vector<idx_t> keys;
+	vector<LogicalIndex> keys;
 	//! The same keys but stored as an unordered set
-	unordered_set<idx_t> key_set;
+	logical_index_set_t key_set;
 	//! Whether or not the unique constraint is a primary key
 	bool is_primary_key;
 };

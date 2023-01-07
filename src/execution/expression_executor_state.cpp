@@ -1,6 +1,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -11,13 +12,42 @@ void ExpressionState::AddChild(Expression *expr) {
 
 void ExpressionState::Finalize() {
 	if (!types.empty()) {
-		intermediate_chunk.Initialize(root.executor->allocator, types);
+		intermediate_chunk.Initialize(GetAllocator(), types);
 	}
 }
+
+Allocator &ExpressionState::GetAllocator() {
+	return root.executor->GetAllocator();
+}
+
+bool ExpressionState::HasContext() {
+	return root.executor->HasContext();
+}
+
+ClientContext &ExpressionState::GetContext() {
+	if (!HasContext()) {
+		throw BinderException("Cannot use %s in this context", ((BoundFunctionExpression &)expr).function.name);
+	}
+	return root.executor->GetContext();
+}
+
 ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root)
     : expr(expr), root(root), name(expr.ToString()) {
 }
 
 ExpressionExecutorState::ExpressionExecutorState(const string &name) : profiler(), name(name) {
 }
+
+void ExpressionState::Verify(ExpressionExecutorState &root_executor) {
+	D_ASSERT(&root_executor == &root);
+	for (auto &entry : child_states) {
+		entry->Verify(root_executor);
+	}
+}
+
+void ExpressionExecutorState::Verify() {
+	D_ASSERT(executor);
+	root_state->Verify(*this);
+}
+
 } // namespace duckdb

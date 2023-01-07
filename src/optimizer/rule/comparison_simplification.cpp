@@ -25,7 +25,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr->IsFoldable());
 	Value constant_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(*constant_expr, constant_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_expr, constant_value)) {
 		return nullptr;
 	}
 	if (constant_value.IsNull() && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
@@ -52,7 +52,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		// Is the constant cast invertible?
-		if (!BoundCastExpression::CastIsInvertible(cast_expression->return_type, target_type)) {
+		if (!cast_constant.IsNull() &&
+		    !BoundCastExpression::CastIsInvertible(cast_expression->return_type, target_type)) {
 			// Is it actually invertible?
 			Value uncast_constant;
 			if (!cast_constant.DefaultTryCastAs(constant_value.type(), uncast_constant, &error_message, true) ||

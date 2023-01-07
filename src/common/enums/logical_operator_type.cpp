@@ -96,6 +96,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
+	case LogicalOperatorType::LOGICAL_ATTACH:
+		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -106,10 +108,14 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPORT";
 	case LogicalOperatorType::LOGICAL_SET:
 		return "SET";
+	case LogicalOperatorType::LOGICAL_RESET:
+		return "RESET";
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return "LOAD";
 	case LogicalOperatorType::LOGICAL_INVALID:
 		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		return "CUSTOM_OP";
 	}
 	return "INVALID";
 }

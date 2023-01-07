@@ -15,12 +15,12 @@ namespace duckdb {
 
 class UniqueConstraint : public Constraint {
 public:
-	DUCKDB_API UniqueConstraint(uint64_t index, bool is_primary_key);
+	DUCKDB_API UniqueConstraint(LogicalIndex index, bool is_primary_key);
 	DUCKDB_API UniqueConstraint(vector<string> columns, bool is_primary_key);
 
 	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single
 	//! column, equal to DConstants::INVALID_INDEX if not used
-	uint64_t index;
+	LogicalIndex index;
 	//! The set of columns for which this constraint holds by name. Only used when the index field is not used.
 	vector<string> columns;
 	//! Whether or not this is a PRIMARY KEY constraint, or a UNIQUE constraint.

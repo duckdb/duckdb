@@ -14,47 +14,20 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/expression/list.hpp"
+#include "duckdb/common/index_map.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
 
-static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_names) {
-	auto &base = (CreateTableInfo &)*info.base;
-
-	idx_t storage_idx = 0;
-	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
-		auto &col = base.columns[oid];
-		if (allow_duplicate_names) {
-			idx_t index = 1;
-			string base_name = col.Name();
-			while (info.name_map.find(col.Name()) != info.name_map.end()) {
-				col.SetName(base_name + ":" + to_string(index++));
-			}
-		} else {
-			if (info.name_map.find(col.Name()) != info.name_map.end()) {
-				throw CatalogException("Column with name %s already exists!", col.Name());
-			}
-		}
-
-		info.name_map[col.Name()] = oid;
-		col.SetOid(oid);
-		if (col.Generated()) {
-			continue;
-		}
-		col.SetStorageOid(storage_idx++);
-	}
-}
-
 static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
-	D_ASSERT(!info.name_map.empty());
-
-	for (auto &col : base.columns) {
+	for (auto &col : base.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;
 		}
-		info.column_dependency_manager.AddGeneratedColumn(col, info.name_map);
+		info.column_dependency_manager.AddGeneratedColumn(col, base.columns);
 	}
 }
 
@@ -78,8 +51,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	bool has_primary_key = false;
-	unordered_set<idx_t> not_null_columns;
-	vector<idx_t> primary_keys;
+	logical_index_set_t not_null_columns;
+	vector<LogicalIndex> primary_keys;
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
@@ -89,20 +62,20 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		}
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (NotNullConstraint &)*cond;
-			auto &col = base.columns[not_null.index];
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.StorageOid()));
+			auto &col = base.columns.GetColumn(LogicalIndex(not_null.index));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
 			not_null_columns.insert(not_null.index);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
 			auto &unique = (UniqueConstraint &)*cond;
 			// have to resolve columns of the unique constraint
-			vector<idx_t> keys;
-			unordered_set<idx_t> key_set;
-			if (unique.index != DConstants::INVALID_INDEX) {
-				D_ASSERT(unique.index < base.columns.size());
+			vector<LogicalIndex> keys;
+			logical_index_set_t key_set;
+			if (unique.index.index != DConstants::INVALID_INDEX) {
+				D_ASSERT(unique.index.index < base.columns.LogicalColumnCount());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns[unique.index].Name());
+				unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
 				keys.push_back(unique.index);
 				key_set.insert(unique.index);
 			} else {
@@ -110,11 +83,11 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				// have to resolve names
 				D_ASSERT(!unique.columns.empty());
 				for (auto &keyname : unique.columns) {
-					auto entry = info.name_map.find(keyname);
-					if (entry == info.name_map.end()) {
+					if (!base.columns.ColumnExists(keyname)) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto &column_index = entry->second;
+					auto &column = base.columns.GetColumn(keyname);
+					auto column_index = column.Logical();
 					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
@@ -142,34 +115,15 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
-			if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE && fk.info.pk_keys.empty()) {
-				for (auto &keyname : fk.pk_columns) {
-					auto entry = info.name_map.find(keyname);
-					if (entry == info.name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto column_index = entry->second;
-					fk.info.pk_keys.push_back(column_index);
-				}
-			}
-			if (fk.info.fk_keys.empty()) {
-				for (auto &keyname : fk.fk_columns) {
-					auto entry = info.name_map.find(keyname);
-					if (entry == info.name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto column_index = entry->second;
-					fk.info.fk_keys.push_back(column_index);
-				}
-			}
-			unordered_set<idx_t> fk_key_set, pk_key_set;
+			physical_index_set_t fk_key_set, pk_key_set;
 			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
 				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
 			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
-			info.bound_constraints.push_back(make_unique<BoundForeignKeyConstraint>(fk.info, pk_key_set, fk_key_set));
+			info.bound_constraints.push_back(
+			    make_unique<BoundForeignKeyConstraint>(fk.info, move(pk_key_set), move(fk_key_set)));
 			break;
 		}
 		default:
@@ -183,9 +137,9 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				//! No need to create a NotNullConstraint, it's already present
 				continue;
 			}
-			auto &column = base.columns[column_index];
+			auto physical_index = base.columns.LogicalToPhysical(column_index);
 			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.StorageOid()));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(physical_index));
 		}
 	}
 }
@@ -197,8 +151,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	vector<LogicalType> types;
 
 	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
-	for (idx_t i = 0; i < base.columns.size(); i++) {
-		auto &col = base.columns[i];
+	for (auto &col : base.columns.Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 	}
@@ -213,12 +166,12 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	D_ASSERT(table_binding && ignore.empty());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
-	unordered_set<column_t> bound_indices;
+	logical_index_set_t bound_indices;
 
 	while (!bind_order.empty()) {
 		auto i = bind_order.top();
 		bind_order.pop();
-		auto &col = base.columns[i];
+		auto &col = base.columns.GetColumnMutable(i);
 
 		//! Already bound this previously
 		//! This can not be optimized out of the GetBindOrder function
@@ -240,35 +193,58 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 			// Update the type in the binding, for future expansions
 			string ignore;
-			table_binding->types[i] = col.Type();
+			table_binding->types[i.index] = col.Type();
 		}
 		bound_indices.insert(i);
 	}
 }
 
-void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
-	for (idx_t i = 0; i < columns.size(); i++) {
+void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
-		if (columns[i].DefaultValue()) {
+		if (column.DefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = columns[i].DefaultValue()->Copy();
+			auto default_copy = column.DefaultValue()->Copy();
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
-			default_binder.target_type = columns[i].Type();
+			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(columns[i].Type()));
+			bound_default = make_unique<BoundConstantExpression>(Value(column.Type()));
 		}
 		bound_defaults.push_back(move(bound_default));
 	}
 }
 
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateTableInfo &)*info;
+static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
+	if (expr.type == ExpressionType::BOUND_FUNCTION) {
+		auto &function = (BoundFunctionExpression &)expr;
+		if (function.function.dependency) {
+			function.function.dependency(function, dependencies);
+		}
+	}
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
+}
 
+static void ExtractDependencies(BoundCreateTableInfo &info) {
+	for (auto &default_value : info.bound_defaults) {
+		if (default_value) {
+			ExtractExpressionDependencies(*default_value, info.dependencies);
+		}
+	}
+	for (auto &constraint : info.bound_constraints) {
+		if (constraint->type == ConstraintType::CHECK) {
+			auto &bound_check = (BoundCheckConstraint &)*constraint;
+			ExtractExpressionDependencies(*bound_check.expression, info.dependencies);
+		}
+	}
+}
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
+	auto &base = (CreateTableInfo &)*info;
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
-	result->schema = BindSchema(*result->base);
+	result->schema = schema;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -278,17 +254,14 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto &names = query_obj.names;
 		auto &sql_types = query_obj.types;
 		D_ASSERT(names.size() == sql_types.size());
+		base.columns.SetAllowDuplicates(true);
 		for (idx_t i = 0; i < names.size(); i++) {
-			base.columns.emplace_back(names[i], sql_types[i]);
+			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 		}
-		// create the name map for the statement
-		CreateColumnMap(*result, true);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
 	} else {
-		// create the name map for the statement
-		CreateColumnMap(*result, false);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
@@ -297,30 +270,34 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
+	// extract dependencies from any default values or CHECK constraints
+	ExtractDependencies(*result);
 
-	idx_t regular_column_count = 0;
+	if (base.columns.PhysicalColumnCount() == 0) {
+		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
+	}
 	// bind collations to detect any unsupported collation errors
-	for (auto &column : base.columns) {
-		if (column.Generated()) {
-			continue;
-		}
-		regular_column_count++;
+	for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
+		auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable());
+		BindLogicalType(context, column.TypeMutable(), result->schema->catalog->GetName());
 		// We add a catalog dependency
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
-			result->dependencies.insert(type_dependency);
+			result->dependencies.AddDependency(type_dependency);
 		}
-	}
-	if (regular_column_count == 0) {
-		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 	properties.allow_stream_result = false;
 	return result;
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+	auto &base = (CreateTableInfo &)*info;
+	auto schema = BindCreateSchema(base);
+	return BindCreateTableInfo(move(info), schema);
 }
 
 } // namespace duckdb

@@ -15,4 +15,13 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(LogicalDeserializationState
 	auto limit = reader.ReadRequired<idx_t>();
 	return make_unique<LogicalTopN>(move(orders), limit, offset);
 }
+
+idx_t LogicalTopN::EstimateCardinality(ClientContext &context) {
+	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
+	if (limit >= 0 && child_cardinality < idx_t(limit)) {
+		return limit;
+	}
+	return child_cardinality;
+}
+
 } // namespace duckdb

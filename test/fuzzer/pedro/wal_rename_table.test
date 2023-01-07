@@ -1,0 +1,19 @@
+# name: test/fuzzer/pedro/wal_rename_table.test
+# description: Rename table not written to WAL correctly
+# group: [pedro]
+
+load __TEST_DIR__/wal_rename_table.db
+
+statement ok
+CREATE TABLE t1 (c0 INT);
+
+statement ok
+ALTER TABLE t1 RENAME TO t0;
+
+statement ok
+PRAGMA DISABLE_CHECKPOINT_ON_SHUTDOWN;
+
+restart
+
+statement ok
+CREATE INDEX i0 ON t0(c0);

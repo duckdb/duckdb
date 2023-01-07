@@ -9,10 +9,89 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 
+#include <functional>
+
 namespace duckdb {
+
+struct date_t;
+struct dtime_t;
+
+//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
+struct timestamp_t { // NOLINT
+	int64_t value;
+
+	timestamp_t() = default;
+	explicit inline timestamp_t(int64_t value_p) : value(value_p) {
+	}
+	inline timestamp_t &operator=(int64_t value_p) {
+		value = value_p;
+		return *this;
+	}
+
+	// explicit conversion
+	explicit inline operator int64_t() const {
+		return value;
+	}
+
+	// comparison operators
+	inline bool operator==(const timestamp_t &rhs) const {
+		return value == rhs.value;
+	};
+	inline bool operator!=(const timestamp_t &rhs) const {
+		return value != rhs.value;
+	};
+	inline bool operator<=(const timestamp_t &rhs) const {
+		return value <= rhs.value;
+	};
+	inline bool operator<(const timestamp_t &rhs) const {
+		return value < rhs.value;
+	};
+	inline bool operator>(const timestamp_t &rhs) const {
+		return value > rhs.value;
+	};
+	inline bool operator>=(const timestamp_t &rhs) const {
+		return value >= rhs.value;
+	};
+
+	// arithmetic operators
+	inline timestamp_t operator+(const double &value) const {
+		return timestamp_t(this->value + int64_t(value));
+	};
+	inline int64_t operator-(const timestamp_t &other) const {
+		return this->value - other.value;
+	};
+
+	// in-place operators
+	inline timestamp_t &operator+=(const int64_t &value) {
+		this->value += value;
+		return *this;
+	};
+	inline timestamp_t &operator-=(const int64_t &value) {
+		this->value -= value;
+		return *this;
+	};
+
+	// special values
+	static timestamp_t infinity() { // NOLINT
+		return timestamp_t(NumericLimits<int64_t>::Maximum());
+	}                                // NOLINT
+	static timestamp_t ninfinity() { // NOLINT
+		return timestamp_t(-NumericLimits<int64_t>::Maximum());
+	}                                   // NOLINT
+	static inline timestamp_t epoch() { // NOLINT
+		return timestamp_t(0);
+	} // NOLINT
+};
+
+struct timestamp_tz_t : public timestamp_t {};  // NOLINT
+struct timestamp_ns_t : public timestamp_t {};  // NOLINT
+struct timestamp_ms_t : public timestamp_t {};  // NOLINT
+struct timestamp_sec_t : public timestamp_t {}; // NOLINT
 
 //! The Timestamp class is a static class that holds helper functions for the Timestamp
 //! type.
@@ -27,8 +106,10 @@ public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
 	DUCKDB_API static timestamp_t FromString(const string &str);
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
+	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, string_t &tz);
+	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
+	                                             string_t &tz);
 	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
@@ -40,6 +121,12 @@ public:
 	//! Create a Timestamp object from a specified (date, time) combination
 	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
 	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+
+	//! Is the character a valid part of a time zone name?
+	static inline bool CharacterIsTimeZone(char c) {
+		return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/' || c == '+' ||
+		       c == '-';
+	}
 
 	//! Is the timestamp finite or infinite?
 	static inline bool IsFinite(timestamp_t timestamp) {
@@ -75,4 +162,45 @@ public:
 	DUCKDB_API static string ConversionError(const string &str);
 	DUCKDB_API static string ConversionError(string_t str);
 };
+
 } // namespace duckdb
+
+namespace std {
+
+//! Timestamp
+template <>
+struct hash<duckdb::timestamp_t> {
+	std::size_t operator()(const duckdb::timestamp_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ms_t> {
+	std::size_t operator()(const duckdb::timestamp_ms_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ns_t> {
+	std::size_t operator()(const duckdb::timestamp_ns_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_sec_t> {
+	std::size_t operator()(const duckdb::timestamp_sec_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_tz_t> {
+	std::size_t operator()(const duckdb::timestamp_tz_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+} // namespace std

@@ -4,20 +4,40 @@
  *
  *****************************************************************************/
 CreateSchemaStmt:
-			CREATE_P SCHEMA ColId OptSchemaEltList
+			CREATE_P SCHEMA qualified_name OptSchemaEltList
 				{
 					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
-					/* ...but not both */
-					n->schemaname = $3;
+					if ($3->catalogname) {
+						ereport(ERROR,
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("CREATE SCHEMA too many dots: expected \"catalog.schema\" or \"schema\""),
+								 parser_errposition(@3)));
+					}
+					if ($3->schemaname) {
+						n->catalogname = $3->schemaname;
+						n->schemaname = $3->relname;
+					} else {
+						n->schemaname = $3->relname;
+					}
 					n->schemaElts = $4;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-			| CREATE_P SCHEMA IF_P NOT EXISTS ColId OptSchemaEltList
+			| CREATE_P SCHEMA IF_P NOT EXISTS qualified_name OptSchemaEltList
 				{
 					PGCreateSchemaStmt *n = makeNode(PGCreateSchemaStmt);
-					/* ...but not here */
-					n->schemaname = $6;
+					if ($6->catalogname) {
+						ereport(ERROR,
+								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("CREATE SCHEMA too many dots: expected \"catalog.schema\" or \"schema\""),
+								 parser_errposition(@6)));
+					}
+					if ($6->schemaname) {
+						n->catalogname = $6->schemaname;
+						n->schemaname = $6->relname;
+					} else {
+						n->schemaname = $6->relname;
+					}
 					if ($7 != NIL)
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_FEATURE_NOT_SUPPORTED),

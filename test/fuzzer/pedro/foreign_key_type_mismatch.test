@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/foreign_key_type_mismatch.test
+# description: Foreign key type mismatch
+# group: [pedro]
+
+# foreign key type mismatch on self-referencing fk constraint
+statement error
+CREATE TABLE t0 (c2 INT CONSTRAINT k0 UNIQUE, c0 DECIMAL, CONSTRAINT k1 FOREIGN KEY (c0) REFERENCES t0 (c2));
+----
+incompatible types
+
+statement ok
+CREATE TABLE t0 (c2 INT CONSTRAINT k0 UNIQUE);
+
+statement error
+CREATE TABLE t1 (c0 DECIMAL, CONSTRAINT k1 FOREIGN KEY (c0) REFERENCES t0 (c2));
+----
+incompatible types

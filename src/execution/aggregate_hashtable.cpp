@@ -18,29 +18,28 @@ namespace duckdb {
 
 using ValidityBytes = RowLayout::ValidityBytes;
 
-GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
+GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
                                                      HtEntryType entry_type)
-    : GroupedAggregateHashTable(allocator, buffer_manager, move(group_types), move(payload_types),
+    : GroupedAggregateHashTable(context, allocator, move(group_types), move(payload_types),
                                 AggregateObject::CreateAggregateObjects(bindings), entry_type) {
 }
 
-GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
+GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types)
-    : GroupedAggregateHashTable(allocator, buffer_manager, move(group_types), {}, vector<AggregateObject>()) {
+    : GroupedAggregateHashTable(context, allocator, move(group_types), {}, vector<AggregateObject>()) {
 }
 
-GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
+GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
-    : BaseAggregateHashTable(allocator, aggregate_objects_p, buffer_manager, move(payload_types_p)),
-      entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false),
-      ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE) {
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, move(payload_types_p)), entry_type(entry_type),
+      capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);

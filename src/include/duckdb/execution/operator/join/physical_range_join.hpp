@@ -22,7 +22,7 @@ class PhysicalRangeJoin : public PhysicalComparisonJoin {
 public:
 	class LocalSortedTable {
 	public:
-		LocalSortedTable(Allocator &allocator, const PhysicalRangeJoin &op, const idx_t child);
+		LocalSortedTable(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child);
 
 		void Sink(DataChunk &input, GlobalSortState &global_sort_state);
 

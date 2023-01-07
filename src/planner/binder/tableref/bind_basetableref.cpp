@@ -13,6 +13,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -62,21 +63,28 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto table_or_view =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name, true, error_context);
+	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
+	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
+	                                       ref.table_name, true, error_context);
 	if (!table_or_view) {
-		auto table_name = ref.schema_name.empty() ? ref.table_name : (ref.schema_name + "." + ref.table_name);
+		string table_name = ref.catalog_name;
+		if (!ref.schema_name.empty()) {
+			table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
+		}
+		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
 		// table could not be found: try to bind a replacement scan
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &scan : config.replacement_scans) {
-			auto replacement_function = scan.function(context, table_name, scan.data.get());
-			if (replacement_function) {
-				replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				replacement_function->column_name_alias = ref.column_name_alias;
-				return Bind(*replacement_function);
+		if (context.config.use_replacement_scans) {
+			for (auto &scan : config.replacement_scans) {
+				auto replacement_function = scan.function(context, table_name, scan.data.get());
+				if (replacement_function) {
+					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
+					replacement_function->column_name_alias = ref.column_name_alias;
+					return Bind(*replacement_function);
+				}
 			}
 		}
+
 		// we still didn't find the table
 		if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 			// if we are in EXTRACT_NAMES, we create a dummy table ref
@@ -91,8 +99,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return make_unique_base<BoundTableRef, BoundEmptyTableRef>(table_index);
 		}
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
-		                                                      ref.table_name, false, error_context);
+		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
+		                                  ref.table_name, false, error_context);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
@@ -110,7 +118,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		vector<LogicalType> return_types;
 		vector<string> return_names;
-		for (auto &col : table->columns) {
+		for (auto &col : table->columns.Logical()) {
 			table_types.push_back(col.Type());
 			table_names.push_back(col.Name());
 			return_types.push_back(col.Type());
@@ -140,6 +148,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
+		if (!view_binder->correlated_columns.empty()) {
+			throw BinderException("Contents of view were altered - view bound correlated columns");
+		}
 
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names

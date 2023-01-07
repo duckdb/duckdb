@@ -17,11 +17,11 @@ class TableCatalogEntry;
 //! The ALTER binder is responsible for binding an expression within alter statements
 class AlterBinder : public ExpressionBinder {
 public:
-	AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table, vector<column_t> &bound_columns,
+	AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table, vector<LogicalIndex> &bound_columns,
 	            LogicalType target_type);
 
 	TableCatalogEntry &table;
-	vector<column_t> &bound_columns;
+	vector<LogicalIndex> &bound_columns;
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

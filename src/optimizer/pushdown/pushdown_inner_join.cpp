@@ -13,7 +13,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
                                                               unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::INNER);
-	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return FinishPushdown(move(op));
+	}
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = (LogicalAnyJoin &)join;
@@ -38,7 +40,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	GenerateFilters();
 
 	// turn the inner join into a cross product
-	auto cross_product = LogicalCrossProduct::Create(move(op->children[0]), move(op->children[1]));
+	auto cross_product = make_unique<LogicalCrossProduct>(move(op->children[0]), move(op->children[1]));
 	// then push down cross product
 	return PushdownCrossProduct(move(cross_product));
 }

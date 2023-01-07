@@ -79,7 +79,7 @@ void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto new_node = new Node256();
+		auto new_node = Node256::New();
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
@@ -88,7 +88,7 @@ void Node48::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 		}
 		new_node->count = n->count;
 		new_node->prefix = move(n->prefix);
-		delete node;
+		Node::Delete(node);
 		node = new_node;
 		Node256::InsertChild(node, key_byte, new_child);
 	}
@@ -100,7 +100,7 @@ void Node48::EraseChild(Node *&node, int pos, ART &art) {
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto new_node = new Node16();
+		auto new_node = Node16::New();
 		new_node->prefix = move(n->prefix);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
@@ -109,7 +109,7 @@ void Node48::EraseChild(Node *&node, int pos, ART &art) {
 				n->children[n->child_index[i]] = nullptr;
 			}
 		}
-		delete node;
+		Node::Delete(node);
 		node = new_node;
 	}
 }

@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "re2/re2.h"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 
@@ -70,7 +71,8 @@ struct RegexLocalState : public FunctionLocalState {
 	RE2 constant_pattern;
 };
 
-unique_ptr<FunctionLocalState> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data);
+unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data);
 unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments);
 

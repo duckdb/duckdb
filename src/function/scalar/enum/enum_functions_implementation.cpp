@@ -61,6 +61,11 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	result.Reference(val);
 }
 
+static void EnumCodeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.GetTypes().size() == 1);
+	result.Reinterpret(input.data[0]);
+}
+
 static void CheckEnumParameter(const Expression &expr) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -73,6 +78,34 @@ unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
+	return nullptr;
+}
+
+unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
+	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
+		throw BinderException("This function needs an ENUM as an argument");
+	}
+
+	auto phy_type = EnumType::GetPhysicalType(arguments[0]->return_type);
+	switch (phy_type) {
+	case PhysicalType::UINT8:
+		bound_function.return_type = LogicalType(LogicalTypeId::UTINYINT);
+		break;
+	case PhysicalType::UINT16:
+		bound_function.return_type = LogicalType(LogicalTypeId::USMALLINT);
+		break;
+	case PhysicalType::UINT32:
+		bound_function.return_type = LogicalType(LogicalTypeId::UINTEGER);
+		break;
+	case PhysicalType::UINT64:
+		bound_function.return_type = LogicalType(LogicalTypeId::UBIGINT);
+		break;
+	default:
+		throw InternalException("Unsupported Enum Internal Type");
+	}
+
 	return nullptr;
 }
 
@@ -107,6 +140,13 @@ void EnumFirst::RegisterFunction(BuiltinFunctions &set) {
 void EnumLast::RegisterFunction(BuiltinFunctions &set) {
 	auto fun =
 	    ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
+}
+
+void EnumCode::RegisterFunction(BuiltinFunctions &set) {
+	auto fun =
+	    ScalarFunction("enum_code", {LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 }

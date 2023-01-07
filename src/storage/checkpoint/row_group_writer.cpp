@@ -8,7 +8,7 @@
 namespace duckdb {
 
 CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns[i].CompressionType();
+	return table.columns.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
 void RowGroupWriter::RegisterPartialBlock(PartialBlockAllocation &&allocation) {

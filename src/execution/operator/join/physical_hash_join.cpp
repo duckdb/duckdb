@@ -102,8 +102,7 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
-	    : build_executor(Allocator::Get(context)) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
 		auto &allocator = Allocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
@@ -166,8 +165,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.correlated_aggregates.push_back(move(aggr));
 
 			auto &allocator = Allocator::Get(context);
-			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    allocator, BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
+			info.correlated_counts = make_unique<GroupedAggregateHashTable>(context, allocator, delim_types,
+			                                                                payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			info.group_chunk.Initialize(allocator, delim_types);
 			info.result_chunk.Initialize(allocator, payload_types);
@@ -307,6 +306,10 @@ public:
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
+	if (hash_table->Count() == 0) {
+		hash_table->finalized = true;
+		return;
+	}
 	hash_table->InitializePointerTable();
 	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(move(new_event));
@@ -412,7 +415,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public CachingOperatorState {
 public:
-	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), initialized(false) {
+	explicit HashJoinOperatorState(ClientContext &context) : probe_executor(context), initialized(false) {
 	}
 
 	DataChunk join_keys;
@@ -434,7 +437,7 @@ public:
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-	auto state = make_unique<HashJoinOperatorState>(allocator);
+	auto state = make_unique<HashJoinOperatorState>(context.client);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
@@ -477,7 +480,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	}
 
 	if (state.scan_structure) {
-		// still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		// still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		state.scan_structure->Next(state.join_keys, input, chunk);
 		if (chunk.size() > 0) {
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -797,7 +800,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::PROBE && sink.hash_table->finalized);
 
 	if (scan_structure) {
-		// Still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		// still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
 		scan_structure->Next(join_keys, payload, chunk);
 		if (chunk.size() == 0) {
 			scan_structure = nullptr;

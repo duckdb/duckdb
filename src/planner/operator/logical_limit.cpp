@@ -39,4 +39,5 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(LogicalDeserializationStat
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	return make_unique<LogicalLimit>(limit_val, offset_val, move(limit), move(offset));
 }
+
 } // namespace duckdb

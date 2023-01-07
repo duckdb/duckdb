@@ -12,6 +12,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -32,7 +34,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 	if (column_id == DConstants::INVALID_INDEX) {
 		return column_id;
 	}
-	auto &col = table.columns[column_id];
+	auto &col = table.columns.GetColumn(LogicalIndex(column_id));
 	return col.StorageOid();
 }
 
@@ -92,7 +94,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				result->scanned_types.push_back(columns[col_idx].Type());
+				result->scanned_types.push_back(columns.GetColumn(LogicalIndex(col_idx)).Type());
 			}
 		}
 	}
@@ -102,7 +104,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
                                                       column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	if (local_storage.Find(bind_data.table->storage.get())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
@@ -114,7 +116,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
 	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
 	do {
 		if (bind_data.is_create_index) {
 			bind_data.table->storage->CreateIndexScan(
@@ -176,14 +178,18 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
 	return 0;
 }
 
-void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
+BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
+	return BindInfo(ScanType::TABLE);
+}
+
+void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	entries.insert(bind_data.table);
+	entries.AddDependency(bind_data.table);
 }
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	idx_t estimated_cardinality =
 	    bind_data.table->storage->info->cardinality + local_storage.AddedRows(bind_data.table->storage.get());
 	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
@@ -210,7 +216,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
 	auto result = make_unique<IndexScanGlobalState>(row_id_data);
-	auto &local_storage = LocalStorage::Get(context);
+	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
 	local_storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
@@ -223,7 +229,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	if (!state.finished) {
@@ -359,7 +365,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		}
 		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
 			// we can scan this index using this predicate: try a scan
-			auto &transaction = Transaction::GetTransaction(context);
+			auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
 			unique_ptr<IndexScanState> index_state;
 			if (!equal_value.IsNull()) {
 				// equality predicate
@@ -403,6 +409,7 @@ static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteField<bool>(bind_data.is_index_scan);
 	writer.WriteField<bool>(bind_data.is_create_index);
 	writer.WriteList<row_t>(bind_data.result_ids);
+	writer.WriteString(bind_data.table->schema->catalog->GetName());
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
@@ -412,9 +419,9 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto is_index_scan = reader.ReadRequired<bool>();
 	auto is_create_index = reader.ReadRequired<bool>();
 	auto result_ids = reader.ReadRequiredList<row_t>();
+	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
 
-	auto &catalog = Catalog::GetCatalog(context);
-	auto catalog_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema_name, table_name);
+	auto catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, table_name);
 	if (!catalog_entry || catalog_entry->type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}
@@ -455,6 +462,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_batch_index = TableScanGetBatchIndex;
+	scan_function.get_batch_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;

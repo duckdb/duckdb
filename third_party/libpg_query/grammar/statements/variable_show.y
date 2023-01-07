@@ -14,14 +14,14 @@ VariableShowStmt:
 				n->is_summary = 1;
 				$$ = (PGNode *) n;
 			}
-		 | SUMMARIZE var_name
+		 | SUMMARIZE table_id
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 				n->name = $2;
 				n->is_summary = 1;
 				$$ = (PGNode *) n;
 			}
-		 | show_or_describe var_name
+		 | show_or_describe table_id
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 				n->name = $2;
@@ -63,4 +63,9 @@ show_or_describe: SHOW | DESCRIBE
 var_name:	ColId								{ $$ = $1; }
 			| var_name '.' ColId
 				{ $$ = psprintf("%s.%s", $1, $3); }
+		;
+
+table_id:	ColId								{ $$ = psprintf("\"%s\"", $1); }
+			| table_id '.' ColId
+				{ $$ = psprintf("%s.\"%s\"", $1, $3); }
 		;

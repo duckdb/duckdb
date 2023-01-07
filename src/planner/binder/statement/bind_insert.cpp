@@ -30,20 +30,20 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
+	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
+	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
-	auto insert = make_unique<LogicalInsert>(table);
+	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
 
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
-	idx_t generated_column_count = 0;
-	vector<idx_t> named_column_map;
+	vector<LogicalIndex> named_column_map;
 	if (!stmt.columns.empty()) {
 		// insertion statement specifies column list
 
@@ -51,25 +51,18 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
-			auto entry = table->name_map.find(stmt.columns[i]);
-			if (entry == table->name_map.end()) {
-				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
-			}
-			auto column_index = entry->second;
-			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			auto column_index = table->GetColumnIndex(stmt.columns[i]);
+			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			if (table->columns[column_index].Generated()) {
+			auto &col = table->columns.GetColumn(column_index);
+			if (col.Generated()) {
 				throw BinderException("Cannot insert into a generated column");
 			}
-			insert->expected_types.push_back(table->columns[column_index].Type());
+			insert->expected_types.push_back(col.Type());
 			named_column_map.push_back(column_index);
 		}
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &col = table->columns[i];
-			if (col.Generated()) {
-				generated_column_count++;
-			}
+		for (auto &col : table->columns.Physical()) {
 			auto entry = column_name_map.find(col.Name());
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to DConstants::INVALID_INDEX
@@ -80,14 +73,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for (idx_t i = 0; i < table->columns.size(); i++) {
-			auto &col = table->columns[i];
-			if (col.Generated()) {
-				generated_column_count++;
-				continue;
-			}
-			named_column_map.push_back(i);
-			insert->expected_types.push_back(table->columns[i].Type());
+		for (auto &col : table->columns.Physical()) {
+			named_column_map.push_back(col.Logical());
+			insert->expected_types.push_back(col.Type());
 		}
 	}
 
@@ -99,8 +87,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// Exclude the generated columns from this amount
-	idx_t expected_columns =
-	    stmt.columns.empty() ? (table->columns.size() - generated_column_count) : stmt.columns.size();
+	idx_t expected_columns = stmt.columns.empty() ? table->columns.PhysicalColumnCount() : stmt.columns.size();
 
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
@@ -115,11 +102,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-			idx_t table_col_idx = named_column_map[col_idx];
-			D_ASSERT(table_col_idx < table->columns.size());
+			auto table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement
-			auto &column = table->columns[table_col_idx];
+			auto &column = table->columns.GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
 			expr_list.expected_names[col_idx] = column.Name();
 
@@ -159,13 +145,13 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
 		                     move(result));
-	} else {
-		D_ASSERT(result.types.size() == result.names.size());
-		result.plan = move(insert);
-		properties.allow_stream_result = false;
-		properties.return_type = StatementReturnType::CHANGED_ROWS;
-		return result;
 	}
+
+	D_ASSERT(result.types.size() == result.names.size());
+	result.plan = move(insert);
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+	return result;
 }
 
 } // namespace duckdb

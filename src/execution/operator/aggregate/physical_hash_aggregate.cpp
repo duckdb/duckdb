@@ -85,6 +85,21 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	return types;
 }
 
+bool PhysicalHashAggregate::CanSkipRegularSink() const {
+	if (!filter_indexes.empty()) {
+		// If we have filters, we can't skip the regular sink, because we might lose groups otherwise.
+		return false;
+	}
+	if (grouped_aggregate_data.aggregates.empty()) {
+		// When there are no aggregates, we have to add to the main ht right away
+		return false;
+	}
+	if (!non_distinct_filter.empty()) {
+		return false;
+	}
+	return true;
+}
+
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
     : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality) {
@@ -206,7 +221,7 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 
-		filter_set.Initialize(Allocator::Get(context.client), aggregate_objects, payload_types);
+		filter_set.Initialize(context.client, aggregate_objects, payload_types);
 	}
 
 	DataChunk aggregate_input_chunk;
@@ -327,6 +342,10 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		SinkDistinct(context, state, lstate, input);
 	}
 
+	if (CanSkipRegularSink()) {
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
@@ -405,6 +424,9 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 
 	CombineDistinct(context, state, lstate);
 
+	if (CanSkipRegularSink()) {
+		return;
+	}
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping_gstate = gstate.grouping_states[i];
 		auto &grouping_lstate = llstate.grouping_states[i];

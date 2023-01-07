@@ -164,7 +164,7 @@ void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChun
 	auto &global_data = (CTableGlobalInitData &)*data_p.global_state;
 	auto &local_data = (CTableLocalInitData &)*data_p.local_state;
 	CTableInternalFunctionInfo function_info(bind_data, global_data.init_data, local_data.init_data);
-	bind_data.info->function(&function_info, &output);
+	bind_data.info->function(&function_info, reinterpret_cast<duckdb_data_chunk>(&output));
 	if (!function_info.success) {
 		throw Exception(function_info.error);
 	}
@@ -274,7 +274,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		return DuckDBError;
 	}
 	con->context->RunFunctionInTransaction([&]() {
-		auto &catalog = duckdb::Catalog::GetCatalog(*con->context);
+		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 		duckdb::CreateTableFunctionInfo tf_info(*tf);
 
 		// create the function in the catalog
@@ -316,7 +316,7 @@ duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index) {
 		return nullptr;
 	}
 	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
-	return new duckdb::Value(bind_info->input.inputs[index]);
+	return reinterpret_cast<duckdb_value>(new duckdb::Value(bind_info->input.inputs[index]));
 }
 
 void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy) {

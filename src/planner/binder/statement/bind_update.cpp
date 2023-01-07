@@ -20,12 +20,12 @@
 namespace duckdb {
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-                             unordered_set<column_t> &bound_columns) {
+                             physical_index_set_t &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
 	idx_t found_column_count = 0;
-	unordered_set<idx_t> found_columns;
+	physical_index_set_t found_columns;
 	for (idx_t i = 0; i < update.columns.size(); i++) {
 		if (bound_columns.find(update.columns[i]) != bound_columns.end()) {
 			// this column is referenced in the CHECK constraint
@@ -42,12 +42,12 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			auto &column = table.columns[check_column_id];
+			auto &column = table.columns.GetColumn(check_column_id);
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id);
+			get.column_ids.push_back(check_column_id.index);
 			update.columns.push_back(check_column_id);
 		}
 	}
@@ -88,6 +88,13 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
+	if (update.return_chunk) {
+		physical_index_set_t all_columns;
+		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
+			all_columns.insert(PhysicalIndex(i));
+		}
+		BindExtraColumns(table, get, proj, update, all_columns);
+	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
@@ -102,19 +109,20 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	});
 
 	// we also convert any updates on LIST columns into delete + insert
-	for (auto &col : update.columns) {
-		if (!TypeSupportsRegularUpdate(table.columns[col].Type())) {
+	for (auto &col_index : update.columns) {
+		auto &column = table.columns.GetColumn(col_index);
+		if (!TypeSupportsRegularUpdate(column.Type())) {
 			update.update_is_del_and_insert = true;
 			break;
 		}
 	}
 
-	if (update.update_is_del_and_insert || update.return_chunk) {
+	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
-		unordered_set<column_t> all_columns;
+		physical_index_set_t all_columns;
 		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
-			all_columns.insert(i);
+			all_columns.insert(PhysicalIndex(i));
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);
 	}
@@ -149,7 +157,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 	auto update = make_unique<LogicalUpdate>(table);
 
@@ -186,10 +194,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(update->columns.begin(), update->columns.end(), column.StorageOid()) != update->columns.end()) {
+		if (std::find(update->columns.begin(), update->columns.end(), column.Physical()) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		update->columns.push_back(column.StorageOid());
+		update->columns.push_back(column.Physical());
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
@@ -220,22 +228,20 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
 
+	auto update_table_index = GenerateTableIndex();
+	update->table_index = update_table_index;
 	if (!stmt.returning_list.empty()) {
-		auto update_table_index = GenerateTableIndex();
-		update->table_index = update_table_index;
 		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
 
 		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
 		                     move(result));
-
-	} else {
-		update->table_index = 0;
-		result.names = {"Count"};
-		result.types = {LogicalType::BIGINT};
-		result.plan = move(update);
-		properties.allow_stream_result = false;
-		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
+
+	result.names = {"Count"};
+	result.types = {LogicalType::BIGINT};
+	result.plan = move(update);
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }
 

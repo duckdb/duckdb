@@ -60,6 +60,9 @@ struct ColumnScanState {
 	//! This is used to detect if the ColumnData has been changed out from under us during a scan
 	//! If this is the case, we re-initialize the scan
 	idx_t version;
+	//! We initialize one SegmentScanState per segment, however, if scanning a DataChunk requires us to scan over more
+	//! than one Segment, we need to keep the scan states of the previous segments around
+	vector<unique_ptr<SegmentScanState>> previous_states;
 
 public:
 	//! Move the scan state forward by "count" rows (including all child states)

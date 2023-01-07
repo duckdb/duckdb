@@ -10,8 +10,8 @@ namespace duckdb {
 
 class UnnestOperatorState : public OperatorState {
 public:
-	UnnestOperatorState(Allocator &allocator, const vector<unique_ptr<Expression>> &select_list)
-	    : parent_position(0), list_position(0), list_length(-1), first_fetch(true), executor(allocator) {
+	UnnestOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &select_list)
+	    : parent_position(0), list_position(0), list_length(-1), first_fetch(true), executor(context) {
 		vector<LogicalType> list_data_types;
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
@@ -19,6 +19,7 @@ public:
 			list_data_types.push_back(bue->child->return_type);
 			executor.AddExpression(*bue->child.get());
 		}
+		auto &allocator = Allocator::Get(context);
 		list_data.Initialize(allocator, list_data_types);
 
 		list_vector_data.resize(list_data.ColumnCount());
@@ -88,6 +89,7 @@ static void UnnestValidity(UnifiedVectorFormat &vdata, idx_t start, idx_t end, V
 
 static void UnnestVector(UnifiedVectorFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
                          Vector &result) {
+	D_ASSERT(source.GetType() == result.GetType());
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -158,7 +160,7 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &con
 
 unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
                                                    const vector<unique_ptr<Expression>> &select_list) {
-	return make_unique<UnnestOperatorState>(Allocator::Get(context.client), select_list);
+	return make_unique<UnnestOperatorState>(context.client, select_list);
 }
 
 OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

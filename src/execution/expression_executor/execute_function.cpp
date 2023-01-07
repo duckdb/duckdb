@@ -18,7 +18,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 	}
 	result->Finalize();
 	if (expr.function.init_local_state) {
-		result->local_state = expr.function.init_local_state(expr, expr.bind_info.get());
+		result->local_state = expr.function.init_local_state(*result, expr, expr.bind_info.get());
 	}
 	return move(result);
 }

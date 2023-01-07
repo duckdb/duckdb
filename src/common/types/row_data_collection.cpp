@@ -122,6 +122,7 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 		temp.block_capacity = other.block_capacity;
 		temp.entry_size = other.entry_size;
 		temp.blocks = move(other.blocks);
+		temp.pinned_blocks = move(other.pinned_blocks);
 	}
 	other.Clear();
 

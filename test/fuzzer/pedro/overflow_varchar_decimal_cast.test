@@ -1,0 +1,21 @@
+# name: test/fuzzer/pedro/overflow_varchar_decimal_cast.test
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT CAST(strftime(TIMESTAMP '1-1-1 0:00:00',340282346638528859811704183484516925440.0) AS DECIMAL(10,2));
+
+query I
+SELECT '552.123242346e+11'::DECIMAL;
+----
+55212324234600.000
+
+query I
+SELECT '-3.4028234663852886e+16'::DECIMAL(30);
+----
+-34028234663852886
+
+statement error
+SELECT '-3.4028234663852886e+38'::DECIMAL;

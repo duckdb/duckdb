@@ -20,6 +20,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	LogicalType result_type;
 	if (base_type == LogicalTypeId::LIST) {
 		throw ParserException("LIST is not valid as a stand-alone type");
+	} else if (base_type == LogicalTypeId::ENUM) {
+		throw ParserException("ENUM is not valid as a stand-alone type");
 	} else if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
@@ -52,21 +54,14 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		D_ASSERT(!children.empty());
 		result_type = LogicalType::STRUCT(move(children));
 	} else if (base_type == LogicalTypeId::MAP) {
-		//! We transform MAP<TYPE_KEY, TYPE_VALUE> to STRUCT<LIST<key: TYPE_KEY>, LIST<value: TYPE_VALUE>>
 
 		if (!type_name->typmods || type_name->typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
-		child_list_t<LogicalType> children;
 		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
 		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
 
-		children.push_back({"key", LogicalType::LIST(key_type)});
-		children.push_back({"value", LogicalType::LIST(value_type)});
-
-		D_ASSERT(children.size() == 2);
-
-		result_type = LogicalType::MAP(move(children));
+		result_type = LogicalType::MAP(move(key_type), move(value_type));
 	} else if (base_type == LogicalTypeId::UNION) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Union type needs at least one member");

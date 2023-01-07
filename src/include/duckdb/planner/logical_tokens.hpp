@@ -48,6 +48,7 @@ class LogicalSample;
 class LogicalShow;
 class LogicalSimple;
 class LogicalSet;
+class LogicalReset;
 class LogicalTopN;
 class LogicalUnnest;
 class LogicalUpdate;

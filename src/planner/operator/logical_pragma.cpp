@@ -10,4 +10,8 @@ unique_ptr<LogicalOperator> LogicalPragma::Deserialize(LogicalDeserializationSta
 	throw NotImplementedException(LogicalOperatorToString(state.type));
 }
 
+idx_t LogicalPragma::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
+
 } // namespace duckdb

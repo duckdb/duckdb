@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/restart_random.test
+# description: Segfault when restarting a system with current time in a check constraint
+# group: [pedro]
+
+load __TEST_DIR__/restart_random.db
+
+statement ok
+CREATE TABLE t0 (c1 INT, CHECK (RANDOM() >= 0));
+
+restart
+
+statement ok
+INSERT INTO t0(c1) VALUES (0);
+
+statement ok
+DROP TABLE t0;

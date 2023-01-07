@@ -1,0 +1,26 @@
+# name: test/fuzzer/pedro/like_empty_list.test
+# description: Issue #4978 (#6):  Like empty list assertion error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '1' LIKE [];
+----
+false
+
+query I
+SELECT [] LIKE 1;
+----
+false
+
+query I
+SELECT [] LIKE [];
+----
+true
+
+query I
+SELECT 1 FROM (SELECT 2) t1(c0) NATURAL RIGHT JOIN (SELECT 2) t0(c0) WHERE (0, t1.c0) NOT LIKE '0';
+----
+1

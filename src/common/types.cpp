@@ -107,11 +107,11 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
-	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
 		return PhysicalType::LIST;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
@@ -126,7 +126,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
-		D_ASSERT(type_info_);
+		if (!type_info_) {
+			return PhysicalType::INVALID;
+		}
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
@@ -255,8 +257,6 @@ string TypeIdToString(PhysicalType type) {
 		return "INVALID";
 	case PhysicalType::BIT:
 		return "BIT";
-	case PhysicalType::MAP:
-		return "MAP";
 	case PhysicalType::UNKNOWN:
 		return "UNKNOWN";
 	}
@@ -441,15 +441,9 @@ string LogicalType::ToString() const {
 		if (!type_info_) {
 			return "MAP";
 		}
-		auto &child_types = StructType::GetChildTypes(*this);
-		if (child_types.empty()) {
-			return "MAP(?)";
-		}
-		if (child_types.size() != 2) {
-			throw InternalException("Map needs exactly two child elements");
-		}
-		return "MAP(" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
-		       ListType::GetChildType(child_types[1].second).ToString() + ")";
+		auto &key_type = MapType::KeyType(*this);
+		auto &value_type = MapType::ValueType(*this);
+		return "MAP(" + key_type.ToString() + ", " + value_type.ToString() + ")";
 	}
 	case LogicalTypeId::UNION: {
 		if (!type_info_) {
@@ -458,7 +452,7 @@ string LogicalType::ToString() const {
 		string ret = "UNION(";
 		size_t count = UnionType::GetMemberCount(*this);
 		for (size_t i = 0; i < count; i++) {
-			ret += UnionType::GetMemberType(*this, i).ToString();
+			ret += UnionType::GetMemberName(*this, i) + " " + UnionType::GetMemberType(*this, i).ToString();
 			if (i < count - 1) {
 				ret += ", ";
 			}
@@ -506,7 +500,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].Type();
+	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
 }
 
 bool LogicalType::IsIntegral() const {
@@ -745,7 +739,12 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(move(new_child));
 	}
-	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP) {
+	if (type_id == LogicalTypeId::MAP) {
+		// list: perform max recursively on child type
+		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
+		return LogicalType::MAP(move(new_child));
+	}
+	if (type_id == LogicalTypeId::STRUCT) {
 		// struct: perform recursively
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
@@ -760,8 +759,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
 
-		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
-		                                        : LogicalType::MAP(move(child_types));
+		return LogicalType::STRUCT(move(child_types));
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -1038,7 +1036,7 @@ protected:
 };
 
 const LogicalType &ListType::GetChildType(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::LIST);
+	D_ASSERT(type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((ListTypeInfo &)*info).child_type;
@@ -1152,8 +1150,7 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP ||
-	         type.id() == LogicalTypeId::UNION);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1189,26 +1186,26 @@ LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLI
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(move(children));
+LogicalType LogicalType::MAP(LogicalType child) {
+	auto info = make_shared<ListTypeInfo>(move(child));
 	return LogicalType(LogicalTypeId::MAP, move(info));
 }
 
 LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", LogicalType::LIST(move(key))});
-	child_types.push_back({"value", LogicalType::LIST(move(value))});
-	return LogicalType::MAP(move(child_types));
+	child_types.push_back({"key", move(key)});
+	child_types.push_back({"value", move(value)});
+	return LogicalType::MAP(LogicalType::STRUCT(move(child_types)));
 }
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return ListType::GetChildType(StructType::GetChildTypes(type)[0].second);
+	return StructType::GetChildTypes(ListType::GetChildType(type))[0].second;
 }
 
 const LogicalType &MapType::ValueType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::MAP);
-	return ListType::GetChildType(StructType::GetChildTypes(type)[1].second);
+	return StructType::GetChildTypes(ListType::GetChildType(type))[1].second;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1291,16 +1288,12 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 
-enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1, DEDUP_POINTER = 2 };
+enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
 	      enum_name(move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
-	}
-	explicit EnumTypeInfo()
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::DEDUP_POINTER),
-	      enum_name("dedup_pointer"), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
 	}
 	EnumDictType dict_type;
 	string enum_name;
@@ -1313,9 +1306,6 @@ protected:
 		auto &other = (EnumTypeInfo &)*other_p;
 		if (dict_type != other.dict_type) {
 			return false;
-		}
-		if (dict_type == EnumDictType::DEDUP_POINTER) {
-			return true;
 		}
 		D_ASSERT(dict_type == EnumDictType::VECTOR_DICT);
 		// We must check if both enums have the same size
@@ -1417,12 +1407,6 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
-LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
-	auto info = make_shared<EnumTypeInfo>();
-	D_ASSERT(info->dict_type == EnumDictType::DEDUP_POINTER);
-	return LogicalType(LogicalTypeId::ENUM, info);
-}
-
 template <class T>
 int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
@@ -1448,10 +1432,6 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	auto &enum_info = ((EnumTypeInfo &)*info);
-	if (enum_info.dict_type == EnumDictType::DEDUP_POINTER) {
-		return (const char *)val.GetValue<uint64_t>();
-	}
 	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
@@ -1488,10 +1468,6 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto aux_info = type.AuxInfo();
 	D_ASSERT(aux_info);
 	auto &info = (EnumTypeInfo &)*aux_info;
-
-	if (info.dict_type == EnumDictType::DEDUP_POINTER) {
-		return PhysicalType::UINT64; // for pointer enum types
-	}
 	D_ASSERT(info.dict_type == EnumDictType::VECTOR_DICT);
 	return EnumVectorDictType(info.dict_size);
 }
