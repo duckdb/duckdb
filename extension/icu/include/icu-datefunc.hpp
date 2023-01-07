@@ -64,7 +64,9 @@ struct ICUDateFunc {
 	static timestamp_t Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the latter timestamp from the former timestamp using the calendar
 	static interval_t Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date);
-	//! Add UTC offset to the naive timestamp
+	//! Pulls out the bin values from the timestamp assuming it is an instant,
+	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
+	//! Adding offset doesn't really work around DST because the bin values are ambiguous
 	static timestamp_t FromNaive(icu::Calendar *calendar, timestamp_t naive);
 
 	//! Truncates the calendar time to the given part precision
