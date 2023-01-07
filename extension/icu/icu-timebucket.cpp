@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -38,7 +39,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 	}
 
-	static inline BucketWidthType ClassifyBucketWidthWithThrowingError(const interval_t bucket_width) {
+	static inline BucketWidthType ClassifyBucketWidthErrorThrow(const interval_t bucket_width) {
 		if (bucket_width.months == 0 && bucket_width.days == 0) {
 			if (bucket_width.micros <= 0) {
 				throw NotImplementedException("Period must be greater than 0");
@@ -71,10 +72,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 		int64_t ts_micros = Interval::GetMicro(Sub(calendar, ts, origin));
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
 		if (ts_micros < 0 && ts_micros % bucket_width_micros != 0) {
-			if (result_micros < NumericLimits<int64_t>::Minimum() + bucket_width_micros) {
-				throw OutOfRangeException("Timestamp out of range");
-			}
-			result_micros -= bucket_width_micros;
+			result_micros =
+			    SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(result_micros, bucket_width_micros);
 		}
 
 		return Add(calendar, origin, Interval::FromMicro(result_micros));
@@ -95,10 +94,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 			throw OutOfRangeException("Timestamp out of range");
 		}
 		if (ts_days < 0 && ts_days % bucket_width_days != 0) {
-			if (result_days < NumericLimits<int32_t>::Minimum() + bucket_width_days) {
-				throw OutOfRangeException("Timestamp out of range");
-			}
-			result_days -= bucket_width_days;
+			result_days =
+			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_days, bucket_width_days);
 		}
 
 		return Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
@@ -118,15 +115,13 @@ struct ICUTimeBucket : public ICUDateFunc {
 		timestamp_t truncated_origin = GetTimeUnsafe(calendar, tmp_micros);
 
 		int64_t ts_months = sub_months(calendar, truncated_origin, truncated_ts);
-		int32_t result_months = (ts_months / bucket_width_months) * bucket_width_months;
+		int64_t result_months = (ts_months / bucket_width_months) * bucket_width_months;
 		if (result_months < NumericLimits<int32_t>::Minimum() || result_months > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
 		}
 		if (ts_months < 0 && ts_months % bucket_width_months != 0) {
-			if (result_months < NumericLimits<int32_t>::Minimum() + bucket_width_months) {
-				throw OutOfRangeException("Timestamp out of range");
-			}
-			result_months -= bucket_width_months;
+			result_months =
+			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_months, bucket_width_months);
 		}
 
 		return Add(calendar, truncated_origin, interval_t {static_cast<int32_t>(result_months), 0, 0});
@@ -191,7 +186,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	struct BinaryOperator {
 		static inline timestamp_t Operation(interval_t bucket_width, timestamp_t ts, icu::Calendar *calendar) {
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return WidthConvertibleToMicrosBinaryOperator::Operation(bucket_width, ts, calendar);
@@ -247,7 +242,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 	struct OffsetTernaryOperator {
 		static inline timestamp_t Operation(interval_t bucket_width, timestamp_t ts, interval_t offset,
 		                                    icu::Calendar *calendar) {
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OffsetWidthConvertibleToMicrosTernaryOperator::Operation(bucket_width, ts, offset, calendar);
@@ -298,7 +293,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 				mask.SetInvalid(idx);
 				return timestamp_t(0);
 			}
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				return OriginWidthConvertibleToMicrosTernaryOperator::Operation(bucket_width, ts, origin, calendar);
@@ -348,7 +343,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			SetTimeZone(calendar, tz);
 
 			timestamp_t origin;
-			BucketWidthType bucket_width_type = ClassifyBucketWidthWithThrowingError(bucket_width);
+			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
 			case BucketWidthType::CONVERTIBLE_TO_MICROS:
 				origin = ICUDateFunc::FromNaive(calendar, Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1));
