@@ -165,20 +165,24 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP:
-			if (modifier_idx > 1) {
-				throw ParserException("TIMESTAMP only supports a single modifier");
-			}
-			if (width > 10) {
-				throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
-			}
-			if (width == 0) {
-				result_type = LogicalType::TIMESTAMP_S;
-			} else if (width <= 3) {
-				result_type = LogicalType::TIMESTAMP_MS;
-			} else if (width <= 6) {
+			if (modifier_idx == 0) {
 				result_type = LogicalType::TIMESTAMP;
 			} else {
-				result_type = LogicalType::TIMESTAMP_NS;
+				if (modifier_idx > 1) {
+					throw ParserException("TIMESTAMP only supports a single modifier");
+				}
+				if (width > 10) {
+					throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
+				}
+				if (width == 0) {
+					result_type = LogicalType::TIMESTAMP_S;
+				} else if (width <= 3) {
+					result_type = LogicalType::TIMESTAMP_MS;
+				} else if (width <= 6) {
+					result_type = LogicalType::TIMESTAMP;
+				} else {
+					result_type = LogicalType::TIMESTAMP_NS;
+				}
 			}
 			break;
 		default:
