@@ -398,12 +398,14 @@ struct ICUTimeBucket : public ICUDateFunc {
 						    return WidthConvertibleToMonthsBinaryOperator::Operation(bucket_width, ts, calendar);
 					    });
 					break;
-				default:
+				case BucketWidthType::UNCLASSIFIED:
 					BinaryExecutor::Execute<interval_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, result, args.size(), [&](interval_t bucket_width, timestamp_t ts) {
 						    return BinaryOperator::Operation(bucket_width, ts, calendar);
 					    });
 					break;
+				default:
+					throw NotImplementedException("Bucket type not implemented for ICU TIME_BUCKET");
 				}
 			}
 		} else {
@@ -459,13 +461,15 @@ struct ICUTimeBucket : public ICUDateFunc {
 						                                                                    calendar);
 					    });
 					break;
-				default:
+				case BucketWidthType::UNCLASSIFIED:
 					TernaryExecutor::Execute<interval_t, timestamp_t, interval_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, offset_arg, result, args.size(),
 					    [&](interval_t bucket_width, timestamp_t ts, interval_t offset) {
 						    return OffsetTernaryOperator::Operation(bucket_width, ts, offset, calendar);
 					    });
 					break;
+				default:
+					throw NotImplementedException("Bucket type not implemented for ICU TIME_BUCKET");
 				}
 			}
 		} else {
@@ -524,7 +528,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 						                                                                    calendar);
 					    });
 					break;
-				default:
+				case BucketWidthType::UNCLASSIFIED:
 					TernaryExecutor::ExecuteWithNulls<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 					    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin, ValidityMask &mask,
@@ -532,6 +536,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 						    return OriginTernaryOperator::Operation(bucket_width, ts, origin, mask, idx, calendar);
 					    });
 					break;
+				default:
+					throw NotImplementedException("Bucket type not implemented for ICU TIME_BUCKET");
 				}
 			}
 		} else {
@@ -593,13 +599,15 @@ struct ICUTimeBucket : public ICUDateFunc {
 						                                                                     calendar);
 					    });
 					break;
-				default:
+				case BucketWidthType::UNCLASSIFIED:
 					TernaryExecutor::Execute<interval_t, timestamp_t, string_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, tz_arg, result, args.size(),
 					    [&](interval_t bucket_width, timestamp_t ts, string_t tz) {
 						    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar);
 					    });
 					break;
+				default:
+					throw NotImplementedException("Bucket type not implemented for ICU TIME_BUCKET");
 				}
 			}
 		} else {
