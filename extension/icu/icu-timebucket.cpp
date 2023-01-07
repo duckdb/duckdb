@@ -22,8 +22,6 @@ struct ICUTimeBucket : public ICUDateFunc {
 	// Use 2000-01-01 as origin when bucket_width is months, years, ... for TimescaleDB compatibility
 	// There are 10957 days between 1970-01-01 and 2000-01-01
 	constexpr static const int64_t DEFAULT_ORIGIN_MICROS_2 = 10957 * Interval::MICROS_PER_DAY;
-	// There are 360 months between 1970-01-01 and 2000-01-01
-	constexpr static const int64_t DEFAULT_ORIGIN_MONTHS = 360;
 
 	enum struct BucketWidthType { CONVERTIBLE_TO_MICROS, CONVERTIBLE_TO_DAYS, CONVERTIBLE_TO_MONTHS, UNCLASSIFIED };
 
@@ -60,11 +58,6 @@ struct ICUTimeBucket : public ICUDateFunc {
 		} else {
 			throw NotImplementedException("Month intervals cannot have day or time component");
 		}
-	}
-
-	static inline int32_t EpochMonths(timestamp_t ts, icu::Calendar *calendar) {
-		SetTime(calendar, ts);
-		return (ExtractField(calendar, UCAL_YEAR) - 1970) * 12 + ExtractField(calendar, UCAL_MONTH);
 	}
 
 	static inline timestamp_t WidthConvertibleToMicrosCommon(int64_t bucket_width_micros, const timestamp_t ts,
