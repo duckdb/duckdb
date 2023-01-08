@@ -1,0 +1,59 @@
+# name: test/sql/parser/invisible_spaces.test
+# description: Test invisible spaces
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+# non-breaking space
+query I
+SELECT 42;
+----
+42
+
+# test all special unicode spaces
+# see https://www.compart.com/en/unicode/category/Zs for a list
+foreach unicode_space                       ​   　   ﻿
+
+query I
+SELECT${unicode_space}42;
+----
+42
+
+# unicode space in strings are not modified
+query I
+SELECT${unicode_space}strlen('${unicode_space}');
+----
+3
+
+# unicode spaces in strings with escaped quotes
+query I
+SELECT${unicode_space}strlen(' ''${unicode_space}');
+----
+5
+
+# unicode space in comment
+query I
+SELECT${unicode_space} -- ${unicode_space};
+42
+----
+42
+
+# multiple unicode spaces
+query I
+SELECT${unicode_space}42${unicode_space}${unicode_space}${unicode_space}${unicode_space}${unicode_space}
+----
+42
+
+endloop
+
+# the query can still fail even after replacing unicode spaces
+statement error
+SELEC 
+
+# only a unicode space
+statement ok
+ 
+
+statement error
+S
