@@ -915,6 +915,9 @@ void ColumnDataCollection::Print() const {
 void ColumnDataCollection::Reset() {
 	count = 0;
 	segments.clear();
+
+	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
+	allocator = make_shared<ColumnDataAllocator>(*allocator);
 }
 
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,

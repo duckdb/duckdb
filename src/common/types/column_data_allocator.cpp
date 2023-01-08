@@ -28,6 +28,20 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	}
 }
 
+ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
+	type = other.GetType();
+	switch (type) {
+	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+		alloc.allocator = other.alloc.allocator;
+		break;
+	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
+		alloc.buffer_manager = other.alloc.buffer_manager;
+		break;
+	default:
+		throw InternalException("Unrecognized column data allocator type");
+	}
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	shared_ptr<BlockHandle> handle;

@@ -85,11 +85,25 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
                     const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
 	idx_t tries = 0;
 	while (true) {
-		auto res = request();
+		std::exception_ptr caught_e = nullptr;
+		duckdb_httplib_openssl::Error err;
+		duckdb_httplib_openssl::Response response;
+		int status;
+
+		try {
+			auto res = request();
+			err = res.error();
+			if (err == duckdb_httplib_openssl::Error::Success) {
+				status = res->status;
+				response = res.value();
+			}
+		} catch (IOException &e) {
+			caught_e = std::current_exception();
+		}
 
 		// Note: all duckdb_httplib_openssl::Error types will be retried.
-		if (res.error() == duckdb_httplib_openssl::Error::Success) {
-			switch (res->status) {
+		if (err == duckdb_httplib_openssl::Error::Success) {
+			switch (status) {
 			case 408: // Request Timeout
 			case 418: // Server is pretending to be a teapot
 			case 429: // Rate limiter hit
@@ -97,7 +111,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			case 504: // Server has error
 				break;
 			default:
-				return make_unique<ResponseWrapper>(res.value());
+				return make_unique<ResponseWrapper>(response);
 			}
 		}
 
@@ -112,7 +126,14 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 				retry_cb();
 			}
 		} else {
-			throw IOException(to_string(res.error()) + " error for " + "HTTP " + method + " to '" + url + "'");
+			if (caught_e) {
+				std::rethrow_exception(caught_e);
+			} else if (err == duckdb_httplib_openssl::Error::Success) {
+				throw IOException("Request returned HTTP " + to_string(status) + " for HTTP " + method + " to '" + url +
+				                  "'");
+			} else {
+				throw IOException(to_string(err) + " error for " + "HTTP " + method + " to '" + url + "'");
+			}
 		}
 	}
 }

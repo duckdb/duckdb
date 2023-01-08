@@ -23,7 +23,6 @@ struct ListSortBindData : public FunctionData {
 	vector<LogicalType> payload_types;
 
 	ClientContext &context;
-	unique_ptr<GlobalSortState> global_sort_state;
 	RowLayout payload_layout;
 	vector<BoundOrderByNode> orders;
 
@@ -94,6 +93,7 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 	payload_chunk.Verify();
 
 	// sink
+	key_chunk.Flatten();
 	local_sort_state.SinkChunk(key_chunk, payload_chunk);
 	data_to_sort = true;
 }
@@ -116,8 +116,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, info.orders, info.payload_layout);
-	auto &global_sort_state = *info.global_sort_state;
+	GlobalSortState global_sort_state(buffer_manager, info.orders, info.payload_layout);
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 

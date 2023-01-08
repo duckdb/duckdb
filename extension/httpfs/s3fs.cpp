@@ -279,38 +279,67 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	                     S3FileSystem::UrlEncode("uploadId") + "=" +
 	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
+	case_insensitive_map_t<string>::iterator etag_lookup;
 
-	res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {}, (char *)write_buffer->Ptr(),
-	                      write_buffer->idx);
+	try {
+		res = s3fs.PutRequest(file_handle, file_handle.stripped_path + "?" + query_param, {},
+		                      (char *)write_buffer->Ptr(), write_buffer->idx);
 
-	if (res->code != 200) {
-		throw IOException("Unable to connect to URL " + file_handle.path + " " + res->error + " (HTTP code " +
-		                  to_string(res->code) + ")");
-	}
+		if (res->code != 200) {
+			throw IOException("Unable to connect  to URL " + file_handle.path + " " + res->error + " (HTTP code " +
+			                  to_string(res->code) + ")");
+		}
 
-	auto etag_lookup = res->headers.find("ETag");
-	if (etag_lookup == res->headers.end()) {
-		throw IOException("Unexpected response when uploading part to S3");
+		etag_lookup = res->headers.find("ETag");
+		if (etag_lookup == res->headers.end()) {
+			throw IOException("Unexpected response when uploading part to S3");
+		}
+
+	} catch (IOException &ex) {
+		// Ensure only one thread sets the exception
+		bool f = false;
+		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong(f, true);
+		if (exchanged) {
+			file_handle.upload_exception = std::current_exception();
+		}
+
+		{
+			unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+			file_handle.uploads_in_progress--;
+		}
+		file_handle.uploads_in_progress_cv.notify_one();
+
+		return;
 	}
 
 	// Insert etag
-	file_handle.part_etags_lock.lock();
-	file_handle.part_etags.insert(std::pair<uint16_t, string>(write_buffer->part_no, etag_lookup->second));
-	file_handle.part_etags_lock.unlock();
+	{
+		unique_lock<mutex> lck(file_handle.part_etags_lock);
+		file_handle.part_etags.insert(std::pair<uint16_t, string>(write_buffer->part_no, etag_lookup->second));
+	}
 
 	file_handle.parts_uploaded++;
 
 	// Free up space for another thread to acquire an S3WriteBuffer
 	write_buffer.reset();
-	s3fs.buffers_available++;
+
+	// Signal a buffer has become available
+	{
+		unique_lock<mutex> lck(s3fs.buffers_available_lock);
+		s3fs.buffers_in_use--;
+	}
 	s3fs.buffers_available_cv.notify_one();
 
-	// Update uploads in progress
-	file_handle.uploads_in_progress--;
+	// Signal a thread has finished
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress--;
+	}
 	file_handle.uploads_in_progress_cv.notify_one();
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
+
 	if (write_buffer->idx == 0) {
 		return;
 	}
@@ -324,10 +353,17 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuff
 		return;
 	}
 
-	file_handle.write_buffers_lock.lock();
-	file_handle.write_buffers.erase(write_buffer->part_no);
-	file_handle.write_buffers_lock.unlock();
-	file_handle.uploads_in_progress++;
+	file_handle.RethrowIOError();
+
+	{
+		unique_lock<mutex> lck(file_handle.write_buffers_lock);
+		file_handle.write_buffers.erase(write_buffer->part_no);
+	}
+
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress++;
+	}
 
 	thread upload_thread(UploadBuffer, std::ref(file_handle), write_buffer);
 	upload_thread.detach();
@@ -352,8 +388,9 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 		}
 	}
 	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-	file_handle.uploads_in_progress_cv.wait(lck,
-	                                        [&file_handle] { return file_handle.uploads_in_progress.load() == 0; });
+	file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
+
+	file_handle.RethrowIOError();
 }
 
 void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
@@ -389,24 +426,15 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	file_handle.upload_finalized = true;
 }
 
-shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx) {
-	auto &s3fs = (S3FileSystem &)file_handle.file_system;
-	// Check if write buffer already exists
-	{
-		unique_lock<mutex> lck(file_handle.write_buffers_lock);
-		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
-		if (lookup_result != file_handle.write_buffers.end()) {
-			shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
-			return buffer;
-		}
-	}
+// Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
+BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
+	unique_lock<mutex> lck(buffers_available_lock);
 
 	// Wait for a buffer to become available
-	{
-		unique_lock<mutex> lck(s3fs.buffers_available_lock);
-		s3fs.buffers_available_cv.wait(lck, [&s3fs] { return s3fs.buffers_available > 0; });
-		s3fs.buffers_available--;
+	if (buffers_in_use + threads_waiting_for_memory >= max_threads) {
+		buffers_available_cv.wait(lck, [&] { return buffers_in_use + threads_waiting_for_memory < max_threads; });
 	}
+	buffers_in_use++;
 
 	// Try to allocate a buffer from the buffer manager
 	BufferHandle duckdb_buffer;
@@ -414,7 +442,7 @@ shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uin
 
 	while (true) {
 		try {
-			duckdb_buffer = buffer_manager.Allocate(file_handle.part_size);
+			duckdb_buffer = buffer_manager.Allocate(part_size);
 
 			if (set_waiting_for_memory) {
 				threads_waiting_for_memory--;
@@ -425,38 +453,47 @@ shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle, uin
 				threads_waiting_for_memory++;
 				set_waiting_for_memory = true;
 			}
-			auto buffers_available = s3fs.buffers_available.load();
 
-			if (buffers_available >= file_handle.config_params.max_upload_threads - threads_waiting_for_memory) {
+			auto currently_in_use = buffers_in_use;
+			if (currently_in_use == 0) {
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
 				throw e;
 			} else {
-
 				// Wait for more buffers to become available before trying again
-				{
-					unique_lock<mutex> lck(s3fs.buffers_available_lock);
-					s3fs.buffers_available_cv.wait(
-					    lck, [&s3fs, &buffers_available] { return s3fs.buffers_available > buffers_available; });
-				}
+				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
 			}
 		}
 	}
 
-	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size,
-	                                                   move(duckdb_buffer));
+	return duckdb_buffer;
+}
 
+shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
+	auto &s3fs = (S3FileSystem &)file_system;
+
+	// Check if write buffer already exists
 	{
-		unique_lock<mutex> lck(file_handle.write_buffers_lock);
-		auto lookup_result = file_handle.write_buffers.find(write_buffer_idx);
+		unique_lock<mutex> lck(write_buffers_lock);
+		auto lookup_result = write_buffers.find(write_buffer_idx);
+		if (lookup_result != write_buffers.end()) {
+			shared_ptr<S3WriteBuffer> buffer = lookup_result->second;
+			return buffer;
+		}
+	}
+
+	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
+	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, move(buffer_handle));
+	{
+		unique_lock<mutex> lck(write_buffers_lock);
+		auto lookup_result = write_buffers.find(write_buffer_idx);
 
 		// Check if other thread has created the same buffer, if so we return theirs and drop ours.
-		if (lookup_result != file_handle.write_buffers.end()) {
+		if (lookup_result != write_buffers.end()) {
 			// write_buffer_idx << std::endl;
 			shared_ptr<S3WriteBuffer> write_buffer = lookup_result->second;
-			file_handle.write_buffers_lock.unlock();
 			return write_buffer;
 		}
-		file_handle.write_buffers.insert(pair<uint16_t, shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
+		write_buffers.insert(pair<uint16_t, shared_ptr<S3WriteBuffer>>(write_buffer_idx, new_write_buffer));
 	}
 
 	return new_write_buffer;
@@ -738,8 +775,6 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
 
-		// Threads are limited by limiting the amount of write buffers available, since each
-		s3fs.buffers_available = config_params.max_upload_threads;
 		uploads_in_progress = 0;
 		parts_uploaded = 0;
 		upload_finalized = false;
@@ -776,7 +811,7 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 		auto write_buffer_idx = curr_location / s3fh.part_size;
 
 		// Get write buffer, may block until buffer is available
-		auto write_buffer = GetBuffer(s3fh, write_buffer_idx);
+		auto write_buffer = s3fh.GetBuffer(write_buffer_idx);
 
 		// Writing to buffer
 		auto idx_to_write = curr_location - write_buffer->buffer_start;
