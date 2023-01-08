@@ -17,6 +17,9 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 	for (auto &expr : other.expressions) {
 		expressions.emplace_back(expr->Copy());
 	}
+	for (auto &expr : other.returning_list) {
+		returning_list.emplace_back(expr->Copy());
+	}
 	cte_map = other.cte_map.Copy();
 }
 

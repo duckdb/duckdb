@@ -170,6 +170,7 @@ jobs:
       BUILD_EXCEL: 1
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
 
     steps:
     - uses: actions/checkout@v3

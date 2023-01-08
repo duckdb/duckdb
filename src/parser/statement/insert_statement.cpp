@@ -13,6 +13,9 @@ InsertStatement::InsertStatement(const InsertStatement &other)
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog) {
 	cte_map = other.cte_map.Copy();
+	for (auto &expr : other.returning_list) {
+		returning_list.emplace_back(expr->Copy());
+	}
 }
 
 string InsertStatement::ToString() const {

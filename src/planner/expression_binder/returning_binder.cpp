@@ -9,7 +9,8 @@ ReturningBinder::ReturningBinder(Binder &binder, ClientContext &context) : Expre
 
 BindResult ReturningBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth) {
 	auto &expr = **expr_ptr;
-	if (expr.GetName() == "rowid") {
+	auto &alias = (ColumnRefExpression &)expr;
+	if (alias.column_names.back() == "rowid") {
 		return BindResult("rowid is not supported in returning statements");
 	}
 	return ExpressionBinder::BindExpression(expr_ptr, depth);

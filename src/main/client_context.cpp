@@ -663,6 +663,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = move(copied_statement);
 			break;
 		}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
@@ -682,6 +683,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = move(parser.statements[0]);
 			break;
 		}
+#endif
 		default:
 			statement = move(copied_statement);
 			break;
