@@ -19,17 +19,24 @@ namespace duckdb {
 Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
-static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<idx_t> &unicode_spaces) {
-	const idx_t UNICODE_SPACE_BYTES = 3;
+struct UnicodeSpace {
+	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
+	}
+
+	idx_t pos;
+	idx_t bytes;
+};
+
+static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
 	if (unicode_spaces.empty()) {
 		// no unicode spaces found
 		return false;
 	}
 	idx_t prev = 0;
-	for (idx_t pos : unicode_spaces) {
-		new_query += query.substr(prev, pos - prev);
+	for (auto &usp : unicode_spaces) {
+		new_query += query.substr(prev, usp.pos - prev);
 		new_query += " ";
-		prev = pos + UNICODE_SPACE_BYTES;
+		prev = usp.pos + usp.bytes;
 	}
 	new_query += query.substr(prev, query.size() - prev);
 	return true;
@@ -37,38 +44,52 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 
 // This function strips unicode space characters from the query and replaces them with regular spaces
 // It returns true if any unicode space characters were found and stripped
-// See here for a list of unicode space characters - https://www.compart.com/en/unicode/category/Zs
-static bool StripUnicodeSpaces(const string &query, string &new_query) {
+// See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
+static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
+	const idx_t NBSP_LEN = 2;
+	const idx_t USP_LEN = 3;
 	idx_t pos = 0;
-	char quote;
-	vector<idx_t> unicode_spaces;
+	unsigned char quote;
+	vector<UnicodeSpace> unicode_spaces;
+	auto query = (unsigned char *)query_str.c_str();
+	auto qsize = query_str.size();
 
 regular:
-	for (; pos + 2 < query.size(); pos++) {
-		if (query[pos] == '\xe2') {
-			if (query[pos + 1] == '\x80') {
-				if (query[pos + 2] >= '\x80' && query[pos + 2] <= '\x8b') {
-					// e28080 - e2808b
-					unicode_spaces.push_back(pos);
-				} else if (query[pos + 2] == '\xaf') {
-					// e280af
-					unicode_spaces.push_back(pos);
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == 0xC2) {
+			if (query[pos + 1] == 0xA0) {
+				// U+00A0 - C2A0
+				unicode_spaces.emplace_back(pos, NBSP_LEN);
+			}
+		}
+		if (query[pos] == 0xE2) {
+			if (query[pos + 1] == 0x80) {
+				if (query[pos + 2] >= 0x80 && query[pos + 2] <= 0x8B) {
+					// U+2000 to U+200B
+					// E28080 - E2808B
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xAF) {
+					// U+202F - E280AF
+					unicode_spaces.emplace_back(pos, USP_LEN);
 				}
-			} else if (query[pos + 1] == '\x81') {
-				if (query[pos + 2] == '\x9f') {
-					// e2819f
-					unicode_spaces.push_back(pos);
+			} else if (query[pos + 1] == 0x81) {
+				if (query[pos + 2] == 0x9F) {
+					// U+205F - E2819f
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xA0) {
+					// U+2060 - E281A0
+					unicode_spaces.emplace_back(pos, USP_LEN);
 				}
 			}
-		} else if (query[pos] == '\xef') {
-			if (query[pos + 1] == '\xbb' && query[pos + 2] == '\xbf') {
-				// efbbbf
-				unicode_spaces.push_back(pos);
+		} else if (query[pos] == 0xE3) {
+			if (query[pos + 1] == 0x80 && query[pos + 2] == 0x80) {
+				// U+3000 - E38080
+				unicode_spaces.emplace_back(pos, USP_LEN);
 			}
-		} else if (query[pos] == '\xe3') {
-			if (query[pos + 1] == '\x80' && query[pos + 2] == '\x80') {
-				// e38080
-				unicode_spaces.push_back(pos);
+		} else if (query[pos] == 0xEF) {
+			if (query[pos + 1] == 0xBB && query[pos + 2] == 0xBF) {
+				// U+FEFF - EFBBBF
+				unicode_spaces.emplace_back(pos, USP_LEN);
 			}
 		} else if (query[pos] == '"' || query[pos] == '\'') {
 			quote = query[pos];
@@ -80,7 +101,7 @@ regular:
 	}
 	goto end;
 in_quotes:
-	for (; pos + 1 < query.size(); pos++) {
+	for (; pos + 1 < qsize; pos++) {
 		if (query[pos] == quote) {
 			if (query[pos + 1] == quote) {
 				// escaped quote
@@ -93,14 +114,14 @@ in_quotes:
 	}
 	goto end;
 in_comment:
-	for (; pos < query.size(); pos++) {
+	for (; pos < qsize; pos++) {
 		if (query[pos] == '\n' || query[pos] == '\r') {
 			goto regular;
 		}
 	}
 	goto end;
 end:
-	return ReplaceUnicodeSpaces(query, new_query, unicode_spaces);
+	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
 void Parser::ParseQuery(const string &query) {
