@@ -45,6 +45,12 @@ SELECT${unicode_space}42${unicode_space}${unicode_space}${unicode_space}${unicod
 ----
 42
 
+# invisible space in identifiers
+query I
+SELECT a${unicode_space} FROM (SELECT 42) t(a);
+----
+42
+
 endloop
 
 # the query can still fail even after replacing unicode spaces

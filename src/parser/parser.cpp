@@ -107,6 +107,15 @@ void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options.max_expression_depth);
 	string parser_error;
 	{
+		// check if there are any unicode spaces in the string
+		string new_query;
+		if (StripUnicodeSpaces(query, new_query)) {
+			// there are - strip the unicode spaces and re-run the query
+			ParseQuery(new_query);
+			return;
+		}
+	}
+	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		PostgresParser parser;
 		parser.Parse(query);
@@ -124,12 +133,6 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	if (!parser_error.empty()) {
-		// parser error - check if there are any unicode spaces in the string
-		string new_query;
-		if (StripUnicodeSpaces(query, new_query)) {
-			ParseQuery(new_query);
-			return;
-		}
 		if (options.extensions) {
 			for (auto &ext : *options.extensions) {
 				D_ASSERT(ext.parse_function);
