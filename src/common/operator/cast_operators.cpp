@@ -877,7 +877,20 @@ struct IntegerCastOperation {
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos;
+	if (NEGATIVE) {
+		start_pos = 1;
+	} else {
+		if (*buf == '+') {
+			if (strict) {
+				// leading plus is not allowed in strict mode
+				return false;
+			}
+			start_pos = 1;
+		} else {
+			start_pos = 0;
+		}
+	}
 	idx_t pos = start_pos;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsDigit(buf[pos])) {
@@ -1168,6 +1181,10 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 		return false;
 	}
 	if (*buf == '+') {
+		if (strict) {
+			// plus is not allowed in strict mode
+			return false;
+		}
 		buf++;
 		len--;
 	}
