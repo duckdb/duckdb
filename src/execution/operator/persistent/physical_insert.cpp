@@ -59,6 +59,8 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
 		filtered_physical_ids.push_back(PhysicalIndex(i));
 	}
 
+	// One or more columns are referenced from the existing table,
+	// we still need to figure out which types they have
 	types_to_fetch = vector<LogicalType>(columns_to_fetch.size(), LogicalType::SQLNULL);
 	for (idx_t i = 0; i < columns_to_fetch.size(); i++) {
 		auto &id = columns_to_fetch[i];

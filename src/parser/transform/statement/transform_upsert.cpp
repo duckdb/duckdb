@@ -53,7 +53,7 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 	auto result = make_unique<OnConflictInfo>();
 	result->action_type = TransformOnConflictAction(stmt);
 	if (stmt->infer) {
-		// A filter for the DO ... is specified
+		// A filter for the ON CONFLICT ... is specified
 		if (stmt->infer->indexElems) {
 			// Columns are specified
 			result->indexed_columns = TransformConflictTarget(stmt->infer->indexElems);
@@ -64,9 +64,10 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 			throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 		}
 	} else if (result->action_type == OnConflictAction::UPDATE) {
-		// This is SQLite behavior, though I'm not entirely sure why they do this
-		// 'When the conflict target is omitted, the upsert behavior is triggered by a violation of any uniqueness
-		// constraint on the table of the INSERT' Which sounds like it could function just fine for DO UPDATE.
+		// "It's because one insert row could violate multiple different unique constraints,
+		// with it being a different row for each of the constraints that's causing the violation,
+		// and the upsert is only intended to update a single row."
+		// https://sqlite.org/forum/info/45cf84d3e89d590d
 		throw InvalidInputException("Empty conflict target is not supported for DO UPDATE");
 	}
 

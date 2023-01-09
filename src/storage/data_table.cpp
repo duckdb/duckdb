@@ -963,9 +963,6 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	// FIXME: this is fine when we're doing UPSERT, as we have made sure that none of the columns targeted
-	// are part of the index
-
 	info->indexes.Scan([&](Index &index) {
 		D_ASSERT(!index.IndexIsUpdated(column_ids));
 		return false;

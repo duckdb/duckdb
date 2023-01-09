@@ -13,7 +13,6 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/execution_failure_vector.hpp"
 
 namespace duckdb {
 class Allocator;

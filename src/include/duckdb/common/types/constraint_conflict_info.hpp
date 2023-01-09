@@ -30,6 +30,9 @@ public:
 	}
 
 public:
+	// TODO: this can be optimized, if we just create a vector the size of the input chunk,
+	// and update which indices have conflicts, then we can construct a selection vector at the end
+	// merging these selection vectors and rowid vectors like this is likely more expensive
 	void AddConflicts(UniqueConstraintConflictInfo &info) {
 		D_ASSERT(info.count == count);
 		if (info.matches.Count() == 0) {

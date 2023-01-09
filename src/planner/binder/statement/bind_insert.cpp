@@ -65,7 +65,7 @@ void QualifyColumnReferences(ParsedExpression &expr, const string &table_name) {
 	    expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(*child, table_name); });
 }
 
-// FIXME: this is dumb, doesn't work and is all-in-all just an attempt at a bandaid fix
+// Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_columnref = (BoundColumnRefExpression &)expr;
@@ -133,7 +133,8 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because an Index exists on it", column_names[i]);
+			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint",
+			                      column_names[i]);
 		}
 	}
 }
@@ -157,7 +158,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	if (!on_conflict.indexed_columns.empty()) {
 		// Bind the ON CONFLICT (<columns>)
 
-		// create a mapping of (list index) -> (column index)x
+		// create a mapping of (list index) -> (column index)
 		case_insensitive_map_t<idx_t> specified_columns;
 		for (idx_t i = 0; i < on_conflict.indexed_columns.size(); i++) {
 			specified_columns[on_conflict.indexed_columns[i]] = i;
@@ -177,8 +178,6 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 				insert->on_conflict_filter.insert(col.Oid());
 			}
 		}
-		// TODO: verify that no columns that are indexed on appear as target of a SET expression (<indexed_on_column> =
-		// <expression>)
 		auto &indexes = table->storage->info->indexes;
 		bool index_references_columns = false;
 		indexes.Scan([&](Index &index) {
@@ -193,16 +192,16 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		});
 		if (!index_references_columns) {
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
-			// But since this makes no logical sense, it's probably better to throw
+			// But since this makes no logical sense, it's probably better to throw an error
 			throw BinderException(
 			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
 		}
 	} else {
-		// The ON CONFLICT applies to every UNIQUE index on the table
+		// Omitting the conflict target for a DO UPDATE is not allowed
+		D_ASSERT(insert->action_type != OnConflictAction::UPDATE);
+		// When omitting the conflict target, the ON CONFLICT applies to every UNIQUE/PRIMARY KEY on the table
 
-		// We check if there are any indexes on the table, without it the ON CONFLICT clause
-		// makes no sense, so we can transform this into a DO THROW (so we can avoid doing a bunch of extra wasted work)
-		// or just throw a binder exception because this query should logically not have ON CONFLICT
+		// We check if there are any constraints on the table, if there aren't we throw an error.
 		bool index_references_table = false;
 		auto &indexes = table->storage->info->indexes;
 		indexes.Scan([&](Index &index) {
@@ -399,7 +398,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
-	// FIXME: this creates a projection, with a child LogicalExpressionGet
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
 	insert->AddChild(move(root));
 	BindOnConflictClause(insert, table, stmt);

@@ -25,7 +25,7 @@ ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
 }
 
 bool ColumnRefExpression::IsQualified() const {
-	return column_names.size() > 1;
+	return column_names.size() >= 2 && column_names.size() <= 4;
 }
 
 const string &ColumnRefExpression::GetColumnName() const {
@@ -33,8 +33,8 @@ const string &ColumnRefExpression::GetColumnName() const {
 	return column_names.back();
 }
 
-const string &ColumnRefExpression::GetTableName() const {
-	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
+string &ColumnRefExpression::InnerGetTableNameMutable() {
+	D_ASSERT(IsQualified());
 	if (column_names.size() == 4) {
 		return column_names[2];
 	}
@@ -44,9 +44,13 @@ const string &ColumnRefExpression::GetTableName() const {
 	return column_names[0];
 }
 
+const string &ColumnRefExpression::GetTableName() const {
+	return ((ColumnRefExpression &)*this).InnerGetTableNameMutable();
+}
+
 void ColumnRefExpression::SetTableName(string table_name) {
 	if (IsQualified()) {
-		auto &name = column_names.size() == 3 ? column_names[1] : column_names[0];
+		auto &name = InnerGetTableNameMutable();
 		name = move(table_name);
 		return;
 	}

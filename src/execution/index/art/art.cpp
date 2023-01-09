@@ -452,7 +452,6 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
 	}
 
 	ManagedSelection match_vec(chunk.size());
-	ManagedSelection null_vec(chunk.size());
 	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
 
 	LookupValues(chunk, &match_vec, true, &row_ids);
@@ -887,17 +886,17 @@ string ART::GenerateErrorKeyName(DataChunk &input, idx_t row) {
 string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, string key_name) {
 	switch (verify_type) {
 	case VerifyExistenceType::APPEND: {
-		// node already exists in tree
+		// This node already exists in the tree
 		string type = IsPrimary() ? "primary key" : "unique";
 		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint", key_name, type);
 	}
 	case VerifyExistenceType::APPEND_FK: {
-		// found node no exists in tree
+		// The node we tried to insert does not exist in the foreign table
 		return StringUtil::Format(
 		    "Violates foreign key constraint because key \"%s\" does not exist in referenced table", key_name);
 	}
 	case VerifyExistenceType::DELETE_FK: {
-		// found node exists in tree
+		// The node we tried to delete still exists in the foreign table
 		return StringUtil::Format("Violates foreign key constraint because key \"%s\" exists in table has foreign key",
 		                          key_name);
 	}
