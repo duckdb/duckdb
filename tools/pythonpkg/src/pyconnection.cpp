@@ -192,8 +192,9 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem
 py::list DuckDBPyConnection::ListFilesystems() {
 	auto subsystems = database->GetFileSystem().ListSubSystems();
 	py::list names;
-	for (auto &name : subsystems)
+	for (auto &name : subsystems) {
 		names.append(py::str(name));
+	}
 	return names;
 }
 
