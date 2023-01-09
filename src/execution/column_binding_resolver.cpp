@@ -64,11 +64,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
 		// ON CONFLICT DO UPDATE clause
 		auto &insert_op = (LogicalInsert &)op;
-		if (insert_op.action_type == OnConflictAction::UPDATE) {
+		if (insert_op.action_type != OnConflictAction::THROW) {
 			VisitOperatorChildren(op);
 			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(
 			    insert_op.excluded_table_index, insert_op.table->columns.PhysicalColumnCount());
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
+			if (insert_op.on_conflict_condition) {
+				VisitExpression(&insert_op.on_conflict_condition);
+			}
+			if (insert_op.do_update_condition) {
+				VisitExpression(&insert_op.do_update_condition);
+			}
 			VisitOperatorExpressions(op);
 			bindings = op.GetColumnBindings();
 			return;

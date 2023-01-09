@@ -168,8 +168,8 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 	}
 }
 
-void VerifyAllConflictsMeetCondition(ExecutionContext &context, DataChunk &conflicts,
-                                     const unique_ptr<Expression> &condition) {
+bool AllConflictsMeetCondition(ExecutionContext &context, DataChunk &conflicts,
+                               const unique_ptr<Expression> &condition) {
 
 	ExpressionExecutor executor(context.client, *condition);
 	DataChunk result;
@@ -185,11 +185,7 @@ void VerifyAllConflictsMeetCondition(ExecutionContext &context, DataChunk &confl
 			break;
 		}
 	}
-	if (condition_met) {
-		return;
-	}
-	// Not all conflicts found meet the condition, we need to throw the error instead
-	throw ConstraintException("TODO: find the first conflict that doesn't meet the condition");
+	return condition_met;
 }
 
 void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -299,7 +295,14 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 				if (on_conflict_condition) {
 					// todo: pass the on_conflict condition
-					VerifyAllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
+					bool conditions_met = AllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
+					if (!conditions_met) {
+						// At least one of the conditions weren't met, just run the VerifyAppend again, expecting it to
+						// throw
+						table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+						// This should throw, we should not get here
+						D_ASSERT(false);
+					}
 				}
 
 				if (action_type != OnConflictAction::NOTHING &&

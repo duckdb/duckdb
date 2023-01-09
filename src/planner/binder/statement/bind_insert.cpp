@@ -65,17 +65,6 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 }
 
 void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table) {
-
-	vector<PhysicalIndex> columns;
-	// add the 'excluded' dummy table binding
-	AddTableName("excluded");
-	// add a bind context entry for it
-	auto excluded_index = GenerateTableIndex();
-	insert->excluded_table_index = excluded_index;
-	auto table_column_names = table->columns.GetColumnNames();
-	auto table_column_types = table->columns.GetColumnTypes();
-	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
-
 	D_ASSERT(insert->children.size() == 1);
 	D_ASSERT(insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
@@ -83,6 +72,7 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
+	vector<PhysicalIndex> assigned_columns;
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -93,10 +83,10 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
+		if (std::find(assigned_columns.begin(), assigned_columns.end(), column.Physical()) != assigned_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		columns.push_back(column.Physical());
+		assigned_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
 		column_names.push_back(colname);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
@@ -226,13 +216,14 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		}
 	}
 
-	if (insert->action_type != OnConflictAction::UPDATE) {
-		return;
-	}
-	D_ASSERT(on_conflict.set_info);
-	auto &set_info = *on_conflict.set_info;
-	D_ASSERT(!set_info.columns.empty());
-	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
+	// add the 'excluded' dummy table binding
+	AddTableName("excluded");
+	// add a bind context entry for it
+	auto excluded_index = GenerateTableIndex();
+	insert->excluded_table_index = excluded_index;
+	auto table_column_names = table->columns.GetColumnNames();
+	auto table_column_types = table->columns.GetColumnTypes();
+	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
 
 	if (on_conflict.condition) {
 		// Bind the ON CONFLICT ... WHERE clause
@@ -243,6 +234,14 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		}
 		insert->on_conflict_condition = move(condition);
 	}
+
+	if (insert->action_type != OnConflictAction::UPDATE) {
+		return;
+	}
+	D_ASSERT(on_conflict.set_info);
+	auto &set_info = *on_conflict.set_info;
+	D_ASSERT(!set_info.columns.empty());
+	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
 	if (set_info.condition) {
 		// Bind the SET ... WHERE clause
