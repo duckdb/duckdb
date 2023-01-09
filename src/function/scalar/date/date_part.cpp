@@ -16,28 +16,33 @@ namespace duckdb {
 
 bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &result) {
 	auto specifier = StringUtil::Lower(specifier_p);
-	if (specifier == "year" || specifier == "y" || specifier == "years") {
+	if (specifier == "year" || specifier == "yr" || specifier == "y" || specifier == "years" || specifier == "yrs") {
 		result = DatePartSpecifier::YEAR;
 	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
 		result = DatePartSpecifier::MONTH;
 	} else if (specifier == "day" || specifier == "days" || specifier == "d" || specifier == "dayofmonth") {
 		result = DatePartSpecifier::DAY;
-	} else if (specifier == "decade" || specifier == "decades") {
+	} else if (specifier == "decade" || specifier == "dec" || specifier == "decades" || specifier == "decs") {
 		result = DatePartSpecifier::DECADE;
-	} else if (specifier == "century" || specifier == "centuries") {
+	} else if (specifier == "century" || specifier == "cent" || specifier == "centuries" || specifier == "c") {
 		result = DatePartSpecifier::CENTURY;
-	} else if (specifier == "millennium" || specifier == "millennia" || specifier == "millenium") {
+	} else if (specifier == "millennium" || specifier == "mil" || specifier == "millenniums" ||
+	           specifier == "millennia" || specifier == "mils" || specifier == "millenium") {
 		result = DatePartSpecifier::MILLENNIUM;
-	} else if (specifier == "microseconds" || specifier == "microsecond") {
+	} else if (specifier == "microseconds" || specifier == "microsecond" || specifier == "us" || specifier == "usec" ||
+	           specifier == "usecs" || specifier == "usecond" || specifier == "useconds") {
 		result = DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
-	           specifier == "msecs") {
+	           specifier == "msecs" || specifier == "msecond" || specifier == "mseconds") {
 		result = DatePartSpecifier::MILLISECONDS;
-	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
+	} else if (specifier == "second" || specifier == "sec" || specifier == "seconds" || specifier == "secs" ||
+	           specifier == "s") {
 		result = DatePartSpecifier::SECOND;
-	} else if (specifier == "minute" || specifier == "minutes" || specifier == "m") {
+	} else if (specifier == "minute" || specifier == "min" || specifier == "minutes" || specifier == "mins" ||
+	           specifier == "m") {
 		result = DatePartSpecifier::MINUTE;
-	} else if (specifier == "hour" || specifier == "hours" || specifier == "h") {
+	} else if (specifier == "hour" || specifier == "hr" || specifier == "hours" || specifier == "hrs" ||
+	           specifier == "h") {
 		result = DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01

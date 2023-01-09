@@ -129,19 +129,9 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	// append the null values
 	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
 
-	auto &struct_validity = FlatVector::Validity(vector);
-
 	auto &struct_stats = (StructStatistics &)stats;
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		if (!struct_validity.AllValid()) {
-			// we set the child entries of the struct to NULL
-			// for any values in which the struct itself is NULL
-			child_entries[i]->Flatten(count);
-
-			auto &child_validity = FlatVector::Validity(*child_entries[i]);
-			child_validity.Combine(struct_validity, count);
-		}
 		sub_columns[i]->Append(*struct_stats.child_stats[i], state.child_appends[i + 1], *child_entries[i], count);
 	}
 }
