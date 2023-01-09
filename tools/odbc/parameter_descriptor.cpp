@@ -1,4 +1,4 @@
-#include "parameter_descriptor.hpp"
+#include "include/parameter_descriptor.hpp"
 #include "odbc_utils.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
@@ -343,6 +343,13 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 		}
 		break;
 	}
+	case SQL_TYPE_TIMESTAMP: {
+		auto timestamp_struct = Load<SQL_TIMESTAMP_STRUCT>(dataptr);
+		value = Value::TIMESTAMP(timestamp_struct.year, timestamp_struct.month, timestamp_struct.day,
+		                         timestamp_struct.hour, timestamp_struct.minute, timestamp_struct.second, 0);
+		break;
+	}
+
 	// TODO more types
 	default:
 		// TODO error message?
