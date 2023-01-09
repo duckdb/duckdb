@@ -206,9 +206,6 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 			colref.alias = names[column_index];
 		}
 	}
-	if (column_name == "k") {
-		void;
-	}
 	ColumnBinding binding = GetColumnBinding(column_index);
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }

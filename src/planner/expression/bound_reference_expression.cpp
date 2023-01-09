@@ -16,11 +16,10 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index
 }
 
 string BoundReferenceExpression::ToString() const {
-	string representation;
 	if (!alias.empty()) {
-		representation += "(" + alias + ") ";
+		return alias;
 	}
-	return representation + "#" + to_string(index);
+	return "#" + to_string(index);
 }
 
 bool BoundReferenceExpression::Equals(const BaseExpression *other_p) const {

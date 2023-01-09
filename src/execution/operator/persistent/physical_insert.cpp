@@ -337,7 +337,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			gstate.initialized = true;
 		}
 		OnConflictHandling(table, context, lstate);
-		table->storage->LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk);
+		table->storage->LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk, true);
 
 		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
