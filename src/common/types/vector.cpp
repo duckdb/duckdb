@@ -545,6 +545,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
+    case LogicalTypeId::BIT: {
+        auto str = ((string_t *)data)[index];
+        return Value::BIT((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
+    }
 	case LogicalTypeId::MAP: {
 		auto &child_entries = StructVector::GetEntries(*vector);
 		Value key = child_entries[0]->GetValue(index);
@@ -588,6 +592,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		value.type().CopyAuxInfo(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
+
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;

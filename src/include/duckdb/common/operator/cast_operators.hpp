@@ -647,6 +647,31 @@ template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
 
+
+//===--------------------------------------------------------------------===//
+// Bits
+//===--------------------------------------------------------------------===//
+struct CastFromBit {
+    template <class SRC>
+    static inline string_t Operation(SRC input, Vector &result) {
+        throw duckdb::NotImplementedException("Cast from bit could not be performed!");
+    }
+};
+template <>
+duckdb::string_t CastFromBit::Operation(duckdb::string_t input, Vector &vector);
+
+struct TryCastToBit {
+    template <class SRC, class DST>
+    static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+                                 bool strict = false) {
+        throw InternalException("Unsupported type for try cast to bit");
+    }
+};
+
+template <>
+bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict);
+
 //===--------------------------------------------------------------------===//
 // UUID
 //===--------------------------------------------------------------------===//

@@ -20,6 +20,7 @@
 #include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
+#include "duckdb/common/types/bit.hpp"
 
 #include <cctype>
 #include <cmath>
@@ -1378,6 +1379,19 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From Bit
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromBit::Operation(string_t input, Vector &vector) {
+    idx_t result_size = Bit::GetStringSize(input);
+
+    string_t result = StringVector::EmptyString(vector, result_size);
+    Bit::ToString(input, result.GetDataWriteable());
+    result.Finalize();
+    return result;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From Pointer
 //===--------------------------------------------------------------------===//
 template <>
@@ -1402,6 +1416,23 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 	result.Finalize();
 	return true;
 }
+
+//===--------------------------------------------------------------------===//
+// Cast To Bit
+//===--------------------------------------------------------------------===//
+    template <>
+    bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                                  bool strict) {
+        idx_t result_size;
+        if (!Bit::TryGetBitSize(input, result_size, error_message)) {
+            return false;
+        }
+
+        result = StringVector::EmptyString(result_vector, result_size);
+        Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
+        result.Finalize();
+        return true;
+    }
 
 //===--------------------------------------------------------------------===//
 // Cast From UUID

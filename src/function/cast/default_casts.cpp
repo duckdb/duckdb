@@ -121,7 +121,9 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::VARCHAR:
 		return StringCastSwitch(input, source, target);
 	case LogicalTypeId::BLOB:
-		return BlobCastSwitch(input, source, target);
+        return BlobCastSwitch(input, source, target);
+	case LogicalTypeId::BIT:
+        return BitCastSwitch(input, source, target);
 	case LogicalTypeId::SQLNULL:
 		return NullTypeCast;
 	case LogicalTypeId::MAP:

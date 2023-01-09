@@ -171,6 +171,11 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			result_type = LogicalType::USER(user_type_name);
 			break;
 		}
+        case LogicalTypeId::BIT: {
+            // TODO ....
+            result_type = LogicalType(base_type);
+            break;
+        }
 		default:
 			if (modifier_idx > 0) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
