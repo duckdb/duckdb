@@ -15,14 +15,11 @@ namespace duckdb {
             for (idx_t j = 0; j < 8; j++) {
                 char c = 1;
                 c = c << (7 - j);
-                if (data[i] & c){
-                    output[(i * 8) + j] = '1';
-                } else {
-                    output[(i * 8) + j] = '0';
-                }
+                (data[i] & c) ? output[(i * 8) + j] = '1' : output[(i * 8) + j] = '0';
             }
         }
     }
+
 
     bool Bit::TryGetBitSize(string_t str, idx_t &str_len, string *error_message) {
         auto data = (const_data_ptr_t)str.GetDataUnsafe();
@@ -32,10 +29,9 @@ namespace duckdb {
             if (data[i] == '0' || data[i] == '1' ) {
                 str_len++;
             } else {
-                string error = "Invalid character encountered in string -> bit conversion: ";
-//                string error =
-//                        StringUtil::Format("Invalid character encountered in string -> blob conversion: %c",
-//                                           string((char *)data + i, 4));
+                string error =
+                        StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
+                                           string((char *)data + i, 1));
                 HandleCastError::AssignError(error, error_message);
                 return false;
             }
