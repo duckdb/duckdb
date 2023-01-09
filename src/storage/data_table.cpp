@@ -260,9 +260,13 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<
 // Append
 //===--------------------------------------------------------------------===//
 static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, const string &col_name) {
-	if (VectorOperations::HasNull(vector, count)) {
-		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
+	if (!VectorOperations::HasNull(vector, count)) {
+		return;
 	}
+
+	// TODO: Check conflicts
+
+	throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
