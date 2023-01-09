@@ -1,8 +1,8 @@
 # name: test/sql/upsert/upsert_set_expressions.test
 # group: [upsert]
 
-#statement ok
-#pragma enable_verification;
+statement ok
+pragma enable_verification;
 
 foreach parallel false true
 
