@@ -200,6 +200,7 @@ jobs:
     - uses: r-lib/actions/setup-r@v1
       with:
         r-version: 'devel'
+        update-rtools: true
 
     - uses: r-lib/actions/setup-pandoc@v2
 
