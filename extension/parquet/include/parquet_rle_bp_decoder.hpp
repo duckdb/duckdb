@@ -67,7 +67,7 @@ public:
 			return 0;
 		}
 		uint8_t ret = 1;
-		while (((idx_t)(1 << ret) - 1) < val) {
+		while (((idx_t)(1u << ret) - 1) < val) {
 			ret++;
 		}
 		return ret;
