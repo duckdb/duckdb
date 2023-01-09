@@ -4,13 +4,14 @@
 #statement ok
 #pragma enable_verification;
 
-# Use parallel insert
+foreach parallel false true
+
 statement ok
-SET preserve_insertion_order=false;
+SET preserve_insertion_order=${parallel};
 
 # Create a primary key on both 'a' and 'b'
 statement ok
-create table tbl (
+create or replace table tbl (
 	a integer,
 	b integer,
 	c integer,
@@ -48,3 +49,6 @@ select * from tbl;
 1	2	3
 1	4	5
 1	8	4
+
+# parallel
+endloop

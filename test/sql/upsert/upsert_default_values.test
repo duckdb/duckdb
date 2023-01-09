@@ -4,12 +4,13 @@
 #statement ok
 #pragma enable_verification;
 
-# Use parallel insert
-statement ok
-SET preserve_insertion_order=false;
+foreach parallel false true
 
 statement ok
-create table tbl (
+SET preserve_insertion_order=${parallel};
+
+statement ok
+create or replace table tbl (
 	a integer primary key DEFAULT 5,
 	b integer
 );
@@ -21,3 +22,6 @@ Parser Error: DEFAULT VALUES clause is not supported!
 
 # We only bind the on conflict clause when there is a SelectStmt child, so when support is added for DEFAULT VALUES
 # This should also be changed.
+
+# parallel
+endloop

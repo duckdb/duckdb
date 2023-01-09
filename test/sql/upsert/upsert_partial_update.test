@@ -4,12 +4,13 @@
 #statement ok
 #pragma enable_verification;
 
-# Use parallel insert
-statement ok
-SET preserve_insertion_order=false;
+foreach parallel false true
 
 statement ok
-create table tbl (a integer primary key, b integer);
+SET preserve_insertion_order=${parallel};
+
+statement ok
+create or replace table tbl (a integer primary key, b integer);
 
 statement ok
 insert into tbl VALUES (1,3), (2,2), (3,10), (4,3);
@@ -24,3 +25,6 @@ select * from tbl;
 2	4
 3	10
 4	3
+
+# parallel
+endloop

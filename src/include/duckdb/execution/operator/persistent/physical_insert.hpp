@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+class InsertLocalState;
+
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
 public:
@@ -107,6 +109,7 @@ public:
 protected:
 	void CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                  ClientContext &client) const;
+	void OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context, InsertLocalState &lstate) const;
 };
 
 } // namespace duckdb

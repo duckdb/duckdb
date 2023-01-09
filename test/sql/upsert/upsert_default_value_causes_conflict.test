@@ -1,12 +1,16 @@
 # name: test/sql/upsert/upsert_default_value_causes_conflict.test
 # group: [upsert]
 
-# Use parallel insert (only implemented parallel for now)
-statement ok
-SET preserve_insertion_order=false;
+#statement ok
+#pragma enable_verification;
+
+foreach parallel false true
 
 statement ok
-create table tbl (
+SET preserve_insertion_order=${parallel};
+
+statement ok
+create or replace table tbl (
 	a integer primary key default 5,
 	b integer
 );
@@ -43,3 +47,6 @@ query II
 select * from tbl;
 ----
 5	20
+
+# parallel
+endloop

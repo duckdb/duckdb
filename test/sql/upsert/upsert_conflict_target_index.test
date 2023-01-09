@@ -1,11 +1,16 @@
 # name: test/sql/upsert/upsert_conflict_target_index.test
 # group: [upsert]
 
-statement ok
-SET preserve_insertion_order=false;
+#statement ok
+#pragma enable_verification;
+
+foreach parallel false true
 
 statement ok
-create table index_tbl (
+SET preserve_insertion_order=${parallel};
+
+statement ok
+create or replace table index_tbl (
 	i integer,
 	j integer
 );
@@ -30,3 +35,6 @@ statement error
 insert into index_tbl values (5, 10) on conflict on constraint other_index do update set j = excluded.j;
 ----
 Not implemented Error: ON CONSTRAINT conflict target is not supported yet
+
+# parallel
+endloop

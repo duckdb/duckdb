@@ -574,8 +574,8 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	local_storage.InitializeAppend(state, this);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
-                            DataChunk &chunk) {
+void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                            bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -587,8 +587,9 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	VerifyAppendConstraints(table, context, chunk);
-	// FIXME: call method that returns for which values the constraint check failed
+	if (!unsafe) {
+		VerifyAppendConstraints(table, context, chunk);
+	}
 
 	// append to the transaction local data
 	LocalStorage::Append(state, chunk);

@@ -225,6 +225,104 @@ void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &
 	result.SetCardinality(input_chunk.size());
 }
 
+void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context,
+                                        InsertLocalState &lstate) const {
+	if (action_type == OnConflictAction::THROW) {
+		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+		return;
+	}
+	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
+	// If that's not the case - We throw the first error
+
+	// We either want to do nothing, or perform an update when conflicts arise
+	ConflictInfo conflict_info(lstate.insert_chunk.size(), on_conflict_filter);
+	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
+	auto &conflicts = conflict_info.constraint_conflicts;
+	if (conflicts.matches.Count() == 0) {
+		// No conflicts found
+		return;
+	}
+	DataChunk conflict_chunk; // contains only the conflicting values
+	DataChunk scan_chunk;     // contains the original values, that caused the conflict
+	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
+	DataChunk update_chunk;   // contains only the to-update columns
+
+	// Filter out everything but the conflicting rows
+	conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
+	conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
+	conflict_chunk.Slice(conflicts.matches.Selection(), conflicts.matches.Count());
+	conflict_chunk.SetCardinality(conflicts.matches.Count());
+
+	auto &data_table = table->storage;
+	if (types_to_fetch.size()) {
+		D_ASSERT(scan_chunk.size() == 0);
+		// When these values are required for the conditions or the SET expressions,
+		// then we scan the existing table for the conflicting tuples, using the rowids
+		scan_chunk.Initialize(context.client, types_to_fetch);
+		auto fetch_state = make_unique<ColumnFetchState>();
+		data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, columns_to_fetch,
+		                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
+	}
+
+	// Splice the Input chunk and the fetched chunk together
+	CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
+
+	if (on_conflict_condition) {
+		bool conditions_met = AllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
+		if (!conditions_met) {
+			// At least one of the conditions weren't met, just run the VerifyAppend again, expecting it to
+			// throw
+			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+			// This should throw, we should not get here
+			D_ASSERT(false);
+		}
+	}
+
+	if (action_type != OnConflictAction::NOTHING && indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
+
+		// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
+		if (do_update_condition) {
+			DataChunk do_update_filter_result;
+			do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
+			ExpressionExecutor where_executor(context.client, *do_update_condition);
+			where_executor.Execute(combined_chunk, do_update_filter_result);
+			do_update_filter_result.SetCardinality(combined_chunk.size());
+
+			ManagedSelection selection(combined_chunk.size());
+
+			auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
+			for (idx_t i = 0; i < combined_chunk.size(); i++) {
+				if (where_data[i]) {
+					selection.Append(i);
+				}
+			}
+			if (selection.Count() != selection.Size()) {
+				// Not all conflicts met the condition, need to filter out the ones that don't
+				combined_chunk.Slice(selection.Selection(), selection.Count());
+				combined_chunk.SetCardinality(selection.Count());
+				// Also apply this Slice to the to-update row_ids
+				conflicts.row_ids.Slice(selection.Selection(), selection.Count());
+			}
+		}
+
+		// Execute the SET expressions
+		update_chunk.Initialize(context.client, filtered_types);
+		ExpressionExecutor executor(context.client, set_expressions);
+		executor.Execute(combined_chunk, update_chunk);
+		update_chunk.SetCardinality(combined_chunk);
+
+		// Perform the update, using the results of the SET expressions
+		data_table->Update(*table, context.client, conflicts.row_ids, filtered_physical_ids, update_chunk);
+	}
+
+	// Remove the conflicting tuples from the insert chunk
+	SelectionVector sel_vec(lstate.insert_chunk.size());
+	idx_t new_size = SelectionVector::Inverted(conflicts.matches.Selection(), sel_vec, conflicts.matches.Count(),
+	                                           lstate.insert_chunk.size());
+	lstate.insert_chunk.Slice(sel_vec, new_size);
+	lstate.insert_chunk.SetCardinality(new_size);
+}
+
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                     DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
@@ -238,6 +336,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			table->storage->InitializeLocalAppend(gstate.append_state, context.client);
 			gstate.initialized = true;
 		}
+		OnConflictHandling(table, context, lstate);
 		table->storage->LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk);
 
 		if (return_chunk) {
@@ -257,99 +356,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
 		}
-		// TODO: check the conflict_target + condition here
-		if (action_type == OnConflictAction::THROW) {
-			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
-		} else {
-			// Check whether any conflicts arise, and if they all meet the conflict_target + condition
-			// If that's not the case - We throw the first error
-
-			// We either want to do nothing, or perform an update when conflicts arise
-			ConflictInfo conflict_info(lstate.insert_chunk.size(), on_conflict_filter);
-			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
-			auto &conflicts = conflict_info.constraint_conflicts;
-			if (conflicts.matches.Count() != 0) {
-				DataChunk conflict_chunk; // contains only the conflicting values
-				DataChunk scan_chunk;     // contains the original values, that caused the conflict
-				DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
-				DataChunk update_chunk;   // contains only the to-update columns
-
-				// Filter out everything but the conflicting rows
-				conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
-				conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
-				conflict_chunk.Slice(conflicts.matches.Selection(), conflicts.matches.Count());
-				conflict_chunk.SetCardinality(conflicts.matches.Count());
-
-				auto &data_table = table->storage;
-				if (types_to_fetch.size()) {
-					// When these values are required for the conditions or the SET expressions,
-					// then we scan the existing table for the conflicting tuples, using the rowids
-					scan_chunk.Initialize(context.client, types_to_fetch);
-					auto fetch_state = make_unique<ColumnFetchState>();
-					data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, columns_to_fetch,
-					                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
-				}
-
-				// Splice the Input chunk and the fetched chunk together
-				CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
-
-				if (on_conflict_condition) {
-					// todo: pass the on_conflict condition
-					bool conditions_met = AllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
-					if (!conditions_met) {
-						// At least one of the conditions weren't met, just run the VerifyAppend again, expecting it to
-						// throw
-						table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
-						// This should throw, we should not get here
-						D_ASSERT(false);
-					}
-				}
-
-				if (action_type != OnConflictAction::NOTHING &&
-				    indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
-
-					// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
-					if (do_update_condition) {
-						DataChunk do_update_filter_result;
-						do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
-						ExpressionExecutor where_executor(context.client, *do_update_condition);
-						where_executor.Execute(combined_chunk, do_update_filter_result);
-						do_update_filter_result.SetCardinality(combined_chunk.size());
-
-						ManagedSelection selection(combined_chunk.size());
-
-						auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
-						for (idx_t i = 0; i < combined_chunk.size(); i++) {
-							if (where_data[i]) {
-								selection.Append(i);
-							}
-						}
-						if (selection.Count() != selection.Size()) {
-							// Not all conflicts met the condition, need to filter out the ones that don't
-							combined_chunk.Slice(selection.Selection(), selection.Count());
-							combined_chunk.SetCardinality(selection.Count());
-							// Also apply this Slice to the to-update row_ids
-							conflicts.row_ids.Slice(selection.Selection(), selection.Count());
-						}
-					}
-
-					// Execute the SET expressions
-					update_chunk.Initialize(context.client, filtered_types);
-					ExpressionExecutor executor(context.client, set_expressions);
-					executor.Execute(combined_chunk, update_chunk);
-					update_chunk.SetCardinality(combined_chunk);
-
-					// Perform the update, using the results of the SET expressions
-					data_table->Update(*table, context.client, conflicts.row_ids, filtered_physical_ids, update_chunk);
-				}
-				// Cut out the conflicting columns from the insert chunk
-				SelectionVector sel_vec(lstate.insert_chunk.size());
-				idx_t new_size = SelectionVector::Inverted(conflicts.matches.Selection(), sel_vec,
-				                                           conflicts.matches.Count(), lstate.insert_chunk.size());
-				lstate.insert_chunk.Slice(sel_vec, new_size);
-				lstate.insert_chunk.SetCardinality(new_size);
-			}
-		}
+		OnConflictHandling(table, context, lstate);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
