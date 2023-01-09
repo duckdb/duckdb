@@ -41,8 +41,8 @@ public:
 	OnConflictAction action_type;
 	// The types that the DO UPDATE .. SET (expressions) are cast to
 	vector<LogicalType> expected_set_types;
-	// The column ids to apply the ON CONFLICT on
-	vector<column_t> on_conflict_filter;
+	// The (distinct) column ids to apply the ON CONFLICT on
+	unordered_set<column_t> on_conflict_filter;
 	// The WHERE clause of the conflict_target (ON CONFLICT .. WHERE <condition>)
 	unique_ptr<Expression> on_conflict_condition;
 	// The WHERE clause of the DO UPDATE clause

@@ -51,7 +51,7 @@ select * from tbl;
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (k) DO UPDATE SET k = excluded.k;
 ----
-Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT/INDEX
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 # Overwrite the existing value with the new value
 statement ok

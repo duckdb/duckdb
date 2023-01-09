@@ -26,7 +26,7 @@ public:
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
 	               idx_t estimated_cardinality, bool return_chunk, bool parallel, OnConflictAction action_type,
 	               unique_ptr<Expression> on_conflict_condition, unique_ptr<Expression> do_update_condition,
-	               vector<column_t> on_conflict_filter, vector<column_t> columns_to_fetch);
+	               unordered_set<column_t> on_conflict_filter, vector<column_t> columns_to_fetch);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -67,7 +67,7 @@ public:
 	// Condition for the DO UPDATE clause
 	unique_ptr<Expression> do_update_condition;
 	// The column ids to apply the ON CONFLICT on
-	vector<column_t> on_conflict_filter;
+	unordered_set<column_t> on_conflict_filter;
 	// The Index name to apply the ON CONFLICT on
 	string constraint_name;
 	// Column ids from the original table to fetch

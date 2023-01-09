@@ -11,16 +11,8 @@ bool ConflictInfo::ConflictTargetMatches(Index &index) const {
 	if (column_ids.empty()) {
 		return true;
 	}
-	if (column_ids.size() != index.column_id_set.size()) {
-		// All targets need to match, not only partially
-		return false;
-	}
-	for (auto &id : column_ids) {
-		if (!index.column_id_set.count(id)) {
-			return false;
-		}
-	}
-	return true;
+	// Check whether the column ids match
+	return column_ids == index.column_id_set;
 }
 
 } // namespace duckdb

@@ -113,11 +113,11 @@ public:
 
 class ConflictInfo {
 public:
-	ConflictInfo(idx_t count, const vector<column_t> &column_ids)
+	ConflictInfo(idx_t count, const unordered_set<column_t> &column_ids)
 	    : constraint_conflicts(count), column_ids(column_ids) {
 	}
 	UniqueConstraintConflictInfo constraint_conflicts;
-	const vector<column_t> &column_ids;
+	const unordered_set<column_t> &column_ids;
 
 public:
 	bool ConflictTargetMatches(Index &index) const;

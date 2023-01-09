@@ -31,13 +31,13 @@ insert into tbl VALUES (1,2,3), (1,4,5);
 statement error
 insert into tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (a) DO UPDATE set c = 5;
 ----
-Constraint Error: Duplicate key "a: 1, b: 4" violates primary key constraint
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 # Conflict target does not match any index on the table, only valid conflict target would be: (a,b)
 statement error
 insert into tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (b) DO UPDATE set c = 5;
 ----
-Constraint Error: Duplicate key "a: 1, b: 4" violates primary key constraint
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 # Conflict target matches the index on the table, conflict is resolved by the ON CONFLICT clause
 statement ok

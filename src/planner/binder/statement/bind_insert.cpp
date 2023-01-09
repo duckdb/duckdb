@@ -174,7 +174,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			auto entry = specified_columns.find(col.Name());
 			if (entry != specified_columns.end()) {
 				// column was specified, set to the index
-				insert->on_conflict_filter.push_back(col.Oid());
+				insert->on_conflict_filter.insert(col.Oid());
 			}
 		}
 		// TODO: verify that no columns that are indexed on appear as target of a SET expression (<indexed_on_column> =
@@ -185,21 +185,17 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			if (!index.IsUnique()) {
 				return false;
 			}
-			auto &column_ids = index.column_id_set;
-			for (auto &column_id : insert->on_conflict_filter) {
-				if (column_ids.count(column_id)) {
-					// We got a hit
-					index_references_columns = true;
-					return true;
-				}
+			bool index_matches = insert->on_conflict_filter == index.column_id_set;
+			if (index_matches) {
+				index_references_columns = true;
 			}
-			return false;
+			return index_matches;
 		});
 		if (!index_references_columns) {
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw
 			throw BinderException(
-			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT/INDEX");
+			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
 		}
 	} else {
 		// The ON CONFLICT applies to every UNIQUE index on the table
