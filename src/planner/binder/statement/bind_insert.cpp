@@ -39,6 +39,19 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 	}
 }
 
+unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &column) {
+	if (column.DefaultValue()) {
+		return column.DefaultValue()->Copy();
+	} else {
+		return make_unique<ConstantExpression>(Value(column.Type()));
+	}
+}
+
+void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column) {
+	D_ASSERT(expr->type == ExpressionType::VALUE_DEFAULT);
+	expr = ExpandDefaultExpression(column);
+}
+
 void QualifyColumnReferences(ParsedExpression &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
 	if (expr.type == ExpressionType::COLUMN_REF) {
@@ -90,22 +103,21 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		logical_column_ids.push_back(column.Oid());
 		column_names.push_back(colname);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			insert->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
-		} else {
-			UpdateBinder binder(*this, context);
-			binder.target_type = column.Type();
-
-			// Avoid ambiguity issues
-			QualifyColumnReferences(*expr, table->name);
-
-			auto bound_expr = binder.Bind(expr);
-			D_ASSERT(bound_expr);
-			if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-				throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
-			}
-
-			insert->expressions.push_back(move(bound_expr));
+			expr = ExpandDefaultExpression(column);
 		}
+		UpdateBinder binder(*this, context);
+		binder.target_type = column.Type();
+
+		// Avoid ambiguity issues
+		QualifyColumnReferences(*expr, table->name);
+
+		auto bound_expr = binder.Bind(expr);
+		D_ASSERT(bound_expr);
+		if (bound_expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+			throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
+		}
+
+		insert->expressions.push_back(move(bound_expr));
 	}
 
 	// Figure out which columns are indexed on
@@ -377,11 +389,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
 				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
 					// DEFAULT value! replace the entry
-					if (column.DefaultValue()) {
-						expr_list.values[list_idx][col_idx] = column.DefaultValue()->Copy();
-					} else {
-						expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.Type()));
-					}
+					ReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 				}
 			}
 		}
