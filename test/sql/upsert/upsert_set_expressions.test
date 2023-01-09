@@ -1,4 +1,4 @@
-# name: test/sql/upsert/this_does_work_for_some_reason.test
+# name: test/sql/upsert/upsert_set_expressions.test
 # group: [upsert]
 
 # Use parallel insert (only implemented parallel for now)
@@ -54,4 +54,4 @@ select * from tbl;
 ----
 1	10	1
 2	20	1
-3	30	4
+3	30	3

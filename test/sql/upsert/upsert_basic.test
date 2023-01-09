@@ -96,7 +96,7 @@ select * from tbl;
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) WHERE k < 5 DO UPDATE SET k = 1;
 ----
-Constraint Error: TODO: find the first conflict that doesn't meet the condition
+Constraint Error: Duplicate key "i: 3" violates primary key constraint
 
 # When the condition is met, the DO is performed
 statement ok
