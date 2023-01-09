@@ -26,6 +26,11 @@ public:
 	bool is_file_and_exists;
 	bool per_thread_output;
 
+	bool partition_output;
+	vector<idx_t> partition_columns;
+	vector<string> names;
+	vector<LogicalType> expected_types;
+
 public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);

@@ -27,6 +27,11 @@ public:
 	bool parallel;
 	bool per_thread_output;
 
+	bool partition_output;
+	vector<idx_t> partition_columns;
+	vector<string> names;
+	vector<LogicalType> expected_types;
+
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

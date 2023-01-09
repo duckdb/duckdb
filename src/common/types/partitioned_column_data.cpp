@@ -1,6 +1,7 @@
 #include "duckdb/common/types/partitioned_column_data.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -18,6 +19,8 @@ unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
 		return make_unique<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
+	case PartitionedColumnDataType::HIVE:
+		return make_unique<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}

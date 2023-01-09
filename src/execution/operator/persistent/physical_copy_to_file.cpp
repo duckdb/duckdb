@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/file_system.hpp"
 
 #include <algorithm>
@@ -15,6 +16,9 @@ public:
 	idx_t rows_copied;
 	idx_t last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
+
+	//! shared state for HivePartitionedColumnData
+	shared_ptr<GlobalHivePartitionState> partition_state;
 };
 
 class CopyToFunctionLocalState : public LocalSinkState {
@@ -23,6 +27,10 @@ public:
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
+
+	//! Buffers the tuples in partitions before writing
+	unique_ptr<HivePartitionedColumnData> part_buffer;
+	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 };
 
 //===--------------------------------------------------------------------===//
@@ -48,6 +56,11 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
+	if (partition_output) {
+		l.part_buffer->Append(*l.part_buffer_append_state, input);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
 	{
 		lock_guard<mutex> glock(g.lock);
 		g.rows_copied += input.size();
@@ -57,14 +70,59 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
+static string GetFullHivePath(const vector<idx_t>& cols, const vector<string>& names, const vector<Value>& values, const string& path) {
+	string partition_path = "/";
+
+	for(idx_t i = 0; i < cols.size(); i++) {
+		auto partition_col_name = names[cols[i]];
+		auto partition_value = values[i];
+		string p_dir = partition_col_name + "=" + partition_value.ToString() + "/";
+		partition_path += p_dir + "/";
+	}
+
+	return path + partition_path;
+}
+
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
+	if (partition_output) {
+		l.part_buffer->FlushAppendState(*l.part_buffer_append_state);
+		auto& partitions = l.part_buffer->GetPartitions();
+		auto partition_key_map = l.part_buffer->GetReverseMap();
+
+		for(idx_t i = 0; i < partitions.size(); i++) {
+			// TODO: get partition string
+			string hive_path = GetFullHivePath(partition_columns, names, partition_key_map[i]->values, file_path);
+
+			auto &fs = FileSystem::GetFileSystem(context.client);
+			if (!fs.DirectoryExists(hive_path)) {
+				fs.CreateDirectory(hive_path);
+			}
+
+			// Create a writer for the current file
+			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, hive_path + "/1337.parquet");
+			auto fun_data_local = function.copy_to_initialize_local(context, *bind_data);
+
+			for(auto &chunk : partitions[i]->Chunks()) {
+				function.copy_to_sink(context, *bind_data, *fun_data_global, *fun_data_local, chunk);
+			}
+
+			function.copy_to_combine(context, *bind_data, *fun_data_global, *fun_data_local);
+			function.copy_to_finalize(context.client, *bind_data, *fun_data_global);
+		}
+
+		return;
+	}
+
 	if (function.copy_to_combine) {
 		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state,
 		                         *l.local_state);
-		if (per_thread_output) {
+
+		if (partition_output) {
+
+		} else if (per_thread_output) {
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 		}
 	}
@@ -73,7 +131,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
-	if (per_thread_output) {
+	if (per_thread_output || partition_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;
 	}
@@ -89,6 +147,19 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
+	if (partition_output) {
+		auto state = make_unique<CopyToFunctionLocalState>(nullptr);
+		{
+			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			lock_guard<mutex> glock(g.lock);
+
+			// TODO: types is incorrect: its what copy returns, instead of what goes in here
+			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types, partition_columns, g.partition_state);
+			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
+			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
+		}
+		return std::move(state);
+	}
 	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
 		idx_t this_file_offset;
@@ -108,7 +179,11 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	if (per_thread_output) {
+	if (partition_output) {
+		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
+		state->partition_state = make_shared<GlobalHivePartitionState>();
+		return state;
+	} else if (per_thread_output) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
 		if (fs.FileExists(file_path)) {

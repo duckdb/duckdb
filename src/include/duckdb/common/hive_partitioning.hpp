@@ -16,6 +16,9 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
+#include <sstream>
+#include <iostream>
+
 namespace duckdb {
 
 class HivePartitioning {
@@ -35,29 +38,45 @@ public:
 	DUCKDB_API static const string REGEX_STRING;
 };
 
+
+static void HashDataChunk2(DataChunk& chunk, Vector &result, vector<idx_t> column_ids) {
+	D_ASSERT(result.GetType().id() == LogicalType::HASH);
+	VectorOperations::Hash(chunk.data[0], result, chunk.size());
+	for (idx_t i = 1; i < column_ids.size(); i++) {
+		VectorOperations::CombineHash(result, chunk.data[column_ids[i]], chunk.size());
+	}
+}
+
+// The idea
 struct HivePartitionKey {
-	//! Columns by which we want to partition, last column containing the combined hash
-	DataChunk& partition_columns;
-	//! offset of this specific key
-	idx_t offset;
+	//! Columns by which we want to partition
+	vector<Value> values;
+	//! Hash of this key
+	hash_t hash;
+
+	string ToString() {
+		std::stringstream ss;
+
+		ss << "[";
+		for (const auto& val: values) {
+			ss << val.ToString();
+			ss << ", ";
+		}
+		ss << "] with hash: " << hash;
+
+		return ss.str();
+	}
 };
 
 struct HivePartitionKeyHash {
 	std::size_t operator()(const HivePartitionKey &k) const {
-		// Essentially a NOP, because the hash is already available here
-		return k.partition_columns.data[k.partition_columns.ColumnCount()-1].GetData()[k.offset];
+		return k.hash;
 	}
 };
 
-// TODO: this is probably slow and wrong in many cases, simple INT types should work
 struct HivePartitionKeyEquality {
 	bool operator()(const HivePartitionKey &a, const HivePartitionKey &b) const {
-		for(idx_t i = 0; i < a.partition_columns.ColumnCount()-1; i++){
-			if (a.partition_columns.data[i].GetValue(a.offset) != b.partition_columns.data[i].GetValue(b.offset)) {
-				return false;
-			}
-		}
-		return true;
+		return a.values == b.values;
 	}
 };
 
@@ -68,10 +87,8 @@ typedef unordered_map<HivePartitionKey, idx_t, HivePartitionKeyHash, HivePartiti
 class HivePartitionMap {
 public:
 	hive_partition_map_t map;
-	//! partition columns for each key
-	DataChunk key_values;
 
-	idx_t Lookup(HivePartitionKey& key) {
+	idx_t Lookup(HivePartitionKey &key) {
 		auto lookup = map.find(key);
 		if (lookup != map.end()) {
 			return lookup->second;
@@ -80,42 +97,45 @@ public:
 	}
 
 	// Assumes key is not present!
-	void Insert(HivePartitionKey& key) {
-		SelectionVector updated(key.offset, 1);
-		key_values.Append(key.partition_columns, true, &updated, 1);
-		map[{key_values, map.size()}] = map.size();
+	idx_t Insert(HivePartitionKey key) {
+		auto new_idx = map.size();
+		map.insert({std::move(key), new_idx});
+		return new_idx;
 	}
 
-	void InsertIfNew(HivePartitionKey& key) {
+	idx_t InsertIfNew(HivePartitionKey key) {
 		auto partition_id = Lookup(key);
 		if (partition_id == DConstants::INVALID_INDEX) {
-			Insert(key);
+			return Insert(std::move(key));
+		} else {
+			return partition_id;
 		}
 	}
 
-	void InsertBulk(DataChunk& keys) {
+	void InsertBulk(DataChunk &keys) {
 		// TODO
+	}
+
+	std::map<idx_t, const HivePartitionKey*> GetReverseMap() {
+		std::map<idx_t, const HivePartitionKey*> ret;
+		for (const auto& pair : map) {
+			ret[pair.second] = &(pair.first);
+		}
+		return ret;
 	}
 
 	//! Update this HivePartitionMap with the keys that are present in the other maps
 	//! Note: caller should acquire appropriate locks!
-	void Synchronise(HivePartitionMap& other) {
-		idx_t start_from = map.size();
-		idx_t to_copy = other.map.size() - start_from;
-
-		// TODO: this can be improved. We now need a local copy since DataChunk can resize, however we could make a shared
-		//       global hivePartitionMapState which has a linked list to guarantee pointer stability
-		SelectionVector updated(start_from, to_copy);
-		key_values.Append(other.key_values, true, &updated, to_copy);
-
-		// insert new keys into local map
-		for (idx_t i = start_from; i < other.map.size(); i++) {
-			map[{key_values, i}] = i;
-		}
+	void Synchronise(HivePartitionMap &other) {
+		//		idx_t start_from = map.size();
+		//		idx_t to_copy = other.map.size() - start_from;
+		//
+		// Todo: incremental instead of copy all over
+		map = other.map;
 	}
- };
+};
 
-//! class shared between HivePartitionColumnData classes that synchronizes lazy partition discovery.
+//! class shared between HivePartitionColumnData classes that synchronizes partition discovery between threads.
 //! each HivePartitionedColumnData will hold a local copy of the key->partition map
 class GlobalHivePartitionState {
 public:
@@ -125,32 +145,114 @@ public:
 
 class HivePartitionedColumnData : public PartitionedColumnData {
 public:
-	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types)
-	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, types) {
+	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
+	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
+	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
+	      global_state(std::move(global_state)),group_by_columns(partition_by_cols) {
+	}
+	HivePartitionedColumnData(const HivePartitionedColumnData &other) : PartitionedColumnData(other) {
 
+		// Synchronize to ensure consistency of partition map
+		if (other.global_state) {
+			global_state = other.global_state;
+			unique_lock<mutex> lck(global_state->lock);
+			local_partition_map.Synchronise(global_state->partition_map);
+		}
 	}
 
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override {
-		throw NotImplementedException("TODO");
 
-		// TODO:
-		// generate Datachunk for key columns
-		// add hash column to datachunk
-		// Generate PartitionedColumnDataAppendState
+		Vector hashes(LogicalType::HASH, input.size());
+		input.Hash(hashes);
+		HashDataChunk2(input, hashes, group_by_columns);
+
+		for (idx_t i = 0; i < input.size(); i++) {
+			HivePartitionKey key;
+			key.hash = FlatVector::GetData<hash_t>(hashes)[i];
+			for (auto &col : group_by_columns) {
+				key.values.emplace_back(input.GetValue(col, i));
+			}
+
+			idx_t partition_id = local_partition_map.Lookup(key);
+			const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+			if (partition_id == DConstants::INVALID_INDEX) {
+				idx_t new_partition_id = RegisterNewPartition(key,state);
+				partition_indices[i] = new_partition_id;
+			} else {
+				partition_indices[i] = partition_id;
+			}
+		}
 	}
 
-	idx_t RegisterNewPartition(HivePartitionKey key) {
-		unique_lock<mutex> lck(global_state->lock);
-		// Insert into global
-		global_state->partition_map.InsertIfNew(key);
-		// Synchronise global map into local, may contain changes from other threads too
-		local_partition_map.Synchronise(global_state->partition_map);
+	//! Create allocators for all currently registered partitions (requires lock!)
+	void GrowAllocators() {
+		idx_t current_allocator_size = allocators->allocators.size();
+		idx_t required_allocators = local_partition_map.map.size();
+
+		allocators->allocators.reserve(current_allocator_size);
+		for (idx_t i = current_allocator_size; i < required_allocators; i++) {
+			CreateAllocator();
+		}
+
+		D_ASSERT(allocators->allocators.size() == local_partition_map.map.size());
+	}
+
+	//! Create append states for all currently registered partitions (requires lock!)
+	void GrowAppendState(PartitionedColumnDataAppendState &state) {
+		idx_t current_append_state_size = state.partition_append_states.size();
+		idx_t required_append_state_size = local_partition_map.map.size();
+
+		for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
+			state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+			state.partition_buffers.emplace_back(CreatePartitionBuffer());
+		}
+	}
+
+	void GrowPartitions() {
+		idx_t current_partitions = partitions.size();
+		idx_t required_partitions = local_partition_map.map.size();
+
+		D_ASSERT(allocators->allocators.size() == required_partitions);
+
+		for (idx_t i = current_partitions; i < required_partitions; i++) {
+			partitions.emplace_back(CreatePartitionCollection(i));
+		}
+		D_ASSERT(partitions.size() == local_partition_map.map.size());
+	}
+
+	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state) {
+		std::cout << "Registering new partition: " << key.ToString() << "\n";
+
+		if (global_state) {
+			// We need to lock both the GlobalHivePartitionState and the allocators while adding a partition
+			unique_lock<mutex> lck_gstate(global_state->lock);
+			unique_lock<mutex> lck_alloc(allocators->lock);
+
+			// Insert into global map
+			idx_t partition_id = global_state->partition_map.InsertIfNew(std::move(key));
+			// Synchronise global map into local, may contain changes from other threads too
+			local_partition_map.Synchronise(global_state->partition_map);
+
+			// Grow all the things!
+			GrowAllocators();
+			GrowAppendState(state);
+			GrowPartitions();
+
+			return partition_id;
+		} else {
+			return local_partition_map.Insert(std::move(key));
+		}
+	}
+
+	std::map<idx_t, const HivePartitionKey*> GetReverseMap() {
+		return local_partition_map.GetReverseMap();
 	}
 
 protected:
 	//! Shared HivePartitionedColumnData should always have a global state to keep partition map sync
 	shared_ptr<GlobalHivePartitionState> global_state;
 	HivePartitionMap local_partition_map;
+	vector<idx_t> group_by_columns;
 };
 
 } // namespace duckdb
