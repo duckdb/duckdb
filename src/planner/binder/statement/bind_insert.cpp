@@ -226,6 +226,8 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	bind_context.AddGenericBinding(excluded_index, "excluded", table_column_names, table_column_types);
 
 	if (on_conflict.condition) {
+		// Avoid ambiguity between <table_name> binding and 'excluded'
+		QualifyColumnReferences(*on_conflict.condition, table->name);
 		// Bind the ON CONFLICT ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(on_conflict.condition);
@@ -244,6 +246,8 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
 	if (set_info.condition) {
+		// Avoid ambiguity between <table_name> binding and 'excluded'
+		QualifyColumnReferences(*set_info.condition, table->name);
 		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(set_info.condition);

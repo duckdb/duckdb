@@ -43,7 +43,7 @@ select * from tbl;
 2	2
 3	4
 
-# Usage of 'excluded' in a ON CONFLICT (..) <WHERE> clause
+# Usage of 'excluded' in a ON CONFLICT (..) WHERE <expr>
 statement error
 insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) WHERE excluded.b < 8 DO NOTHING;
 ----
@@ -57,5 +57,19 @@ select * from tbl;
 ----
 1	3
 2	2
+3	10
+4	3
+
+# Usage of 'excluded' in a DO UPDATE SET ... WHERE <expr>
+
+# Condition not met, turns into a DO NOTHING instead
+statement ok
+insert into tbl VALUES (3,8), (2,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b == excluded.b;
+
+query II
+select * from tbl;
+----
+1	3
+2	4
 3	10
 4	3
