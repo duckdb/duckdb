@@ -164,6 +164,27 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			result_type = LogicalType::USER(user_type_name);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP:
+			if (modifier_idx == 0) {
+				result_type = LogicalType::TIMESTAMP;
+			} else {
+				if (modifier_idx > 1) {
+					throw ParserException("TIMESTAMP only supports a single modifier");
+				}
+				if (width > 10) {
+					throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
+				}
+				if (width == 0) {
+					result_type = LogicalType::TIMESTAMP_S;
+				} else if (width <= 3) {
+					result_type = LogicalType::TIMESTAMP_MS;
+				} else if (width <= 6) {
+					result_type = LogicalType::TIMESTAMP;
+				} else {
+					result_type = LogicalType::TIMESTAMP_NS;
+				}
+			}
+			break;
 		default:
 			if (modifier_idx > 0) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
