@@ -62,10 +62,12 @@ select * from tbl;
 
 # Usage of 'excluded' in a DO UPDATE SET ... WHERE <expr>
 
-# Condition not met, turns into a DO NOTHING instead
+# Both '2' and '3' are conflicts, but only '2' meets the condition
+# When the condition is not met, this turns into a DO NOTHING instead for that tuple
 statement ok
-insert into tbl VALUES (3,8), (2,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b == excluded.b;
+insert into tbl VALUES (3,8), (2,2), (7,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b == excluded.b;
 
+# Only '2' is updated
 query II
 select * from tbl;
 ----
@@ -73,3 +75,4 @@ select * from tbl;
 2	4
 3	10
 4	3
+7	2
