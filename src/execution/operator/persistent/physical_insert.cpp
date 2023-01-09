@@ -328,6 +328,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 							// Not all conflicts met the condition, need to filter out the ones that don't
 							combined_chunk.Slice(selection.Selection(), selection.Count());
 							combined_chunk.SetCardinality(selection.Count());
+							// Also apply this Slice to the to-update row_ids
+							conflicts.row_ids.Slice(selection.Selection(), selection.Count());
 						}
 					}
 
