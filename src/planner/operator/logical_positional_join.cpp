@@ -1,4 +1,4 @@
-#include "duckdb/planner/operator/logical_pos_join.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
 
 namespace duckdb {
 

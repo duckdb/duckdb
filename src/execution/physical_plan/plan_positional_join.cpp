@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/join/physical_positional_join.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_pos_join.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
 
 namespace duckdb {
 

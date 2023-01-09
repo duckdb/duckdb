@@ -59,6 +59,18 @@ FROM three t1 POSITIONAL JOIN two t2
 12	2	12	2
 13	3	NULL	NULL
 
+query II
+SELECT COUNT(a), COUNT(id)
+FROM three POSITIONAL JOIN threek
+----
+3	3002
+
+query II
+SELECT COUNT(id), COUNT(a)
+FROM threek POSITIONAL JOIN three
+----
+3002	3
+
 #
 # Positional Join
 #
@@ -102,3 +114,21 @@ FROM
 ----
 12	2	11	1
 NULL	NULL	13	3
+
+query II
+SELECT COUNT(t1.id), COUNT(t2.id)
+FROM 
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 3 = 0) t2
+----
+1501	1001
+
+query II
+SELECT COUNT(t1.id), COUNT(t2.id)
+FROM 
+	(SELECT * FROM threek WHERE id % 3 = 0) t2
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+----
+1501	1001

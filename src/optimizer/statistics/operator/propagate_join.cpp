@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
@@ -226,6 +227,61 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
+	return move(node_stats);
+}
+
+static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {
+	if (!stats->has_estimated_cardinality || !new_stats.has_estimated_cardinality || !stats->has_max_cardinality ||
+	    !new_stats.has_max_cardinality) {
+		stats = nullptr;
+		return;
+	}
+	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
+	stats->max_cardinality = MaxValue<idx_t>(stats->max_cardinality, new_stats.max_cardinality);
+}
+
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPositionalJoin &join,
+                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+	D_ASSERT(join.type == LogicalOperatorType::LOGICAL_POSITIONAL_JOIN);
+
+	// first propagate through the children of the join
+	node_stats = PropagateStatistics(join.children[0]);
+	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
+		auto child_stats = PropagateStatistics(join.children[child_idx]);
+		if (!child_stats) {
+			node_stats = nullptr;
+		} else if (node_stats) {
+			if (!node_stats->has_estimated_cardinality || !child_stats->has_estimated_cardinality ||
+			    !node_stats->has_max_cardinality || !child_stats->has_max_cardinality) {
+				node_stats = nullptr;
+			} else {
+				MaxCardinalities(node_stats, *child_stats);
+			}
+		}
+	}
+
+	// No conditions.
+
+	// Positional Joins are always FULL OUTER
+
+	// set IsNull() to true for all lhs statistics
+	auto left_bindings = join.children[0]->GetColumnBindings();
+	for (auto &binding : left_bindings) {
+		auto stats = statistics_map.find(binding);
+		if (stats != statistics_map.end()) {
+			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+		}
+	}
+
+	// set IsNull() to true for all rhs statistics
+	auto right_bindings = join.children[1]->GetColumnBindings();
+	for (auto &binding : right_bindings) {
+		auto stats = statistics_map.find(binding);
+		if (stats != statistics_map.end()) {
+			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+		}
+	}
+
 	return move(node_stats);
 }
 
