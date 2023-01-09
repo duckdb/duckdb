@@ -1,0 +1,23 @@
+# name: test/sql/upsert/upsert_default_values.test
+# group: [upsert]
+
+#statement ok
+#pragma enable_verification;
+
+# Use parallel insert
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+create table tbl (
+	a integer primary key DEFAULT 5,
+	b integer
+);
+
+statement error
+insert into tbl DEFAULT VALUES;
+----
+Parser Error: DEFAULT VALUES clause is not supported!
+
+# We only bind the on conflict clause when there is a SelectStmt child, so when support is added for DEFAULT VALUES
+# This should also be changed.

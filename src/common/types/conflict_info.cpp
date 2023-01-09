@@ -8,13 +8,17 @@ bool ConflictInfo::ConflictTargetMatches(Index &index) const {
 		// We only support checking ON CONFLICT for Unique/Primary key constraints
 		return false;
 	}
-	if (!column_ids.empty()) {
-		for (auto &id : column_ids) {
-			if (index.column_id_set.count(id)) {
-				return true;
-			}
-		}
+	if (column_ids.empty()) {
+		return true;
+	}
+	if (column_ids.size() != index.column_id_set.size()) {
+		// All targets need to match, not only partially
 		return false;
+	}
+	for (auto &id : column_ids) {
+		if (!index.column_id_set.count(id)) {
+			return false;
+		}
 	}
 	return true;
 }
