@@ -156,7 +156,7 @@ SELECT col1::INT[][][][][][] FROM crazyNested;
 [[[[[[1]], [[3, 4, 9]]], [[[0, 1]]]]]]
 [[[[[[4]]]]]]
 
-#               Quote escaping
+#               Quote handling
 # ---------------------------------------------------
 query I
 SELECT CAST('[''hello'',''world'', ''!'']' AS VARCHAR[]);
@@ -177,6 +177,11 @@ query I
 SELECT CAST('["can''t", "you''re", "i''m"]' AS VARCHAR[]);
 ----
 ["can't", "you're", "i'm"]
+
+query I
+SELECT CAST('[can''t, you''re, i''m]' AS VARCHAR[]);
+----
+[can't, you're, i'm]
 
 query I
 SELECT CAST('["]", "hello", "world"]' AS VARCHAR[]);
