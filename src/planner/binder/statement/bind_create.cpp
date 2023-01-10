@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
@@ -128,6 +129,33 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
+static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::FUNCTION: {
+		auto &func = (FunctionExpression &)*expr;
+		auto function = (StandardEntry *)Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
+		                                                   func.schema, func.function_name, true);
+		if (function) {
+			func.catalog = function->catalog->GetName();
+			func.schema = function->schema->name;
+		}
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		// replacing parameters within a subquery is slightly different
+		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
+		break;
+	}
+	default: // fall through
+		break;
+	}
+	// unfold child expressions
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
+}
+
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 	auto &scalar_function = (ScalarMacroFunction &)*base.function;
@@ -157,6 +185,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto this_macro_binding = make_unique<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
+	QualifyFunctionNames(context, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
