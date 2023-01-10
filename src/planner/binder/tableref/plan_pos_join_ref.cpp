@@ -1,5 +1,5 @@
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_pos_join.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/tableref/bound_pos_join_ref.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 

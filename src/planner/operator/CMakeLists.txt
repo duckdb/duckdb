@@ -29,7 +29,7 @@ add_library_unity(
   logical_limit.cpp
   logical_limit_percent.cpp
   logical_order.cpp
-  logical_pos_join.cpp
+  logical_positional_join.cpp
   logical_pragma.cpp
   logical_prepare.cpp
   logical_projection.cpp
