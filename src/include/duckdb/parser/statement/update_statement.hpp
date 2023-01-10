@@ -18,8 +18,7 @@ namespace duckdb {
 
 class UpdateSetInfo {
 public:
-	UpdateSetInfo() {
-	}
+	UpdateSetInfo();
 
 public:
 	unique_ptr<UpdateSetInfo> Copy() const;

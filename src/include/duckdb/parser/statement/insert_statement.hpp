@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 
 namespace duckdb {
 class ExpressionListRef;

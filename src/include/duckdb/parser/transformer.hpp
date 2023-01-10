@@ -228,7 +228,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Update transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<UpdateSetInfo> TransformUpdateSetInfo(duckdb_libpgquery::PGList *targetList,
+	unique_ptr<UpdateSetInfo> TransformUpdateSetInfo(duckdb_libpgquery::PGList *target_list,
 	                                                 duckdb_libpgquery::PGNode *where_clause);
 
 	//===--------------------------------------------------------------------===//

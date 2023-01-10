@@ -3,11 +3,11 @@
 
 namespace duckdb {
 
-unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery::PGList *targetList,
+unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery::PGList *target_list,
                                                               duckdb_libpgquery::PGNode *where_clause) {
 	auto result = make_unique<UpdateSetInfo>();
 
-	auto root = targetList;
+	auto root = target_list;
 	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
 		auto target = (duckdb_libpgquery::PGResTarget *)(cell->data.ptr_value);
 		result->columns.emplace_back(target->name);

@@ -3,6 +3,9 @@
 
 namespace duckdb {
 
+UpdateSetInfo::UpdateSetInfo() {
+}
+
 UpdateSetInfo::UpdateSetInfo(const UpdateSetInfo &other) : columns(other.columns) {
 	if (other.condition) {
 		condition = other.condition->Copy();
