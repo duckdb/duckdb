@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
