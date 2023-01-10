@@ -222,6 +222,7 @@ jobs:
 
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
+    needs: rstats-linux
     runs-on: windows-latest
     env:
       TREAT_WARNINGS_AS_ERRORS: true
