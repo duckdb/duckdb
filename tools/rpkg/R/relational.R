@@ -213,7 +213,7 @@ rel_set_diff <- rapi_rel_set_diff
 #' SET SYMDIFF on two DuckDB relation objects
 #' @param rel_a a DuckDB relation object
 #' @param rel_b a DuckDB relation object
-#' @return a new `duckdb_relation` object resulting from the SYMDIFF
+#' @return a new `duckdb_relation` object resulting from the symmetric difference of rel_a and rel_b
 #' @noRd
 #' @examples
 #' rel_a <- rel_from_df(con, mtcars)
