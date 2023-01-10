@@ -42,6 +42,12 @@ struct SelectionVector {
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(move(data));
 	}
+	SelectionVector &operator=(SelectionVector &&other) {
+		sel_vector = other.sel_vector;
+		other.sel_vector = nullptr;
+		selection_data = move(other.selection_data);
+		return *this;
+	}
 
 public:
 	static idx_t Inverted(SelectionVector &src, SelectionVector &dst, idx_t source_size, idx_t count) {

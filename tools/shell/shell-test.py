@@ -34,7 +34,7 @@ def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
           test_exception(command, cmd, stdout, stderr, 'out test failed')
 
      if err and err not in stderr:
-          test_exception(command, cmd, stdout, stderr, 'err test failed')
+          test_exception(command, cmd, stdout, stderr, f"err test failed, error does not contain: '{err}'")
 
      if not err and stderr != '':
           test_exception(command, cmd, stdout, stderr, 'got err test failed')
