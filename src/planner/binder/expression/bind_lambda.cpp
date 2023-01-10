@@ -156,8 +156,8 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	}
 }
 
-idx_t ExpressionBinder::MatchingLambdaBinding(ColumnRefExpression &expr) const {
-	if (lambda_bindings == nullptr) {
+idx_t ExpressionBinder::GetMatchingLambdaBinding(ColumnRefExpression &expr) const {
+	if (!lambda_bindings) {
 		return DConstants::INVALID_INDEX;
 	}
 	auto &table_name = expr.GetTableName();

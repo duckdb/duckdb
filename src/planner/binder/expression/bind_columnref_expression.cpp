@@ -313,7 +313,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 
 	BindResult result;
 
-	auto lambda_binding_idx = MatchingLambdaBinding(colref);
+	auto lambda_binding_idx = GetMatchingLambdaBinding(colref);
 	if (lambda_binding_idx != DConstants::INVALID_INDEX) {
 		D_ASSERT(lambda_bindings);
 		D_ASSERT(lambda_bindings->size() > lambda_binding_idx);
