@@ -187,7 +187,6 @@ jobs:
   rstats-windows:
     name: R Package Windows
     runs-on: windows-latest
-    needs: rstats-linux
     steps:
     - uses: actions/checkout@v3
       with:
