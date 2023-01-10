@@ -68,9 +68,10 @@ struct UniqueConstructor {
 };
 
 #ifdef DEBUG
-template< class T >
+template<class T>
 typename std::remove_reference<T>::type&& move(T&& t) noexcept {
-	//static_assert(false, "Use std::move instead of unqualified move or duckdb::move");
+	// the nonsensical sizeof check ensures this is never instantiated
+	static_assert(sizeof(T) == 0, "Use std::move instead of unqualified move or duckdb::move");
 }
 #endif
 

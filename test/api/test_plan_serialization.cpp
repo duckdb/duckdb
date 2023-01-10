@@ -25,17 +25,13 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 
 	Parser p;
 	p.ParseQuery(sql);
-	//	printf("\nParsed query '%s'\n", sql.c_str());
 
-	int i = 0;
 	for (auto &statement : p.statements) {
 		con.context->transaction.BeginTransaction();
 		// Should that be the default "ToString"?
 		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);
-		//		printf("[%d] Processing statement '%s'\n", i, statement_sql.c_str());
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(statement));
-		//		printf("[%d] Created plan\n", i);
 		auto plan = std::move(planner.plan);
 
 		Optimizer optimizer(*planner.binder, *con.context);
@@ -47,7 +43,6 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 
 		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
 		con.context->transaction.Commit();
-		++i;
 	}
 }
 
