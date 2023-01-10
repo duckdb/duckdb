@@ -31,7 +31,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 		result->from_table = TransformFrom(stmt->fromClause);
 	}
 
-	result->set_info = TransformUpdateSetInfo(stmt->targetList, stmt->where_clause);
+	result->set_info = TransformUpdateSetInfo(stmt->targetList, stmt->whereClause);
 
 	// Grab and transform the returning columns from the parser.
 	if (stmt->returningList) {
