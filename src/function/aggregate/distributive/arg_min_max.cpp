@@ -7,16 +7,83 @@
 
 namespace duckdb {
 
+struct ArgMinMaxStateBase {
+	ArgMinMaxStateBase() : is_initialized(false) {
+	}
+
+	template <class T>
+	static inline void CreateValue(T &value) {
+	}
+
+	template <class T>
+	static inline void DestroyValue(T &value) {
+	}
+
+	template <class T>
+	static inline void AssignValue(T &target, T new_value, bool is_initialized) {
+		target = new_value;
+	}
+
+	template <typename T>
+	static inline void ReadValue(Vector &result, T &arg, T *target, idx_t idx) {
+		target[idx] = arg;
+	}
+
+	bool is_initialized;
+};
+
+// Out-of-line specialisations
+template <>
+void ArgMinMaxStateBase::CreateValue(Vector *&value) {
+	value = nullptr;
+}
+
+template <>
+void ArgMinMaxStateBase::DestroyValue(string_t &value) {
+	if (!value.IsInlined()) {
+		delete[] value.GetDataUnsafe();
+	}
+}
+
+template <>
+void ArgMinMaxStateBase::DestroyValue(Vector *&value) {
+	delete value;
+	value = nullptr;
+}
+
+template <>
+void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value, bool is_initialized) {
+	if (is_initialized) {
+		DestroyValue(target);
+	}
+	if (new_value.IsInlined()) {
+		target = new_value;
+	} else {
+		// non-inlined string, need to allocate space for it
+		auto len = new_value.GetSize();
+		auto ptr = new char[len];
+		memcpy(ptr, new_value.GetDataUnsafe(), len);
+
+		target = string_t(ptr, len);
+	}
+}
+
+template <>
+void ArgMinMaxStateBase::ReadValue(Vector &result, string_t &arg, string_t *target, idx_t idx) {
+	target[idx] = StringVector::AddStringOrBlob(result, arg);
+}
+
 template <class A, class B>
-struct ArgMinMaxState {
+struct ArgMinMaxState : public ArgMinMaxStateBase {
 	using ARG_TYPE = A;
 	using BY_TYPE = B;
 
 	ARG_TYPE arg;
 	BY_TYPE value;
-	bool is_initialized;
 
-	ArgMinMaxState() : is_initialized(false) {
+	ArgMinMaxState() {
+		CreateValue(arg);
+		CreateValue(value);
 	}
 
 	~ArgMinMaxState() {
@@ -25,54 +92,6 @@ struct ArgMinMaxState {
 			DestroyValue(value);
 			is_initialized = false;
 		}
-	}
-
-	template <class T>
-	static void DestroyValue(T value) {
-	}
-
-	template <>
-	void DestroyValue(string_t value) {
-		if (!value.IsInlined()) {
-			delete[] value.GetDataUnsafe();
-		}
-	}
-
-	template <>
-	void DestroyValue(Vector *value) {
-		delete value;
-	}
-
-	template <class T>
-	static void AssignValue(T &target, T new_value, bool is_initialized) {
-		target = new_value;
-	}
-
-	template <>
-	void AssignValue(string_t &target, string_t new_value, bool is_initialized) {
-		if (is_initialized) {
-			DestroyValue(target);
-		}
-		if (new_value.IsInlined()) {
-			target = new_value;
-		} else {
-			// non-inlined string, need to allocate space for it
-			auto len = new_value.GetSize();
-			auto ptr = new char[len];
-			memcpy(ptr, new_value.GetDataUnsafe(), len);
-
-			target = string_t(ptr, len);
-		}
-	}
-
-	template <typename T>
-	static void ReadValue(Vector &result, T &arg, T *target, idx_t idx) {
-		target[idx] = arg;
-	}
-
-	template <>
-	static void ReadValue(Vector &result, string_t &arg, string_t *target, idx_t idx) {
-		target[idx] = StringVector::AddStringOrBlob(result, arg);
 	}
 };
 
@@ -211,7 +230,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 				ConstantVector::SetNull(result, true);
 				break;
 			default:
-				throw InternalException("Invalid result vector type for nested min/max");
+				throw InternalException("Invalid result vector type for nested arg_min/max");
 			}
 		} else {
 			VectorOperations::Copy(*state->arg, result, 1, 0, idx);
