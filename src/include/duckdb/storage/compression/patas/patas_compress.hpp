@@ -52,7 +52,7 @@ public:
 				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
 			}
 
-			state_wrapper->WriteValue(*(reinterpret_cast<EXACT_TYPE *>(&value)));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
 		}
 	};
 
