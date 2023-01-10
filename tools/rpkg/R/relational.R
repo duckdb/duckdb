@@ -168,7 +168,14 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_join(left, right, cond, "right")
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
-rel_join <- rapi_rel_join
+rel_inner_join <- function(left, right, conds) {
+  rel_join(left, right, conds, "inner")
+}
+
+rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer")) {
+  join <- match.arg(join)
+  rapi_rel_join(left, right, conds, join)
+}
 
 #' UNION ALL on two DuckDB relation objects
 #' @param rel_a a DuckDB relation object
