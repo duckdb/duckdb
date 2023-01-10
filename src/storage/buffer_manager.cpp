@@ -718,9 +718,9 @@ private:
 		if (index_manager.RemoveIndex(index)) {
 			// the max_index that is currently in use has decreased
 			// as a result we can truncate the file
+#ifndef WIN32 // this ended up causing issues when sorting
 			auto max_index = index_manager.GetMaxIndex();
 			auto &fs = FileSystem::GetFileSystem(db);
-#ifndef WIN32 // this ended up causing issues when sorting
 			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
 #endif
 		}

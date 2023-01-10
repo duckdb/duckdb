@@ -74,7 +74,7 @@ struct StringSplitter {
 		auto delim_size = delim.GetSize();
 		idx_t list_idx = 0;
 		while (input_size > 0) {
-			idx_t match_size;
+			idx_t match_size = 0;
 			auto pos = OP::Find(input_data, input_size, delim_data, delim_size, match_size, data);
 			if (pos > input_size) {
 				break;

@@ -119,8 +119,10 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant
-			int lower_index = -1, upper_index = -1;
-			bool lower_inclusive, upper_inclusive;
+			int lower_index = -1;
+			int upper_index = -1;
+			bool lower_inclusive = false;
+			bool upper_inclusive = false;
 			for (idx_t k = 0; k < constant_list.size(); k++) {
 				auto &info = constant_list[k];
 				if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
