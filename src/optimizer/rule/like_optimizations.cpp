@@ -16,7 +16,7 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
 	func->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
-	root = move(func);
+	root = std::move(func);
 }
 
 static bool PatternIsConstant(const string &pattern) {
@@ -123,7 +123,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 		// Pattern is constant
 		return make_unique<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
 		                                                          : ExpressionType::COMPARE_EQUAL,
-		                                              move(root->children[0]), move(root->children[1]));
+		                                              std::move(root->children[0]), std::move(root->children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -142,18 +142,18 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
 	auto new_function =
-	    make_unique<BoundFunctionExpression>(expr->return_type, move(function), move(expr->children), nullptr);
+	    make_unique<BoundFunctionExpression>(expr->return_type, std::move(function), std::move(expr->children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	new_function->children[1] = make_unique<BoundConstantExpression>(Value(move(pattern)));
+	new_function->children[1] = make_unique<BoundConstantExpression>(Value(std::move(pattern)));
 
-	result = move(new_function);
+	result = std::move(new_function);
 	if (is_not_like) {
 		auto negation = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-		negation->children.push_back(move(result));
-		result = move(negation);
+		negation->children.push_back(std::move(result));
+		result = std::move(negation);
 	}
 
 	return result;

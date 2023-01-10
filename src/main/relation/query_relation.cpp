@@ -8,7 +8,7 @@ namespace duckdb {
 
 QueryRelation::QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
                              string alias_p)
-    : Relation(context, RelationType::QUERY_RELATION), select_stmt(move(select_stmt_p)), alias(move(alias_p)) {
+    : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)), alias(std::move(alias_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 
@@ -25,7 +25,7 @@ unique_ptr<SelectStatement> QueryRelation::ParseStatement(ClientContext &context
 	if (parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException(error);
 	}
-	return unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
+	return unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 }
 
 unique_ptr<SelectStatement> QueryRelation::GetSelectStatement() {
@@ -34,12 +34,12 @@ unique_ptr<SelectStatement> QueryRelation::GetSelectStatement() {
 
 unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	auto select = GetSelectStatement();
-	return move(select->node);
+	return std::move(select->node);
 }
 
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_unique<SubqueryRef>(GetSelectStatement(), GetAlias());
-	return move(subquery_ref);
+	return std::move(subquery_ref);
 }
 
 string QueryRelation::GetAlias() {

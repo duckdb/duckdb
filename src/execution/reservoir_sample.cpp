@@ -118,7 +118,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 			input.Slice(sel, append_to_next_sample);
 		}
 		// now our first sample is filled: append it to the set of finished samples
-		finished_samples.push_back(move(current_sample));
+		finished_samples.push_back(std::move(current_sample));
 
 		// allocate a new sample, and potentially add the remainder of the current input to that sample
 		current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
@@ -162,7 +162,7 @@ void ReservoirSamplePercentage::Finalize() {
 			}
 			new_sample->AddToReservoir(*chunk);
 		}
-		finished_samples.push_back(move(new_sample));
+		finished_samples.push_back(std::move(new_sample));
 	}
 	is_finalized = true;
 }

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::LOGICAL_FILTER) {
-	expressions.push_back(move(expression));
+	expressions.push_back(std::move(expression));
 	SplitPredicates(expressions);
 }
 
@@ -31,10 +31,10 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 			found_conjunction = true;
 			// AND expression, append the other children
 			for (idx_t k = 1; k < conjunction.children.size(); k++) {
-				expressions.push_back(move(conjunction.children[k]));
+				expressions.push_back(std::move(conjunction.children[k]));
 			}
 			// replace this expression with the first child of the conjunction
-			expressions[i] = move(conjunction.children[0]);
+			expressions[i] = std::move(conjunction.children[0]);
 			// we move back by one so the right child is checked again
 			// in case it is an AND expression as well
 			i--;
@@ -52,9 +52,9 @@ unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationSta
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto projection_map = reader.ReadRequiredList<idx_t>();
 	auto result = make_unique<LogicalFilter>();
-	result->expressions = move(expressions);
-	result->projection_map = move(projection_map);
-	return move(result);
+	result->expressions = std::move(expressions);
+	result->projection_map = std::move(projection_map);
+	return std::move(result);
 }
 
 } // namespace duckdb

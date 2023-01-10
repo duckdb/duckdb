@@ -3,7 +3,7 @@
 namespace duckdb {
 
 ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
-    : ExpressionBinder(binder, context), clause(move(clause)) {
+    : ExpressionBinder(binder, context), clause(std::move(clause)) {
 }
 
 BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

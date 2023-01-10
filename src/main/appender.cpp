@@ -19,7 +19,7 @@ BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
 }
 
 BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
-    : allocator(allocator_p), types(move(types_p)), collection(make_unique<ColumnDataCollection>(allocator, types)),
+    : allocator(allocator_p), types(std::move(types_p)), collection(make_unique<ColumnDataCollection>(allocator, types)),
       column(0), appender_type(type_p) {
 	InitializeChunk();
 }

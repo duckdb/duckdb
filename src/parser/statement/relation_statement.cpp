@@ -3,7 +3,7 @@
 namespace duckdb {
 
 RelationStatement::RelationStatement(shared_ptr<Relation> relation)
-    : SQLStatement(StatementType::RELATION_STATEMENT), relation(move(relation)) {
+    : SQLStatement(StatementType::RELATION_STATEMENT), relation(std::move(relation)) {
 }
 
 unique_ptr<SQLStatement> RelationStatement::Copy() const {

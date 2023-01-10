@@ -20,13 +20,13 @@ namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type, ColumnData *parent)
-    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(move(type)),
+    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(std::move(type)),
       parent(parent), version(0) {
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(move(other.type)), parent(parent), updates(move(other.updates)), version(parent ? parent->version + 1 : 0) {
+      type(std::move(other.type)), parent(parent), updates(std::move(other.updates)), version(parent ? parent->version + 1 : 0) {
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -124,7 +124,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (!state.current->next) {
 				break;
 			}
-			state.previous_states.emplace_back(move(state.scan_state));
+			state.previous_states.emplace_back(std::move(state.scan_state));
 			state.current = (ColumnSegment *)state.current->Next();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
@@ -349,7 +349,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 #endif
 	}
 	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
-	data.AppendSegment(l, move(new_segment));
+	data.AppendSegment(l, std::move(new_segment));
 }
 
 void ColumnData::CommitDropColumn() {
@@ -396,7 +396,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	lock_guard<mutex> update_guard(update_lock);
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(move(nodes));
+	checkpointer.Checkpoint(std::move(nodes));
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
@@ -422,8 +422,8 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		auto segment = ColumnSegment::CreatePersistentSegment(
 		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-		    move(data_pointer.statistics));
-		data.AppendSegment(move(segment));
+		    std::move(data_pointer.statistics));
+		data.AppendSegment(std::move(segment));
 	}
 }
 
@@ -487,7 +487,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 			column_info.emplace_back();
 		}
 
-		result.push_back(move(column_info));
+		result.push_back(std::move(column_info));
 
 		segment_idx++;
 		segment = (ColumnSegment *)segment->Next();

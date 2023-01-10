@@ -121,7 +121,7 @@ public:
 	                                                 bind_aggregate_function_t bind = nullptr,
 	                                                 aggregate_destructor_t destructor = nullptr) {
 
-		AggregateFunction aggr_function(move(name), move(arguments), move(return_type), state_size, initialize, update,
+		AggregateFunction aggr_function(std::move(name), std::move(arguments), std::move(return_type), state_size, initialize, update,
 		                                combine, finalize, simple_update, bind, destructor);
 		aggr_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 		return aggr_function;

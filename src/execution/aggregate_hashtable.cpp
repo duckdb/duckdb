@@ -22,13 +22,13 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
                                                      HtEntryType entry_type)
-    : GroupedAggregateHashTable(context, allocator, move(group_types), move(payload_types),
+    : GroupedAggregateHashTable(context, allocator, std::move(group_types), std::move(payload_types),
                                 AggregateObject::CreateAggregateObjects(bindings), entry_type) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types)
-    : GroupedAggregateHashTable(context, allocator, move(group_types), {}, vector<AggregateObject>()) {
+    : GroupedAggregateHashTable(context, allocator, std::move(group_types), {}, vector<AggregateObject>()) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -36,14 +36,14 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
-    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, move(payload_types_p)), entry_type(entry_type),
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)), entry_type(entry_type),
       capacity(0), entries(0), payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
       hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
       no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
-	layout.Initialize(move(group_types_p), move(aggregate_objects_p));
+	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
 
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
@@ -102,7 +102,7 @@ void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 
 void GroupedAggregateHashTable::NewBlock() {
 	auto pin = buffer_manager.Allocate(Storage::BLOCK_SIZE);
-	payload_hds.push_back(move(pin));
+	payload_hds.push_back(std::move(pin));
 	payload_hds_ptrs.push_back(payload_hds.back().Ptr());
 	payload_page_offset = 0;
 }

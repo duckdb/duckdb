@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p), StatisticsType::LOCAL_STATS) {
+StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	InitializeBase();
 
@@ -43,7 +43,7 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() const {
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		result->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void StructStatistics::Serialize(FieldWriter &writer) const {
@@ -59,7 +59,7 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto result = make_unique<StructStatistics>(move(type));
+	auto result = make_unique<StructStatistics>(std::move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();
@@ -75,7 +75,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, Lo
 			result->child_stats[i].reset();
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 string StructStatistics::ToString() const {

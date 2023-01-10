@@ -67,6 +67,13 @@ struct UniqueConstructor {
 	}
 };
 
+#ifdef DEBUG
+template< class T >
+typename std::remove_reference<T>::type&& move(T&& t) noexcept {
+	//static_assert(false, "Use std::move instead of unqualified move or duckdb::move");
+}
+#endif
+
 template <typename T>
 T MaxValue(T a, T b) {
 	return a > b ? a : b;

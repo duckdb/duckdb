@@ -35,7 +35,6 @@ namespace duckdb {
 #endif
 
 //! inline std directives that we use frequently
-using std::move;
 using std::shared_ptr;
 using std::unique_ptr;
 using std::weak_ptr;

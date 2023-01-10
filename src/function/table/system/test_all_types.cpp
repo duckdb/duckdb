@@ -136,17 +136,17 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_type_list;
 	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
 	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
-	auto struct_type = LogicalType::STRUCT(move(struct_type_list));
+	auto struct_type = LogicalType::STRUCT(std::move(struct_type_list));
 
 	child_list_t<Value> min_struct_list;
 	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
 	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
-	auto min_struct_val = Value::STRUCT(move(min_struct_list));
+	auto min_struct_val = Value::STRUCT(std::move(min_struct_list));
 
 	child_list_t<Value> max_struct_list;
 	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
 	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
-	auto max_struct_val = Value::STRUCT(move(max_struct_list));
+	auto max_struct_val = Value::STRUCT(std::move(max_struct_list));
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
@@ -154,26 +154,26 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_list_type_list;
 	struct_list_type_list.push_back(make_pair("a", int_list_type));
 	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
-	auto struct_list_type = LogicalType::STRUCT(move(struct_list_type_list));
+	auto struct_list_type = LogicalType::STRUCT(std::move(struct_list_type_list));
 
 	child_list_t<Value> min_struct_vl_list;
 	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
 	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
-	auto min_struct_val_list = Value::STRUCT(move(min_struct_vl_list));
+	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list));
 
 	child_list_t<Value> max_struct_vl_list;
 	max_struct_vl_list.push_back(make_pair("a", int_list));
 	max_struct_vl_list.push_back(make_pair("b", varchar_list));
-	auto max_struct_val_list = Value::STRUCT(move(max_struct_vl_list));
+	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
-	result.emplace_back(struct_list_type, "struct_of_arrays", move(min_struct_val_list), move(max_struct_val_list));
+	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list), std::move(max_struct_val_list));
 
 	// array of structs
 	auto array_of_structs_type = LogicalType::LIST(struct_type);
 	auto min_array_of_struct_val = Value::EMPTYLIST(struct_type);
 	auto max_array_of_struct_val = Value::LIST({min_struct_val, max_struct_val, Value(struct_type)});
-	result.emplace_back(array_of_structs_type, "array_of_structs", move(min_array_of_struct_val),
-	                    move(max_array_of_struct_val));
+	result.emplace_back(array_of_structs_type, "array_of_structs", std::move(min_array_of_struct_val),
+	                    std::move(max_array_of_struct_val));
 
 	// map
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
@@ -191,7 +191,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	map_values.push_back(Value::STRUCT(map_struct2));
 
 	auto max_map_value = Value::MAP(ListType::GetChildType(map_type), map_values);
-	result.emplace_back(map_type, "map", move(min_map_value), move(max_map_value));
+	result.emplace_back(map_type, "map", std::move(min_map_value), std::move(max_map_value));
 
 	return result;
 }
@@ -200,8 +200,8 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto test_types = TestAllTypesFun::GetTestTypes();
 	for (auto &test_type : test_types) {
-		return_types.push_back(move(test_type.type));
-		names.push_back(move(test_type.name));
+		return_types.push_back(std::move(test_type.type));
+		names.push_back(std::move(test_type.name));
 	}
 	return nullptr;
 }
@@ -213,11 +213,11 @@ unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, Ta
 	result->entries.resize(3);
 	// initialize the values
 	for (auto &test_type : test_types) {
-		result->entries[0].push_back(move(test_type.min_value));
-		result->entries[1].push_back(move(test_type.max_value));
-		result->entries[2].emplace_back(move(test_type.type));
+		result->entries[0].push_back(std::move(test_type.min_value));
+		result->entries[1].push_back(std::move(test_type.max_value));
+		result->entries[2].emplace_back(std::move(test_type.type));
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

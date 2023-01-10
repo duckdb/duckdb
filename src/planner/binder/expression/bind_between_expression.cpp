@@ -31,31 +31,31 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	auto input_type = BoundComparisonExpression::BindComparison(input_sql_type, lower_sql_type);
 	input_type = BoundComparisonExpression::BindComparison(input_type, upper_sql_type);
 	// add casts (if necessary)
-	input.expr = BoundCastExpression::AddCastToType(context, move(input.expr), input_type);
-	lower.expr = BoundCastExpression::AddCastToType(context, move(lower.expr), input_type);
-	upper.expr = BoundCastExpression::AddCastToType(context, move(upper.expr), input_type);
+	input.expr = BoundCastExpression::AddCastToType(context, std::move(input.expr), input_type);
+	lower.expr = BoundCastExpression::AddCastToType(context, std::move(lower.expr), input_type);
+	upper.expr = BoundCastExpression::AddCastToType(context, std::move(upper.expr), input_type);
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
-		input.expr = PushCollation(context, move(input.expr), collation, false);
-		lower.expr = PushCollation(context, move(lower.expr), collation, false);
-		upper.expr = PushCollation(context, move(upper.expr), collation, false);
+		input.expr = PushCollation(context, std::move(input.expr), collation, false);
+		lower.expr = PushCollation(context, std::move(lower.expr), collation, false);
+		upper.expr = PushCollation(context, std::move(upper.expr), collation, false);
 	}
 	if (!input.expr->HasSideEffects() && !input.expr->HasParameter() && !input.expr->HasSubquery()) {
 		// the expression does not have side effects and can be copied: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
 		auto left_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		                                                           input.expr->Copy(), move(lower.expr));
+		                                                           input.expr->Copy(), std::move(lower.expr));
 		auto right_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                                            move(input.expr), move(upper.expr));
-		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_compare),
-		                                                          move(right_compare)));
+		                                                            std::move(input.expr), std::move(upper.expr));
+		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(left_compare),
+		                                                          std::move(right_compare)));
 	} else {
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
 		return BindResult(
-		    make_unique<BoundBetweenExpression>(move(input.expr), move(lower.expr), move(upper.expr), true, true));
+		    make_unique<BoundBetweenExpression>(std::move(input.expr), std::move(lower.expr), std::move(upper.expr), true, true));
 	}
 }
 

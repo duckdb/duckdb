@@ -21,20 +21,20 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 			auto side = JoinSide::GetJoinSide(f->bindings, left_bindings, right_bindings);
 			if (side == JoinSide::LEFT) {
 				// bindings match left side: push into left
-				left_pushdown.filters.push_back(move(f));
+				left_pushdown.filters.push_back(std::move(f));
 			} else if (side == JoinSide::RIGHT) {
 				// bindings match right side: push into right
-				right_pushdown.filters.push_back(move(f));
+				right_pushdown.filters.push_back(std::move(f));
 			} else {
 				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
 				// bindings match both: turn into join condition
-				join_expressions.push_back(move(f->filter));
+				join_expressions.push_back(std::move(f->filter));
 			}
 		}
 	}
 
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
+	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
 
 	if (!join_expressions.empty()) {
 		// join conditions found: turn into inner join
@@ -46,8 +46,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		                                             right_bindings, join_expressions, conditions,
 		                                             arbitrary_expressions);
 		// create the join from the join conditions
-		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, move(op->children[0]), move(op->children[1]),
-		                                         move(conditions), move(arbitrary_expressions));
+		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, std::move(op->children[0]), std::move(op->children[1]),
+		                                         std::move(conditions), std::move(arbitrary_expressions));
 	} else {
 		// no join conditions found: keep as cross product
 		return op;

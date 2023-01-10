@@ -15,7 +15,7 @@ namespace duckdb {
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
                            case_insensitive_map_t<idx_t> alias_map)
-    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info), alias_map(move(alias_map)) {
+    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info), alias_map(std::move(alias_map)) {
 }
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
@@ -126,7 +126,7 @@ BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t dept
 		group_indexes.push_back(idx);
 	}
 	auto col_idx = node.grouping_functions.size();
-	node.grouping_functions.push_back(move(group_indexes));
+	node.grouping_functions.push_back(std::move(group_indexes));
 	return BindResult(make_unique<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
 	                                                        ColumnBinding(node.groupings_index, col_idx), depth));
 }

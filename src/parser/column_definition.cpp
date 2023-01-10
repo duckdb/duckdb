@@ -7,19 +7,19 @@
 
 namespace duckdb {
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(move(name_p)), type(move(type_p)) {
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
                                    TableColumnType category)
-    : name(move(name_p)), type(move(type_p)), category(category) {
+    : name(std::move(name_p)), type(std::move(type_p)), category(category) {
 	switch (category) {
 	case TableColumnType::STANDARD: {
-		default_value = move(expression);
+		default_value = std::move(expression);
 		break;
 	}
 	case TableColumnType::GENERATED: {
-		generated_expression = move(expression);
+		generated_expression = std::move(expression);
 		break;
 	}
 	default: {
@@ -62,9 +62,9 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 
 	switch (category) {
 	case TableColumnType::STANDARD:
-		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::STANDARD);
+		return ColumnDefinition(column_name, column_type, std::move(expression), TableColumnType::STANDARD);
 	case TableColumnType::GENERATED:
-		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::GENERATED);
+		return ColumnDefinition(column_name, column_type, std::move(expression), TableColumnType::GENERATED);
 	default:
 		throw NotImplementedException("Type not implemented for TableColumnType");
 	}
@@ -75,7 +75,7 @@ const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {
 }
 
 void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_value) {
-	this->default_value = move(default_value);
+	this->default_value = std::move(default_value);
 }
 
 const LogicalType &ColumnDefinition::Type() const {
@@ -187,24 +187,24 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 
 	VerifyColumnRefs(*expression);
 	if (type.id() == LogicalTypeId::ANY) {
-		generated_expression = move(expression);
+		generated_expression = std::move(expression);
 		return;
 	}
 	// Always wrap the expression in a cast, that way we can always update the cast when we change the type
 	// Except if the type is LogicalType::ANY (no type specified)
-	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(expression));
+	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(expression));
 }
 
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	D_ASSERT(Generated());
 	// First time the type is set, add a cast around the expression
 	D_ASSERT(this->type.id() == LogicalTypeId::ANY);
-	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(generated_expression));
+	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(generated_expression));
 	// Every generated expression should be wrapped in a cast on creation
 	// D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
 	// auto &cast_expr = (CastExpression &)*generated_expression;
-	// auto base_expr = move(cast_expr.child);
-	// generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
+	// auto base_expr = std::move(cast_expr.child);
+	// generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(base_expr));
 }
 
 const ParsedExpression &ColumnDefinition::GeneratedExpression() const {
