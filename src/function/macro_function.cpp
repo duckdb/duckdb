@@ -24,9 +24,9 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 	for (auto &arg : function_expr.children) {
 		if (!arg->alias.empty()) {
 			// default argument
-			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
+			if (!macro_def.default_parameters.count(arg->alias)) {
 				return StringUtil::Format("Macro %s does not have default parameter %s!", name, arg->alias);
-			} else if (defaults.find(arg->alias) != defaults.end()) {
+			} else if (defaults.count(arg->alias)) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
 			defaults[arg->alias] = move(arg);
@@ -58,9 +58,11 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 
 	// Add the default values for parameters that have defaults, that were not explicitly assigned to
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		if (defaults.find(it->first) == defaults.end()) {
+		auto &parameter_name = it->first;
+		auto &parameter_default = it->second;
+		if (!defaults.count(parameter_name)) {
 			// This parameter was not set yet, set it with the default value
-			defaults[it->first] = it->second->Copy();
+			defaults[parameter_name] = parameter_default->Copy();
 		}
 	}
 
