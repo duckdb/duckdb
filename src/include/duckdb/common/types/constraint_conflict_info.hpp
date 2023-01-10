@@ -3,6 +3,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 

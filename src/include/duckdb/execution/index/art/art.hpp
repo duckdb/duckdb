@@ -108,7 +108,7 @@ public:
 	string ToString() override;
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, string key_name);
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
 
 private:
 	//! Insert a row id into a leaf node

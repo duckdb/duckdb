@@ -56,7 +56,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
 		}
 		filtered_types.push_back(insert_types[i]);
 		filtered_ids.push_back(i);
-		filtered_physical_ids.push_back(PhysicalIndex(i));
+		filtered_physical_ids.emplace_back(PhysicalIndex(i));
 	}
 
 	// One or more columns are referenced from the existing table,
@@ -256,7 +256,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	conflict_chunk.SetCardinality(conflicts.matches.Count());
 
 	auto &data_table = table->storage;
-	if (types_to_fetch.size()) {
+	if (!types_to_fetch.empty()) {
 		D_ASSERT(scan_chunk.size() == 0);
 		// When these values are required for the conditions or the SET expressions,
 		// then we scan the existing table for the conflicting tuples, using the rowids

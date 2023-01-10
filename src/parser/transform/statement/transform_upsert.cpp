@@ -40,7 +40,7 @@ vector<string> TransformConflictTarget(duckdb_libpgquery::PGList *list) {
 		if (index_element->ordering) {
 			throw NotImplementedException("Index with ordering not supported yet!");
 		}
-		columns.push_back(index_element->name);
+		columns.emplace_back(index_element->name);
 	}
 	return columns;
 }

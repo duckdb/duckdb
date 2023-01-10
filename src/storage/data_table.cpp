@@ -350,7 +350,7 @@ idx_t LocateErrorIndex(bool is_append, ManagedSelection &matches) {
 	D_ASSERT(index->type == IndexType::ART);
 	auto &art_index = (ART &)*index;
 	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
-	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, move(key_name));
+	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
 	throw ConstraintException(exception_msg);
 }
 

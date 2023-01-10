@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery::PGList *targetList,
-                                                              duckdb_libpgquery::PGNode *whereClause) {
+                                                              duckdb_libpgquery::PGNode *where_clause) {
 	auto result = make_unique<UpdateSetInfo>();
 
 	auto root = targetList;
@@ -13,7 +13,7 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 		result->columns.emplace_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));
 	}
-	result->condition = TransformExpression(whereClause);
+	result->condition = TransformExpression(where_clause);
 	return result;
 }
 
@@ -31,7 +31,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 		result->from_table = TransformFrom(stmt->fromClause);
 	}
 
-	result->set_info = TransformUpdateSetInfo(stmt->targetList, stmt->whereClause);
+	result->set_info = TransformUpdateSetInfo(stmt->targetList, stmt->where_clause);
 
 	// Grab and transform the returning columns from the parser.
 	if (stmt->returningList) {

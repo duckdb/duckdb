@@ -10,6 +10,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,

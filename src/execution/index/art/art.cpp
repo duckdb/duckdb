@@ -420,7 +420,7 @@ void ART::VerifyAppend(DataChunk &chunk) {
 		return;
 	}
 	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND, move(key_name));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND, key_name);
 	throw ConstraintException(exception_msg);
 }
 
@@ -442,7 +442,7 @@ void ART::VerifyAppendForeignKey(DataChunk &chunk) {
 	idx_t first_missing_key = UniqueConstraintConflictInfo::FirstMissingMatch(match_vec);
 	D_ASSERT(first_missing_key != DConstants::INVALID_INDEX);
 	auto key_name = GenerateErrorKeyName(chunk, match_vec[first_missing_key]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND_FK, move(key_name));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND_FK, key_name);
 	throw ConstraintException(exception_msg);
 }
 
@@ -460,7 +460,7 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
 		return;
 	}
 	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::DELETE_FK, move(key_name));
+	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::DELETE_FK, key_name);
 	throw ConstraintException(exception_msg);
 }
 
@@ -883,7 +883,7 @@ string ART::GenerateErrorKeyName(DataChunk &input, idx_t row) {
 	return key_name;
 }
 
-string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, string key_name) {
+string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) {
 	switch (verify_type) {
 	case VerifyExistenceType::APPEND: {
 		// This node already exists in the tree

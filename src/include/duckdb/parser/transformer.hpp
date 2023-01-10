@@ -229,7 +229,7 @@ private:
 	// Update transform
 	//===--------------------------------------------------------------------===//
 	unique_ptr<UpdateSetInfo> TransformUpdateSetInfo(duckdb_libpgquery::PGList *targetList,
-	                                                 duckdb_libpgquery::PGNode *whereClause);
+	                                                 duckdb_libpgquery::PGNode *where_clause);
 
 	//===--------------------------------------------------------------------===//
 	// Index transform
