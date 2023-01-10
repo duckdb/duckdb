@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type, StatisticsType stats_type) : type(std::move(type)), stats_type(stats_type) {
+BaseStatistics::BaseStatistics(LogicalType type, StatisticsType stats_type)
+    : type(std::move(type)), stats_type(stats_type) {
 }
 
 BaseStatistics::~BaseStatistics() {

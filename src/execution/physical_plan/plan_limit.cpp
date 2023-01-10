@@ -24,8 +24,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 			                                   std::move(op.offset), op.estimated_cardinality);
 		} else {
 			// source does not support batch index: use a non-parallel streaming limit
-			limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, std::move(op.limit),
-			                                            std::move(op.offset), op.estimated_cardinality, false);
+			limit =
+			    make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, std::move(op.limit),
+			                                        std::move(op.offset), op.estimated_cardinality, false);
 		}
 	}
 

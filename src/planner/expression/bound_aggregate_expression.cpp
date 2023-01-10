@@ -13,8 +13,8 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
-      function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)), aggr_type(aggr_type),
-      filter(std::move(filter)) {
+      function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
+      aggr_type(aggr_type), filter(std::move(filter)) {
 	D_ASSERT(!function.name.empty());
 }
 

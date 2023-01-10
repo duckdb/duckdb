@@ -136,7 +136,8 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 		auto &temp_handles = temp_scan_state.current_chunk_state.handles;
 		auto &scan_handles = scan_state.current_chunk_state.handles;
 		for (auto &temp_handle_pair : temp_handles) {
-			auto handle_copy = make_pair<uint32_t, BufferHandle>(scan_handles.size(), std::move(temp_handle_pair.second));
+			auto handle_copy =
+			    make_pair<uint32_t, BufferHandle>(scan_handles.size(), std::move(temp_handle_pair.second));
 			scan_state.current_chunk_state.handles.insert(std::move(handle_copy));
 		}
 		chunks.push_back(std::move(chunk));

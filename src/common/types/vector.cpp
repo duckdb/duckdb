@@ -60,8 +60,8 @@ Vector::Vector(const Value &value) : type(value.type()) {
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(std::move(other.type)), data(other.data), validity(std::move(other.validity)),
-      buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(std::move(other.type)), data(other.data),
+      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
 }
 
 void Vector::Reference(const Value &value) {

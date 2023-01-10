@@ -49,13 +49,13 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		                                                           input.expr->Copy(), std::move(lower.expr));
 		auto right_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
 		                                                            std::move(input.expr), std::move(upper.expr));
-		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(left_compare),
-		                                                          std::move(right_compare)));
+		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+		                                                          std::move(left_compare), std::move(right_compare)));
 	} else {
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
-		return BindResult(
-		    make_unique<BoundBetweenExpression>(std::move(input.expr), std::move(lower.expr), std::move(upper.expr), true, true));
+		return BindResult(make_unique<BoundBetweenExpression>(std::move(input.expr), std::move(lower.expr),
+		                                                      std::move(upper.expr), true, true));
 	}
 }
 

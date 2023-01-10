@@ -64,11 +64,11 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions), constraint_type,
-		                       storage->db, index_block->block_id, index_block->offset);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions),
+		                       constraint_type, storage->db, index_block->block_id, index_block->offset);
 	} else {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions), constraint_type,
-		                       storage->db);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions),
+		                       constraint_type, storage->db);
 		if (!storage->IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
@@ -88,9 +88,9 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, vector<Log
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(std::move(inherited_storage)),
-      columns(std::move(info->Base().columns)), constraints(std::move(info->Base().constraints)),
-      bound_constraints(std::move(info->bound_constraints)),
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table),
+      storage(std::move(inherited_storage)), columns(std::move(info->Base().columns)),
+      constraints(std::move(info->Base().constraints)), bound_constraints(std::move(info->bound_constraints)),
       column_dependency_manager(std::move(info->column_dependency_manager)) {
 	this->temporary = info->Base().temporary;
 	if (!storage) {

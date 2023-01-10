@@ -9,8 +9,9 @@ namespace duckdb {
 UpdateRelation::UpdateRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition_p,
                                string schema_name_p, string table_name_p, vector<string> update_columns_p,
                                vector<unique_ptr<ParsedExpression>> expressions_p)
-    : Relation(context, RelationType::UPDATE_RELATION), condition(std::move(condition_p)), schema_name(std::move(schema_name_p)),
-      table_name(std::move(table_name_p)), update_columns(std::move(update_columns_p)), expressions(std::move(expressions_p)) {
+    : Relation(context, RelationType::UPDATE_RELATION), condition(std::move(condition_p)),
+      schema_name(std::move(schema_name_p)), table_name(std::move(table_name_p)),
+      update_columns(std::move(update_columns_p)), expressions(std::move(expressions_p)) {
 	D_ASSERT(update_columns.size() == expressions.size());
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }

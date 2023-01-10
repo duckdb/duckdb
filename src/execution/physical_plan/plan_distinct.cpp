@@ -67,15 +67,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	child = ExtractAggregateExpressions(std::move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
-	                                                  child->estimated_cardinality);
+	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates),
+	                                                  std::move(groups), child->estimated_cardinality);
 	groupby->children.push_back(std::move(child));
 	if (!requires_projection) {
 		return std::move(groupby);
 	}
 
 	// we add a physical projection on top of the aggregation to project all members in the select list
-	auto aggr_projection = make_unique<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
+	auto aggr_projection =
+	    make_unique<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
 	aggr_projection->children.push_back(std::move(groupby));
 	return std::move(aggr_projection);
 }

@@ -47,8 +47,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	} else {
 		buffer_manager.Allocate(segment_size, false, &block);
 	}
-	return make_unique<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
-	                                  INVALID_BLOCK, 0, segment_size);
+	return make_unique<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function,
+	                                  nullptr, INVALID_BLOCK, 0, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
@@ -70,8 +70,8 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
     : SegmentBase(start, other.count), db(other.db), type(std::move(other.type)), type_size(other.type_size),
-      segment_type(other.segment_type), function(other.function), stats(std::move(other.stats)), block(std::move(other.block)),
-      block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
+      segment_type(other.segment_type), function(other.function), stats(std::move(other.stats)),
+      block(std::move(other.block)), block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
       segment_state(std::move(other.segment_state)) {
 }
 

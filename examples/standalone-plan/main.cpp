@@ -178,7 +178,8 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 
 	// we can register multiple functions here if we want overloads
 	AggregateFunctionSet set(name);
-	set.AddFunction(AggregateFunction(std::move(arguments), std::move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
+	set.AddFunction(
+	    AggregateFunction(std::move(arguments), std::move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
 
 	CreateAggregateFunctionInfo info(std::move(set));
 	catalog.CreateFunction(context, &info);
@@ -314,7 +315,8 @@ void ExecuteQuery(Connection &con, const string &query) {
 //===--------------------------------------------------------------------===//
 class MyScanNode : public MyNode {
 public:
-	MyScanNode(string name_p, vector<column_t> column_ids_p) : name(std::move(name_p)), column_ids(std::move(column_ids_p)) {
+	MyScanNode(string name_p, vector<column_t> column_ids_p)
+	    : name(std::move(name_p)), column_ids(std::move(column_ids_p)) {
 		// fill up the data based on which table we are scanning
 		if (name == "mytable") {
 			// i

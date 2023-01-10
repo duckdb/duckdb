@@ -917,8 +917,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
-				auto comparison =
-				    make_unique<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+				auto comparison = make_unique<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
+				                                                         std::move(cond.right));
 				if (filter_set.find(comparison.get()) == filter_set.end()) {
 					filter_set.insert(comparison.get());
 					filters.push_back(std::move(comparison));

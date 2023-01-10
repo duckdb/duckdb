@@ -79,8 +79,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 				auto colref = make_unique<ColumnRefExpression>(command->name);
 				expr = make_unique<CastExpression>(column_definition.Type(), std::move(colref));
 			}
-			result->info =
-			    make_unique<ChangeColumnTypeInfo>(std::move(data), command->name, column_definition.Type(), std::move(expr));
+			result->info = make_unique<ChangeColumnTypeInfo>(std::move(data), command->name, column_definition.Type(),
+			                                                 std::move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_SetNotNull: {

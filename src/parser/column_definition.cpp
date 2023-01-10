@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)
+    : name(std::move(name_p)), type(std::move(type_p)) {
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,

@@ -82,7 +82,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		left_projection->children.push_back(std::move(left_node));
 		left_node = std::move(left_projection);
 
-		auto right_projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(node.right_reorder_exprs));
+		auto right_projection =
+		    make_unique<LogicalProjection>(GenerateTableIndex(), std::move(node.right_reorder_exprs));
 		right_projection->children.push_back(std::move(right_node));
 		right_node = std::move(right_projection);
 
@@ -113,8 +114,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		break;
 	}
 
-	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node), std::move(right_node),
-	                                             logical_type);
+	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
+	                                             std::move(right_node), logical_type);
 
 	return VisitQueryNode(node, std::move(root));
 }

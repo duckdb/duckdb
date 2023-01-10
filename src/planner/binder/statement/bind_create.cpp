@@ -426,22 +426,26 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// bind the schema
 		auto schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -486,8 +490,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		create_index_info->column_ids = get.column_ids;
 
 		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info), std::move(expressions),
-		                                              *table, std::move(get.function));
+		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
+		                                              std::move(expressions), *table, std::move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -558,7 +562,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = (SelectStatement &)*create_type_info.query;

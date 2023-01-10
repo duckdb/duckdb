@@ -13,7 +13,8 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(std::move(name)), statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
+    : type(type), name(std::move(name)),
+      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
       select_list(statement->node->GetSelectList()) {
 }
 

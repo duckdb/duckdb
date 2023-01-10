@@ -12,11 +12,13 @@ ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
                                              : vector<string> {std::move(table_name), std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name) : ColumnRefExpression(vector<string> {std::move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(string column_name)
+    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
 }
 
 ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_names(std::move(column_names_p)) {
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
+      column_names(std::move(column_names_p)) {
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());

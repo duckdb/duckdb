@@ -78,8 +78,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(const Expression *equal_ex
 		}
 	}
 	if (valid && a_is_null_found && b_is_null_found) {
-		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, std::move(equal_cast->left),
-		                                              std::move(equal_cast->right));
+		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                              std::move(equal_cast->left), std::move(equal_cast->right));
 	}
 	return nullptr;
 }

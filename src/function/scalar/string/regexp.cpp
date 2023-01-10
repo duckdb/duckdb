@@ -273,8 +273,8 @@ RegexpExtractBindData::RegexpExtractBindData() {
 
 RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string_p,
                                              bool constant_pattern, string group_string_p)
-    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern), group_string(std::move(group_string_p)),
-      rewrite(group_string) {
+    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern),
+      group_string(std::move(group_string_p)), rewrite(group_string) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
@@ -317,7 +317,8 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
 	}
-	return make_unique<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, std::move(group_string));
+	return make_unique<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
+	                                          std::move(group_string));
 }
 
 inline static string_t Extract(const string_t &input, Vector &result, const RE2 &re,

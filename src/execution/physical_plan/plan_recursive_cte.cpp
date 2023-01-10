@@ -20,8 +20,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 
-	auto cte =
-	    make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, std::move(left), std::move(right), op.estimated_cardinality);
+	auto cte = make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, std::move(left), std::move(right),
+	                                             op.estimated_cardinality);
 	cte->working_table = working_table;
 
 	return std::move(cte);

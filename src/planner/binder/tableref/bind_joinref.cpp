@@ -249,8 +249,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	MoveCorrelatedExpressions(right_binder);
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
-			                                                   std::move(condition));
+			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+			                                                   std::move(ref.condition), std::move(condition));
 		} else {
 			ref.condition = std::move(condition);
 		}

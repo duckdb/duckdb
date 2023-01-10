@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
+StructStatistics::StructStatistics(LogicalType type_p)
+    : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	InitializeBase();
 

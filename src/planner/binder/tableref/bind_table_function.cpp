@@ -174,7 +174,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 	vector<string> input_table_names;
 	vector<string> column_name_aliases;
 	return BindTableFunctionInternal(function, function.name, std::move(parameters), std::move(named_parameters),
-	                                 std::move(input_table_types), std::move(input_table_names), column_name_aliases, nullptr);
+	                                 std::move(input_table_types), std::move(input_table_names), column_name_aliases,
+	                                 nullptr);
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
@@ -252,8 +253,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_names = subquery->subquery->names;
 	}
 	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr->function_name : ref.alias,
-	                                     std::move(parameters), std::move(named_parameters), std::move(input_table_types),
-	                                     std::move(input_table_names), ref.column_name_alias, std::move(ref.external_dependency));
+	                                     std::move(parameters), std::move(named_parameters),
+	                                     std::move(input_table_types), std::move(input_table_names),
+	                                     ref.column_name_alias, std::move(ref.external_dependency));
 	if (subquery) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}

@@ -47,8 +47,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// now we push a projection with a comparison to 1
 		auto left_child = make_unique<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, 0));
 		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(idx_type, 1));
-		auto comparison =
-		    make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left_child), std::move(right_child));
+		auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left_child),
+		                                                         std::move(right_child));
 
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(std::move(comparison));
@@ -272,7 +272,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// correlated EXISTS query
 		// this query is similar to the correlated SCALAR query, except we use a MARK join here
 		idx_t mark_index = binder.GenerateTableIndex();
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
+		auto delim_join =
+		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
 		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
@@ -299,7 +300,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
 		idx_t mark_index = binder.GenerateTableIndex();
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
+		auto delim_join =
+		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
 		FlattenDependentJoins flatten(binder, correlated_columns, true, true);

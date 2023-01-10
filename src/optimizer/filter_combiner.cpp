@@ -142,8 +142,9 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				// found both lower and upper index, create a BETWEEN expression
 				auto lower_constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
 				auto upper_constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
-				auto between = make_unique<BoundBetweenExpression>(
-				    entries[i]->Copy(), std::move(lower_constant), std::move(upper_constant), lower_inclusive, upper_inclusive);
+				auto between =
+				    make_unique<BoundBetweenExpression>(entries[i]->Copy(), std::move(lower_constant),
+				                                        std::move(upper_constant), lower_inclusive, upper_inclusive);
 				callback(std::move(between));
 			} else if (lower_index >= 0) {
 				// only lower index found, create simple comparison expression

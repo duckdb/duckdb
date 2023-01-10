@@ -7,7 +7,8 @@
 namespace duckdb {
 
 CrossProductRelation::CrossProductRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p)
-    : Relation(left_p->context, RelationType::CROSS_PRODUCT_RELATION), left(std::move(left_p)), right(std::move(right_p)) {
+    : Relation(left_p->context, RelationType::CROSS_PRODUCT_RELATION), left(std::move(left_p)),
+      right(std::move(right_p)) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}

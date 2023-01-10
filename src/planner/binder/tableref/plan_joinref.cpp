@@ -208,7 +208,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.lateral) {
 		// lateral join
-		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type, std::move(ref.condition));
+		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+		                       std::move(ref.condition));
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
@@ -225,7 +226,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	// now create the join operator from the join condition
-	auto result = LogicalComparisonJoin::CreateJoin(ref.type, std::move(left), std::move(right), std::move(ref.condition));
+	auto result =
+	    LogicalComparisonJoin::CreateJoin(ref.type, std::move(left), std::move(right), std::move(ref.condition));
 
 	LogicalOperator *join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {

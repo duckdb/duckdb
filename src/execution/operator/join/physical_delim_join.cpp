@@ -13,8 +13,8 @@ namespace duckdb {
 
 PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, std::move(types), estimated_cardinality), join(std::move(original_join)),
-      delim_scans(std::move(delim_scans)) {
+    : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, std::move(types), estimated_cardinality),
+      join(std::move(original_join)), delim_scans(std::move(delim_scans)) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate

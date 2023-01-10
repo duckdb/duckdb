@@ -166,7 +166,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	max_struct_vl_list.push_back(make_pair("b", varchar_list));
 	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
-	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list), std::move(max_struct_val_list));
+	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list),
+	                    std::move(max_struct_val_list));
 
 	// array of structs
 	auto array_of_structs_type = LogicalType::LIST(struct_type);

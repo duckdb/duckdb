@@ -45,14 +45,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		filter_select_list.push_back(std::move(is_not_null_expr));
 	}
 
-	auto null_filter = make_unique<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), STANDARD_VECTOR_SIZE);
+	auto null_filter =
+	    make_unique<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), STANDARD_VECTOR_SIZE);
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
 	null_filter->children.push_back(std::move(table_scan));
 
 	// actual physical create index operator
-	auto physical_create_index =
-	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.expressions), std::move(op.info),
-	                                     std::move(op.unbound_expressions), op.estimated_cardinality);
+	auto physical_create_index = make_unique<PhysicalCreateIndex>(
+	    op, op.table, op.info->column_ids, std::move(op.expressions), std::move(op.info),
+	    std::move(op.unbound_expressions), op.estimated_cardinality);
 	physical_create_index->children.push_back(std::move(null_filter));
 	return std::move(physical_create_index);
 }

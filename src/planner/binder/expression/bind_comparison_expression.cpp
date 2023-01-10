@@ -136,7 +136,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
 		left.expr = PushCollation(context, std::move(left.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr = PushCollation(context, std::move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr =
+		    PushCollation(context, std::move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, std::move(left.expr), std::move(right.expr)));

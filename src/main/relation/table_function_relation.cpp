@@ -15,16 +15,17 @@ namespace duckdb {
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
                                              vector<Value> parameters_p, named_parameter_map_t named_parameters,
                                              shared_ptr<Relation> input_relation_p)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)), parameters(std::move(parameters_p)),
-      named_parameters(std::move(named_parameters)), input_relation(std::move(input_relation_p)) {
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      parameters(std::move(parameters_p)), named_parameters(std::move(named_parameters)),
+      input_relation(std::move(input_relation_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
                                              vector<Value> parameters_p,
 
                                              shared_ptr<Relation> input_relation_p)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)), parameters(std::move(parameters_p)),
-      input_relation(std::move(input_relation_p)) {
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      parameters(std::move(parameters_p)), input_relation(std::move(input_relation_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 
@@ -54,8 +55,8 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// the function binder likes
 		auto column_ref = make_unique<ColumnRefExpression>(parameter.first);
 		auto constant_value = make_unique<ConstantExpression>(parameter.second);
-		auto comparison =
-		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref), std::move(constant_value));
+		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
+		                                                    std::move(constant_value));
 		children.push_back(std::move(comparison));
 	}
 

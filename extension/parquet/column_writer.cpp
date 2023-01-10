@@ -1932,23 +1932,23 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<BooleanColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                        can_have_nulls);
 	case LogicalTypeId::TINYINT:
-		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                          max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<int8_t, int32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                          max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::SMALLINT:
-		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                           max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<int16_t, int32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                           max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<int32_t, int32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
-		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                           max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_unique<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
@@ -1959,17 +1959,17 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_unique<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UTINYINT:
-		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                           max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<uint8_t, int32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::USMALLINT:
-		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                            max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<uint16_t, int32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                            max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UINTEGER:
-		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                             max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema_idx, std::move(schema_path),
+		                                                             max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::UBIGINT:
-		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                             max_define, can_have_nulls);
+		return make_unique<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, std::move(schema_path),
+		                                                             max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::FLOAT:
 		return make_unique<StandardColumnWriter<float, float>>(writer, schema_idx, std::move(schema_path), max_repeat,
 		                                                       max_define, can_have_nulls);
@@ -1988,8 +1988,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			return make_unique<StandardColumnWriter<int64_t, int64_t>>(writer, schema_idx, std::move(schema_path),
 			                                                           max_repeat, max_define, can_have_nulls);
 		default:
-			return make_unique<FixedDecimalColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
-			                                             can_have_nulls);
+			return make_unique<FixedDecimalColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat,
+			                                             max_define, can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:

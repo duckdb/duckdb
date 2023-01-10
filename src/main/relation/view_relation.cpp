@@ -8,7 +8,8 @@
 namespace duckdb {
 
 ViewRelation::ViewRelation(const std::shared_ptr<ClientContext> &context, string schema_name_p, string view_name_p)
-    : Relation(context, RelationType::VIEW_RELATION), schema_name(std::move(schema_name_p)), view_name(std::move(view_name_p)) {
+    : Relation(context, RelationType::VIEW_RELATION), schema_name(std::move(schema_name_p)),
+      view_name(std::move(view_name_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 

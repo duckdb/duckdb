@@ -405,8 +405,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
 			// push a potential collation, if necessary
-			bound_expr =
-			    ExpressionBinder::PushCollation(context, std::move(bound_expr), StringType::GetCollation(group_type), true);
+			bound_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
+			                                             StringType::GetCollation(group_type), true);
 			result->groups.group_expressions.push_back(std::move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
