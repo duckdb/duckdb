@@ -35,6 +35,9 @@ namespace duckdb {
 #endif
 
 //! inline std directives that we use frequently
+#ifndef DUCKDB_DEBUG_MOVE
+using std::move;
+#endif
 using std::shared_ptr;
 using std::unique_ptr;
 using std::weak_ptr;

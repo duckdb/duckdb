@@ -67,7 +67,7 @@ struct UniqueConstructor {
 	}
 };
 
-#ifdef DEBUG
+#ifdef DUCKDB_DEBUG_MOVE
 template<class T>
 typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 	// the nonsensical sizeof check ensures this is never instantiated
