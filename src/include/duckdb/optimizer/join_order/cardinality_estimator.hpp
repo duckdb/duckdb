@@ -69,9 +69,9 @@ private:
 
 	vector<RelationsToTDom> relations_to_tdoms;
 
+public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
-public:
 	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
 
 	void AssertEquivalentRelationSize();

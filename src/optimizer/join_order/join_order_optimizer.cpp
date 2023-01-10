@@ -182,13 +182,16 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	    op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// inner join or cross product
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
-	} else if (op->type == LogicalOperatorType::LOGICAL_GET) {
+	}
+	case LogicalOperatorType::LOGICAL_GET: {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
@@ -199,24 +202,25 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
+	}
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
 		auto get = (LogicalExpressionGet *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		idx_t relation_id = relations.size();
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		auto table_index = get->table_index;
-		relation_mapping[table_index] = relation_id;
+		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 		// table function call, add to set of relations
 		auto dummy_scan = (LogicalDummyScan *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[dummy_scan->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto proj = (LogicalProjection *)op;
 		// we run the join order optimizer witin the subquery as well
 		JoinOrderOptimizer optimizer(context);
@@ -227,7 +231,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	return false;
+	default:
+		return false;
+	}
 }
 
 //! Update the exclusion set with all entries in the subgraph
@@ -768,9 +774,19 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		result_relation = node->set;
 		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
-	result_operator->estimated_cardinality = node->GetCardinality<idx_t>();
-	result_operator->has_estimated_cardinality = true;
 	result_operator->estimated_props = node->estimated_props->Copy();
+	result_operator->estimated_cardinality = result_operator->estimated_props->GetCardinality<idx_t>();
+	result_operator->has_estimated_cardinality = true;
+	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
+	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+		// FILTER on top of GET, add estimated properties to both
+		auto &filter_props = *result_operator->estimated_props;
+		auto &child_operator = *result_operator->children[0];
+		child_operator.estimated_props = make_unique<EstimatedProperties>(
+		    filter_props.GetCardinality<double>() / CardinalityEstimator::DEFAULT_SELECTIVITY, filter_props.GetCost());
+		child_operator.estimated_cardinality = child_operator.estimated_props->GetCardinality<idx_t>();
+		child_operator.has_estimated_cardinality = true;
+	}
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
