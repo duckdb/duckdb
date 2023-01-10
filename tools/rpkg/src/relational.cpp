@@ -186,7 +186,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	auto join_type = JoinType::INNER;
-//	std::transform(join.begin(), join.end(), join.begin(), [](unsigned char c) { return std::tolower(c); });
 	if (join == "left") {
 		join_type = JoinType::LEFT;
 	} else if (join == "right") {
