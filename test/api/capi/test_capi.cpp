@@ -349,7 +349,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
 	REQUIRE(result->Fetch<float>(1, 0) == 100.3f);
 	REQUIRE(floor(result->Fetch<float>(2, 0)) == -320939);
-	REQUIRE(floor(result->Fetch<float>(3, 0)) == 49082094824);
+	REQUIRE((long)floor(result->Fetch<float>(3, 0)) == 49082094824);
 	REQUIRE(result->Fetch<float>(4, 0) == 0.0);
 
 	REQUIRE(result->Fetch<double>(0, 0) == 1.2);
