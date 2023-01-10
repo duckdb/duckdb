@@ -79,7 +79,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		}
 	} else {
 		if (ValidChecker::IsInvalidated(*db)) {
-			return original->materialized_result->TakeErrorObject();
+			return original->materialized_result->GetErrorObject();
 		}
 	}
 

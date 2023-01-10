@@ -86,7 +86,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 
 	auto &result = *my_stream->result;
 	if (result.HasError()) {
-		my_stream->last_error = result.TakeErrorObject();
+		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -111,7 +111,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	auto &result = *my_stream->result;
 	if (result.HasError()) {
-		my_stream->last_error = result.TakeErrorObject();
+		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -130,7 +130,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	PreservedError error;
 	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
 		D_ASSERT(error);
-		my_stream->last_error = move(error);
+		my_stream->last_error = error;
 		return -1;
 	}
 	if (result_count == 0) {
@@ -191,7 +191,7 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 		unique_ptr<DataChunk> data_chunk;
 		if (!TryFetchNext(*result, data_chunk, error)) {
 			if (result->HasError()) {
-				error = result->TakeErrorObject();
+				error = result->GetErrorObject();
 			}
 			return false;
 		}

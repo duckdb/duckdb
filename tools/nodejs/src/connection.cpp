@@ -373,7 +373,7 @@ struct ExecTask : public Task {
 				auto res = connection.connection->Query(move(statements[i]));
 				if (res->HasError()) {
 					success = false;
-					error = res->TakeErrorObject();
+					error = res->GetErrorObject();
 					break;
 				}
 			}

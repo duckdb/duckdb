@@ -46,8 +46,6 @@ public:
 	case_insensitive_map_t<idx_t> named_param_map;
 
 public:
-	//! Gives over ownership of the error object
-	DUCKDB_API PreservedError &&TakeErrorObject();
 	//! Returns the stored error message
 	DUCKDB_API const string &GetError();
 	//! Returns whether or not an error occurred

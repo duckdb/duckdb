@@ -221,7 +221,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
-		result->SetError(move(error));
+		result->SetError(error);
 	}
 	D_ASSERT(!active_query);
 }
@@ -587,7 +587,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	auto lock = LockContext();
 	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending->TakeErrorObject());
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->ExecuteInternal(*lock);
 }
@@ -624,7 +624,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	parameters.allow_stream_result = allow_stream_result;
 	auto pending = PendingQueryInternal(lock, move(statement), parameters, verify);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending->TakeErrorObject());
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return ExecutePendingQueryInternal(lock, *pending);
 }
@@ -658,7 +658,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error) {
 				// error in verifying query
-				return make_unique<PendingQueryResult>(move(error));
+				return make_unique<PendingQueryResult>(error);
 			}
 			statement = move(copied_statement);
 			break;
@@ -677,7 +677,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error) {
 				// error in verifying query
-				return make_unique<PendingQueryResult>(move(error));
+				return make_unique<PendingQueryResult>(error);
 			}
 			statement = move(parser.statements[0]);
 			break;
@@ -784,7 +784,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(move(statement), allow_stream_result);
 	if (pending_query->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending_query->TakeErrorObject());
+		return make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
 }
@@ -816,7 +816,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		auto pending_query = PendingQueryInternal(*lock, move(statement), parameters);
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
-			current_result = make_unique<MaterializedQueryResult>(pending_query->TakeErrorObject());
+			current_result = make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}

@@ -65,7 +65,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
-		return make_unique<MaterializedQueryResult>(TakeErrorObject());
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 
@@ -81,7 +81,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	auto result =
 	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
 	if (HasError()) {
-		return make_unique<MaterializedQueryResult>(TakeErrorObject());
+		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	return result;
 }

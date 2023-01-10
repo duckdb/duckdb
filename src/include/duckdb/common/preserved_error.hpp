@@ -25,9 +25,6 @@ public:
 	DUCKDB_API explicit PreservedError(const string &raw_message);
 	//! From an Exception
 	DUCKDB_API PreservedError(const Exception &exception);
-	PreservedError(const PreservedError &other) = delete;
-	PreservedError(PreservedError &&other) = default;
-	PreservedError &operator=(PreservedError &&other) = default;
 
 public:
 	//! Throw the error
@@ -39,10 +36,6 @@ public:
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
 	//! Let's us do things like 'if (error)'
-	//! Whether or not an error occurred
-	DUCKDB_API bool HasError() const;
-	//! Whether an error of a given type occurred
-	DUCKDB_API bool HasErrorOfType(ExceptionType type) const;
 	DUCKDB_API operator bool() const;
 	DUCKDB_API bool operator==(const PreservedError &other) const;
 

@@ -52,14 +52,6 @@ PreservedError::operator bool() const {
 	return initialized;
 }
 
-bool PreservedError::HasError() const {
-	return initialized;
-}
-
-bool PreservedError::HasErrorOfType(ExceptionType exception_type) const {
-	return HasError() && type == exception_type;
-}
-
 bool PreservedError::operator==(const PreservedError &other) const {
 	if (initialized != other.initialized) {
 		return false;
