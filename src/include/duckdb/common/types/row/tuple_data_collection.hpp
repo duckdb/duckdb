@@ -42,7 +42,6 @@ public:
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
 	void Append(TupleDataAppendState &state, DataChunk &new_chunk, bool unify);
 
-
 private:
 	//! Allocate a row block, hold the pin in the state, and return its id
 	uint32_t AllocateRowBlock(TupleDataAppendState &state);
@@ -59,7 +58,7 @@ private:
 
 	//! Reserves space for the data to be appended, and sets pointers where the rows will be written
 	void Build(TupleDataAppendState &state, DataChunk &chunk);
-	idx_t AppendToRowBlock(TupleDataAppendState &state, uint32_t row_block_id, idx_t offset, idx_t append_remaining);
+	idx_t AppendToBlock(TupleDataAppendState &state, idx_t offset, idx_t append_count);
 	void ComputeEntrySizes(TupleDataAppendState &state, DataChunk &chunk);
 
 private:

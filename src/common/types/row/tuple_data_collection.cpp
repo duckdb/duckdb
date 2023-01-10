@@ -91,49 +91,40 @@ data_ptr_t TupleDataCollection::GetHeapDataPointer(TupleDataManagementState &sta
 }
 
 void TupleDataCollection::Build(TupleDataAppendState &state, DataChunk &chunk) {
-	idx_t append_count = chunk.size();
+	// Compute entry sizes of heap data
+	if (!layout.AllConstant()) {
+		ComputeEntrySizes(state, chunk);
+	}
 
 	// Build out blocks for row data
 	idx_t offset = 0;
-	if (!row_blocks.empty()) {
-		uint32_t row_block_id = row_blocks.size() - 1;
-		offset += AppendToRowBlock(state, row_block_id, offset, append_count - offset);
-	}
+	idx_t append_count = chunk.size();
 	while (offset != append_count) {
-		uint32_t row_block_id = AllocateRowBlock(state);
-		offset += AppendToRowBlock(state, row_block_id, offset, append_count - offset);
-	}
-
-	if (layout.AllConstant()) {
-		return;
-	}
-
-	// TODO: row and heap blocks need to be created at the same time
-	//  otherwise we don't know which heap block belongs to which row block
-
-	ComputeEntrySizes(state, chunk);
-	auto entry_sizes = FlatVector::GetData<idx_t>(state.heap_row_sizes);
-
-	// Build out blocks for heap data
-	offset = 0;
-	if (!heap_blocks.empty()) {
-		uint32_t heap_block_id = heap_blocks.size() - 1;
-		//		offset +=
+		offset += AppendToBlock(state, offset, append_count);
 	}
 }
 
-idx_t TupleDataCollection::AppendToRowBlock(TupleDataAppendState &state, uint32_t row_block_id, idx_t offset,
-                                            idx_t append_remaining) {
+idx_t TupleDataCollection::AppendToBlock(TupleDataAppendState &state, idx_t offset, idx_t append_count) {
+	uint32_t row_block_id = row_blocks.empty() || row_blocks.back().RemainingCapacity() == 0 ? AllocateRowBlock(state)
+	                                                                                         : row_blocks.size() - 1;
 	auto &row_block = row_blocks[row_block_id];
 	auto remaining_capacity = row_block.RemainingCapacity();
-	if (remaining_capacity == 0) {
-		return 0;
+	D_ASSERT(remaining_capacity != 0);
+
+	idx_t append_remaining = append_count - offset;
+	if (!layout.AllConstant()) {
+		auto entry_sizes = FlatVector::GetData<idx_t>(state.heap_row_sizes);
+		
 	}
-	idx_t append_count = MinValue<idx_t>(remaining_capacity, append_remaining);
-	row_block.count += append_count;
+
+	idx_t next = MinValue<idx_t>(remaining_capacity, append_remaining);
+	row_block.count += next;
 
 	PinRowBlock(state.management_state, row_block_id);
 	auto row_ptr = GetRowDataPointer(state.management_state, row_block_id, row_block.count);
+	if (!layout.AllConstant()) {
+
+	}
 
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
 	for (idx_t i = 0; i < append_count; i++) {
@@ -165,7 +156,7 @@ void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &state, DataChu
 			                                 chunk.size(), *FlatVector::IncrementalSelectionVector());
 			break;
 		default:
-			throw InternalException("Unsupported type for RowOperations::Scatter");
+			throw InternalException("Unsupported type for RowOperations::ComputeEntrySizes");
 		}
 	}
 }
