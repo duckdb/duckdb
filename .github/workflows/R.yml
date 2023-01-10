@@ -187,6 +187,8 @@ jobs:
   rstats-windows:
     name: R Package Windows
     runs-on: windows-latest
+    env:
+      TREAT_WARNINGS_AS_ERRORS: true
     steps:
     - uses: actions/checkout@v3
       with:
