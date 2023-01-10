@@ -92,6 +92,11 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 				                      "effects. This is not yet supported.",
 				                      colref.column_names[0]);
 			}
+			if (node.select_list[index]->HasSubquery()) {
+				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
+				                      " This is not yet supported.",
+				                      colref.column_names[0]);
+			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &result_expr = (BoundColumnRefExpression &)*result.expression;
