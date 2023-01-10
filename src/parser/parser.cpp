@@ -19,41 +19,158 @@ namespace duckdb {
 Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
+struct UnicodeSpace {
+	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
+	}
+
+	idx_t pos;
+	idx_t bytes;
+};
+
+static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
+	if (unicode_spaces.empty()) {
+		// no unicode spaces found
+		return false;
+	}
+	idx_t prev = 0;
+	for (auto &usp : unicode_spaces) {
+		new_query += query.substr(prev, usp.pos - prev);
+		new_query += " ";
+		prev = usp.pos + usp.bytes;
+	}
+	new_query += query.substr(prev, query.size() - prev);
+	return true;
+}
+
+// This function strips unicode space characters from the query and replaces them with regular spaces
+// It returns true if any unicode space characters were found and stripped
+// See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
+static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
+	const idx_t NBSP_LEN = 2;
+	const idx_t USP_LEN = 3;
+	idx_t pos = 0;
+	unsigned char quote;
+	vector<UnicodeSpace> unicode_spaces;
+	auto query = (unsigned char *)query_str.c_str();
+	auto qsize = query_str.size();
+
+regular:
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == 0xC2) {
+			if (query[pos + 1] == 0xA0) {
+				// U+00A0 - C2A0
+				unicode_spaces.emplace_back(pos, NBSP_LEN);
+			}
+		}
+		if (query[pos] == 0xE2) {
+			if (query[pos + 1] == 0x80) {
+				if (query[pos + 2] >= 0x80 && query[pos + 2] <= 0x8B) {
+					// U+2000 to U+200B
+					// E28080 - E2808B
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xAF) {
+					// U+202F - E280AF
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				}
+			} else if (query[pos + 1] == 0x81) {
+				if (query[pos + 2] == 0x9F) {
+					// U+205F - E2819f
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				} else if (query[pos + 2] == 0xA0) {
+					// U+2060 - E281A0
+					unicode_spaces.emplace_back(pos, USP_LEN);
+				}
+			}
+		} else if (query[pos] == 0xE3) {
+			if (query[pos + 1] == 0x80 && query[pos + 2] == 0x80) {
+				// U+3000 - E38080
+				unicode_spaces.emplace_back(pos, USP_LEN);
+			}
+		} else if (query[pos] == 0xEF) {
+			if (query[pos + 1] == 0xBB && query[pos + 2] == 0xBF) {
+				// U+FEFF - EFBBBF
+				unicode_spaces.emplace_back(pos, USP_LEN);
+			}
+		} else if (query[pos] == '"' || query[pos] == '\'') {
+			quote = query[pos];
+			pos++;
+			goto in_quotes;
+		} else if (query[pos] == '-' && query[pos + 1] == '-') {
+			goto in_comment;
+		}
+	}
+	goto end;
+in_quotes:
+	for (; pos + 1 < qsize; pos++) {
+		if (query[pos] == quote) {
+			if (query[pos + 1] == quote) {
+				// escaped quote
+				pos++;
+				continue;
+			}
+			pos++;
+			goto regular;
+		}
+	}
+	goto end;
+in_comment:
+	for (; pos < qsize; pos++) {
+		if (query[pos] == '\n' || query[pos] == '\r') {
+			goto regular;
+		}
+	}
+	goto end;
+end:
+	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options.max_expression_depth);
+	string parser_error;
+	{
+		// check if there are any unicode spaces in the string
+		string new_query;
+		if (StripUnicodeSpaces(query, new_query)) {
+			// there are - strip the unicode spaces and re-run the query
+			ParseQuery(new_query);
+			return;
+		}
+	}
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		PostgresParser parser;
 		parser.Parse(query);
+		if (parser.success) {
+			if (!parser.parse_tree) {
+				// empty statement
+				return;
+			}
 
-		if (!parser.success) {
-			if (options.extensions) {
-				for (auto &ext : *options.extensions) {
-					D_ASSERT(ext.parse_function);
-					auto result = ext.parse_function(ext.parser_info.get(), query);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-						auto statement = make_unique<ExtensionStatement>(ext, move(result.parse_data));
-						statement->stmt_length = query.size();
-						statement->stmt_location = 0;
-						statements.push_back(move(statement));
-						return;
-					}
-					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException(result.error);
-					}
+			// if it succeeded, we transform the Postgres parse tree into a list of
+			// SQLStatements
+			transformer.TransformParseTree(parser.parse_tree, statements);
+		} else {
+			parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
+		}
+	}
+	if (!parser_error.empty()) {
+		if (options.extensions) {
+			for (auto &ext : *options.extensions) {
+				D_ASSERT(ext.parse_function);
+				auto result = ext.parse_function(ext.parser_info.get(), query);
+				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+					auto statement = make_unique<ExtensionStatement>(ext, move(result.parse_data));
+					statement->stmt_length = query.size();
+					statement->stmt_location = 0;
+					statements.push_back(move(statement));
+					return;
+				}
+				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					throw ParserException(result.error);
 				}
 			}
-			throw ParserException(QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1));
 		}
-
-		if (!parser.parse_tree) {
-			// empty statement
-			return;
-		}
-
-		// if it succeeded, we transform the Postgres parse tree into a list of
-		// SQLStatements
-		transformer.TransformParseTree(parser.parse_tree, statements);
+		throw ParserException(parser_error);
 	}
 	if (!statements.empty()) {
 		auto &last_statement = statements.back();
