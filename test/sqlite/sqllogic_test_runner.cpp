@@ -123,6 +123,12 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	// Replace environment variables in the SQL
+	for (auto &it : environment_variables) {
+		auto &name = it.first;
+		auto &value = it.second;
+		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+	}
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
@@ -515,19 +521,35 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
-			if (token.parameters.size() < 2) {
+			if (InLoop()) {
+				parser.Fail("require-env cannot be called in a loop");
+			}
+
+			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
 				parser.Fail("require-env requires 2 arguments: <env name> <env value>");
 			}
 
 			auto env_var = token.parameters[0];
-			auto env_value = token.parameters[1];
-
 			auto env_actual = std::getenv(env_var.c_str());
-
-			if (env_actual == nullptr || std::strcmp(env_actual, env_value.c_str()) != 0) {
+			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
 				return;
 			}
+
+			if (token.parameters.size() == 2) {
+				// Check that the value is the same as the expected value
+				auto env_value = token.parameters[1];
+				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
+					// It's not, check the test
+					return;
+				}
+			}
+
+			if (environment_variables.count(env_var)) {
+				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
+			}
+			environment_variables[env_var] = env_actual;
+
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			if (InLoop()) {
 				parser.Fail("load cannot be called in a loop");
