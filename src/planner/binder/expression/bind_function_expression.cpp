@@ -177,12 +177,16 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// (rhs)
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-			D_ASSERT((*lambda_bindings)[i - 1].names.size() == 1);
-			D_ASSERT((*lambda_bindings)[i - 1].types.size() == 1);
-			bound_function_expr.function.arguments.push_back((*lambda_bindings)[i - 1].types[0]);
-			auto bound_lambda_param = make_unique<BoundReferenceExpression>((*lambda_bindings)[i - 1].names[0],
-			                                                                (*lambda_bindings)[i - 1].types[0],
-			                                                                lambda_bindings->size() - i + 1);
+
+			idx_t lambda_index = lambda_bindings->size() - i + 1;
+			auto &binding = (*lambda_bindings)[i - 1];
+
+			D_ASSERT(binding.names.size() == 1);
+			D_ASSERT(binding.types.size() == 1);
+
+			bound_function_expr.function.arguments.push_back(binding.types[0]);
+			auto bound_lambda_param =
+			    make_unique<BoundReferenceExpression>(binding.names[0], binding.types[0], lambda_index);
 			bound_function_expr.children.push_back(move(bound_lambda_param));
 		}
 	}

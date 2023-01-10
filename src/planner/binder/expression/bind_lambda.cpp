@@ -105,27 +105,23 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
                                                      LogicalType &list_child_type) {
 
 	// check if the original expression is a lambda parameter
-	idx_t lambda_index = DConstants::INVALID_INDEX;
-	string alias = "";
-	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// determine if this is the lambda parameter
-		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
-		lambda_index = bound_col_ref.binding.lambda_index;
-		alias = bound_col_ref.alias;
-	}
+		auto &bound_lambda_ref = (BoundLambdaRefExpression &)*original;
+		auto alias = bound_lambda_ref.alias;
 
-	if (lambda_index != DConstants::INVALID_INDEX) {
-		if (lambda_bindings && lambda_index != lambda_bindings->size()) {
+		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {
 
-			D_ASSERT(lambda_index < lambda_bindings->size());
-			auto &lambda_binding = (*lambda_bindings)[lambda_index];
+			D_ASSERT(bound_lambda_ref.lambda_index < lambda_bindings->size());
+			auto &lambda_binding = (*lambda_bindings)[bound_lambda_ref.lambda_index];
 
 			D_ASSERT(lambda_binding.names.size() == 1);
 			D_ASSERT(lambda_binding.types.size() == 1);
 			// refers to a lambda parameter outside of the current lambda function
-			replacement = make_unique<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
-			                                                    lambda_bindings->size() - lambda_index + 1);
+			replacement =
+			    make_unique<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
+			                                          lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
 
 		} else {
 			// refers to current lambda parameter
@@ -156,7 +152,8 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	// these expression classes do not have children, transform them
 	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
 	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
-	    expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
+	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// move the expr because we are going to replace it
 		auto original = move(expr);

@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -317,9 +318,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (lambda_bindings) {
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (table_name == (*lambda_bindings)[i].alias) {
-				result = (*lambda_bindings)[i].Bind(colref, depth);
-				auto &bound_col_ref = (BoundColumnRefExpression &)*result.expression;
-				bound_col_ref.binding.lambda_index = i;
+				result = (*lambda_bindings)[i].Bind(colref, i, depth);
 				found_lambda_binding = true;
 				break;
 			}

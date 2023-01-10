@@ -100,6 +100,7 @@ public:
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth);
 
 	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
