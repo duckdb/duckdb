@@ -186,9 +186,8 @@ jobs:
 
   rstats-windows:
     name: R Package Windows
+    needs: rstats-linux
     runs-on: windows-latest
-    env:
-      TREAT_WARNINGS_AS_ERRORS: true
     steps:
     - uses: actions/checkout@v3
       with:
@@ -220,6 +219,40 @@ jobs:
         (cd tests && R -f testthat.R)
         _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+  rstats-windows-warnings:
+    name: R Package Windows (Warnings)
+    runs-on: windows-latest
+    env:
+      TREAT_WARNINGS_AS_ERRORS: true
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+        update-rtools: true
+
+    - uses: r-lib/actions/setup-pandoc@v2
+
+    - name: Install
+      shell: bash
+      run: |
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      shell: bash
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
 
   rubsan:
     name: R UBSAN
