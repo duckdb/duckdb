@@ -875,7 +875,8 @@ void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
-	return SearchPathSetting::GetSetting(context);
+	auto &client_data = ClientData::Get(context);
+	return client_data.catalog_search_path->GetDefault().schema;
 }
 
 //===--------------------------------------------------------------------===//

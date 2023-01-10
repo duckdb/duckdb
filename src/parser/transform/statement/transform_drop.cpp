@@ -44,13 +44,22 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *n
 	}
 
 	switch (stmt->removeType) {
-	case duckdb_libpgquery::PG_OBJECT_SCHEMA:
-		info.name = ((duckdb_libpgquery::PGValue *)stmt->objects->head->data.ptr_value)->val.str;
-		break;
 	case duckdb_libpgquery::PG_OBJECT_TYPE: {
 		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects;
 		auto target = (duckdb_libpgquery::PGTypeName *)(view_list->head->data.ptr_value);
 		info.name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(target->names->tail->data.ptr_value)->val.str);
+		break;
+	}
+	case duckdb_libpgquery::PG_OBJECT_SCHEMA: {
+		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects->head->data.ptr_value;
+		if (view_list->length == 2) {
+			info.catalog = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
+			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->next->data.ptr_value)->val.str;
+		} else if (view_list->length == 1) {
+			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
+		} else {
+			throw ParserException("Expected \"catalog.schema\" or \"schema\"");
+		}
 		break;
 	}
 	default: {
