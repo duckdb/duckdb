@@ -347,8 +347,8 @@ public:
 		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(
 		    context, result->files, union_col_types, union_col_names, union_names_map, parquet_options);
 
-		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(std::move(dummy_readers), union_col_types,
-		                                                                           union_col_names, union_names_map);
+		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(
+		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
 
 		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
 		names.assign(union_col_names.begin(), union_col_names.end());
