@@ -144,7 +144,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
-		result->sql_types = initial_reader->sql_types;
+		result->sql_types = initial_reader->return_types;
 		result->initial_reader = std::move(initial_reader);
 	} else {
 		result->sql_types = return_types;
