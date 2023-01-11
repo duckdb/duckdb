@@ -329,6 +329,7 @@ private:
 			auto a_idx = a_state.main_data.sel->get_index(i);
 			auto b_idx = a_state.main_data.sel->get_index(i);
 			auto c_idx = a_state.main_data.sel->get_index(i);
+			auto d_idx = a_state.main_data.sel->get_index(i);
 			if (!a_state.main_data.validity.RowIsValid(a_idx) || !b_state.main_data.validity.RowIsValid(b_idx) ||
 			    !c_state.main_data.validity.RowIsValid(c_idx) || !d_state.main_data.validity.RowIsValid(d_idx)) {
 				FlatVector::SetNull(result, i, true);
