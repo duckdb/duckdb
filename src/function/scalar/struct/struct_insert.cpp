@@ -74,7 +74,7 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 	}
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType::STRUCT(move(new_struct_children));
+	bound_function.return_type = LogicalType::STRUCT(std::move(new_struct_children));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
@@ -96,7 +96,7 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	for (idx_t i = 1; i < child_stats.size(); i++) {
 		new_struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
-	return move(new_struct_stats);
+	return std::move(new_struct_stats);
 }
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {

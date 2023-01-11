@@ -3,7 +3,7 @@
 namespace duckdb {
 
 RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op)
-    : ExpressionBinder(binder, context), op(move(op)) {
+    : ExpressionBinder(binder, context), op(std::move(op)) {
 }
 
 BindResult RelationBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

@@ -34,7 +34,7 @@ void Executor::AddEvent(shared_ptr<Event> event) {
 	if (cancelled) {
 		return;
 	}
-	events.push_back(move(event));
+	events.push_back(std::move(event));
 }
 
 struct PipelineEventStack {
@@ -71,10 +71,10 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	auto base_complete_event = make_shared<PipelineCompleteEvent>(base_pipeline->executor, event_data.initial_schedule);
 	PipelineEventStack base_stack {base_initialize_event.get(), base_event.get(), base_finish_event.get(),
 	                               base_complete_event.get()};
-	events.push_back(move(base_initialize_event));
-	events.push_back(move(base_event));
-	events.push_back(move(base_finish_event));
-	events.push_back(move(base_complete_event));
+	events.push_back(std::move(base_initialize_event));
+	events.push_back(std::move(base_event));
+	events.push_back(std::move(base_finish_event));
+	events.push_back(std::move(base_complete_event));
 
 	// dependencies: initialize -> event -> finish -> complete
 	base_stack.pipeline_event->AddDependency(*base_stack.pipeline_initialize_event);
@@ -95,14 +95,14 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
 			auto pipeline_finish_event = make_unique<PipelineFinishEvent>(pipeline);
 			pipeline_finish_event_ptr = pipeline_finish_event.get();
-			events.push_back(move(pipeline_finish_event));
+			events.push_back(std::move(pipeline_finish_event));
 			base_stack.pipeline_complete_event->AddDependency(*pipeline_finish_event_ptr);
 		} else {
 			pipeline_finish_event_ptr = base_stack.pipeline_finish_event;
 		}
 		PipelineEventStack pipeline_stack {base_stack.pipeline_initialize_event, pipeline_event.get(),
 		                                   pipeline_finish_event_ptr, base_stack.pipeline_complete_event};
-		events.push_back(move(pipeline_event));
+		events.push_back(std::move(pipeline_event));
 
 		// dependencies: base_initialize -> pipeline_event -> base_finish
 		pipeline_stack.pipeline_event->AddDependency(*base_stack.pipeline_initialize_event);
@@ -280,7 +280,7 @@ void Executor::VerifyPipelines() {
 
 void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan) {
 	Reset();
-	owned_plan = move(physical_plan);
+	owned_plan = std::move(physical_plan);
 	InitializeInternal(owned_plan.get());
 }
 
@@ -467,7 +467,7 @@ void Executor::PushError(PreservedError exception) {
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	exceptions.push_back(move(exception));
+	exceptions.push_back(std::move(exception));
 }
 
 bool Executor::HasError() {

@@ -227,12 +227,12 @@ public:
 		// The most likely path (Parquet read without union by name option)
 		if (!parquet_options.union_by_name) {
 			auto result = make_unique<ParquetReadBindData>();
-			result->files = move(files);
+			result->files = std::move(files);
 			result->SetInitialReader(
 			    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
 			result->names = result->initial_reader->names;
 			result->types = result->initial_reader->return_types;
-			return move(result);
+			return std::move(result);
 		} else {
 			return ParquetUnionNamesBind(context, files, expected_types, expected_names, parquet_options);
 		}
@@ -325,11 +325,11 @@ public:
 
 		// The most likely path (Parquet Scan without union by name option)
 		if (!parquet_options.union_by_name) {
-			result->files = move(files);
+			result->files = std::move(files);
 			result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
 			return_types = result->types = result->initial_reader->return_types;
 			names = result->names = result->initial_reader->names;
-			return move(result);
+			return std::move(result);
 		} else {
 			return ParquetUnionNamesBind(context, files, return_types, names, parquet_options);
 		}
@@ -339,7 +339,7 @@ public:
 	                                                      vector<LogicalType> &return_types, vector<string> &names,
 	                                                      ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
-		result->files = move(files);
+		result->files = std::move(files);
 
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
@@ -350,13 +350,13 @@ public:
 		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(move(dummy_readers), union_col_types,
 		                                                                           union_col_names, union_names_map);
 
-		move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
+		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		result->SetInitialReader(result->union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 
-		return move(result);
+		return std::move(result);
 	}
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
@@ -391,7 +391,7 @@ public:
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = ParquetGlob(fs, file_name, context);
-		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
+		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
@@ -424,7 +424,7 @@ public:
 				parquet_options.union_by_name = true;
 			}
 		}
-		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
+		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -458,7 +458,7 @@ public:
 		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
-		return move(result);
+		return std::move(result);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
@@ -485,7 +485,7 @@ public:
 				}
 			}
 		} else {
-			result->readers = move(bind_data.union_readers);
+			result->readers = std::move(bind_data.union_readers);
 			result->initial_reader = result->readers[0];
 		}
 
@@ -504,7 +504,7 @@ public:
 				}
 			}
 		}
-		return move(result);
+		return std::move(result);
 	}
 
 	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
@@ -748,7 +748,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -760,7 +760,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	global_state->writer =
 	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
 	                               parquet_bind.column_names, parquet_bind.codec);
-	return move(global_state);
+	return std::move(global_state);
 }
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
@@ -818,7 +818,7 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, cons
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", move(children));
+	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
 	return table_function;
 }
 

@@ -26,9 +26,9 @@ namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      unique_ptr<CSVBufferRead> buffer_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, move(options_p), requested_types) {
+    : BaseCSVReader(context, std::move(options_p), requested_types) {
 	Initialize(requested_types);
-	SetBufferRead(move(buffer_p));
+	SetBufferRead(std::move(buffer_p));
 	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
 		throw InternalException("Parallel CSV reader cannot handle CSVs with multi-byte delimiters/escapes/quotes");
 	}
@@ -106,7 +106,7 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 		buffer_size = buffer_read_p->buffer->GetBufferSize();
 	}
 	linenr = buffer_read_p->estimated_linenr;
-	buffer = move(buffer_read_p);
+	buffer = std::move(buffer_read_p);
 
 	linenr_estimated = true;
 	reached_remainder_state = false;

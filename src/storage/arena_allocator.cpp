@@ -9,9 +9,9 @@ ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), 
 }
 ArenaChunk::~ArenaChunk() {
 	if (next) {
-		auto current_next = move(next);
+		auto current_next = std::move(next);
 		while (current_next) {
-			current_next = move(current_next->next);
+			current_next = std::move(current_next->next);
 		}
 	}
 }
@@ -34,11 +34,11 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 		auto new_chunk = make_unique<ArenaChunk>(allocator, current_capacity);
 		if (head) {
 			head->prev = new_chunk.get();
-			new_chunk->next = move(head);
+			new_chunk->next = std::move(head);
 		} else {
 			tail = new_chunk.get();
 		}
-		head = move(new_chunk);
+		head = std::move(new_chunk);
 	}
 	D_ASSERT(head->current_position + len <= head->maximum_size);
 	auto result = head->data.get() + head->current_position;
@@ -51,9 +51,9 @@ void ArenaAllocator::Reset() {
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
-			auto current_next = move(head->next);
+			auto current_next = std::move(head->next);
 			while (current_next) {
-				current_next = move(current_next->next);
+				current_next = std::move(current_next->next);
 			}
 		}
 		tail = head.get();
@@ -73,7 +73,7 @@ void ArenaAllocator::Destroy() {
 void ArenaAllocator::Move(ArenaAllocator &other) {
 	D_ASSERT(!other.head);
 	other.tail = tail;
-	other.head = move(head);
+	other.head = std::move(head);
 	other.current_capacity = current_capacity;
 	Destroy();
 }

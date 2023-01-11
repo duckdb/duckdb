@@ -46,16 +46,17 @@ RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableI
 	// set up the statistics
 	for (auto &stats : pointer.statistics) {
 		auto stats_type = stats->type;
-		this->stats.push_back(make_shared<SegmentStatistics>(stats_type, move(stats)));
+		this->stats.push_back(make_shared<SegmentStatistics>(stats_type, std::move(stats)));
 	}
-	this->version_info = move(pointer.versions);
+	this->version_info = std::move(pointer.versions);
 
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroup &row_group, idx_t start)
     : SegmentBase(start, row_group.count), db(row_group.db), block_manager(row_group.block_manager),
-      table_info(row_group.table_info), version_info(move(row_group.version_info)), stats(move(row_group.stats)) {
+      table_info(row_group.table_info), version_info(std::move(row_group.version_info)),
+      stats(std::move(row_group.stats)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
 	}
@@ -87,7 +88,7 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = ColumnData::CreateColumn(block_manager, GetTableInfo(), i, start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
-		columns.push_back(move(column_data));
+		columns.push_back(std::move(column_data));
 	}
 }
 
@@ -175,8 +176,8 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
-			row_group->columns.push_back(move(column_data));
-			row_group->stats.push_back(move(altered_col_stats));
+			row_group->columns.push_back(std::move(column_data));
+			row_group->stats.push_back(std::move(altered_col_stats));
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(columns[i]);
@@ -219,8 +220,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	row_group->columns = columns;
 	row_group->stats = stats;
 	// now add the new column
-	row_group->columns.push_back(move(added_column));
-	row_group->stats.push_back(move(added_col_stats));
+	row_group->columns.push_back(std::move(added_column));
+	row_group->stats.push_back(std::move(added_col_stats));
 
 	row_group->Verify();
 	return row_group;
@@ -559,7 +560,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
-			version_info->info[vector_idx] = move(constant_info);
+			version_info->info[vector_idx] = std::move(constant_info);
 		} else {
 			// part of a vector is encapsulated: append to that part
 			ChunkVectorInfo *info;
@@ -567,7 +568,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 				// first time appending to this vector: create new info
 				auto insert_info = make_unique<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 				info = insert_info.get();
-				version_info->info[vector_idx] = move(insert_info);
+				version_info->info[vector_idx] = std::move(insert_info);
 			} else {
 				D_ASSERT(version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
@@ -708,8 +709,8 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
-		result.statistics.push_back(move(stats));
-		result.states.push_back(move(checkpoint_state));
+		result.statistics.push_back(std::move(stats));
+		result.states.push_back(std::move(checkpoint_state));
 	}
 	D_ASSERT(result.states.size() == result.statistics.size());
 	return result;
@@ -727,7 +728,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		global_stats[column_idx]->Merge(*result.statistics[column_idx]);
 	}
-	row_group_pointer.statistics = move(result.statistics);
+	row_group_pointer.statistics = std::move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(result.states.size() == columns.size());
@@ -826,7 +827,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnLis
 	auto &source = reader.GetSource();
 	for (auto &col : columns.Physical()) {
 		auto stats = BaseStatistics::Deserialize(source, col.Type());
-		result.statistics.push_back(move(stats));
+		result.statistics.push_back(std::move(stats));
 	}
 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 		BlockPointer pointer;
@@ -920,7 +921,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 				new_info->inserted[i] = constant.insert_id.load();
 			}
-			info.version_info->info[vector_idx] = move(new_info);
+			info.version_info->info[vector_idx] = std::move(new_info);
 		}
 		D_ASSERT(info.version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 		current_info = (ChunkVectorInfo *)info.version_info->info[vector_idx].get();

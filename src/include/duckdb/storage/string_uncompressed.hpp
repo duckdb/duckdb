@@ -61,7 +61,7 @@ public:
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		return make_unique<CompressionAppendState>(move(handle));
+		return make_unique<CompressionAppendState>(std::move(handle));
 	}
 
 	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,

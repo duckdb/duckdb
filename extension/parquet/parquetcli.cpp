@@ -79,7 +79,7 @@ int main(int argc, const char **argv) {
 		auto idx = entry->second;
 		auto filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL,
 		                                          Value(splits[1]).DefaultCastAs(return_types[idx]));
-		filters.filters[idx] = move(filter);
+		filters.filters[idx] = std::move(filter);
 	}
 
 	ParquetReaderScanState state;

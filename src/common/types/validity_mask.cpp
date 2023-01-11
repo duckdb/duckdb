@@ -24,7 +24,7 @@ void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
 	}
 	// have to merge
 	// create a new validity mask that contains the combined mask
-	auto owned_data = move(validity_data);
+	auto owned_data = std::move(validity_data);
 	auto data = GetData();
 	auto other_data = other.GetData();
 
@@ -61,7 +61,7 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 		for (idx_t entry_idx = old_size_count; entry_idx < new_size_count; entry_idx++) {
 			new_owned_data[entry_idx] = ValidityData::MAX_ENTRY;
 		}
-		validity_data = move(new_validity_data);
+		validity_data = std::move(new_validity_data);
 		validity_mask = validity_data->owned_data.get();
 	} else {
 		Initialize(new_size);

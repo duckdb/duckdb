@@ -85,19 +85,19 @@ public:
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
 	              const vector<LogicalType> &expected_types_p, const string &initial_filename_p = string());
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p)
-	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
+	    : ParquetReader(allocator, std::move(file_handle_p), vector<LogicalType>(), string()) {
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<string> &names,
 	              const vector<LogicalType> &expected_types_p, const vector<column_t> &column_ids,
 	              ParquetOptions parquet_options, const string &initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options)
-	    : ParquetReader(context, move(file_name), vector<string>(), vector<LogicalType>(), vector<column_t>(),
+	    : ParquetReader(context, std::move(file_name), vector<string>(), vector<LogicalType>(), vector<column_t>(),
 	                    parquet_options, string()) {
 	}
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
 	              ParquetOptions parquet_options)
-	    : ParquetReader(context, move(file_name), vector<string>(), expected_types_p, vector<column_t>(),
+	    : ParquetReader(context, std::move(file_name), vector<string>(), expected_types_p, vector<column_t>(),
 	                    parquet_options, string()) {
 	}
 	~ParquetReader();

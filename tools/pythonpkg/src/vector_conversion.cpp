@@ -489,7 +489,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
 		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
 		return_types.push_back(duckdb_col_type);
-		bind_columns.push_back(move(bind_data));
+		bind_columns.push_back(std::move(bind_data));
 	}
 }
 
