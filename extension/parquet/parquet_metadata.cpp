@@ -423,7 +423,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 	if (result->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_name);
 	}
-	return move(result);
+	return std::move(result);
 }
 
 template <bool SCHEMA>
@@ -438,7 +438,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 		result->LoadFileMetaData(context, bind_data.return_types, bind_data.files[0]);
 	}
 	result->file_index = 0;
-	return move(result);
+	return std::move(result);
 }
 
 template <bool SCHEMA>

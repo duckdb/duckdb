@@ -104,7 +104,7 @@ void InterpretedBenchmark::ReadResultFromFile(BenchmarkFileReader &reader, const
 		for (idx_t col_idx = 0; col_idx < result->ColumnCount(); col_idx++) {
 			row_values.push_back(row.GetValue<string>(col_idx));
 		}
-		result_values.push_back(move(row_values));
+		result_values.push_back(std::move(row_values));
 	}
 }
 
@@ -121,7 +121,7 @@ void InterpretedBenchmark::ReadResultFromReader(BenchmarkFileReader &reader, con
 			throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
 			                                                " values but got " + std::to_string(result_column_count)));
 		}
-		result_values.push_back(move(result_splits));
+		result_values.push_back(std::move(result_splits));
 	}
 }
 
@@ -338,7 +338,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			if (result->HasError()) {
 				result->ThrowError();
 			}
-			result = move(result->next);
+			result = std::move(result->next);
 		}
 	}
 
@@ -374,7 +374,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		if (result->HasError()) {
 			result->ThrowError();
 		}
-		result = move(result->next);
+		result = std::move(result->next);
 	}
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
@@ -405,7 +405,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 			if (result->HasError()) {
 				result->ThrowError();
 			}
-			result = move(result->next);
+			result = std::move(result->next);
 		}
 	}
 }

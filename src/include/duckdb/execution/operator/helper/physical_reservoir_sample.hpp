@@ -17,8 +17,8 @@ namespace duckdb {
 class PhysicalReservoirSample : public PhysicalOperator {
 public:
 	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types), estimated_cardinality),
-	      options(move(options)) {
+	    : PhysicalOperator(PhysicalOperatorType::RESERVOIR_SAMPLE, std::move(types), estimated_cardinality),
+	      options(std::move(options)) {
 	}
 
 	unique_ptr<SampleOptions> options;

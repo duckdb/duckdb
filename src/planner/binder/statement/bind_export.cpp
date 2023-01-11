@@ -176,18 +176,18 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
-		copy_stmt.info = move(info);
+		copy_stmt.info = std::move(info);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union =
-			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                     move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
-			child_operator = move(copy_union);
+			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			                                     std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			child_operator = std::move(copy_union);
 		} else {
-			child_operator = move(bound_statement.plan);
+			child_operator = std::move(bound_statement.plan);
 		}
 	}
 
@@ -198,13 +198,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_unique<LogicalExport>(copy_function->function, move(stmt.info), exported_tables);
+	auto export_node = make_unique<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
 
 	if (child_operator) {
-		export_node->children.push_back(move(child_operator));
+		export_node->children.push_back(std::move(child_operator));
 	}
 
-	result.plan = move(export_node);
+	result.plan = std::move(export_node);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

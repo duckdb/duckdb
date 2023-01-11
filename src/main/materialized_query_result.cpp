@@ -7,13 +7,13 @@ namespace duckdb {
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
                                                  vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
                                                  ClientProperties client_properties)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(properties), collection_p->Types(),
-                  move(names_p), move(client_properties)),
-      collection(move(collection_p)), scan_initialized(false) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
+                  std::move(names_p), std::move(client_properties)),
+      collection(std::move(collection_p)), scan_initialized(false) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(PreservedError error)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)), scan_initialized(false) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
 }
 
 string MaterializedQueryResult::ToString() {

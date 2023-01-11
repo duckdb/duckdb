@@ -8,8 +8,8 @@ namespace duckdb {
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                            unique_ptr<ParsedExpression> condition_p, JoinType type)
-    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)),
-      condition(move(condition_p)), join_type(type) {
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
+      condition(std::move(condition_p)), join_type(type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
@@ -18,8 +18,8 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p,
                            JoinType type)
-    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)),
-      using_columns(move(using_columns_p)), join_type(type) {
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
+      using_columns(std::move(using_columns_p)), join_type(type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
@@ -30,7 +30,7 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
@@ -42,7 +42,7 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	}
 	join_ref->using_columns = using_columns;
 	join_ref->type = join_type;
-	return move(join_ref);
+	return std::move(join_ref);
 }
 
 const vector<ColumnDefinition> &JoinRelation::Columns() {

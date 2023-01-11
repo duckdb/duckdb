@@ -76,13 +76,13 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
-	active_transactions.push_back(move(transaction));
+	active_transactions.push_back(std::move(transaction));
 	return transaction_ptr;
 }
 
 struct ClientLockWrapper {
 	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
-	    : connection(move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {
+	    : connection(std::move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {
 	}
 
 	shared_ptr<ClientContext> connection;
@@ -98,7 +98,7 @@ void TransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, Cl
 			continue;
 		}
 		auto &context_lock = con->context_lock;
-		client_locks.emplace_back(context_lock, move(con));
+		client_locks.emplace_back(context_lock, std::move(con));
 	}
 }
 
@@ -262,17 +262,17 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 
 	transaction_t lowest_stored_query = lowest_start_time;
 	D_ASSERT(t_index != active_transactions.size());
-	auto current_transaction = move(active_transactions[t_index]);
+	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
 	if (transaction->commit_id != 0) {
 		// the transaction was committed, add it to the list of recently
 		// committed transactions
-		recently_committed_transactions.push_back(move(current_transaction));
+		recently_committed_transactions.push_back(std::move(current_transaction));
 	} else {
 		// the transaction was aborted, but we might still need its information
 		// add it to the set of transactions awaiting GC
 		current_transaction->highest_active_query = current_query;
-		old_transactions.push_back(move(current_transaction));
+		old_transactions.push_back(std::move(current_transaction));
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
@@ -298,7 +298,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 			// store the current highest active query
 			recently_committed_transactions[i]->highest_active_query = current_query;
 			// move it to the list of transactions awaiting GC
-			old_transactions.push_back(move(recently_committed_transactions[i]));
+			old_transactions.push_back(std::move(recently_committed_transactions[i]));
 		} else {
 			// recently_committed_transactions is ordered on commit_id
 			// implicitly thus if the current one is bigger than

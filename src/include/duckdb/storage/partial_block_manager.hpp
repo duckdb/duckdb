@@ -36,7 +36,7 @@ struct PartialBlockState {
 };
 
 struct PartialBlock {
-	explicit PartialBlock(PartialBlockState state) : state(move(state)) {
+	explicit PartialBlock(PartialBlockState state) : state(std::move(state)) {
 	}
 	virtual ~PartialBlock() {
 	}

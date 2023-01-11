@@ -155,6 +155,8 @@ jobs:
       LIBARROW_BINARY: 'false'
       ARROW_USER_SIMD_LEVEL: 'AVX2'
       DUCKDB_R_DEBUG: 1
+      DUCKDB_DEBUG_MOVE: 1
+
     steps:
     - uses: actions/checkout@v3
       with:

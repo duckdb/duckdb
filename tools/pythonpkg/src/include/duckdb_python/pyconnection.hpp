@@ -29,7 +29,7 @@ class RegisteredArrow : public RegisteredObject {
 
 public:
 	RegisteredArrow(unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory_p, py::object obj_p)
-	    : RegisteredObject(std::move(obj_p)), arrow_factory(move(arrow_factory_p)) {};
+	    : RegisteredObject(std::move(obj_p)), arrow_factory(std::move(arrow_factory_p)) {};
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 

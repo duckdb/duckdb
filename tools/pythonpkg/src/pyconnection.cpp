@@ -241,7 +241,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto pending_query = connection->PendingQuery(move(statements[i]));
+			auto pending_query = connection->PendingQuery(std::move(statements[i]));
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -249,7 +249,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 			}
 		}
 
-		prep = connection->Prepare(move(statements.back()));
+		prep = connection->Prepare(std::move(statements.back()));
 		if (prep->HasError()) {
 			prep->error.Throw();
 		}
@@ -297,7 +297,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		}
 
 		if (!many) {
-			result = make_unique<DuckDBPyRelation>(move(res));
+			result = make_unique<DuckDBPyRelation>(std::move(res));
 		}
 	}
 	return shared_from_this();
@@ -325,7 +325,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
-		connection->context->external_dependencies[name] = move(dependencies);
+		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (IsAcceptedArrowObject(python_object)) {
 		auto stream_factory =
 		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
@@ -342,8 +342,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
-		connection->context->external_dependencies[name] = move(dependencies);
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), python_object)));
+		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
@@ -370,7 +370,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 	parser.ParseQuery(query);
 	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
 		return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(
-		    unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])), alias));
+		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
 	Execute(query);
 	if (result) {
@@ -525,7 +525,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
 	        ->Alias(name));
 	rel->rel->extra_dependencies =
-	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), arrow_object));
+	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object));
 	return rel;
 }
 
@@ -707,7 +707,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		string name = "df_" + GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
-		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+		table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
 		                                                                      make_unique<RegisteredObject>(new_df));
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
@@ -720,9 +720,9 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 
-		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
 		table_function->external_dependency =
-		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
+		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";

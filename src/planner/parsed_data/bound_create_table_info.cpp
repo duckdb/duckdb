@@ -37,7 +37,7 @@ unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer 
                                                                    PlanDeserializationState &state) {
 	auto create_info = SchemaCatalogEntry::Deserialize(source);
 	auto schema_name = create_info->schema;
-	auto result = make_unique<BoundCreateTableInfo>(move(create_info));
+	auto result = make_unique<BoundCreateTableInfo>(std::move(create_info));
 	auto &context = state.context;
 	result->schema = Catalog::GetSchema(context, INVALID_CATALOG, schema_name);
 	result->base = source.ReadOptional<CreateInfo>();

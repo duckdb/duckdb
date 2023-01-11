@@ -13,8 +13,8 @@ namespace duckdb {
 
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
                                  vector<ColumnDefinition> columns_p, bool auto_detect, string alias_p)
-    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), auto_detect(auto_detect),
-      alias(move(alias_p)), columns(move(columns_p)) {
+    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(std::move(csv_file_p)), auto_detect(auto_detect),
+      alias(std::move(alias_p)), columns(std::move(columns_p)) {
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
@@ -24,7 +24,7 @@ unique_ptr<QueryNode> ReadCSVRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
@@ -39,16 +39,16 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 		for (idx_t i = 0; i < columns.size(); i++) {
 			column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 		}
-		auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
+		auto colnames = make_unique<ConstantExpression>(Value::STRUCT(std::move(column_names)));
 		children.push_back(make_unique<ComparisonExpression>(
-		    ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
+		    ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), std::move(colnames)));
 	} else {
 		children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
 		                                                     make_unique<ColumnRefExpression>("auto_detect"),
 		                                                     make_unique<ConstantExpression>(Value::BOOLEAN(true))));
 	}
-	table_ref->function = make_unique<FunctionExpression>("read_csv", move(children));
-	return move(table_ref);
+	table_ref->function = make_unique<FunctionExpression>("read_csv", std::move(children));
+	return std::move(table_ref);
 }
 
 string ReadCSVRelation::GetAlias() {

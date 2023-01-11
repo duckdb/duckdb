@@ -164,7 +164,7 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 
 		current_segment->function = function;
 
@@ -254,7 +254,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);
@@ -461,7 +461,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 		dict_child_data[i] = FetchStringFromDict(segment, dict, baseptr, index_buffer_ptr[i], str_len);
 	}
 
-	return move(state);
+	return std::move(state);
 }
 
 //===--------------------------------------------------------------------===//

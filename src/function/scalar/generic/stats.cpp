@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct StatsBindData : public FunctionData {
-	explicit StatsBindData(string stats_p = string()) : stats(move(stats_p)) {
+	explicit StatsBindData(string stats_p = string()) : stats(std::move(stats_p)) {
 	}
 
 	string stats;

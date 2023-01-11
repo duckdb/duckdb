@@ -39,17 +39,17 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 		auto qualified_name = QualifiedName::Parse(stmt->name);
 		basetable->schema_name = qualified_name.schema;
 		basetable->table_name = qualified_name.name;
-		select->from_table = move(basetable);
+		select->from_table = std::move(basetable);
 
-		info.query = move(select);
-		return move(result);
+		info.query = std::move(select);
+		return std::move(result);
 	}
 
 	auto result = make_unique<PragmaStatement>();
 
 	auto show_name = stmt->name;
 	TransformShowName(result, show_name);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -4,7 +4,7 @@
 namespace duckdb {
 
 LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION, move(select_list)), table_index(table_index) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION, std::move(select_list)), table_index(table_index) {
 }
 
 vector<ColumnBinding> LogicalProjection::GetColumnBindings() {
@@ -25,7 +25,7 @@ void LogicalProjection::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalProjection::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return make_unique<LogicalProjection>(table_index, move(expressions));
+	return make_unique<LogicalProjection>(table_index, std::move(expressions));
 }
 
 vector<idx_t> LogicalProjection::GetTableIndex() const {

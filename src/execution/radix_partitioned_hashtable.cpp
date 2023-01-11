@@ -196,7 +196,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	llstate.ht->Finalize();
 
 	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
-	gstate.intermediate_hts.push_back(move(llstate.ht));
+	gstate.intermediate_hts.push_back(std::move(llstate.ht));
 }
 
 bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
@@ -267,7 +267,7 @@ class RadixAggregateFinalizeTask : public ExecutorTask {
 public:
 	RadixAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, RadixHTGlobalState &state_p,
 	                           idx_t radix_p)
-	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
+	    : ExecutorTask(executor), event(std::move(event_p)), state(state_p), radix(radix_p) {
 	}
 
 	static void FinalizeHT(RadixHTGlobalState &gstate, idx_t radix) {

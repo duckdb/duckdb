@@ -28,8 +28,8 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 		}
 		auto group_ref = make_unique<BoundColumnRefExpression>(
 		    expr.expression->return_type, ColumnBinding(node.group_index, node.groups.group_expressions.size()));
-		node.groups.group_expressions.push_back(move(expr.expression));
-		return BindResult(move(group_ref));
+		node.groups.group_expressions.push_back(std::move(expr.expression));
+		return BindResult(std::move(group_ref));
 	}
 	return BindResult(StringUtil::Format(
 	    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));

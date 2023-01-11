@@ -15,15 +15,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side: push into left
-			left_pushdown.filters.push_back(move(filters[i]));
+			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
 			filters.erase(filters.begin() + i);
 			i--;
 		}
 	}
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
-	return FinishPushdown(move(op));
+	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb
