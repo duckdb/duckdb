@@ -41,7 +41,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	default:
 		throw InternalException("Unimplemented index type");
 	}
-	return (move(state));
+	return (std::move(state));
 }
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	for (idx_t i = 0; i < state->key_chunk.ColumnCount(); i++) {
 		state->key_column_ids.push_back(i);
 	}
-	return move(state);
+	return std::move(state);
 }
 
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -129,7 +129,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
-	table.storage->info->indexes.AddIndex(move(state.global_index));
+	table.storage->info->indexes.AddIndex(std::move(state.global_index));
 	return SinkFinalizeType::READY;
 }
 

@@ -18,9 +18,9 @@ using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(4),
-      tuples_per_round(0), partition_start(0), partition_end(0) {
+    : buffer_manager(buffer_manager), conditions(conditions), build_types(std::move(btypes)), entry_size(0),
+      tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false),
+      radix_bits(4), tuples_per_round(0), partition_start(0), partition_end(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -93,9 +93,9 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		D_ASSERT(partition_string_heaps.empty());
 		// Move partitions to this HT
 		for (idx_t p = 0; p < other.partition_block_collections.size(); p++) {
-			partition_block_collections.push_back(move(other.partition_block_collections[p]));
+			partition_block_collections.push_back(std::move(other.partition_block_collections[p]));
 			if (!layout.AllConstant()) {
-				partition_string_heaps.push_back(move(other.partition_string_heaps[p]));
+				partition_string_heaps.push_back(std::move(other.partition_string_heaps[p]));
 			}
 		}
 		return;
@@ -254,7 +254,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		source_chunk.data[i].Reference(keys.data[i]);
-		source_data.emplace_back(move(key_data[i]));
+		source_data.emplace_back(std::move(key_data[i]));
 	}
 	// now serialize the payload
 	D_ASSERT(build_types.size() == payload.ColumnCount());
@@ -262,21 +262,21 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		source_chunk.data[source_data.size()].Reference(payload.data[i]);
 		UnifiedVectorFormat pdata;
 		payload.data[i].ToUnifiedFormat(payload.size(), pdata);
-		source_data.emplace_back(move(pdata));
+		source_data.emplace_back(std::move(pdata));
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		source_chunk.data[source_data.size()].Reference(vfound);
 		UnifiedVectorFormat fdata;
 		vfound.ToUnifiedFormat(keys.size(), fdata);
-		source_data.emplace_back(move(fdata));
+		source_data.emplace_back(std::move(fdata));
 	}
 
 	// serialise the hashes at the end
 	source_chunk.data[source_data.size()].Reference(hash_values);
 	UnifiedVectorFormat hdata;
 	hash_values.ToUnifiedFormat(keys.size(), hdata);
-	source_data.emplace_back(move(hdata));
+	source_data.emplace_back(std::move(hdata));
 
 	source_chunk.SetCardinality(keys);
 
@@ -364,7 +364,7 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 			auto &heap_block = string_heap->blocks[block_idx];
 			auto heap_handle = buffer_manager.Pin(heap_block->block);
 			heap_ptr = heap_handle.Ptr();
-			local_pinned_handles.push_back(move(heap_handle));
+			local_pinned_handles.push_back(std::move(heap_handle));
 		}
 
 		idx_t entry = 0;
@@ -386,12 +386,12 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 
 			entry += next;
 		}
-		local_pinned_handles.push_back(move(handle));
+		local_pinned_handles.push_back(std::move(handle));
 	}
 
 	lock_guard<mutex> lock(pinned_handles_lock);
 	for (auto &local_pinned_handle : local_pinned_handles) {
-		pinned_handles.push_back(move(local_pinned_handle));
+		pinned_handles.push_back(std::move(local_pinned_handle));
 	}
 }
 
@@ -1238,7 +1238,7 @@ void ProbeSpill::Finalize() {
 			global_spill_collection =
 			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
-			global_spill_collection = move(local_spill_collections[0]);
+			global_spill_collection = std::move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
 				global_spill_collection->Combine(*local_spill_collections[i]);
 			}
@@ -1257,7 +1257,7 @@ void ProbeSpill::PrepareNextProbe() {
 			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
-			global_spill_collection = move(partitions[ht.partition_start]);
+			global_spill_collection = std::move(partitions[ht.partition_start]);
 			for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
 				global_spill_collection->Combine(*partitions[i]);
 			}

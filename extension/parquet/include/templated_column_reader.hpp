@@ -33,7 +33,7 @@ class TemplatedColumnReader : public ColumnReader {
 public:
 	TemplatedColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                      idx_t max_define_p, idx_t max_repeat_p)
-	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
+	    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
 
 	shared_ptr<ResizeableBuffer> dict;
 
@@ -47,7 +47,7 @@ public:
 	}
 
 	void Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) override {
-		dict = move(data);
+		dict = std::move(data);
 	}
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
@@ -72,7 +72,7 @@ public:
 
 	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
 	           idx_t result_offset, Vector &result) override {
-		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(move(plain_data), defines, num_values, filter, result_offset,
+		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(std::move(plain_data), defines, num_values, filter, result_offset,
 		                                             result);
 	}
 };

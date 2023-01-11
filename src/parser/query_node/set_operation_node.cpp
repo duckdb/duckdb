@@ -64,7 +64,7 @@ unique_ptr<QueryNode> SetOperationNode::Copy() const {
 	result->left = left->Copy();
 	result->right = right->Copy();
 	this->CopyProperties(*result);
-	return move(result);
+	return std::move(result);
 }
 
 void SetOperationNode::Serialize(FieldWriter &writer) const {
@@ -78,7 +78,7 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	result->setop_type = reader.ReadRequired<SetOperationType>();
 	result->left = reader.ReadRequiredSerializable<QueryNode>();
 	result->right = reader.ReadRequiredSerializable<QueryNode>();
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

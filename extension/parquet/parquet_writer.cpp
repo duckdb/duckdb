@@ -214,7 +214,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec)
-    : file_name(move(file_name_p)), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
+    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(
 	    fs, file_name.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, file_opener_p);
@@ -274,14 +274,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		for (auto &chunk : buffer.Chunks()) {
 			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
 		}
-		states.push_back(move(write_state));
+		states.push_back(std::move(write_state));
 	}
 
 	lock_guard<mutex> glock(lock);
 	row_group.file_offset = writer->GetTotalWritten();
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
-		auto write_state = move(states[col_idx]);
+		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
 	}
 

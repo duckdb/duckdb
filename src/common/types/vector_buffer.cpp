@@ -41,7 +41,7 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		auto vector = make_unique<Vector>(child_type.second, capacity);
-		children.push_back(move(vector));
+		children.push_back(std::move(vector));
 	}
 }
 
@@ -50,7 +50,7 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
 	auto &other_vector = StructVector::GetEntries(other);
 	for (auto &child_vector : other_vector) {
 		auto vector = make_unique<Vector>(*child_vector, sel, count);
-		children.push_back(move(vector));
+		children.push_back(std::move(vector));
 	}
 }
 
@@ -58,7 +58,7 @@ VectorStructBuffer::~VectorStructBuffer() {
 }
 
 VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(move(vector)) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(std::move(vector)) {
 }
 
 VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
@@ -100,7 +100,7 @@ VectorListBuffer::~VectorListBuffer() {
 }
 
 ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
-    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
+    : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(std::move(handle)) {
 }
 
 ManagedVectorBuffer::~ManagedVectorBuffer() {

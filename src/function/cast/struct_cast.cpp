@@ -13,9 +13,9 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	}
 	for (idx_t i = 0; i < source_child_types.size(); i++) {
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
-		child_cast_info.push_back(move(child_cast));
+		child_cast_info.push_back(std::move(child_cast));
 	}
-	return make_unique<StructBoundCastData>(move(child_cast_info), target);
+	return make_unique<StructBoundCastData>(std::move(child_cast_info), target);
 }
 
 static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -130,7 +130,7 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 		for (auto &child_entry : struct_children) {
 			varchar_children.push_back(make_pair(child_entry.first, LogicalType::VARCHAR));
 		}
-		auto varchar_type = LogicalType::STRUCT(move(varchar_children));
+		auto varchar_type = LogicalType::STRUCT(std::move(varchar_children));
 		return BoundCastInfo(StructToVarcharCast,
 		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type));
 	}

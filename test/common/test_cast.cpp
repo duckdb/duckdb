@@ -77,7 +77,7 @@ static void TestExponent() {
 	double value = 1;
 	T expected_value = 1;
 	for (idx_t exponent = 0; exponent < 100; exponent++) {
-		if (value < NumericLimits<T>::Maximum()) {
+		if (value < (double)NumericLimits<T>::Maximum()) {
 			// expect success
 			str = "1e" + to_string(exponent);
 			REQUIRE(TryCast::Operation<string_t, T>(string_t(str), parse_result));
@@ -87,7 +87,7 @@ static void TestExponent() {
 			REQUIRE(parse_result == -expected_value);
 			value *= 10;
 			// check again because otherwise this overflows
-			if (value < NumericLimits<T>::Maximum()) {
+			if (value < (double)NumericLimits<T>::Maximum()) {
 				expected_value *= 10;
 			}
 		} else {

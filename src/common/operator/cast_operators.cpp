@@ -877,7 +877,20 @@ struct IntegerCastOperation {
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos;
+	if (NEGATIVE) {
+		start_pos = 1;
+	} else {
+		if (*buf == '+') {
+			if (strict) {
+				// leading plus is not allowed in strict mode
+				return false;
+			}
+			start_pos = 1;
+		} else {
+			start_pos = 0;
+		}
+	}
 	idx_t pos = start_pos;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsDigit(buf[pos])) {
@@ -1050,22 +1063,23 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
-	// If it starts with 0x or 0X, we parse it as a hex value
-	else if (len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X')) {
-		// Skip the 0x
-		buf++;
-		len--;
-		return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+	if (len > 1 && *buf == '0') {
+		if (buf[1] == 'x' || buf[1] == 'X') {
+			// If it starts with 0x or 0X, we parse it as a hex value
+			buf++;
+			len--;
+			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (buf[1] == 'b' || buf[1] == 'B') {
+			// If it starts with 0b or 0B, we parse it as a binary value
+			buf++;
+			len--;
+			return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (strict && StringUtil::CharacterIsDigit(buf[1])) {
+			// leading zeros are not allowed in strict mode
+			return false;
+		}
 	}
-	// If it starts with 0b or 0B, we parse it as a binary value
-	else if (len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
-		// Skip the 0b
-		buf++;
-		len--;
-		return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
-	} else {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
-	}
+	return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 }
 
 template <typename T, bool IS_SIGNED = true>
@@ -1167,8 +1181,18 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 		return false;
 	}
 	if (*buf == '+') {
+		if (strict) {
+			// plus is not allowed in strict mode
+			return false;
+		}
 		buf++;
 		len--;
+	}
+	if (strict && len >= 2) {
+		if (buf[0] == '0' && StringUtil::CharacterIsDigit(buf[1])) {
+			// leading zeros are not allowed in strict mode
+			return false;
+		}
 	}
 	auto endptr = buf + len;
 	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result);

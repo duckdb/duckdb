@@ -96,7 +96,7 @@ void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 		new_node->count = node->count;
 		Node::Delete(node);
 		node = new_node;
@@ -131,7 +131,7 @@ void Node16::EraseChild(Node *&node, int pos, ART &art) {
 			new_node->children[new_node->count++] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 		Node::Delete(node);
 		node = new_node;
 	}

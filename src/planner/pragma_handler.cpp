@@ -33,14 +33,14 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
 				for (idx_t j = 0; j < parser.statements.size(); j++) {
-					new_statements.push_back(move(parser.statements[j]));
+					new_statements.push_back(std::move(parser.statements[j]));
 				}
 				continue;
 			}
 		}
-		new_statements.push_back(move(statements[i]));
+		new_statements.push_back(std::move(statements[i]));
 	}
-	statements = move(new_statements);
+	statements = std::move(new_statements);
 }
 
 void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements) {
