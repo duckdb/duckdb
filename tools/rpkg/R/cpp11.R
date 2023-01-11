@@ -60,16 +60,20 @@ rapi_rel_filter <- function(rel, exprs) {
   .Call(`_duckdb_rapi_rel_filter`, rel, exprs)
 }
 
-rapi_rel_project <- function(rel, exprs) {
-  .Call(`_duckdb_rapi_rel_project`, rel, exprs)
-}
-
 rapi_rel_aggregate <- function(rel, groups, aggregates) {
   .Call(`_duckdb_rapi_rel_aggregate`, rel, groups, aggregates)
 }
 
 rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
+}
+
+rapi_rel_project <- function(rel, exprs) {
+  .Call(`_duckdb_rapi_rel_project`, rel, exprs)
+}
+
+rapi_rel_anti_semi_join <- function(left, subquery, join) {
+  .Call(`_duckdb_rapi_rel_anti_semi_join`, left, subquery, join)
 }
 
 rapi_rel_join <- function(left, right, conds, join) {

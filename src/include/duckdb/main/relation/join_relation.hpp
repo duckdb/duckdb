@@ -18,9 +18,12 @@ public:
 	                        unique_ptr<ParsedExpression> condition, JoinType type);
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
 	                        JoinType type);
+	// for anti and semi joins
+	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_proj, shared_ptr<Relation> right, JoinType type);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
+	shared_ptr<Relation> left_proj;
 	unique_ptr<ParsedExpression> condition;
 	vector<string> using_columns;
 	JoinType join_type;

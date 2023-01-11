@@ -168,6 +168,10 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_join(left, right, cond, "right")
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
+rel_anti_join <- function(left, left_proj, right_proj) {
+    rapi_rel_anti_semi_join(left, left_proj, right_proj, "anti")
+}
+
 rel_inner_join <- function(left, right, conds) {
   rel_join(left, right, conds, "inner")
 }

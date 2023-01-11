@@ -1,8 +1,13 @@
 #include "duckdb/main/relation/join_relation.hpp"
+
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+
+#include <duckdb/parser/expression/subquery_expression.hpp>
 
 namespace duckdb {
 
@@ -26,9 +31,41 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
+JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_proj, shared_ptr<Relation> right_proj, JoinType type)
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_proj)), left_proj(left_proj),
+      using_columns(), join_type(type) {
+	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI) {
+		throw Exception("Must pass conditions for join of type " + JoinTypeToString(join_type));
+	}
+	if (left->context.GetContext() != right->context.GetContext()) {
+		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+	}
+	if (right->type != RelationType::PROJECTION_RELATION) {
+		throw Exception(JoinTypeToString(join_type) + " requires a projection relation as right relation");
+	}
+	context.GetContext()->TryBindRelation(*this, this->columns);
+}
+
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
+	if (join_type == JoinType::ANTI) {
+		result->from_table = left->GetTableRef();
+		D_ASSERT(right->type == RelationType::PROJECTION_RELATION);
+		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
+		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left);
+		auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
+		auto where_child = make_unique<SubqueryExpression>();
+		auto select_statement = make_unique<SelectStatement>();
+		select_statement->node = right->GetQueryNode();
+		where_child->subquery = move(select_statement);
+		where_child->subquery_type = SubqueryType::ANY;
+		where_child->child = move(left_projection->expressions.front());
+		where_child->comparison_type = ExpressionType::COMPARE_EQUAL;
+		where_clause->children.push_back(move(where_child));
+		result->where_clause = where_clause->Copy();
+		return result;
+	}
 	result->from_table = GetTableRef();
 	return move(result);
 }

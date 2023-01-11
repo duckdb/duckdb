@@ -161,6 +161,18 @@ test_that("Right join returns all right relations", {
     expect_equal(rel_df, expected_result)
 })
 
+
+test_that("anti join works", {
+    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right)))
+    rel2 <- duckdb:::rel_anti_join(left, left_projection, right_projection)
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_b=c(5, 6))
+    expect_equal(rel_df, expected_result)
+})
+
 test_that("Full join returns all outer relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 5), left_b=c(4, 5, 6)))

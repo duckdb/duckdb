@@ -113,24 +113,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_project(duckdb::rel_extptr_t rel, list exprs) {
-	if (exprs.size() == 0) {
-		warning("rel_project without projection expressions has no effect");
-		return rel;
-	}
-	vector<unique_ptr<ParsedExpression>> projections;
-	vector<string> aliases;
-
-	for (expr_extptr_t expr : exprs) {
-		auto dexpr = expr->Copy();
-		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
-		projections.push_back(move(dexpr));
-	}
-
-	auto res = std::make_shared<ProjectionRelation>(rel->rel, move(projections), move(aliases));
-	return make_external<RelationWrapper>("duckdb_relation", res);
-}
-
 [[cpp11::register]] SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
 	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
@@ -166,6 +148,34 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	auto res = std::make_shared<OrderRelation>(rel->rel, move(res_orders));
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_project(duckdb::rel_extptr_t rel, list exprs) {
+	if (exprs.size() == 0) {
+		warning("rel_project without projection expressions has no effect");
+		return rel;
+	}
+	vector<unique_ptr<ParsedExpression>> projections;
+	vector<string> aliases;
+
+	for (expr_extptr_t expr : exprs) {
+		auto dexpr = expr->Copy();
+		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
+		projections.push_back(move(dexpr));
+	}
+
+	auto res = std::make_shared<ProjectionRelation>(rel->rel, move(projections), move(aliases));
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_anti_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t left_proj, duckdb::rel_extptr_t right_proj,
+                                       std::string join) {
+
+
+	vector<unique_ptr<ParsedExpression>> cond_args;
+
+	auto res = std::make_shared<JoinRelation>(left->rel, left_proj->rel, right_proj->rel, JoinType::ANTI);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
