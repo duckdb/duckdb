@@ -13,14 +13,20 @@ INSERT INTO t1(c1) VALUES(1);
 statement ok
 CREATE SEQUENCE seq
 
-#statement error
-#CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+statement error
+CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+----
+Binder Error: Index keys cannot contain the "get_current_timestamp" function.
 
 statement error
 CREATE INDEX i1 ON t1((random()), c1);
+----
+Binder Error: Index keys cannot contain the "random" function.
 
 statement error
 CREATE INDEX i1 ON t1((nextval('seq')), c1);
+----
+Binder Error: Index keys cannot contain the "nextval" function.
 
 statement ok
 DELETE FROM t1;
@@ -29,6 +35,8 @@ DELETE FROM t1;
 
 statement error
 CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+----
+Binder Error: Index keys cannot contain the "get_current_timestamp" function.
 
 # but attempting to insert a value borks it up
 statement ok
@@ -38,6 +46,8 @@ restart
 
 statement error
 CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
+----
+Binder Error: Index keys cannot contain the "get_current_timestamp" function.
 
 statement ok
 INSERT INTO t1 VALUES (42, 'hello')

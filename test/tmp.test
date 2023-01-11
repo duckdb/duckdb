@@ -1,0 +1,58 @@
+# name: test/tmp.test
+# group: [test]
+
+statement ok
+create table t (l integer[]);
+
+statement ok
+insert into t values ([4,3,2]), ([7,8]);
+
+#query I
+#select l, unnest(l) from t;
+#----
+
+query I
+select * from t, unnest(l);
+----
+
+#statement ok
+#create table lambda_check (
+#	i BIGINT[],
+#	j BIGINT[],
+#	CHECK (list_count(list_apply(i, x -> x + 1)) == 3)
+#);
+#
+#statement ok
+#insert into lambda_check values ([5,6,13], [4,8,6])
+
+#statement ok
+#create table lambdas AS SELECT [5,6] AS col1, [4,8] AS col2;
+#
+#query I
+#SELECT list_apply(col1, x -> list_filter(col2, y -> y)) from lambdas
+
+#statement ok
+#create table lambda_check2 (
+#	col1 BIGINT[],
+#	col2 BIGINT[],
+#	CHECK (list_apply(col1, x -> list_filter(col2, y -> y)) == [])
+#)
+#
+#statement ok
+#insert into lambda_check2 values ([5,6], [4,8])
+
+#statement ok
+#create table lambda_check2 (
+#	col1 BIGINT[],
+#	col2 BIGINT[],
+#	CHECK (list_apply([1,2], x -> col1 || [x]) == [])
+#)
+#
+#statement ok
+#insert into lambda_check2 values ([5,6], [4,8])
+
+#statement ok
+#create table lambdas AS SELECT [5,6] AS col1, [4,8] AS col2;
+#
+#query I
+#SELECT list_apply([1, 2], x -> col1 || [x]) from lambdas
