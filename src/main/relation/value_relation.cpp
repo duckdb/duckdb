@@ -10,7 +10,7 @@ namespace duckdb {
 
 ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
                              vector<string> names_p, string alias_p)
-    : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	// create constant expressions for the values
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 		auto &list = values[row_idx];
@@ -18,14 +18,14 @@ ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, cons
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 			expressions.push_back(make_unique<ConstantExpression>(list[col_idx]));
 		}
-		this->expressions.push_back(move(expressions));
+		this->expressions.push_back(std::move(expressions));
 	}
 	context->TryBindRelation(*this, this->columns);
 }
 
 ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values_list,
                              vector<string> names_p, string alias_p)
-    : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
 	context->TryBindRelation(*this, this->columns);
 }
@@ -34,7 +34,7 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
@@ -59,10 +59,10 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		for (auto &expr : expr_list) {
 			copied_list.push_back(expr->Copy());
 		}
-		table_ref->values.push_back(move(copied_list));
+		table_ref->values.push_back(std::move(copied_list));
 	}
 	table_ref->alias = GetAlias();
-	return move(table_ref);
+	return std::move(table_ref);
 }
 
 string ValueRelation::GetAlias() {

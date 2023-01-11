@@ -105,9 +105,9 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			if (node.column_index == DConstants::INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
-				state.expressions.push_back(move(*expr_ptr));
+				state.expressions.push_back(std::move(*expr_ptr));
 			} else {
-				state.cached_expressions.push_back(move(*expr_ptr));
+				state.cached_expressions.push_back(std::move(*expr_ptr));
 			}
 			// replace the original expression with a bound column ref
 			*expr_ptr = make_unique<BoundColumnRefExpression>(alias, type,
@@ -147,9 +147,9 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	    op, [&](unique_ptr<Expression> *child) { PerformCSEReplacement(child, state); });
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
-	auto projection = make_unique<LogicalProjection>(state.projection_index, move(state.expressions));
-	projection->children.push_back(move(op.children[0]));
-	op.children[0] = move(projection);
+	auto projection = make_unique<LogicalProjection>(state.projection_index, std::move(state.expressions));
+	projection->children.push_back(std::move(op.children[0]));
+	op.children[0] = std::move(projection);
 }
 
 } // namespace duckdb

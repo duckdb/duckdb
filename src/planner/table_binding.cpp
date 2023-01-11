@@ -15,7 +15,7 @@ namespace duckdb {
 
 Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
                  idx_t index)
-    : binding_type(binding_type), alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
+    : binding_type(binding_type), alias(alias), index(index), types(std::move(coltypes)), names(std::move(colnames)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -77,7 +77,7 @@ StandardEntry *Binding::GetStandardEntry() {
 
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
                            StandardEntry &entry)
-    : Binding(BindingType::CATALOG_ENTRY, alias, move(types_p), move(names_p), index), entry(entry) {
+    : Binding(BindingType::CATALOG_ENTRY, alias, std::move(types_p), std::move(names_p), index), entry(entry) {
 }
 
 StandardEntry *EntryBinding::GetStandardEntry() {
@@ -86,8 +86,8 @@ StandardEntry *EntryBinding::GetStandardEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id)
-    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), index), bound_column_ids(bound_column_ids),
-      entry(entry) {
+    : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index),
+      bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -201,9 +201,9 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, move(types_p), move(names_p),
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p),
               DConstants::INVALID_INDEX),
-      dummy_name(move(dummy_name_p)) {
+      dummy_name(std::move(dummy_name_p)) {
 }
 
 BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

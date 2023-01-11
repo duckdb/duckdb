@@ -11,15 +11,15 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFilter(unique_ptr<LogicalOperato
 
 	auto &filter = (LogicalFilter &)*op;
 	if (can_pullup && filter.projection_map.empty()) {
-		unique_ptr<LogicalOperator> child = move(op->children[0]);
-		child = Rewrite(move(child));
+		unique_ptr<LogicalOperator> child = std::move(op->children[0]);
+		child = Rewrite(std::move(child));
 		// moving filter's expressions
 		for (idx_t i = 0; i < op->expressions.size(); ++i) {
-			filters_expr_pullup.push_back(move(op->expressions[i]));
+			filters_expr_pullup.push_back(std::move(op->expressions[i]));
 		}
 		return child;
 	}
-	op->children[0] = Rewrite(move(op->children[0]));
+	op->children[0] = Rewrite(std::move(op->children[0]));
 	return op;
 }
 

@@ -19,9 +19,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	for (auto &expr : ref.values[0]) {
 		types.push_back(expr->return_type);
 	}
-	auto expr_get = make_unique<LogicalExpressionGet>(ref.bind_index, types, move(ref.values));
-	expr_get->AddChild(move(root));
-	return move(expr_get);
+	auto expr_get = make_unique<LogicalExpressionGet>(ref.bind_index, types, std::move(ref.values));
+	expr_get->AddChild(std::move(root));
+	return std::move(expr_get);
 }
 
 } // namespace duckdb

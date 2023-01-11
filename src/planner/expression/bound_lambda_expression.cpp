@@ -6,8 +6,8 @@ namespace duckdb {
 
 BoundLambdaExpression::BoundLambdaExpression(ExpressionType type_p, LogicalType return_type_p,
                                              unique_ptr<Expression> lambda_expr_p, idx_t parameter_count_p)
-    : Expression(type_p, ExpressionClass::BOUND_LAMBDA, move(return_type_p)), lambda_expr(move(lambda_expr_p)),
-      parameter_count(parameter_count_p) {
+    : Expression(type_p, ExpressionClass::BOUND_LAMBDA, std::move(return_type_p)),
+      lambda_expr(std::move(lambda_expr_p)), parameter_count(parameter_count_p) {
 }
 
 string BoundLambdaExpression::ToString() const {
@@ -36,7 +36,7 @@ unique_ptr<Expression> BoundLambdaExpression::Copy() {
 	for (auto &capture : captures) {
 		copy->captures.push_back(capture->Copy());
 	}
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundLambdaExpression::Serialize(FieldWriter &writer) const {

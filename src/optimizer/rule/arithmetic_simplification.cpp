@@ -19,7 +19,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	op->type = make_unique<IntegerTypeMatcher>();
 	op->matchers[0]->type = make_unique<IntegerTypeMatcher>();
 	op->matchers[1]->type = make_unique<IntegerTypeMatcher>();
-	root = move(op);
+	root = std::move(op);
 }
 
 unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -38,21 +38,21 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant->value == 0) {
 			// addition with 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return move(root->children[1 - constant_child]);
+			return std::move(root->children[1 - constant_child]);
 		}
 	} else if (func_name == "-") {
 		if (constant_child == 1 && constant->value == 0) {
 			// subtraction by 0
 			// we can remove the entire operator and replace it with the non-constant child
-			return move(root->children[1 - constant_child]);
+			return std::move(root->children[1 - constant_child]);
 		}
 	} else if (func_name == "*") {
 		if (constant->value == 1) {
 			// multiply with 1, replace with non-constant child
-			return move(root->children[1 - constant_child]);
+			return std::move(root->children[1 - constant_child]);
 		} else if (constant->value == 0) {
 			// multiply by zero: replace with constant or null
-			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]),
+			return ExpressionRewriter::ConstantOrNull(std::move(root->children[1 - constant_child]),
 			                                          Value::Numeric(root->return_type, 0));
 		}
 	} else {
@@ -60,7 +60,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant_child == 1) {
 			if (constant->value == 1) {
 				// divide by 1, replace with non-constant child
-				return move(root->children[1 - constant_child]);
+				return std::move(root->children[1 - constant_child]);
 			} else if (constant->value == 0) {
 				// divide by 0, replace with NULL
 				return make_unique<BoundConstantExpression>(Value(root->return_type));

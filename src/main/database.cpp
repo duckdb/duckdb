@@ -174,7 +174,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, move(attached_database));
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
 		con.Commit();
 	}
 
@@ -260,7 +260,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
-		config.file_system = move(new_config.file_system);
+		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
@@ -270,14 +270,14 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.SetDefaultMaxThreads();
 	}
-	config.allocator = move(new_config.allocator);
+	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_unique<Allocator>();
 	}
-	config.replacement_scans = move(new_config.replacement_scans);
-	config.replacement_opens = move(new_config.replacement_opens);
-	config.parser_extensions = move(new_config.parser_extensions);
-	config.error_manager = move(new_config.error_manager);
+	config.replacement_scans = std::move(new_config.replacement_scans);
+	config.replacement_opens = std::move(new_config.replacement_opens);
+	config.parser_extensions = std::move(new_config.parser_extensions);
+	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_unique<ErrorManager>();
 	}

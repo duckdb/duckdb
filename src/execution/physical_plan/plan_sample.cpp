@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	unique_ptr<PhysicalOperator> sample;
 	switch (op.sample_options->method) {
 	case SampleMethod::RESERVOIR_SAMPLE:
-		sample = make_unique<PhysicalReservoirSample>(op.types, move(op.sample_options), op.estimated_cardinality);
+		sample = make_unique<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
 		break;
 	case SampleMethod::SYSTEM_SAMPLE:
 	case SampleMethod::BERNOULLI_SAMPLE:
@@ -29,7 +29,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	default:
 		throw InternalException("Unimplemented sample method");
 	}
-	sample->children.push_back(move(plan));
+	sample->children.push_back(std::move(plan));
 	return sample;
 }
 
