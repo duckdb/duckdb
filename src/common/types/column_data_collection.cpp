@@ -51,23 +51,23 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
+	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
+	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
-	this->allocator = move(allocator_p);
+	Initialize(std::move(types_p));
+	this->allocator = std::move(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), move(types_p)) {
+    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -81,7 +81,7 @@ ColumnDataCollection::~ColumnDataCollection() {
 }
 
 void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
-	this->types = move(types_p);
+	this->types = std::move(types_p);
 	this->count = 0;
 	this->finished_append = false;
 	D_ASSERT(!types.empty());
@@ -136,10 +136,11 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 		auto &temp_handles = temp_scan_state.current_chunk_state.handles;
 		auto &scan_handles = scan_state.current_chunk_state.handles;
 		for (auto &temp_handle_pair : temp_handles) {
-			auto handle_copy = make_pair<uint32_t, BufferHandle>(scan_handles.size(), move(temp_handle_pair.second));
-			scan_state.current_chunk_state.handles.insert(move(handle_copy));
+			auto handle_copy =
+			    make_pair<uint32_t, BufferHandle>(scan_handles.size(), std::move(temp_handle_pair.second));
+			scan_state.current_chunk_state.handles.insert(std::move(handle_copy));
 		}
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 	// now create all of the column data rows
 	rows.reserve(collection.Count());
@@ -176,12 +177,12 @@ ColumnDataChunkIterationHelper ColumnDataCollection::Chunks() const {
 }
 
 ColumnDataChunkIterationHelper ColumnDataCollection::Chunks(vector<column_t> column_ids) const {
-	return ColumnDataChunkIterationHelper(*this, move(column_ids));
+	return ColumnDataChunkIterationHelper(*this, std::move(column_ids));
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataCollection &collection_p,
                                                                vector<column_t> column_ids_p)
-    : collection(collection_p), column_ids(move(column_ids_p)) {
+    : collection(collection_p), column_ids(std::move(column_ids_p)) {
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
@@ -190,7 +191,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator
 	if (!collection) {
 		return;
 	}
-	collection->InitializeScan(scan_state, move(column_ids_p));
+	collection->InitializeScan(scan_state, std::move(column_ids_p));
 	collection->InitializeScanChunk(scan_state, *scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
 }
@@ -730,7 +731,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnData
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.push_back(i);
 	}
-	InitializeScan(state, move(column_ids), properties);
+	InitializeScan(state, std::move(column_ids), properties);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
@@ -741,7 +742,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
 	state.properties = properties;
-	state.column_ids = move(column_ids);
+	state.column_ids = std::move(column_ids);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
@@ -751,7 +752,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
                                           ColumnDataScanProperties properties) const {
-	InitializeScan(state.scan_state, move(column_ids), properties);
+	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
@@ -860,7 +861,7 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	this->count += other.count;
 	this->segments.reserve(segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
-		segments.push_back(move(other_seg));
+		segments.push_back(std::move(other_seg));
 	}
 	Verify();
 }

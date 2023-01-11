@@ -43,7 +43,7 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 	result->right = right->Copy();
 	result->aliases = aliases;
 	this->CopyProperties(*result);
-	return move(result);
+	return std::move(result);
 }
 
 void RecursiveCTENode::Serialize(FieldWriter &writer) const {
@@ -61,7 +61,7 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader) {
 	result->left = reader.ReadRequiredSerializable<QueryNode>();
 	result->right = reader.ReadRequiredSerializable<QueryNode>();
 	result->aliases = reader.ReadRequiredList<string>();
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

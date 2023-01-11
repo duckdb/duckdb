@@ -38,7 +38,7 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	} else {
 		stats->max = Value(type);
 	}
-	return move(stats);
+	return std::move(stats);
 }
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
@@ -241,7 +241,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		string_stats->has_unicode = true; // we dont know better
 		string_stats->max_string_length = NumericLimits<uint32_t>::Maximum();
-		row_group_stats = move(string_stats);
+		row_group_stats = std::move(string_stats);
 		break;
 	}
 	default:

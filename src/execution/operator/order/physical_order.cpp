@@ -11,8 +11,8 @@ namespace duckdb {
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
                              idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
-      projections(move(projections)) {
+    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
+      orders(std::move(orders)), projections(std::move(projections)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -62,7 +62,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	state->memory_per_thread = GetMaxThreadMemory(context);
-	return move(state);
+	return std::move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
@@ -111,7 +111,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p
 class PhysicalOrderMergeTask : public ExecutorTask {
 public:
 	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalSinkState &state)
-	    : ExecutorTask(context), event(move(event_p)), context(context), state(state) {
+	    : ExecutorTask(context), event(std::move(event_p)), context(context), state(state) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -149,7 +149,7 @@ public:
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 			merge_tasks.push_back(make_unique<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
 		}
-		SetTasks(move(merge_tasks));
+		SetTasks(std::move(merge_tasks));
 	}
 
 	void FinishEvent() override {
@@ -187,7 +187,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGl
 	// Initialize global sort state for a round of merging
 	state.global_sort_state.InitializeMergeRound();
 	auto new_event = make_shared<OrderMergeEvent>(state, pipeline);
-	event.InsertEvent(move(new_event));
+	event.InsertEvent(std::move(new_event));
 }
 
 //===--------------------------------------------------------------------===//

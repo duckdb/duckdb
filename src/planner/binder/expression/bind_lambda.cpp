@@ -17,7 +17,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!is_lambda) {
 		// this is for binding JSON
 		auto lhs_expr = expr.lhs->Copy();
-		OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), expr.expr->Copy());
+		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(lhs_expr), expr.expr->Copy());
 		return BindExpression(arrow_expr, depth);
 	}
 
@@ -31,11 +31,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// move the lambda parameters to the params vector
 	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
-		expr.params.push_back(move(expr.lhs));
+		expr.params.push_back(std::move(expr.lhs));
 	} else {
 		auto &func_expr = (FunctionExpression &)*expr.lhs;
 		for (idx_t i = 0; i < func_expr.children.size(); i++) {
-			expr.params.push_back(move(func_expr.children[i]));
+			expr.params.push_back(std::move(func_expr.children[i]));
 		}
 	}
 	D_ASSERT(!expr.params.empty());
@@ -96,7 +96,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	return BindResult(make_unique<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
-	                                                     move(result.expression), params_strings.size()));
+	                                                     std::move(result.expression), params_strings.size()));
 }
 
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
@@ -123,7 +123,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
 		replacement =
 		    make_unique<BoundReferenceExpression>(original->alias, original->return_type, captures.size() + 1);
-		captures.push_back(move(original));
+		captures.push_back(std::move(original));
 	}
 }
 
@@ -140,13 +140,13 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	    expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 
 		// move the expr because we are going to replace it
-		auto original = move(expr);
+		auto original = std::move(expr);
 		unique_ptr<Expression> replacement;
 
 		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type, alias);
 
 		// replace the expression
-		expr = move(replacement);
+		expr = std::move(replacement);
 
 	} else {
 		// recursively enumerate the children of the expression

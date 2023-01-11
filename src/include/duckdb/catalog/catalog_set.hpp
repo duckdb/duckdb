@@ -38,7 +38,7 @@ struct EntryValue {
 		throw InternalException("EntryValue called without a catalog entry");
 	}
 
-	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(move(entry_p)), reference_count(0) {
+	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(std::move(entry_p)), reference_count(0) {
 	}
 	//! enable move constructors
 	EntryValue(EntryValue &&other) noexcept {

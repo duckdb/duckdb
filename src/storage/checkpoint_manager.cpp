@@ -379,11 +379,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		auto art =
-		    make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage), move(unbound_expressions),
-		                     info->constraint_type, table_catalog->storage->db, root_block_id, root_offset);
+		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage),
+		                            std::move(unbound_expressions), info->constraint_type, table_catalog->storage->db,
+		                            root_block_id, root_offset);
 		index_catalog->index = art.get();
-		table_catalog->storage->info->indexes.AddIndex(move(art));
+		table_catalog->storage->info->indexes.AddIndex(std::move(art));
 		break;
 	}
 	default:
@@ -442,7 +442,7 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
 	auto schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(move(info), schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
 	// now read the actual table data and place it into the create table info
 	ReadTableData(context, reader, *bound_info);

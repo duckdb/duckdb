@@ -17,7 +17,7 @@ namespace duckdb {
 class LogicalTopN : public LogicalOperator {
 public:
 	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(move(orders)), limit(limit), offset(offset) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(std::move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;

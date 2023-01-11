@@ -48,10 +48,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
-	result->child = move(child.expr);
+	result->child = std::move(child.expr);
 
 	auto unnest_index = node.unnests.size();
-	node.unnests.push_back(move(result));
+	node.unnests.push_back(std::move(result));
 
 	// TODO what if we have multiple unnests in the same projection list? ignore for now
 
@@ -60,7 +60,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
 	    ColumnBinding(node.unnest_index, unnest_index), depth);
 
-	return BindResult(move(colref));
+	return BindResult(std::move(colref));
 }
 
 } // namespace duckdb

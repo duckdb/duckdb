@@ -13,15 +13,15 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
                                                            vector<unique_ptr<Expression>> groups_p,
                                                            vector<unique_ptr<BaseStatistics>> group_stats,
                                                            vector<idx_t> required_bits_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p), estimated_cardinality),
-      groups(move(groups_p)), aggregates(move(aggregates_p)), required_bits(move(required_bits_p)) {
+    : PhysicalOperator(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, std::move(types_p), estimated_cardinality),
+      groups(std::move(groups_p)), aggregates(std::move(aggregates_p)), required_bits(std::move(required_bits_p)) {
 	D_ASSERT(groups.size() == group_stats.size());
 	group_minima.reserve(group_stats.size());
 	for (auto &stats : group_stats) {
 		D_ASSERT(stats);
 		auto &nstats = (NumericStatistics &)*stats;
 		D_ASSERT(!nstats.min.IsNull());
-		group_minima.push_back(move(nstats.min));
+		group_minima.push_back(std::move(nstats.min));
 	}
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);

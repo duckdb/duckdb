@@ -15,7 +15,7 @@
 namespace duckdb {
 
 ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression)
-    : MacroFunction(MacroType::SCALAR_MACRO), expression(move(expression)) {
+    : MacroFunction(MacroType::SCALAR_MACRO), expression(std::move(expression)) {
 }
 
 ScalarMacroFunction::ScalarMacroFunction(void) : MacroFunction(MacroType::SCALAR_MACRO) {
@@ -26,7 +26,7 @@ unique_ptr<MacroFunction> ScalarMacroFunction::Copy() {
 	result->expression = expression->Copy();
 	CopyProperties(*result);
 
-	return move(result);
+	return std::move(result);
 }
 
 void RemoveQualificationRecursive(unique_ptr<ParsedExpression> &expr) {

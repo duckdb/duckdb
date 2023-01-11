@@ -8,7 +8,7 @@ namespace duckdb {
 
 PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}, estimated_cardinality),
-      info(move(info_p)) {
+      info(std::move(info_p)) {
 }
 
 class VacuumLocalSinkState : public LocalSinkState {
@@ -72,7 +72,7 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
 		table->storage->SetStatistics(info->column_id_map.at(col_idx), [&](BaseStatistics &stats) {
-			stats.distinct_stats = move(sink.column_distinct_stats[col_idx]);
+			stats.distinct_stats = std::move(sink.column_distinct_stats[col_idx]);
 		});
 	}
 

@@ -59,7 +59,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	retlist.push_back({"str"_nm = query});
 
 	auto stmtholder = new RStatement();
-	stmtholder->stmt = move(stmt);
+	stmtholder->stmt = std::move(stmt);
 
 	retlist.push_back({"ref"_nm = stmt_eptr_t(stmtholder)});
 	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
@@ -94,12 +94,12 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	auto relation_stmt = make_unique<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
-	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	auto stmt = conn->conn->Prepare(std::move(relation_stmt));
 	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.Message().c_str());
 	}
 
-	return construct_retlist(move(stmt), "", 0);
+	return construct_retlist(std::move(stmt), "", 0);
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare_substrait_json(duckdb::conn_eptr_t conn, std::string json) {
@@ -111,13 +111,13 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	auto relation_stmt = make_unique<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
-	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	auto stmt = conn->conn->Prepare(std::move(relation_stmt));
 	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare_substrait_json: Failed to prepare query %s\nError: %s",
 		            stmt->error.Message().c_str());
 	}
 
-	return construct_retlist(move(stmt), "", 0);
+	return construct_retlist(std::move(stmt), "", 0);
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
@@ -133,19 +133,19 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	// if there are multiple statements, we directly execute the statements besides the last one
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = conn->conn->Query(move(statements[i]));
+		auto res = conn->conn->Query(std::move(statements[i]));
 		if (res->HasError()) {
 			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(),
 			            res->GetError().c_str());
 		}
 	}
-	auto stmt = conn->conn->Prepare(move(statements.back()));
+	auto stmt = conn->conn->Prepare(std::move(statements.back()));
 	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(),
 		            stmt->error.Message().c_str());
 	}
 	auto n_param = stmt->n_param;
-	return construct_retlist(move(stmt), query, n_param);
+	return construct_retlist(std::move(stmt), query, n_param);
 }
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow, bool integer64) {
@@ -315,7 +315,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	cpp11::function getNamespace = RStrings::get().getNamespace_sym;
 	cpp11::sexp arrow_namespace(getNamespace(RStrings::get().arrow_str));
 
-	auto result_stream = new ResultArrowArrayStreamWrapper(move(qry_res->result), chunk_size);
+	auto result_stream = new ResultArrowArrayStreamWrapper(std::move(qry_res->result), chunk_size);
 	cpp11::sexp stream_ptr_sexp(
 	    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	cpp11::sexp record_batch_reader(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
@@ -342,7 +342,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 
 	if (arrow) {
 		auto query_result = new RQueryResult();
-		query_result->result = move(generic_result);
+		query_result->result = std::move(generic_result);
 		rqry_eptr_t query_resultsexp(query_result);
 		return query_resultsexp;
 	} else {

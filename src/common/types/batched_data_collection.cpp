@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(move(types_p)) {
+BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(std::move(types_p)) {
 }
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
@@ -26,7 +26,7 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		last_collection.batch_index = batch_index;
 		new_collection->InitializeAppend(last_collection.append_state);
 		collection = new_collection.get();
-		data.insert(make_pair(batch_index, move(new_collection)));
+		data.insert(make_pair(batch_index, std::move(new_collection)));
 	}
 	collection->Append(last_collection.append_state, input);
 }
@@ -39,7 +39,7 @@ void BatchedDataCollection::Merge(BatchedDataCollection &other) {
 			    "batch indexes are not uniquely distributed over threads",
 			    entry.first);
 		}
-		data[entry.first] = move(entry.second);
+		data[entry.first] = std::move(entry.second);
 	}
 	other.data.clear();
 }
@@ -73,7 +73,7 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	unique_ptr<ColumnDataCollection> result;
 	for (auto &entry : data) {
 		if (!result) {
-			result = move(entry.second);
+			result = std::move(entry.second);
 		} else {
 			result->Combine(*entry.second);
 		}
