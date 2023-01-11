@@ -53,17 +53,17 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 		result->from_table = left->GetTableRef();
 		D_ASSERT(right->type == RelationType::PROJECTION_RELATION);
 		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
-		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left);
+		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_proj);
 		auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
 		auto where_child = make_unique<SubqueryExpression>();
 		auto select_statement = make_unique<SelectStatement>();
 		select_statement->node = right->GetQueryNode();
 		where_child->subquery = move(select_statement);
 		where_child->subquery_type = SubqueryType::ANY;
-		where_child->child = move(left_projection->expressions.front());
+		where_child->child = left_projection->expressions.at(0)->Copy();
 		where_child->comparison_type = ExpressionType::COMPARE_EQUAL;
 		where_clause->children.push_back(move(where_child));
-		result->where_clause = where_clause->Copy();
+		result->where_clause = move(where_clause);
 		return result;
 	}
 	result->from_table = GetTableRef();

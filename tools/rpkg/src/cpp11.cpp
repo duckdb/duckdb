@@ -139,10 +139,10 @@ extern "C" SEXP _duckdb_rapi_rel_project(SEXP rel, SEXP exprs) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_rel_anti_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t subquery, std::string join);
-extern "C" SEXP _duckdb_rapi_rel_anti_semi_join(SEXP left, SEXP subquery, SEXP join) {
+SEXP rapi_rel_anti_semi_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t left_proj, duckdb::rel_extptr_t right_proj, std::string join);
+extern "C" SEXP _duckdb_rapi_rel_anti_semi_join(SEXP left, SEXP left_proj, SEXP right_proj, SEXP join) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_anti_semi_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(subquery), cpp11::as_cpp<cpp11::decay_t<std::string>>(join)));
+    return cpp11::as_sexp(rapi_rel_anti_semi_join(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left_proj), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right_proj), cpp11::as_cpp<cpp11::decay_t<std::string>>(join)));
   END_CPP11
 }
 // relational.cpp
@@ -346,7 +346,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_register_df",            (DL_FUNC) &_duckdb_rapi_register_df,            6},
     {"_duckdb_rapi_rel_aggregate",          (DL_FUNC) &_duckdb_rapi_rel_aggregate,          3},
     {"_duckdb_rapi_rel_alias",              (DL_FUNC) &_duckdb_rapi_rel_alias,              1},
-    {"_duckdb_rapi_rel_anti_semi_join",     (DL_FUNC) &_duckdb_rapi_rel_anti_semi_join,     3},
+    {"_duckdb_rapi_rel_anti_semi_join",     (DL_FUNC) &_duckdb_rapi_rel_anti_semi_join,     4},
     {"_duckdb_rapi_rel_distinct",           (DL_FUNC) &_duckdb_rapi_rel_distinct,           1},
     {"_duckdb_rapi_rel_explain",            (DL_FUNC) &_duckdb_rapi_rel_explain,            1},
     {"_duckdb_rapi_rel_filter",             (DL_FUNC) &_duckdb_rapi_rel_filter,             2},
