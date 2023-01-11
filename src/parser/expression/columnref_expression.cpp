@@ -56,7 +56,7 @@ void ColumnRefExpression::SetTableName(string table_name) {
 		name = std::move(table_name);
 		return;
 	}
-	column_names.insert(column_names.begin(), move(table_name));
+	column_names.insert(column_names.begin(), std::move(table_name));
 }
 
 string ColumnRefExpression::GetName() const {
