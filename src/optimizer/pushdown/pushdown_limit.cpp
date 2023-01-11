@@ -10,10 +10,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLimit(unique_ptr<LogicalOper
 	auto &limit = (LogicalLimit &)*op;
 
 	if (!limit.limit && limit.limit_val == 0) {
-		return make_unique<LogicalEmptyResult>(move(op));
+		return make_unique<LogicalEmptyResult>(std::move(op));
 	}
 
-	return FinishPushdown(move(op));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

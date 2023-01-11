@@ -16,7 +16,7 @@ namespace duckdb {
 class PhysicalExplainAnalyze : public PhysicalOperator {
 public:
 	PhysicalExplainAnalyze(vector<LogicalType> types)
-	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN_ANALYZE, move(types), 1) {
+	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1) {
 	}
 
 public:

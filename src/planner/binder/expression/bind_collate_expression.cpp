@@ -20,7 +20,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	// Validate the collation, but don't use it
 	PushCollation(context, child.expr->Copy(), expr.collation, false);
 	child.expr->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
-	return BindResult(move(child.expr));
+	return BindResult(std::move(child.expr));
 }
 
 } // namespace duckdb

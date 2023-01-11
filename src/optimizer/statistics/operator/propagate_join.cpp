@@ -26,8 +26,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
 			// Add stats to logical_join for perfect hash join
-			join.join_stats.push_back(move(stats_left));
-			join.join_stats.push_back(move(stats_right));
+			join.join_stats.push_back(std::move(stats_left));
+			join.join_stats.push_back(std::move(stats_right));
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
@@ -42,9 +42,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
 					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
-					limit->AddChild(move(join.children[1]));
-					auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
-					*node_ptr = move(cross_product);
+					limit->AddChild(std::move(join.children[1]));
+					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
+					*node_ptr = std::move(cross_product);
 					return;
 				}
 				case JoinType::LEFT:
@@ -78,9 +78,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
 						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
-						limit->AddChild(move(join.children[1]));
-						auto cross_product = LogicalCrossProduct::Create(move(join.children[0]), move(limit));
-						*node_ptr = move(cross_product);
+						limit->AddChild(std::move(join.children[1]));
+						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
+						*node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::INNER:
@@ -90,8 +90,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// inner/left/right/full outer join, replace with cross product
 						// since the condition is always true, left/right/outer join are equivalent to inner join here
 						auto cross_product =
-						    LogicalCrossProduct::Create(move(join.children[0]), move(join.children[1]));
-						*node_ptr = move(cross_product);
+						    LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
+						*node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::ANTI:
@@ -132,8 +132,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			auto stats_right = PropagateExpression(condition.right);
 			// Update join_stats when is already part of the join
 			if (join.join_stats.size() == 2) {
-				join.join_stats[0] = move(stats_left);
-				join.join_stats[1] = move(stats_right);
+				join.join_stats[0] = std::move(stats_left);
+				join.join_stats[1] = std::move(stats_right);
 			}
 			break;
 		}
@@ -227,7 +227,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 			}
 		}
 	}
-	return move(node_stats);
+	return std::move(node_stats);
 }
 
 static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats) {

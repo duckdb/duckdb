@@ -289,7 +289,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		auto shared_db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
 		auto db = shared_db.get();
 		std::lock_guard<std::mutex> lock(db_map_lock);
-		db_map[db] = move(shared_db);
+		db_map[db] = std::move(shared_db);
 
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
@@ -408,7 +408,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
 		try {
-			auto res = conn_ref->Query(move(statements[i]));
+			auto res = conn_ref->Query(std::move(statements[i]));
 			if (res->HasError()) {
 				env->ThrowNew(J_SQLException, res->GetError().c_str());
 				return nullptr;
@@ -420,7 +420,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	}
 
 	auto stmt_ref = new StatementHolder();
-	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
+	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
 	if (stmt_ref->stmt->HasError()) {
 		string error_msg = string(stmt_ref->stmt->GetError());
 		stmt_ref->stmt = nullptr;
@@ -963,7 +963,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 		env->ThrowNew(J_SQLException, "Invalid result set");
 	}
 
-	auto wrapper = new ResultArrowArrayStreamWrapper(move(res_ref->res), batch_size);
+	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
 	return (jlong)&wrapper->stream;
 }
 

@@ -16,7 +16,7 @@ void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 			// add the correlated column info
 			CorrelatedColumnInfo info(bound_colref);
 			if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
-				correlated_columns.push_back(move(info));
+				correlated_columns.push_back(std::move(info));
 			}
 		}
 	}

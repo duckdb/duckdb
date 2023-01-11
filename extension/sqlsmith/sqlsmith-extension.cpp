@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFuncti
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return std::move(result);
 }
 
 static void SQLSmithFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

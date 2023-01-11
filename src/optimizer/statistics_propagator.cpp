@@ -11,7 +11,7 @@ StatisticsPropagator::StatisticsPropagator(ClientContext &context) : context(con
 }
 
 void StatisticsPropagator::ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node) {
-	node = make_unique<LogicalEmptyResult>(move(node));
+	node = make_unique<LogicalEmptyResult>(std::move(node));
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperator &node,

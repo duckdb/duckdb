@@ -11,10 +11,10 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	auto plan = Bind(*stmt.stmt);
 	// get the unoptimized logical plan, and create the explain statement
 	auto logical_plan_unopt = plan.plan->ToString();
-	auto explain = make_unique<LogicalExplain>(move(plan.plan), stmt.explain_type);
+	auto explain = make_unique<LogicalExplain>(std::move(plan.plan), stmt.explain_type);
 	explain->logical_plan_unopt = logical_plan_unopt;
 
-	result.plan = move(explain);
+	result.plan = std::move(explain);
 	result.names = {"explain_key", "explain_value"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	properties.return_type = StatementReturnType::QUERY_RESULT;

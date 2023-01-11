@@ -157,14 +157,14 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
-		return LogicalType::STRUCT(move(child_types));
+		return LogicalType::STRUCT(std::move(child_types));
 	}
 	case LogicalTypeId::UNION: {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
 			member_type.second = ExchangeType(member_type.second, target, new_type);
 		}
-		return LogicalType::UNION(move(member_types));
+		return LogicalType::UNION(std::move(member_types));
 	}
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
@@ -198,17 +198,17 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	}
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto bound_expr = (BoundExpression *)expr.get();
-	unique_ptr<Expression> result = move(bound_expr->expr);
+	unique_ptr<Expression> result = std::move(bound_expr->expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
-		result = BoundCastExpression::AddCastToType(context, move(result), target_type);
+		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
 	} else {
 		if (!binder.can_contain_nulls) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->return_type)) {
 				auto result_type = ExchangeNullType(result->return_type);
-				result = BoundCastExpression::AddCastToType(context, move(result), result_type);
+				result = BoundCastExpression::AddCastToType(context, std::move(result), result_type);
 			}
 		}
 		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -235,7 +235,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	*expr = make_unique<BoundExpression>(move(result.expression));
+	*expr = make_unique<BoundExpression>(std::move(result.expression));
 	auto be = (BoundExpression *)expr->get();
 	D_ASSERT(be);
 	be->alias = alias;

@@ -13,10 +13,10 @@
 
 namespace duckdb {
 
-DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(std::move(rel)) {
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(move(result)) {
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(std::move(result)) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
@@ -30,7 +30,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, shared_
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->Values(move(values));
+	return conn->Values(std::move(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
@@ -332,7 +332,7 @@ idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
 	D_ASSERT(aggregate_rel->result && aggregate_rel->result->result);
-	auto tmp_res = move(aggregate_rel->result);
+	auto tmp_res = std::move(aggregate_rel->result);
 	return tmp_res->result->Fetch()->GetValue(0, 0).GetValue<idx_t>();
 }
 
@@ -400,7 +400,7 @@ void DuckDBPyRelation::ExecuteOrThrow() {
 	if (tmp_result->result->HasError()) {
 		tmp_result->result->ThrowError();
 	}
-	result = move(tmp_result);
+	result = std::move(tmp_result);
 }
 
 DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
@@ -537,7 +537,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	rel->CreateView(view_name, replace);
 	// We need to pass ownership of any Python Object Dependencies to the connection
 	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
@@ -555,7 +555,7 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 
 	Parser parser(rel->context.GetContext()->GetParserOptions());
 	parser.ParseQuery(sql_query);
@@ -564,10 +564,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
-		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 		auto query_relation =
-		    make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
-		return make_unique<DuckDBPyRelation>(move(query_relation));
+		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
+		return make_unique<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		FunctionParameters parameters;
 		parameters.values.emplace_back(view_name);
@@ -576,7 +576,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	{
 		py::gil_scoped_release release;
-		auto query_result = rel->context.GetContext()->Query(move(parser.statements[0]), false);
+		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
 		// We only care that it succeeds, we can't store the result
 		D_ASSERT(query_result);

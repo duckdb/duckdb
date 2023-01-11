@@ -34,7 +34,7 @@ void TableDataReader::ReadTableData() {
 	info.data->row_groups.reserve(row_group_count);
 	for (idx_t i = 0; i < row_group_count; i++) {
 		auto row_group_pointer = RowGroup::Deserialize(reader, columns);
-		info.data->row_groups.push_back(move(row_group_pointer));
+		info.data->row_groups.push_back(std::move(row_group_pointer));
 	}
 }
 

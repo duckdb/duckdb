@@ -11,8 +11,8 @@ class BoundSubqueryNode : public QueryNode {
 public:
 	BoundSubqueryNode(shared_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
 	                  unique_ptr<SelectStatement> subquery)
-	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)),
-	      bound_node(move(bound_node)), subquery(move(subquery)) {
+	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(std::move(subquery_binder)),
+	      bound_node(std::move(bound_node)), subquery(std::move(subquery)) {
 	}
 
 	shared_ptr<Binder> subquery_binder;
@@ -55,10 +55,10 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			throw BinderException(binder.FormatError(
 			    expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
 		}
-		auto prior_subquery = move(expr.subquery);
+		auto prior_subquery = std::move(expr.subquery);
 		expr.subquery = make_unique<SelectStatement>();
-		expr.subquery->node =
-		    make_unique<BoundSubqueryNode>(move(subquery_binder), move(bound_node), move(prior_subquery));
+		expr.subquery->node = make_unique<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node),
+		                                                     std::move(prior_subquery));
 	}
 	// now bind the child node of the subquery
 	if (expr.child) {
@@ -72,8 +72,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	D_ASSERT(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
 	auto bound_subquery = (BoundSubqueryNode *)expr.subquery->node.get();
 	auto child = (BoundExpression *)expr.child.get();
-	auto subquery_binder = move(bound_subquery->subquery_binder);
-	auto bound_node = move(bound_subquery->bound_node);
+	auto subquery_binder = std::move(bound_subquery->subquery_binder);
+	auto bound_node = std::move(bound_subquery->bound_node);
 	LogicalType return_type =
 	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
 	if (return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -86,17 +86,17 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// cast child and subquery child to equivalent types
 		D_ASSERT(bound_node->types.size() == 1);
 		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
-		child->expr = BoundCastExpression::AddCastToType(context, move(child->expr), compare_type);
+		child->expr = BoundCastExpression::AddCastToType(context, std::move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
 	}
-	result->binder = move(subquery_binder);
-	result->subquery = move(bound_node);
+	result->binder = std::move(subquery_binder);
+	result->subquery = std::move(bound_node);
 	result->subquery_type = expr.subquery_type;
-	result->child = child ? move(child->expr) : nullptr;
+	result->child = child ? std::move(child->expr) : nullptr;
 	result->comparison_type = expr.comparison_type;
 
-	return BindResult(move(result));
+	return BindResult(std::move(result));
 }
 
 } // namespace duckdb
