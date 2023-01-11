@@ -21,8 +21,8 @@ class PhysicalExport : public PhysicalOperator {
 public:
 	PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
 	               idx_t estimated_cardinality, BoundExportData exported_tables)
-	    : PhysicalOperator(PhysicalOperatorType::EXPORT, move(types), estimated_cardinality),
-	      function(std::move(function)), info(move(info)), exported_tables(move(exported_tables)) {
+	    : PhysicalOperator(PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
+	      function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
 	}
 
 	//! The copy function to use to read the file

@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
@@ -116,7 +117,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);
-	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(move(copy));
+	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
@@ -126,6 +127,33 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		base.aliases.push_back(query_node.names[i]);
 	}
 	base.types = query_node.types;
+}
+
+static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::FUNCTION: {
+		auto &func = (FunctionExpression &)*expr;
+		auto function = (StandardEntry *)Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
+		                                                   func.schema, func.function_name, true);
+		if (function) {
+			func.catalog = function->catalog->GetName();
+			func.schema = function->schema->name;
+		}
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		// replacing parameters within a subquery is slightly different
+		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
+		break;
+	}
+	default: // fall through
+		break;
+	}
+	// unfold child expressions
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
 }
 
 SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -157,6 +185,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto this_macro_binding = make_unique<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
+	QualifyFunctionNames(context, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
@@ -176,24 +205,26 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 }
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog, const string &schema) {
-	if (type.id() == LogicalTypeId::LIST) {
+	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		type = LogicalType::LIST(child_type);
+		if (type.id() == LogicalTypeId::LIST) {
+			type = LogicalType::LIST(child_type);
+		} else {
+			D_ASSERT(child_type.id() == LogicalTypeId::STRUCT); // map must be list of structs
+			type = LogicalType::MAP(child_type);
+		}
+
 		type.SetAlias(alias);
-	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			BindLogicalType(context, child_type.second, catalog, schema);
 		}
-		// Generate new Struct/Map Type
+		// Generate new Struct Type
 		auto alias = type.GetAlias();
-		if (type.id() == LogicalTypeId::STRUCT) {
-			type = LogicalType::STRUCT(child_types);
-		} else {
-			type = LogicalType::MAP(child_types);
-		}
+		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
@@ -388,29 +419,33 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, move(stmt.info));
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
 		auto schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -446,7 +481,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			stmt.info->temporary = true;
 		}
 
-		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info));
+		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
 		for (auto &index : get.column_ids) {
 			create_index_info->scan_types.push_back(get.returned_types[index]);
 		}
@@ -455,8 +490,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		create_index_info->column_ids = get.column_ids;
 
 		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(move(get.bind_data), move(create_index_info), move(expressions),
-		                                              *table, move(get.function));
+		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
+		                                              std::move(expressions), *table, std::move(get.function));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -505,8 +540,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
-		auto bound_info = BindCreateTableInfo(move(stmt.info));
-		auto root = move(bound_info->query);
+		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
+		auto root = std::move(bound_info->query);
 		for (auto &fk_schema : fk_schemas) {
 			if (fk_schema != bound_info->schema) {
 				throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
@@ -515,19 +550,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		// create the logical operator
 		auto &schema = bound_info->schema;
-		auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
+		auto create_table = make_unique<LogicalCreateTable>(schema, std::move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
 			properties.return_type = StatementReturnType::CHANGED_ROWS;
-			create_table->children.push_back(move(root));
+			create_table->children.push_back(std::move(root));
 		}
-		result.plan = move(create_table);
+		result.plan = std::move(create_table);
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
+		result.plan =
+		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = (SelectStatement &)*create_type_info.query;
@@ -551,11 +587,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (need_to_add) {
 				auto distinct_modifier = make_unique<DistinctModifier>();
 				distinct_modifier->distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
-				query_node.modifiers.emplace(query_node.modifiers.begin(), move(distinct_modifier));
+				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
 			}
 
 			auto query_obj = Bind(*create_type_info.query);
-			auto query = move(query_obj.plan);
+			auto query = std::move(query_obj.plan);
 
 			auto &sql_types = query_obj.types;
 			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
@@ -563,7 +599,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				throw BinderException("The query must return one varchar column");
 			}
 
-			result.plan->AddChild(move(query));
+			result.plan->AddChild(std::move(query));
 		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
 			// two cases:
 			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.

@@ -68,7 +68,7 @@ void Node256::EraseChild(Node *&node, int pos, ART &art) {
 	n->count--;
 	if (node->count <= 36) {
 		auto new_node = Node48::New();
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->children[i]) {
 				new_node->child_index[i] = new_node->count;

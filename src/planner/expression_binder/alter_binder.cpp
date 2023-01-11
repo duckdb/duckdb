@@ -9,7 +9,7 @@ namespace duckdb {
 AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table,
                          vector<LogicalIndex> &bound_columns, LogicalType target_type)
     : ExpressionBinder(binder, context), table(table), bound_columns(bound_columns) {
-	this->target_type = move(target_type);
+	this->target_type = std::move(target_type);
 }
 
 BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

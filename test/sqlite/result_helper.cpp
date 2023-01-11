@@ -60,9 +60,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			vector<string> row;
 			row.reserve(ncols);
 			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
-				row.push_back(move(result_values_string[row_idx * ncols + col_idx]));
+				row.push_back(std::move(result_values_string[row_idx * ncols + col_idx]));
 			}
-			rows.push_back(move(row));
+			rows.push_back(std::move(row));
 		}
 		// sort the individual rows
 		std::sort(rows.begin(), rows.end(), [](const vector<string> &a, const vector<string> &b) {
@@ -77,7 +77,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		// now reconstruct the values from the rows
 		for (idx_t row_idx = 0; row_idx < nrows; row_idx++) {
 			for (idx_t col_idx = 0; col_idx < ncols; col_idx++) {
-				result_values_string[row_idx * ncols + col_idx] = move(rows[row_idx][col_idx]);
+				result_values_string[row_idx * ncols + col_idx] = std::move(rows[row_idx][col_idx]);
 			}
 		}
 	} else if (sort_style == SortStyle::VALUE_SORT) {
@@ -217,7 +217,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			if (entry == runner.hash_label_map.end()) {
 				// not computed yet: add it tot he map
 				runner.hash_label_map[query_label] = hash_value;
-				runner.result_label_map[query_label] = move(owned_result);
+				runner.result_label_map[query_label] = std::move(owned_result);
 			} else {
 				hash_compare_error = entry->second != hash_value;
 			}

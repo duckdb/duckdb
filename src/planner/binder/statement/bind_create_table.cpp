@@ -42,9 +42,9 @@ static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, cons
 	auto unbound_expression = check.expression->Copy();
 	// now bind the constraint and create a new BoundCheckConstraint
 	bound_constraint->expression = check_binder.Bind(check.expression);
-	info.bound_constraints.push_back(move(bound_constraint));
+	info.bound_constraints.push_back(std::move(bound_constraint));
 	// move the unbound constraint back into the original check expression
-	check.expression = move(unbound_expression);
+	check.expression = std::move(unbound_expression);
 }
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
@@ -107,7 +107,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				primary_keys = keys;
 			}
 			info.bound_constraints.push_back(
-			    make_unique<BoundUniqueConstraint>(move(keys), move(key_set), unique.is_primary_key));
+			    make_unique<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.is_primary_key));
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
@@ -123,7 +123,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
 			info.bound_constraints.push_back(
-			    make_unique<BoundForeignKeyConstraint>(fk.info, move(pk_key_set), move(fk_key_set)));
+			    make_unique<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set)));
 			break;
 		}
 		default:
@@ -213,7 +213,7 @@ void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression
 			// no default value specified: push a default value of constant null
 			bound_default = make_unique<BoundConstantExpression>(Value(column.Type()));
 		}
-		bound_defaults.push_back(move(bound_default));
+		bound_defaults.push_back(std::move(bound_default));
 	}
 }
 
@@ -243,12 +243,12 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 }
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
 	auto &base = (CreateTableInfo &)*info;
-	auto result = make_unique<BoundCreateTableInfo>(move(info));
+	auto result = make_unique<BoundCreateTableInfo>(std::move(info));
 	result->schema = schema;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
-		result->query = move(query_obj.plan);
+		result->query = std::move(query_obj.plan);
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;
@@ -297,7 +297,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 	auto schema = BindCreateSchema(base);
-	return BindCreateTableInfo(move(info), schema);
+	return BindCreateTableInfo(std::move(info), schema);
 }
 
 } // namespace duckdb

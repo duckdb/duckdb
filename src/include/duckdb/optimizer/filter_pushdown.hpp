@@ -28,7 +28,7 @@ public:
 
 		Filter() {
 		}
-		explicit Filter(unique_ptr<Expression> filter) : filter(move(filter)) {
+		explicit Filter(unique_ptr<Expression> filter) : filter(std::move(filter)) {
 		}
 
 		void ExtractBindings();

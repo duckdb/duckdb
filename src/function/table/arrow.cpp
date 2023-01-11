@@ -114,27 +114,23 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
-		return LogicalType::LIST(move(child_type));
+		return LogicalType::LIST(std::move(child_type));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_convert_data, col_idx);
 			child_types.push_back({schema.children[type_idx]->name, child_type});
 		}
-		return LogicalType::STRUCT(move(child_types));
+		return LogicalType::STRUCT(std::move(child_types));
 
 	} else if (format == "+m") {
-		child_list_t<LogicalType> child_types;
-		//! First type will be struct, so we skip it
-		auto &struct_schema = *schema.children[0];
-		for (idx_t type_idx = 0; type_idx < (idx_t)struct_schema.n_children; type_idx++) {
-			//! The other types must be added on lists
-			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_convert_data, col_idx);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 
-			auto list_type = LogicalType::LIST(child_type);
-			child_types.push_back({struct_schema.children[type_idx]->name, list_type});
-		}
-		return LogicalType::MAP(move(child_types));
+		auto &arrow_struct_type = *schema.children[0];
+		D_ASSERT(arrow_struct_type.n_children == 2);
+		auto key_type = GetArrowLogicalType(*arrow_struct_type.children[0], arrow_convert_data, col_idx);
+		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1], arrow_convert_data, col_idx);
+		return LogicalType::MAP(key_type, value_type);
 	} else if (format == "z") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		return LogicalType::BLOB;
@@ -221,7 +217,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	}
 	RenameArrowColumns(names);
 	res->all_types = return_types;
-	return move(res);
+	return std::move(res);
 }
 
 unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function,
@@ -258,7 +254,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	while (current_chunk->arrow_array.length == 0 && current_chunk->arrow_array.release) {
 		current_chunk = parallel_state.stream->GetNextChunk();
 	}
-	state.chunk = move(current_chunk);
+	state.chunk = std::move(current_chunk);
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
 		parallel_state.done = true;
@@ -283,7 +279,7 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 			}
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
@@ -291,7 +287,7 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
                                                                            GlobalTableFunctionState *global_state_p) {
 	auto &global_state = (ArrowScanGlobalState &)*global_state_p;
 	auto current_chunk = make_unique<ArrowArrayWrapper>();
-	auto result = make_unique<ArrowScanLocalState>(move(current_chunk));
+	auto result = make_unique<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
 	if (input.CanRemoveFilterColumns()) {
@@ -301,7 +297,7 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	if (!ArrowScanParallelStateNext(context.client, input.bind_data, *result, global_state)) {
 		return nullptr;
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

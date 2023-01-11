@@ -8,7 +8,8 @@
 namespace duckdb {
 
 FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p)
-    : Relation(child_p->context, RelationType::FILTER_RELATION), condition(move(condition_p)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::FILTER_RELATION), condition(std::move(condition_p)),
+      child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
 	context.GetContext()->TryBindRelation(*this, dummy_columns);
@@ -28,7 +29,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 			select_node.where_clause = condition->Copy();
 		} else {
 			select_node.where_clause = make_unique<ConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, move(select_node.where_clause), condition->Copy());
+			    ExpressionType::CONJUNCTION_AND, std::move(select_node.where_clause), condition->Copy());
 		}
 		return child_node;
 	} else {
@@ -36,7 +37,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 		result->select_list.push_back(make_unique<StarExpression>());
 		result->from_table = child->GetTableRef();
 		result->where_clause = condition->Copy();
-		return move(result);
+		return std::move(result);
 	}
 }
 

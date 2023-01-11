@@ -55,7 +55,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		if (fk_columns.empty()) {
 			throw ParserException("The set of referencing and referenced columns for foreign keys must be not empty");
 		}
-		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(fk_info));
+		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
 	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
@@ -111,7 +111,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		if (pk_columns.size() != fk_columns.size()) {
 			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
-		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(fk_info));
+		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
 	}
 	default:
 		throw NotImplementedException("Constraint not implemented!");

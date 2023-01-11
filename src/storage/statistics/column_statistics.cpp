@@ -2,12 +2,12 @@
 
 namespace duckdb {
 
-ColumnStatistics::ColumnStatistics(unique_ptr<BaseStatistics> stats_p) : stats(move(stats_p)) {
+ColumnStatistics::ColumnStatistics(unique_ptr<BaseStatistics> stats_p) : stats(std::move(stats_p)) {
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::CreateEmptyStats(const LogicalType &type) {
 	auto col_stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
-	return make_shared<ColumnStatistics>(move(col_stats));
+	return make_shared<ColumnStatistics>(std::move(col_stats));
 }
 
 } // namespace duckdb

@@ -9,9 +9,9 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, move(payload_types_p)),
-      addresses(LogicalType::POINTER), required_bits(move(required_bits_p)), total_required_bits(0),
-      group_minima(move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
+      addresses(LogicalType::POINTER), required_bits(std::move(required_bits_p)), total_required_bits(0),
+      group_minima(std::move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
@@ -19,7 +19,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
-	layout.Initialize(move(aggregate_objects_p));
+	layout.Initialize(std::move(aggregate_objects_p));
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
