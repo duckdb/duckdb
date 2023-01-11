@@ -326,6 +326,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	}
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::UUID:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:
 		return py::str("BINARY");
