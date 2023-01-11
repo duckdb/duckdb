@@ -59,7 +59,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->is_natural = is_natural;
 	copy->alias = alias;
 	copy->using_columns = using_columns;
-	return move(copy);
+	return std::move(copy);
 }
 
 void JoinRef::Serialize(FieldWriter &writer) const {
@@ -79,7 +79,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
 	result->type = reader.ReadRequired<JoinType>();
 	result->is_natural = reader.ReadRequired<bool>();
 	result->using_columns = reader.ReadRequiredList<string>();
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

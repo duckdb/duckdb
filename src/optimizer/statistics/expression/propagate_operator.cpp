@@ -14,7 +14,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		if (!stats) {
 			all_have_stats = false;
 		}
-		child_stats.push_back(move(stats));
+		child_stats.push_back(std::move(stats));
 	}
 	if (!all_have_stats) {
 		return nullptr;
@@ -47,7 +47,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		D_ASSERT(expr.children.size() == child_stats.size());
 		if (expr.children.size() == 1) {
 			// coalesce of one entry: simply return that entry
-			*expr_ptr = move(expr.children[0]);
+			*expr_ptr = std::move(expr.children[0]);
 		} else {
 			// coalesce of multiple entries
 			// merge the stats
@@ -55,7 +55,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 				child_stats[0]->Merge(*child_stats[i]);
 			}
 		}
-		return move(child_stats[0]);
+		return std::move(child_stats[0]);
 	case ExpressionType::OPERATOR_IS_NULL:
 		if (!child_stats[0]->CanHaveNull()) {
 			// child has no null values: x IS NULL will always be false

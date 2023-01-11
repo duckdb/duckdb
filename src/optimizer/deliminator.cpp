@@ -270,21 +270,21 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 				auto is_not_null_expr =
 				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				is_not_null_expr->children.push_back(expr->Copy());
-				filter_op->expressions.push_back(move(is_not_null_expr));
+				filter_op->expressions.push_back(std::move(is_not_null_expr));
 			}
 		}
 		if (filter != nullptr) {
 			for (auto &expr : filter->expressions) {
-				filter_op->expressions.push_back(move(expr));
+				filter_op->expressions.push_back(std::move(expr));
 			}
 		}
-		filter_op->children.push_back(move(join.children[1 - delim_idx]));
-		join.children[1 - delim_idx] = move(filter_op);
+		filter_op->children.push_back(std::move(join.children[1 - delim_idx]));
+		join.children[1 - delim_idx] = std::move(filter_op);
 	}
 	// temporarily save deleted operator so its expressions are still available
-	updater.temp_ptr = move(proj_or_agg.children[0]);
+	updater.temp_ptr = std::move(proj_or_agg.children[0]);
 	// replace the redundant join
-	proj_or_agg.children[0] = move(join.children[1 - delim_idx]);
+	proj_or_agg.children[0] = std::move(join.children[1 - delim_idx]);
 	return true;
 }
 
@@ -325,7 +325,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	GetDelimJoins(**plan, delim_joins);
 
 	LogicalOperator *parent = nullptr;
-	idx_t parent_delim_get_side;
+	idx_t parent_delim_get_side = 0;
 	for (auto dj : delim_joins) {
 		D_ASSERT(dj->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 		if (!HasChild(dj, &proj_or_agg, parent_delim_get_side)) {

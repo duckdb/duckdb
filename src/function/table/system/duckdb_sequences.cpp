@@ -73,7 +73,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 		schema->Scan(context, CatalogType::SEQUENCE_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back((SequenceCatalogEntry *)entry); });
 	};
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

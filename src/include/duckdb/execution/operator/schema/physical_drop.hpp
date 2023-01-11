@@ -18,7 +18,7 @@ class PhysicalDrop : public PhysicalOperator {
 public:
 	explicit PhysicalDrop(unique_ptr<DropInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      info(move(info)) {
+	      info(std::move(info)) {
 	}
 
 	unique_ptr<DropInfo> info;

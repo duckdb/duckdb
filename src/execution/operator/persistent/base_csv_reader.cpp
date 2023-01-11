@@ -30,13 +30,13 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 
 BaseCSVReader::BaseCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
                              BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)) {
+    : fs(fs_p), allocator(allocator), opener(opener_p), options(std::move(options_p)) {
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
     : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    move(options_p), requested_types) {
+                    std::move(options_p), requested_types) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -45,7 +45,7 @@ BaseCSVReader::~BaseCSVReader() {
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
 	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 	                               options_p.compression, this->opener);
-	return make_unique<CSVFileHandle>(move(file_handle));
+	return make_unique<CSVFileHandle>(std::move(file_handle));
 }
 
 void BaseCSVReader::InitParseChunk(idx_t num_cols) {

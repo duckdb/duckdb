@@ -19,10 +19,10 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 	} else {
 		alias = ref.alias;
 	}
-	auto result = make_unique<BoundSubqueryRef>(move(binder), move(subquery));
+	auto result = make_unique<BoundSubqueryRef>(std::move(binder), std::move(subquery));
 	bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb
