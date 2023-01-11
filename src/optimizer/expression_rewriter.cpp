@@ -21,7 +21,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				// rerun on the new node
-				return ExpressionRewriter::ApplyRules(op, rules, move(result), changes_made);
+				return ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
 			} else if (rule_made_change) {
 				changes_made = true;
 				// the base node didn't change, but changes were made, rerun
@@ -34,7 +34,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	// no changes could be made to this node
 	// recursively run on the children of this node
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		child = ExpressionRewriter::ApplyRules(op, rules, move(child), changes_made);
+		child = ExpressionRewriter::ApplyRules(op, rules, std::move(child), changes_made);
 	});
 	return expr;
 }
@@ -42,15 +42,15 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(make_unique<BoundConstantExpression>(value));
-	children.push_back(move(child));
-	return ConstantOrNull(move(children), move(value));
+	children.push_back(std::move(child));
+	return ConstantOrNull(std::move(children), std::move(value));
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
 	children.insert(children.begin(), make_unique<BoundConstantExpression>(value));
-	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), move(children),
-	                                            ConstantOrNull::Bind(move(value)));
+	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
+	                                            ConstantOrNull::Bind(std::move(value)));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
@@ -83,7 +83,7 @@ void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
 	bool changes_made;
 	do {
 		changes_made = false;
-		*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, move(*expression), changes_made, true);
+		*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, std::move(*expression), changes_made, true);
 	} while (changes_made);
 }
 

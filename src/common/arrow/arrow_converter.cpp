@@ -137,7 +137,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			format_ptr[i] = format[i];
 		}
 		format_ptr[format.size()] = '\0';
-		root_holder.owned_type_names.push_back(move(format_ptr));
+		root_holder.owned_type_names.push_back(std::move(format_ptr));
 		child.format = root_holder.owned_type_names.back().get();
 		break;
 	}
@@ -162,7 +162,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			format_ptr[i] = format[i];
 		}
 		format_ptr[format.size()] = '\0';
-		root_holder.owned_type_names.push_back(move(format_ptr));
+		root_holder.owned_type_names.push_back(std::move(format_ptr));
 		child.format = root_holder.owned_type_names.back().get();
 		break;
 	}
@@ -209,7 +209,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 				name_ptr[i] = struct_col_name[i];
 			}
 			name_ptr[struct_col_name.size()] = '\0';
-			root_holder.owned_type_names.push_back(move(name_ptr));
+			root_holder.owned_type_names.push_back(std::move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone);

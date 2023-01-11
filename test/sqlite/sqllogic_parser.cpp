@@ -142,7 +142,7 @@ SQLLogicToken SQLLogicParser::Tokenize() {
 	}
 	result.type = CommandToToken(argument_list[0]);
 	for (idx_t i = 1; i < argument_list.size(); i++) {
-		result.parameters.push_back(move(argument_list[i]));
+		result.parameters.push_back(std::move(argument_list[i]));
 	}
 	return result;
 }

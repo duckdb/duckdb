@@ -51,7 +51,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unique_ptr<idx_t[]> rel
 	// now check if the JoinRelationSet has already been created
 	if (!info->relation) {
 		// if it hasn't we need to create it
-		info->relation = make_unique<JoinRelationSet>(move(relations), count);
+		info->relation = make_unique<JoinRelationSet>(std::move(relations), count);
 	}
 	return info->relation.get();
 }
@@ -62,7 +62,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(idx_t index) {
 	auto relations = unique_ptr<idx_t[]>(new idx_t[1]);
 	relations[0] = index;
 	idx_t count = 1;
-	return GetJoinRelation(move(relations), count);
+	return GetJoinRelation(std::move(relations), count);
 }
 
 JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
@@ -73,7 +73,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &b
 		relations[count++] = entry;
 	}
 	std::sort(relations.get(), relations.get() + count);
-	return GetJoinRelation(move(relations), count);
+	return GetJoinRelation(std::move(relations), count);
 }
 
 JoinRelationSet *JoinRelationSetManager::Union(JoinRelationSet *left, JoinRelationSet *right) {
@@ -109,7 +109,7 @@ JoinRelationSet *JoinRelationSetManager::Union(JoinRelationSet *left, JoinRelati
 			j++;
 		}
 	}
-	return GetJoinRelation(move(relations), count);
+	return GetJoinRelation(std::move(relations), count);
 }
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
@@ -140,7 +140,7 @@ JoinRelationSet *JoinRelationSetManager::Union(JoinRelationSet *left, JoinRelati
 // 			j++;
 // 		}
 // 	}
-// 	return GetJoinRelation(move(relations), count);
+// 	return GetJoinRelation(std::move(relations), count);
 // }
 
 } // namespace duckdb

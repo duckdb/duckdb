@@ -123,7 +123,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 		throw ParserException("START value (%lld) cannot be greater than MAXVALUE (%lld)", info->start_value,
 		                      info->max_value);
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

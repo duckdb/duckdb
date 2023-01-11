@@ -19,7 +19,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 		return proj.groups[colref.binding.column_index]->Copy();
 	}
 	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, move(child)); });
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, std::move(child)); });
 	return expr;
 }
 
@@ -52,11 +52,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		// no aggregate! we can push this down
 		// rewrite any group bindings within the filter
-		f.filter = ReplaceGroupBindings(aggr, move(f.filter));
+		f.filter = ReplaceGroupBindings(aggr, std::move(f.filter));
 		// add the filter to the child node
-		if (child_pushdown.AddFilter(move(f.filter)) == FilterResult::UNSATISFIABLE) {
+		if (child_pushdown.AddFilter(std::move(f.filter)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(move(op));
+			return make_unique<LogicalEmptyResult>(std::move(op));
 		}
 		// erase the filter from here
 		filters.erase(filters.begin() + i);
@@ -64,8 +64,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	}
 	child_pushdown.GenerateFilters();
 
-	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
-	return FinishPushdown(move(op));
+	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

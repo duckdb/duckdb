@@ -24,7 +24,7 @@ static Connection *GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Co
 		// not found: create a new connection
 		auto con = make_unique<Connection>(db);
 		auto res = con.get();
-		named_connection_map[con_name] = move(con);
+		named_connection_map[con_name] = std::move(con);
 		return res;
 	}
 	return entry->second.get();
@@ -73,7 +73,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	if (!query_fail && !is_any_transaction_active && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_unique<RestartCommand>(runner);
-		runner.ExecuteCommand(move(command));
+		runner.ExecuteCommand(std::move(command));
 		connection = CommandConnection(context);
 	}
 }
@@ -113,13 +113,13 @@ RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
 LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
-    : Command(runner), definition(move(definition_p)) {
+    : Command(runner), definition(std::move(definition_p)) {
 }
 
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
-	    : runner(runner), loop_commands(loop_commands), definition(move(definition)), success(true) {
+	    : runner(runner), loop_commands(loop_commands), definition(std::move(definition)), success(true) {
 	}
 
 	SQLLogicTestRunner &runner;
@@ -139,7 +139,7 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		Connection con(*runner.db);
 		// create a new parallel execute context
 		vector<LoopDefinition> running_loops {execute_context->definition};
-		ExecuteContext context(&con, move(running_loops));
+		ExecuteContext context(&con, std::move(running_loops));
 		for (auto &command : execute_context->loop_commands) {
 			execute_context->error_file = command->file_name;
 			execute_context->error_line = command->query_line;
@@ -233,7 +233,7 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
-	if (!helper.CheckQueryResult(*this, context, move(result))) {
+	if (!helper.CheckQueryResult(*this, context, std::move(result))) {
 		if (context.is_parallel) {
 			runner.finished_processing_file = true;
 			context.error_file = file_name;
@@ -257,7 +257,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
 	}
 
-	auto prepared_statements = move(runner.con->context->client_data->prepared_statements);
+	auto prepared_statements = std::move(runner.con->context->client_data->prepared_statements);
 
 	runner.LoadDatabase(runner.dbpath);
 
@@ -271,7 +271,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
 		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
 	}
-	runner.con->context->client_data->prepared_statements = move(prepared_statements);
+	runner.con->context->client_data->prepared_statements = std::move(prepared_statements);
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {
@@ -295,7 +295,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);
-	if (!helper.CheckStatementResult(*this, context, move(result))) {
+	if (!helper.CheckStatementResult(*this, context, std::move(result))) {
 		if (context.is_parallel) {
 			runner.finished_processing_file = true;
 			context.error_file = file_name;

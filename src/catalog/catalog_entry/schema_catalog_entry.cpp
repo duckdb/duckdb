@@ -56,7 +56,7 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 		auto &fk = (ForeignKeyConstraint &)*cond;
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 			AlterEntryData alter_data(entry->catalog->GetName(), fk.info.schema, fk.info.table, false);
-			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(move(alter_data), entry->name, fk.pk_columns,
+			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(std::move(alter_data), entry->name, fk.pk_columns,
 			                                                     fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
 			                                                     alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
@@ -68,7 +68,7 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 }
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, std::move(name_p)),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
       functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
@@ -101,7 +101,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, uniqu
 		}
 	}
 	// now try to add the entry
-	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
+	if (!set.CreateEntry(transaction, entry_name, std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
@@ -115,24 +115,24 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, uniqu
 CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                            OnCreateConflict on_conflict) {
 	DependencyList dependencies;
-	return AddEntry(transaction, move(entry), on_conflict, dependencies);
+	return AddEntry(transaction, std::move(entry), on_conflict, dependencies);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
 	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
-	return AddEntry(transaction, move(sequence), info->on_conflict);
+	return AddEntry(transaction, std::move(sequence), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
 	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
-	return AddEntry(transaction, move(type_entry), info->on_conflict);
+	return AddEntry(transaction, std::move(type_entry), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
 
-	CatalogEntry *entry = AddEntry(transaction, move(table), info->Base().on_conflict, info->dependencies);
+	CatalogEntry *entry = AddEntry(transaction, std::move(table), info->Base().on_conflict, info->dependencies);
 	if (!entry) {
 		return nullptr;
 	}
@@ -154,38 +154,38 @@ CatalogEntry *SchemaCatalogEntry::CreateTable(CatalogTransaction transaction, Bo
 
 CatalogEntry *SchemaCatalogEntry::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
 	auto view = make_unique<ViewCatalogEntry>(catalog, this, info);
-	return AddEntry(transaction, move(view), info->on_conflict);
+	return AddEntry(transaction, std::move(view), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
-	return AddEntry(GetCatalogTransaction(context), move(index), info->on_conflict, dependencies);
+	return AddEntry(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
 	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
 	collation->internal = info->internal;
-	return AddEntry(transaction, move(collation), info->on_conflict);
+	return AddEntry(transaction, std::move(collation), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
 	table_function->internal = info->internal;
-	return AddEntry(transaction, move(table_function), info->on_conflict);
+	return AddEntry(transaction, std::move(table_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
 	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
 	copy_function->internal = info->internal;
-	return AddEntry(transaction, move(copy_function), info->on_conflict);
+	return AddEntry(transaction, std::move(copy_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
 	pragma_function->internal = info->internal;
-	return AddEntry(transaction, move(pragma_function), info->on_conflict);
+	return AddEntry(transaction, std::move(pragma_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) {
@@ -225,7 +225,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(CatalogTransaction transaction,
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
 	function->internal = info->internal;
-	return AddEntry(transaction, move(function), info->on_conflict);
+	return AddEntry(transaction, std::move(function), info->on_conflict);
 }
 
 void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {

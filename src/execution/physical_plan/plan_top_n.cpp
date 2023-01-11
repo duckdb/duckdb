@@ -10,9 +10,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTopN &op) 
 	auto plan = CreatePlan(*op.children[0]);
 
 	auto top_n =
-	    make_unique<PhysicalTopN>(op.types, move(op.orders), (idx_t)op.limit, op.offset, op.estimated_cardinality);
-	top_n->children.push_back(move(plan));
-	return move(top_n);
+	    make_unique<PhysicalTopN>(op.types, std::move(op.orders), (idx_t)op.limit, op.offset, op.estimated_cardinality);
+	top_n->children.push_back(std::move(plan));
+	return std::move(top_n);
 }
 
 } // namespace duckdb

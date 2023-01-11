@@ -151,7 +151,7 @@ struct RLECompressState : public CompressionState {
 		auto &type = checkpointer.GetType();
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		column_segment->function = function;
-		current_segment = move(column_segment);
+		current_segment = std::move(column_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 	}
@@ -202,7 +202,7 @@ struct RLECompressState : public CompressionState {
 		handle.Destroy();
 
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
@@ -282,7 +282,7 @@ struct RLEScanState : public SegmentScanState {
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 	auto result = make_unique<RLEScanState<T>>(segment);
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

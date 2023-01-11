@@ -52,7 +52,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::STRUCT(move(children));
+		result_type = LogicalType::STRUCT(std::move(children));
 	} else if (base_type == LogicalTypeId::MAP) {
 
 		if (!type_name->typmods || type_name->typmods->length != 2) {
@@ -61,7 +61,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
 		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
 
-		result_type = LogicalType::MAP(move(key_type), move(value_type));
+		result_type = LogicalType::MAP(std::move(key_type), std::move(value_type));
 	} else if (base_type == LogicalTypeId::UNION) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Union type needs at least one member");
@@ -97,7 +97,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::UNION(move(children));
+		result_type = LogicalType::UNION(std::move(children));
 	} else {
 		int64_t width, scale;
 		if (base_type == LogicalTypeId::DECIMAL) {
@@ -197,7 +197,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;
 		for (auto cell = type_name->arrayBounds->head; cell != nullptr; cell = cell->next) {
-			result_type = LogicalType::LIST(move(result_type));
+			result_type = LogicalType::LIST(std::move(result_type));
 			StackCheck(extra_stack++);
 		}
 	}

@@ -30,7 +30,7 @@ LogicalType::LogicalType(LogicalTypeId id) : id_(id) {
 	physical_type_ = GetInternalType();
 }
 LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p)
-    : id_(id), type_info_(move(type_info_p)) {
+    : id_(id), type_info_(std::move(type_info_p)) {
 	physical_type_ = GetInternalType();
 }
 
@@ -39,7 +39,7 @@ LogicalType::LogicalType(const LogicalType &other)
 }
 
 LogicalType::LogicalType(LogicalType &&other) noexcept
-    : id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(std::move(other.type_info_)) {
 }
 
 hash_t LogicalType::Hash() const {
@@ -737,12 +737,12 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	if (type_id == LogicalTypeId::LIST) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::LIST(move(new_child));
+		return LogicalType::LIST(std::move(new_child));
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::MAP(move(new_child));
+		return LogicalType::MAP(std::move(new_child));
 	}
 	if (type_id == LogicalTypeId::STRUCT) {
 		// struct: perform recursively
@@ -756,10 +756,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
-			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
+			child_types.push_back(make_pair(left_child_types[i].first, std::move(child_type)));
 		}
 
-		return LogicalType::STRUCT(move(child_types));
+		return LogicalType::STRUCT(std::move(child_types));
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -824,7 +824,7 @@ enum class ExtraTypeInfoType : uint8_t {
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
 	}
-	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(move(alias)) {
+	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
 	}
 	virtual ~ExtraTypeInfo() {
 	}
@@ -873,9 +873,9 @@ protected:
 
 void LogicalType::SetAlias(string alias) {
 	if (!type_info_) {
-		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, move(alias));
+		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
 	} else {
-		type_info_->alias = move(alias);
+		type_info_->alias = std::move(alias);
 	}
 }
 
@@ -959,7 +959,7 @@ uint8_t DecimalType::MaxWidth() {
 LogicalType LogicalType::DECIMAL(int width, int scale) {
 	D_ASSERT(width >= scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
-	return LogicalType(LogicalTypeId::DECIMAL, move(type_info));
+	return LogicalType(LogicalTypeId::DECIMAL, std::move(type_info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -967,7 +967,7 @@ LogicalType LogicalType::DECIMAL(int width, int scale) {
 //===--------------------------------------------------------------------===//
 struct StringTypeInfo : public ExtraTypeInfo {
 	explicit StringTypeInfo(string collation_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(move(collation_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
 	}
 
 	string collation;
@@ -979,7 +979,7 @@ public:
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto collation = reader.ReadRequired<string>();
-		return make_shared<StringTypeInfo>(move(collation));
+		return make_shared<StringTypeInfo>(std::move(collation));
 	}
 
 protected:
@@ -1004,8 +1004,8 @@ string StringType::GetCollation(const LogicalType &type) {
 }
 
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
-	auto string_info = make_shared<StringTypeInfo>(move(collation));
-	return LogicalType(LogicalTypeId::VARCHAR, move(string_info));
+	auto string_info = make_shared<StringTypeInfo>(std::move(collation));
+	return LogicalType(LogicalTypeId::VARCHAR, std::move(string_info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1013,7 +1013,7 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 //===--------------------------------------------------------------------===//
 struct ListTypeInfo : public ExtraTypeInfo {
 	explicit ListTypeInfo(LogicalType child_type_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(move(child_type_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
 	}
 
 	LogicalType child_type;
@@ -1025,7 +1025,7 @@ public:
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		return make_shared<ListTypeInfo>(move(child_type));
+		return make_shared<ListTypeInfo>(std::move(child_type));
 	}
 
 protected:
@@ -1043,8 +1043,8 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 }
 
 LogicalType LogicalType::LIST(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(move(child));
-	return LogicalType(LogicalTypeId::LIST, move(info));
+	auto info = make_shared<ListTypeInfo>(std::move(child));
+	return LogicalType(LogicalTypeId::LIST, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1052,7 +1052,7 @@ LogicalType LogicalType::LIST(LogicalType child) {
 //===--------------------------------------------------------------------===//
 struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(move(child_types_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 	}
 
 	child_list_t<LogicalType> child_types;
@@ -1074,9 +1074,9 @@ public:
 		for (uint32_t i = 0; i < child_types_size; i++) {
 			auto name = source.Read<string>();
 			auto type = LogicalType::Deserialize(source);
-			child_list.push_back(make_pair(move(name), move(type)));
+			child_list.push_back(make_pair(std::move(name), std::move(type)));
 		}
-		return make_shared<StructTypeInfo>(move(child_list));
+		return make_shared<StructTypeInfo>(std::move(child_list));
 	}
 
 protected:
@@ -1088,7 +1088,7 @@ protected:
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(move(state_type_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
 	}
 
 	aggregate_state_t state_type;
@@ -1114,10 +1114,10 @@ public:
 
 		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
 			auto type = LogicalType::Deserialize(source);
-			bound_argument_types.push_back(move(type));
+			bound_argument_types.push_back(std::move(type));
 		}
 		return make_shared<AggregateStateTypeInfo>(
-		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
+		    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
 	}
 
 protected:
@@ -1174,28 +1174,28 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(move(children));
-	return LogicalType(LogicalTypeId::STRUCT, move(info));
+	auto info = make_shared<StructTypeInfo>(std::move(children));
+	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
 LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
-	auto info = make_shared<AggregateStateTypeInfo>(move(state_type));
-	return LogicalType(LogicalTypeId::AGGREGATE_STATE, move(info));
+	auto info = make_shared<AggregateStateTypeInfo>(std::move(state_type));
+	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
 LogicalType LogicalType::MAP(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(move(child));
-	return LogicalType(LogicalTypeId::MAP, move(info));
+	auto info = make_shared<ListTypeInfo>(std::move(child));
+	return LogicalType(LogicalTypeId::MAP, std::move(info));
 }
 
 LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", move(key)});
-	child_types.push_back({"value", move(value)});
-	return LogicalType::MAP(LogicalType::STRUCT(move(child_types)));
+	child_types.push_back({"key", std::move(key)});
+	child_types.push_back({"value", std::move(value)});
+	return LogicalType::MAP(LogicalType::STRUCT(std::move(child_types)));
 }
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
@@ -1217,8 +1217,8 @@ LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::TINYINT});
-	auto info = make_shared<StructTypeInfo>(move(members));
-	return LogicalType(LogicalTypeId::UNION, move(info));
+	auto info = make_shared<StructTypeInfo>(std::move(members));
+	return LogicalType(LogicalTypeId::UNION, std::move(info));
 }
 
 const LogicalType &UnionType::GetMemberType(const LogicalType &type, idx_t index) {
@@ -1250,7 +1250,7 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(move(name_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 	}
 
 	string user_type_name;
@@ -1262,7 +1262,7 @@ public:
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto enum_name = reader.ReadRequired<string>();
-		return make_shared<UserTypeInfo>(move(enum_name));
+		return make_shared<UserTypeInfo>(std::move(enum_name));
 	}
 
 protected:
@@ -1281,7 +1281,7 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 
 LogicalType LogicalType::USER(const string &user_type_name) {
 	auto info = make_shared<UserTypeInfo>(user_type_name);
-	return LogicalType(LogicalTypeId::USER, move(info));
+	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1293,7 +1293,7 @@ enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
-	      enum_name(move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
+	      enum_name(std::move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
 	}
 	EnumDictType dict_type;
 	string enum_name;
@@ -1361,7 +1361,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		auto enum_name = reader.ReadRequired<string>();
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.Deserialize(size, reader.GetSource());
-		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
+		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
 	string_map_t<T> values;
@@ -1564,7 +1564,7 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto info = ExtraTypeInfo::Deserialize(reader);
 	reader.Finalize();
 
-	return LogicalType(id, move(info));
+	return LogicalType(id, std::move(info));
 }
 
 bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
