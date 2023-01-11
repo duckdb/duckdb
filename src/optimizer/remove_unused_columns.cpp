@@ -141,9 +141,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
 					}
 					auto new_projection =
-					    make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(expressions));
-					new_projection->children.push_back(move(child));
-					op.children[child_idx] = move(new_projection);
+					    make_unique<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					new_projection->children.push_back(std::move(child));
+					op.children[child_idx] = std::move(new_projection);
 
 					remove.VisitOperator(*op.children[child_idx]);
 				}
@@ -257,7 +257,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto col_sel_idx : col_sel) {
 				column_ids.push_back(get.column_ids[col_sel_idx]);
 			}
-			get.column_ids = move(column_ids);
+			get.column_ids = std::move(column_ids);
 
 			if (get.function.filter_prune) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns

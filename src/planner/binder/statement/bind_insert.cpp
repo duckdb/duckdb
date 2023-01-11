@@ -240,7 +240,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 			throw BinderException("conflict_target WHERE clause can not be a subquery");
 		}
-		insert->on_conflict_condition = move(condition);
+		insert->on_conflict_condition = std::move(condition);
 	}
 
 	if (insert->action_type != OnConflictAction::UPDATE) {
@@ -260,7 +260,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		if (condition && condition->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 			throw BinderException("conflict_target WHERE clause can not be a subquery");
 		}
-		insert->do_update_condition = move(condition);
+		insert->do_update_condition = std::move(condition);
 	}
 
 	// Instead of this, it should probably be a DummyTableRef
@@ -351,7 +351,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// Bind the default values
 	BindDefaultValues(table->columns, insert->bound_defaults);
 	if (!stmt.select_statement) {
-		result.plan = move(insert);
+		result.plan = std::move(insert);
 		return result;
 	}
 
@@ -397,8 +397,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
-	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
-	insert->AddChild(move(root));
+	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+	insert->AddChild(std::move(root));
 	BindOnConflictClause(insert, table, stmt);
 
 	if (!stmt.returning_list.empty()) {
@@ -407,14 +407,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		result.names.clear();
 		auto insert_table_index = GenerateTableIndex();
 		insert->table_index = insert_table_index;
-		unique_ptr<LogicalOperator> index_as_logicaloperator = move(insert);
+		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(move(stmt.returning_list), table, insert_table_index, move(index_as_logicaloperator),
-		                     move(result));
+		return BindReturning(std::move(stmt.returning_list), table, insert_table_index,
+		                     std::move(index_as_logicaloperator), std::move(result));
 	}
 
 	D_ASSERT(result.types.size() == result.names.size());
-	result.plan = move(insert);
+	result.plan = std::move(insert);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

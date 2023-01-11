@@ -614,7 +614,7 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 	if (child_stats[0]->validity_stats) {
 		result->validity_stats = child_stats[1]->validity_stats->Copy();
 	}
-	return move(result);
+	return std::move(result);
 }
 
 template <class TA, class TR, class OP>

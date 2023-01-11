@@ -216,7 +216,7 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 
 		current_segment->function = function;
 
@@ -295,7 +295,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);
@@ -515,7 +515,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 		state->duckdb_fsst_decoder = nullptr;
 	}
 
-	return move(state);
+	return std::move(state);
 }
 
 void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_count, uint32_t last_known_value) {

@@ -25,7 +25,7 @@ namespace duckdb {
 
 BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
                                      BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(fs_p, allocator, opener_p, move(options_p), requested_types), buffer_size(0), position(0),
+    : BaseCSVReader(fs_p, allocator, opener_p, std::move(options_p), requested_types), buffer_size(0), position(0),
       start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
@@ -34,7 +34,7 @@ BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, Fil
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        move(options_p), requested_types) {
+                        std::move(options_p), requested_types) {
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -800,7 +800,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 					auto chunk = make_unique<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
 					chunk->Move(parse_chunk);
-					cached_chunks.push(move(chunk));
+					cached_chunks.push(std::move(chunk));
 				} else {
 					while (!cached_chunks.empty()) {
 						cached_chunks.pop();
@@ -1333,7 +1333,7 @@ final_state:
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
-	auto old_buffer = move(buffer);
+	auto old_buffer = std::move(buffer);
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
@@ -1363,7 +1363,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';
 	if (old_buffer) {
-		cached_buffers.push_back(move(old_buffer));
+		cached_buffers.push_back(std::move(old_buffer));
 	}
 	start = 0;
 	position = remaining;

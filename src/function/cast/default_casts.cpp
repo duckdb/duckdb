@@ -18,7 +18,7 @@ BoundCastData::~BoundCastData() {
 }
 
 BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastData> cast_data_p)
-    : function(function_p), cast_data(move(cast_data_p)) {
+    : function(function_p), cast_data(std::move(cast_data_p)) {
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {

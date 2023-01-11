@@ -16,7 +16,7 @@ void ColumnList::AddColumn(ColumnDefinition column) {
 	}
 	column.SetOid(columns.size());
 	AddToNameMap(column);
-	columns.push_back(move(column));
+	columns.push_back(std::move(column));
 }
 
 void ColumnList::Finalize() {
@@ -158,7 +158,7 @@ ColumnList ColumnList::Deserialize(FieldReader &reader) {
 	ColumnList result;
 	auto columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
 	for (auto &col : columns) {
-		result.AddColumn(move(col));
+		result.AddColumn(std::move(col));
 	}
 	return result;
 }

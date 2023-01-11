@@ -52,7 +52,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	ReservoirQuantileBindData(vector<double> quantiles_p, int32_t sample_size_p)
-	    : quantiles(move(quantiles_p)), sample_size(sample_size_p) {
+	    : quantiles(std::move(quantiles_p)), sample_size(sample_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -75,7 +75,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<double>();
 		auto sample_size = reader.ReadRequired<int32_t>();
-		return make_unique<ReservoirQuantileBindData>(move(quantiles), sample_size);
+		return make_unique<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
 	}
 
 	vector<double> quantiles;

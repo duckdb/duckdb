@@ -40,12 +40,12 @@ struct SelectionVector {
 		Initialize(sel_vector);
 	}
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
-		Initialize(move(data));
+		Initialize(std::move(data));
 	}
 	SelectionVector &operator=(SelectionVector &&other) {
 		sel_vector = other.sel_vector;
 		other.sel_vector = nullptr;
-		selection_data = move(other.selection_data);
+		selection_data = std::move(other.selection_data);
 		return *this;
 	}
 
@@ -74,7 +74,7 @@ public:
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
-		selection_data = move(data);
+		selection_data = std::move(data);
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(const SelectionVector &other) {

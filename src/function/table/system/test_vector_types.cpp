@@ -44,11 +44,11 @@ struct TestVectorFlat {
 				auto child_values = GenerateValues(info, child_type.second);
 
 				for (idx_t i = 0; i < child_values.size(); i++) {
-					struct_children[i].push_back(make_pair(child_type.first, move(child_values[i])));
+					struct_children[i].push_back(make_pair(child_type.first, std::move(child_values[i])));
 				}
 			}
 			for (auto &struct_child : struct_children) {
-				result.push_back(Value::STRUCT(move(struct_child)));
+				result.push_back(Value::STRUCT(std::move(struct_child)));
 			}
 			break;
 		}
@@ -85,7 +85,7 @@ struct TestVectorFlat {
 				result->data[0].SetValue(i, result_values[cur_row + i]);
 			}
 			result->SetCardinality(cardinality);
-			info.entries.push_back(move(result));
+			info.entries.push_back(std::move(result));
 		}
 	}
 };
@@ -101,7 +101,7 @@ struct TestVectorConstant {
 			result->data[0].SetVectorType(VectorType::CONSTANT_VECTOR);
 			result->SetCardinality(cardinality);
 
-			info.entries.push_back(move(result));
+			info.entries.push_back(std::move(result));
 		}
 	}
 };
@@ -164,7 +164,7 @@ struct TestVectorSequence {
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
-		info.entries.push_back(move(result));
+		info.entries.push_back(std::move(result));
 #endif
 	}
 };
@@ -200,7 +200,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 
 	return_types.push_back(result->type);
 	names.emplace_back("test_vector");
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -212,7 +212,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 
 	map<LogicalTypeId, TestType> test_type_map;
 	for (auto &test_type : test_types) {
-		test_type_map.insert(make_pair(test_type.type.id(), move(test_type)));
+		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
 	}
 
 	TestVectorInfo info(bind_data.type, test_type_map, result->entries);
@@ -229,7 +229,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 			entry->Verify();
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

@@ -80,7 +80,7 @@ public:
 			lhs_idx += in_this;
 			rhs_idx += in_other;
 		}
-		matches = move(new_sel);
+		matches = std::move(new_sel);
 		row_ids.Reference(new_rowids);
 	}
 

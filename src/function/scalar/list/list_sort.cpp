@@ -52,8 +52,8 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_unique_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
 	auto lists_col_expr = make_unique_base<Expression, BoundReferenceExpression>(child_type, 1);
-	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, move(idx_col_expr));
-	orders.emplace_back(order_type, null_order, move(lists_col_expr));
+	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
+	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {

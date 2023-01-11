@@ -12,15 +12,15 @@ namespace duckdb {
 PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
                                          physical_index_vector_t<idx_t> column_index_map,
                                          vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, move(types), estimated_cardinality),
+    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)) {
+      bound_defaults(std::move(bound_defaults)) {
 }
 
 PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
-      insert_table(nullptr), schema(schema), info(move(info_p)) {
+      insert_table(nullptr), schema(schema), info(std::move(info_p)) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -38,7 +38,7 @@ public:
 
 public:
 	void AddCollection(unique_ptr<RowGroupCollection> collection) {
-		current_collections.push_back(move(collection));
+		current_collections.push_back(std::move(collection));
 	}
 
 	bool Empty() {
@@ -49,7 +49,7 @@ public:
 		if (Empty()) {
 			return nullptr;
 		}
-		unique_ptr<RowGroupCollection> new_collection = move(current_collections[0]);
+		unique_ptr<RowGroupCollection> new_collection = std::move(current_collections[0]);
 		if (current_collections.size() > 1) {
 			// we have gathered multiple collections: create one big collection and merge that
 			auto &types = new_collection->GetTypes();
@@ -121,7 +121,7 @@ public:
 		} else {
 			// add the
 			D_ASSERT(result);
-			result->push_back(move(entry->second));
+			result->push_back(std::move(entry->second));
 			collections.erase(batch_index);
 		}
 		return true;
@@ -139,7 +139,7 @@ public:
 	                                                OptimisticDataWriter &writer) {
 		CollectionMerger merger(context);
 		for (auto &collection : merge_collections) {
-			merger.AddCollection(move(collection));
+			merger.AddCollection(std::move(collection));
 		}
 		return merger.Flush(writer);
 	}
@@ -189,7 +189,7 @@ public:
 					// note that we need to gather them in order of batch index
 					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
 						if (i == batch_index) {
-							merge_collections.push_back(move(current_collection));
+							merge_collections.push_back(std::move(current_collection));
 							continue;
 						}
 						auto can_merge = CheckMerge(i, merge_collections);
@@ -201,13 +201,13 @@ public:
 			}
 			if (merge_collections.empty()) {
 				// no collections to merge together - add the collection to the batch index
-				collections[batch_index] = move(current_collection);
+				collections[batch_index] = std::move(current_collection);
 			}
 		}
 		if (!merge_collections.empty()) {
 			// merge together the collections
 			D_ASSERT(writer);
-			auto final_collection = MergeCollections(context, move(merge_collections), *writer);
+			auto final_collection = MergeCollections(context, std::move(merge_collections), *writer);
 			D_ASSERT(final_collection->GetTotalRows() == merge_count);
 			D_ASSERT(final_collection->GetTotalRows() >= RowGroup::ROW_GROUP_SIZE);
 			if (written_to_disk) {
@@ -217,7 +217,7 @@ public:
 			{
 				lock_guard<mutex> l(lock);
 				VerifyUniqueBatch(batch_index);
-				collections[batch_index] = move(final_collection);
+				collections[batch_index] = std::move(final_collection);
 			}
 		}
 	}
@@ -271,7 +271,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(insert_table);
 		result->table = insert_table;
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionContext &context) const {
@@ -296,7 +296,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
+		gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
@@ -327,7 +327,7 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 	TransactionData tdata(0, 0);
 	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-	gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection));
+	gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection));
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -346,22 +346,22 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			if (!current_merger) {
 				current_merger = make_unique<CollectionMerger>(context);
 			}
-			current_merger->AddCollection(move(collection.second));
+			current_merger->AddCollection(std::move(collection.second));
 		} else {
 			// this collection has a lot of rows: it does not need to be merged
 			// create a separate collection merger only for this entry
 			if (current_merger) {
 				// we have small collections remaining: flush them
-				mergers.push_back(move(current_merger));
+				mergers.push_back(std::move(current_merger));
 				current_merger.reset();
 			}
 			auto larger_merger = make_unique<CollectionMerger>(context);
-			larger_merger->AddCollection(move(collection.second));
-			mergers.push_back(move(larger_merger));
+			larger_merger->AddCollection(std::move(collection.second));
+			mergers.push_back(std::move(larger_merger));
 		}
 	}
 	if (current_merger) {
-		mergers.push_back(move(current_merger));
+		mergers.push_back(std::move(current_merger));
 	}
 
 	// now that we have created all of the mergers, perform the actual merging

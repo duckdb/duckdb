@@ -48,12 +48,12 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->return_chunk = return_chunk;
-	result->insert_values = move(insert_values);
+	result->insert_values = std::move(insert_values);
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
-	result->bound_defaults = move(bound_defaults);
+	result->bound_defaults = std::move(bound_defaults);
 	result->action_type = action_type;
-	return move(result);
+	return std::move(result);
 }
 
 idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {

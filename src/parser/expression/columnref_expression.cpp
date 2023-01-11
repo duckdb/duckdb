@@ -8,15 +8,17 @@
 namespace duckdb {
 
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ColumnRefExpression(table_name.empty() ? vector<string> {move(column_name)}
-                                             : vector<string> {move(table_name), move(column_name)}) {
+    : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
+                                             : vector<string> {std::move(table_name), std::move(column_name)}) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name) : ColumnRefExpression(vector<string> {move(column_name)}) {
+ColumnRefExpression::ColumnRefExpression(string column_name)
+    : ColumnRefExpression(vector<string> {std::move(column_name)}) {
 }
 
 ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_names(move(column_names_p)) {
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF),
+      column_names(std::move(column_names_p)) {
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());
@@ -51,7 +53,7 @@ const string &ColumnRefExpression::GetTableName() const {
 void ColumnRefExpression::SetTableName(string table_name) {
 	if (IsQualified()) {
 		auto &name = InnerGetTableNameMutable();
-		name = move(table_name);
+		name = std::move(table_name);
 		return;
 	}
 	column_names.insert(column_names.begin(), move(table_name));
@@ -98,7 +100,7 @@ hash_t ColumnRefExpression::Hash() const {
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_unique<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void ColumnRefExpression::Serialize(FieldWriter &writer) const {
@@ -107,8 +109,8 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
-	auto expression = make_unique<ColumnRefExpression>(move(column_names));
-	return move(expression);
+	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	return std::move(expression);
 }
 
 } // namespace duckdb

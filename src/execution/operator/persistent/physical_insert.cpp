@@ -35,12 +35,12 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p,
                                unordered_set<column_t> on_conflict_filter_p, vector<column_t> columns_to_fetch_p)
-    : PhysicalOperator(PhysicalOperatorType::INSERT, move(types_p), estimated_cardinality),
+    : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel), action_type(action_type),
-      set_expressions(move(set_expressions)), on_conflict_condition(move(on_conflict_condition_p)),
-      do_update_condition(move(do_update_condition_p)), on_conflict_filter(move(on_conflict_filter_p)),
-      columns_to_fetch(move(columns_to_fetch_p)) {
+      bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel),
+      action_type(action_type), set_expressions(std::move(set_expressions)),
+      on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
+      on_conflict_filter(std::move(on_conflict_filter_p)), columns_to_fetch(std::move(columns_to_fetch_p)) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
@@ -72,7 +72,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
 PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel),
+      return_chunk(false), schema(schema), info(std::move(info_p)), parallel(parallel),
       action_type(OnConflictAction::THROW) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
@@ -130,7 +130,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		D_ASSERT(insert_table);
 		result->table = insert_table;
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {

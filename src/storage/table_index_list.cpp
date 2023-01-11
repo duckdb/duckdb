@@ -5,7 +5,7 @@ namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
-	indexes.push_back(move(index));
+	indexes.push_back(std::move(index));
 }
 void TableIndexList::RemoveIndex(Index *index) {
 	D_ASSERT(index);
@@ -32,7 +32,7 @@ idx_t TableIndexList::Count() {
 
 void TableIndexList::Move(TableIndexList &other) {
 	D_ASSERT(indexes.empty());
-	indexes = move(other.indexes);
+	indexes = std::move(other.indexes);
 }
 
 Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) {

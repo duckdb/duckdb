@@ -191,7 +191,7 @@ void ReplayState::ReplayCreateTable() {
 
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 
 	catalog.CreateTable(context, bound_info.get());
 }
@@ -448,7 +448,7 @@ void ReplayState::ReplayUpdate() {
 	}
 
 	// remove the row id vector from the chunk
-	auto row_ids = move(chunk.data.back());
+	auto row_ids = std::move(chunk.data.back());
 	chunk.data.pop_back();
 
 	// now perform the update

@@ -75,7 +75,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-	return move(result);
+	return std::move(result);
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
