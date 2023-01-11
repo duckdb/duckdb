@@ -18,7 +18,6 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
