@@ -57,16 +57,35 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	const auto udate = UDate(millis);
 	calendar->setTime(udate, status);
 
-	const auto interval_ms = interval.micros / Interval::MICROS_PER_MSEC;
+	// Break units apart to avoid overflow
+	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
+
+	const auto interval_ms = interval_h % Interval::MSECS_PER_SEC;
+	interval_h /= Interval::MSECS_PER_SEC;
+
+	const auto interval_s = interval_h % Interval::SECS_PER_MINUTE;
+	interval_h /= Interval::SECS_PER_MINUTE;
+
+	const auto interval_m = interval_h % Interval::MINS_PER_HOUR;
+	interval_h /= Interval::MINS_PER_HOUR;
+
 	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
 		// Add interval fields from lowest to highest (non-ragged to ragged)
 		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		calendar->add(UCAL_HOUR, interval_h, status);
+
 		calendar->add(UCAL_DATE, interval.days, status);
 		calendar->add(UCAL_MONTH, interval.months, status);
 	} else {
 		// Add interval fields from highest to lowest (ragged to non-ragged)
 		calendar->add(UCAL_MONTH, interval.months, status);
 		calendar->add(UCAL_DATE, interval.days, status);
+
+		calendar->add(UCAL_HOUR, interval_h, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
 		calendar->add(UCAL_MILLISECOND, interval_ms, status);
 	}
 
