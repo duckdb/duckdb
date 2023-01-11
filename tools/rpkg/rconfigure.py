@@ -102,6 +102,10 @@ include_list += ' -Iduckdb'
 include_list += extension_list
 include_list += ' ' + debug_move_flag
 
+# add -Werror if enabled
+if 'TREAT_WARNINGS_AS_ERRORS' in os.environ:
+    include_list += ' -Werror'
+
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
