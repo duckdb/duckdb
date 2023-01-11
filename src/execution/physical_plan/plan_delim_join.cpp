@@ -44,11 +44,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
 	// now create the duplicate eliminated join
-	auto delim_join = make_unique<PhysicalDelimJoin>(op.types, move(plan), delim_scans, op.estimated_cardinality);
+	auto delim_join = make_unique<PhysicalDelimJoin>(op.types, std::move(plan), delim_scans, op.estimated_cardinality);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	delim_join->distinct = make_unique<PhysicalHashAggregate>(context, delim_types, move(distinct_expressions),
-	                                                          move(distinct_groups), op.estimated_cardinality);
-	return move(delim_join);
+	delim_join->distinct = make_unique<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
+	                                                          std::move(distinct_groups), op.estimated_cardinality);
+	return std::move(delim_join);
 }
 
 } // namespace duckdb

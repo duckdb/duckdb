@@ -18,7 +18,7 @@ LogicalOperator::LogicalOperator(LogicalOperatorType type)
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : type(type), expressions(std::move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
 }
 
 LogicalOperator::~LogicalOperator() {
@@ -152,7 +152,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
 	D_ASSERT(child);
-	children.push_back(move(child));
+	children.push_back(std::move(child));
 }
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
@@ -344,7 +344,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	}
 
 	reader.Finalize();
-	result->children = move(children);
+	result->children = std::move(children);
 
 	return result;
 }

@@ -72,13 +72,13 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto storage_idx = GetStorageIndex(*bind_data.table, col);
 		col = storage_idx;
 	}
-	result->scan_state.Initialize(move(column_ids), input.filters);
+	result->scan_state.Initialize(std::move(column_ids), input.filters);
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
 		auto &tsgs = (TableScanGlobalState &)*gstate;
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
@@ -98,7 +98,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 			}
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
@@ -223,7 +223,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	                             input.filters);
 
 	result->finished = false;
-	return move(result);
+	return std::move(result);
 }
 
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -429,8 +429,8 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto result = make_unique<TableScanBindData>((TableCatalogEntry *)catalog_entry);
 	result->is_index_scan = is_index_scan;
 	result->is_create_index = is_create_index;
-	result->result_ids = move(result_ids);
-	return move(result);
+	result->result_ids = std::move(result_ids);
+	return std::move(result);
 }
 
 TableFunction TableScanFunction::GetIndexScanFunction() {
@@ -482,7 +482,7 @@ TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &functio
 void TableScanFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet table_scan_set("seq_scan");
 	table_scan_set.AddFunction(GetFunction());
-	set.AddFunction(move(table_scan_set));
+	set.AddFunction(std::move(table_scan_set));
 
 	set.AddFunction(GetIndexScanFunction());
 }

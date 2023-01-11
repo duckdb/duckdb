@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)), finished_processing_file(false) {
+SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.load_extensions = false;
 }
@@ -34,7 +34,7 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 
 void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(move(command));
+		active_loops.back()->loop_commands.push_back(std::move(command));
 	} else {
 		ExecuteContext context;
 		command->Execute(context);
@@ -42,17 +42,17 @@ void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
 }
 
 void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
-	auto loop = make_unique<LoopCommand>(*this, move(definition));
+	auto loop = make_unique<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
 		// already in a loop: add it to the currently active loop
 		if (definition.is_parallel) {
 			throw std::runtime_error("concurrent loop must be the outer-most loop!");
 		}
-		active_loops.back()->loop_commands.push_back(move(loop));
+		active_loops.back()->loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
-		top_level_loop = move(loop);
+		top_level_loop = std::move(loop);
 	}
 	active_loops.push_back(loop_ptr);
 }
@@ -283,12 +283,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			    parser.ExtractExpectedError(command->expected_result == ExpectedResult::RESULT_SUCCESS);
 
 			// perform any renames in the text
-			command->base_sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
 
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
-			ExecuteCommand(move(command));
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
@@ -317,7 +317,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto statement_text = parser.ExtractStatement();
 
 			// perform any renames in the text
-			command->base_sql_query = ReplaceKeywords(move(statement_text));
+			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
 
 			// extract the expected result
 			command->values = parser.ExtractExpectedResult();
@@ -349,7 +349,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
-			ExecuteCommand(move(command));
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("hash-threshold requires a parameter");
@@ -582,7 +582,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// restart the current database
 			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);
-			ExecuteCommand(move(command));
+			ExecuteCommand(std::move(command));
 		}
 	}
 	if (InLoop()) {

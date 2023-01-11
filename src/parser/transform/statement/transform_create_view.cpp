@@ -52,7 +52,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	if (stmt->withCheckOption != duckdb_libpgquery::PGViewCheckOption::PG_NO_CHECK_OPTION) {
 		throw NotImplementedException("VIEW CHECK options");
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

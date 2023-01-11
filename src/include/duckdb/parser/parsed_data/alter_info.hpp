@@ -27,7 +27,7 @@ struct AlterEntryData {
 	AlterEntryData() {
 	}
 	AlterEntryData(string catalog_p, string schema_p, string name_p, bool if_exists)
-	    : catalog(move(catalog_p)), schema(move(schema_p)), name(move(name_p)), if_exists(if_exists) {
+	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)), if_exists(if_exists) {
 	}
 
 	string catalog;

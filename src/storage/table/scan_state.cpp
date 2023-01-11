@@ -6,7 +6,7 @@
 namespace duckdb {
 
 void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
-	this->column_ids = move(column_ids);
+	this->column_ids = std::move(column_ids);
 	this->table_filters = table_filters;
 	if (table_filters) {
 		D_ASSERT(table_filters->filters.size() > 0);

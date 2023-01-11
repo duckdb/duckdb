@@ -21,7 +21,7 @@ unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(LogicalDeserialization
 	auto result = make_unique<LogicalDelimJoin>(JoinType::INVALID);
 	LogicalComparisonJoin::Deserialize(*result, state, reader);
 	result->duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

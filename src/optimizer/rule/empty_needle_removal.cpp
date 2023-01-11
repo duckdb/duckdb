@@ -18,7 +18,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 
 	unordered_set<string> functions = {"prefix", "contains", "suffix"};
 	func->function = make_unique<ManyFunctionMatcher>(functions);
-	root = move(func);
+	root = std::move(func);
 }
 
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -47,7 +47,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	// PREFIX(NULL, '') is NULL
 	// so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 	if (needle_string.empty()) {
-		return ExpressionRewriter::ConstantOrNull(move(root->children[0]), Value::BOOLEAN(true));
+		return ExpressionRewriter::ConstantOrNull(std::move(root->children[0]), Value::BOOLEAN(true));
 	}
 	return nullptr;
 }

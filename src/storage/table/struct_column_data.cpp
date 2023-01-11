@@ -6,7 +6,7 @@ namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                    idx_t start_row, LogicalType type_p, ColumnData *parent)
-    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
@@ -46,13 +46,13 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScan(validity_state);
-	state.child_states.push_back(move(validity_state));
+	state.child_states.push_back(std::move(validity_state));
 
 	// initialize the sub-columns
 	for (auto &sub_column : sub_columns) {
 		ColumnScanState child_state;
 		sub_column->InitializeScan(child_state);
-		state.child_states.push_back(move(child_state));
+		state.child_states.push_back(std::move(child_state));
 	}
 }
 
@@ -65,13 +65,13 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScanWithOffset(validity_state, row_idx);
-	state.child_states.push_back(move(validity_state));
+	state.child_states.push_back(std::move(validity_state));
 
 	// initialize the sub-columns
 	for (auto &sub_column : sub_columns) {
 		ColumnScanState child_state;
 		sub_column->InitializeScanWithOffset(child_state, row_idx);
-		state.child_states.push_back(move(child_state));
+		state.child_states.push_back(std::move(child_state));
 	}
 }
 
@@ -114,12 +114,12 @@ void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;
 	validity.InitializeAppend(validity_append);
-	state.child_appends.push_back(move(validity_append));
+	state.child_appends.push_back(std::move(validity_append));
 
 	for (auto &sub_column : sub_columns) {
 		ColumnAppendState child_append;
 		sub_column->InitializeAppend(child_append);
-		state.child_appends.push_back(move(child_append));
+		state.child_appends.push_back(std::move(child_append));
 	}
 }
 
@@ -149,7 +149,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
 		ColumnScanState child_state;
-		state.child_states.push_back(move(child_state));
+		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the validity state
 	idx_t scan_count = validity.Fetch(state.child_states[0], row_id, result);
@@ -196,7 +196,7 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
-			struct_stats.child_stats[i] = move(child_stats);
+			struct_stats.child_stats[i] = std::move(child_stats);
 		}
 	}
 	return stats;
@@ -209,7 +209,7 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
 		auto child_state = make_unique<ColumnFetchState>();
-		state.child_states.push_back(move(child_state));
+		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the validity state
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
@@ -245,7 +245,7 @@ public:
 			stats->child_stats[i] = child_states[i]->GetStatistics();
 			D_ASSERT(stats->child_stats[i]);
 		}
-		return move(stats);
+		return std::move(stats);
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer) override {
@@ -276,7 +276,7 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 		checkpoint_state->child_states.push_back(
 		    sub_column->Checkpoint(row_group, partial_block_manager, checkpoint_info));
 	}
-	return move(checkpoint_state);
+	return std::move(checkpoint_state);
 }
 
 void StructColumnData::DeserializeColumn(Deserializer &source) {

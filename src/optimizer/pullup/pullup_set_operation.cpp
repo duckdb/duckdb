@@ -21,10 +21,10 @@ unique_ptr<LogicalOperator> FilterPullup::PullupSetOperation(unique_ptr<LogicalO
 	can_add_column = false;
 	can_pullup = true;
 	if (op->type == LogicalOperatorType::LOGICAL_INTERSECT) {
-		op = PullupBothSide(move(op));
+		op = PullupBothSide(std::move(op));
 	} else {
 		// EXCEPT only pull ups from LHS
-		op = PullupFromLeft(move(op));
+		op = PullupFromLeft(std::move(op));
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = (LogicalFilter &)*op;
