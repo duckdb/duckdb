@@ -526,7 +526,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
-				parser.Fail("require-env requires 2 arguments: <env name> <env value>");
+				parser.Fail("require-env requires 1 argument: <env name> [optional: <expected env val>]");
 			}
 
 			auto env_var = token.parameters[0];
