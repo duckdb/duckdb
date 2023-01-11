@@ -3,7 +3,7 @@
 
 # 'db2' is an in-memory database, which no longer exists after restarting
 # So we have to exclude this test from Force Restart runs
-require skip_reload;
+require skip_reload
 
 statement ok
 pragma enable_verification;
