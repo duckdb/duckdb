@@ -325,7 +325,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	GetDelimJoins(**plan, delim_joins);
 
 	LogicalOperator *parent = nullptr;
-	idx_t parent_delim_get_side;
+	idx_t parent_delim_get_side = 0;
 	for (auto dj : delim_joins) {
 		D_ASSERT(dj->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 		if (!HasChild(dj, &proj_or_agg, parent_delim_get_side)) {
