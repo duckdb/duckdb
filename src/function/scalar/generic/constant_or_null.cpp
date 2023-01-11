@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct ConstantOrNullBindData : public FunctionData {
-	explicit ConstantOrNullBindData(Value val) : value(move(val)) {
+	explicit ConstantOrNullBindData(Value val) : value(std::move(val)) {
 	}
 
 	Value value;
@@ -70,7 +70,7 @@ ScalarFunction ConstantOrNull::GetFunction(const LogicalType &return_type) {
 }
 
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
-	return make_unique<ConstantOrNullBindData>(move(value));
+	return make_unique<ConstantOrNullBindData>(std::move(value));
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
@@ -94,7 +94,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	bound_function.return_type = arguments[0]->return_type;
-	return make_unique<ConstantOrNullBindData>(move(value));
+	return make_unique<ConstantOrNullBindData>(std::move(value));
 }
 
 void ConstantOrNull::RegisterFunction(BuiltinFunctions &set) {

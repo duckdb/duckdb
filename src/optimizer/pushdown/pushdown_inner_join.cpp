@@ -14,15 +14,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	auto &join = (LogicalJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::INNER);
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		return FinishPushdown(move(op));
+		return FinishPushdown(std::move(op));
 	}
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = (LogicalAnyJoin &)join;
 		// any join: only one filter to add
-		if (AddFilter(move(any_join.condition)) == FilterResult::UNSATISFIABLE) {
+		if (AddFilter(std::move(any_join.condition)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(move(op));
+			return make_unique<LogicalEmptyResult>(std::move(op));
 		}
 	} else {
 		// comparison join
@@ -30,19 +30,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
 		for (auto &i : comp_join.conditions) {
-			auto condition = JoinCondition::CreateExpression(move(i));
-			if (AddFilter(move(condition)) == FilterResult::UNSATISFIABLE) {
+			auto condition = JoinCondition::CreateExpression(std::move(i));
+			if (AddFilter(std::move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
-				return make_unique<LogicalEmptyResult>(move(op));
+				return make_unique<LogicalEmptyResult>(std::move(op));
 			}
 		}
 	}
 	GenerateFilters();
 
 	// turn the inner join into a cross product
-	auto cross_product = make_unique<LogicalCrossProduct>(move(op->children[0]), move(op->children[1]));
+	auto cross_product = make_unique<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
 	// then push down cross product
-	return PushdownCrossProduct(move(cross_product));
+	return PushdownCrossProduct(std::move(cross_product));
 }
 
 } // namespace duckdb

@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
 	explicit SQLAutoCompleteFunctionData(vector<string> suggestions_p, idx_t start_pos)
-	    : suggestions(move(suggestions_p)), start_pos(start_pos) {
+	    : suggestions(std::move(suggestions_p)), start_pos(start_pos) {
 	}
 
 	vector<string> suggestions;
@@ -33,7 +33,7 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 
 struct AutoCompleteCandidate {
 	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
-	    : candidate(move(candidate_p)), score_bonus(score_bonus) {
+	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
 	}
 
 	string candidate;
@@ -44,7 +44,7 @@ struct AutoCompleteCandidate {
 static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
                                          const unordered_set<string> &extra_keywords, bool add_quotes = false) {
 	for (auto &kw : extra_keywords) {
-		available_suggestions.emplace_back(move(kw));
+		available_suggestions.emplace_back(std::move(kw));
 	}
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
@@ -201,7 +201,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 		if (KnownExtension(fname)) {
 			score = 1;
 		}
-		result.emplace_back(move(suggestion), score);
+		result.emplace_back(std::move(suggestion), score);
 	});
 	return result;
 }
@@ -350,7 +350,7 @@ standard_suggestion:
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
 	}
-	return make_unique<SQLAutoCompleteFunctionData>(move(suggestions), last_pos);
+	return make_unique<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
 
 static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,

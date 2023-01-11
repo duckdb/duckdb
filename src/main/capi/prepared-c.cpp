@@ -42,7 +42,7 @@ duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
 		return DuckDBError;
 	}
 	auto wrapper = new PreparedStatementWrapper();
-	wrapper->statement = conn->Prepare(move(source_wrapper->statements[index]));
+	wrapper->statement = conn->Prepare(std::move(source_wrapper->statements[index]));
 
 	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
 	return wrapper->statement->HasError() ? DuckDBError : DuckDBSuccess;
@@ -233,7 +233,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	return duckdb_translate_result(move(result), out_result);
+	return duckdb_translate_result(std::move(result), out_result);
 }
 
 template <class T>

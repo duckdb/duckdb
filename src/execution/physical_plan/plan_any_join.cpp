@@ -13,8 +13,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &o
 	auto right = CreatePlan(*op.children[1]);
 
 	// create the blockwise NL join
-	return make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(op.condition), op.join_type,
-	                                            op.estimated_cardinality);
+	return make_unique<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(op.condition),
+	                                            op.join_type, op.estimated_cardinality);
 }
 
 } // namespace duckdb

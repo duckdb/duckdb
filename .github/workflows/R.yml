@@ -155,6 +155,8 @@ jobs:
       LIBARROW_BINARY: 'false'
       ARROW_USER_SIMD_LEVEL: 'AVX2'
       DUCKDB_R_DEBUG: 1
+      DUCKDB_DEBUG_MOVE: 1
+
     steps:
     - uses: actions/checkout@v3
       with:
@@ -200,6 +202,7 @@ jobs:
     - uses: r-lib/actions/setup-r@v1
       with:
         r-version: 'devel'
+        update-rtools: true
 
     - uses: r-lib/actions/setup-pandoc@v2
 

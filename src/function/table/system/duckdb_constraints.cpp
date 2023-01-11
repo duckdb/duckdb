@@ -120,7 +120,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
 	};
 
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -279,10 +279,10 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 
 			// constraint_column_indexes, LIST
-			output.SetValue(col++, count, Value::LIST(move(index_list)));
+			output.SetValue(col++, count, Value::LIST(std::move(index_list)));
 
 			// constraint_column_names, LIST
-			output.SetValue(col++, count, Value::LIST(move(column_name_list)));
+			output.SetValue(col++, count, Value::LIST(std::move(column_name_list)));
 
 			count++;
 		}

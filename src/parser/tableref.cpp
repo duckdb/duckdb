@@ -9,7 +9,7 @@ namespace duckdb {
 
 string TableRef::BaseToString(string result) const {
 	vector<string> column_name_alias;
-	return BaseToString(move(result), column_name_alias);
+	return BaseToString(std::move(result), column_name_alias);
 }
 
 string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
@@ -88,7 +88,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	reader.Finalize();
 
 	result->alias = alias;
-	result->sample = move(sample);
+	result->sample = std::move(sample);
 	return result;
 }
 

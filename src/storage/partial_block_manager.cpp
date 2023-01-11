@@ -45,7 +45,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 		return false;
 	}
 	// found a partially filled block! fill in the info
-	partial_block = move(entry->second);
+	partial_block = std::move(entry->second);
 	partially_filled_blocks.erase(entry);
 
 	D_ASSERT(partial_block->state.offset_in_block > 0);
@@ -62,14 +62,14 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		// check if the block is STILL partially filled after adding the segment_size
 		if (new_space_left >= Storage::BLOCK_SIZE - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
-			partially_filled_blocks.insert(make_pair(new_space_left, move(allocation.partial_block)));
+			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}
-	auto block_to_free = move(allocation.partial_block);
+	auto block_to_free = std::move(allocation.partial_block);
 	if (!block_to_free && partially_filled_blocks.size() > MAX_BLOCK_MAP_SIZE) {
 		// Free the page with the least space free.
 		auto itr = partially_filled_blocks.begin();
-		block_to_free = move(itr->second);
+		block_to_free = std::move(itr->second);
 		partially_filled_blocks.erase(itr);
 	}
 	// Flush any block that we're not going to reuse.

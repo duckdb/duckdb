@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-// MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(move(expression)) {}
+// MacroFunction::MacroFunction(unique_ptr<ParsedExpression> expression) : expression(std::move(expression)) {}
 
 MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
@@ -29,12 +29,12 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 			} else if (defaults.count(arg->alias)) {
 				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
-			defaults[arg->alias] = move(arg);
+			defaults[arg->alias] = std::move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {
 			// positional argument
-			positionals.push_back(move(arg));
+			positionals.push_back(std::move(arg));
 		}
 	}
 
