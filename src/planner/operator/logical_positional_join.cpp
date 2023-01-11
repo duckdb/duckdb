@@ -6,8 +6,8 @@ LogicalPositionalJoin::LogicalPositionalJoin(unique_ptr<LogicalOperator> left, u
     : LogicalOperator(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {
 	D_ASSERT(left);
 	D_ASSERT(right);
-	children.push_back(move(left));
-	children.push_back(move(right));
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
 }
 
 vector<ColumnBinding> LogicalPositionalJoin::GetColumnBindings() {
@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> LogicalPositionalJoin::Create(unique_ptr<LogicalOper
 	if (right->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 		return left;
 	}
-	return make_unique<LogicalPositionalJoin>(move(left), move(right));
+	return make_unique<LogicalPositionalJoin>(std::move(left), std::move(right));
 }
 
 void LogicalPositionalJoin::Serialize(FieldWriter &writer) const {
@@ -40,7 +40,7 @@ unique_ptr<LogicalOperator> LogicalPositionalJoin::Deserialize(LogicalDeserializ
                                                                FieldReader &reader) {
 	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
 	auto result = unique_ptr<LogicalPositionalJoin>(new LogicalPositionalJoin());
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

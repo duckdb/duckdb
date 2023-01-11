@@ -11,14 +11,14 @@ namespace duckdb {
 
 PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, move(types),
+    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
                        MinValue(left->estimated_cardinality, right->estimated_cardinality)) {
 
 	// Manage the children ourselves
 	D_ASSERT(left->type == PhysicalOperatorType::TABLE_SCAN);
 	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-	child_tables.emplace_back(move(left));
-	child_tables.emplace_back(move(right));
+	child_tables.emplace_back(std::move(left));
+	child_tables.emplace_back(std::move(right));
 }
 
 class PositionalScanGlobalSourceState : public GlobalSourceState {

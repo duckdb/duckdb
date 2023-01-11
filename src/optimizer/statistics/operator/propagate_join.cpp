@@ -282,7 +282,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 		}
 	}
 
-	return move(node_stats);
+	return std::move(node_stats);
 }
 
 } // namespace duckdb

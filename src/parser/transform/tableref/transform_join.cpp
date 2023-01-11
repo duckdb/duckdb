@@ -47,9 +47,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 
 	if (root->jointype == duckdb_libpgquery::PG_JOIN_POSITION) { // POSITIONAL JOIN
 		auto pj = make_unique<PositionalJoinRef>();
-		pj->left = move(result->left);
-		pj->right = move(result->right);
-		return move(pj);
+		pj->left = std::move(result->left);
+		pj->right = std::move(result->right);
+		return std::move(pj);
 	}
 
 	if (root->usingClause && root->usingClause->length > 0) {

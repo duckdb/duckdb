@@ -8,9 +8,9 @@ namespace duckdb {
 
 PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, move(types), estimated_cardinality) {
-	children.push_back(move(left));
-	children.push_back(move(right));
+    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
 }
 
 //===--------------------------------------------------------------------===//
