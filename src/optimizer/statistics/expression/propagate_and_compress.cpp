@@ -73,13 +73,13 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 	auto input_type = expr->return_type;
 	auto minimum_expr = make_unique<BoundConstantExpression>(Value::CreateValue(signed_min_val));
 	vector<unique_ptr<Expression>> arguments;
-	arguments.push_back(move(expr));
-	arguments.push_back(move(minimum_expr));
+	arguments.push_back(std::move(expr));
+	arguments.push_back(std::move(minimum_expr));
 	auto minus_expr = make_unique<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
-	                                                       move(arguments), nullptr, true);
+	                                                       std::move(arguments), nullptr, true);
 
 	// Cast to smaller type
-	return BoundCastExpression::AddDefaultCastToType(move(minus_expr), cast_type);
+	return BoundCastExpression::AddDefaultCastToType(std::move(minus_expr), cast_type);
 }
 
 unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
@@ -89,19 +89,19 @@ unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericSt
 	case PhysicalType::INT8:
 		return expr;
 	case PhysicalType::UINT16:
-		return TemplatedCastToSmallestType<uint16_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<uint16_t>(std::move(expr), num_stats);
 	case PhysicalType::INT16:
-		return TemplatedCastToSmallestType<int16_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<int16_t>(std::move(expr), num_stats);
 	case PhysicalType::UINT32:
-		return TemplatedCastToSmallestType<uint32_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<uint32_t>(std::move(expr), num_stats);
 	case PhysicalType::INT32:
-		return TemplatedCastToSmallestType<int32_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<int32_t>(std::move(expr), num_stats);
 	case PhysicalType::UINT64:
-		return TemplatedCastToSmallestType<uint64_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<uint64_t>(std::move(expr), num_stats);
 	case PhysicalType::INT64:
-		return TemplatedCastToSmallestType<int64_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<int64_t>(std::move(expr), num_stats);
 	case PhysicalType::INT128:
-		return TemplatedCastToSmallestType<hugeint_t>(move(expr), num_stats);
+		return TemplatedCastToSmallestType<hugeint_t>(std::move(expr), num_stats);
 	default:
 		throw NotImplementedException("Unknown integer type!");
 	}
@@ -111,7 +111,7 @@ void StatisticsPropagator::PropagateAndCompress(unique_ptr<Expression> &expr, un
 	stats = PropagateExpression(expr);
 	if (stats) {
 		if (expr->return_type.IsIntegral()) {
-			expr = CastToSmallestType(move(expr), (NumericStatistics &)*stats);
+			expr = CastToSmallestType(std::move(expr), (NumericStatistics &)*stats);
 		}
 	}
 }

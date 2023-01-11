@@ -237,7 +237,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			i--;
 			if (filter.expressions.empty()) {
 				// all conditions have been erased: remove the entire filter
-				*node_ptr = move(filter.children[0]);
+				*node_ptr = std::move(filter.children[0]);
 				break;
 			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
@@ -251,7 +251,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		}
 	}
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)
-	return move(node_stats);
+	return std::move(node_stats);
 }
 
 } // namespace duckdb

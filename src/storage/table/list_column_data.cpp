@@ -6,7 +6,7 @@ namespace duckdb {
 
 ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                                LogicalType type_p, ColumnData *parent)
-    : ColumnData(block_manager, info, column_index, start_row, move(type_p), parent),
+    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
@@ -31,12 +31,12 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScan(validity_state);
-	state.child_states.push_back(move(validity_state));
+	state.child_states.push_back(std::move(validity_state));
 
 	// initialize the child scan
 	ColumnScanState child_state;
 	child_column->InitializeScan(child_state);
-	state.child_states.push_back(move(child_state));
+	state.child_states.push_back(std::move(child_state));
 }
 
 list_entry_t ListColumnData::FetchListEntry(idx_t row_idx) {
@@ -60,7 +60,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScanWithOffset(validity_state, row_idx);
-	state.child_states.push_back(move(validity_state));
+	state.child_states.push_back(std::move(validity_state));
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto list_entry = FetchListEntry(row_idx);
@@ -71,7 +71,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(child_state, start + child_offset);
 	}
-	state.child_states.push_back(move(child_state));
+	state.child_states.push_back(std::move(child_state));
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -155,12 +155,12 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	// initialize the validity append
 	ColumnAppendState validity_append_state;
 	validity.InitializeAppend(validity_append_state);
-	state.child_appends.push_back(move(validity_append_state));
+	state.child_appends.push_back(std::move(validity_append_state));
 
 	// initialize the child column append
 	ColumnAppendState child_append_state;
 	child_column->InitializeAppend(child_append_state);
-	state.child_appends.push_back(move(child_append_state));
+	state.child_appends.push_back(std::move(child_append_state));
 }
 
 void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, Vector &vector, idx_t count) {
@@ -279,7 +279,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// this is because we will (potentially) fetch more than one tuple from the list child
 	if (state.child_states.empty()) {
 		auto child_state = make_unique<ColumnFetchState>();
-		state.child_states.push_back(move(child_state));
+		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the list_entry_t and the validity mask for that list
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
@@ -364,8 +364,8 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
 
 	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
-	checkpoint_state.validity_state = move(validity_state);
-	checkpoint_state.child_state = move(child_state);
+	checkpoint_state.validity_state = std::move(validity_state);
+	checkpoint_state.child_state = std::move(child_state);
 	return base_state;
 }
 

@@ -17,7 +17,7 @@ class TerminalProgressBarDisplay : public ProgressBarDisplay {
 public:
 	TerminalProgressBarDisplay() {
 	}
-	~TerminalProgressBarDisplay() override final {
+	~TerminalProgressBarDisplay() override {
 	}
 
 public:
