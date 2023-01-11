@@ -20,7 +20,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 	if (expr.function.init_local_state) {
 		result->local_state = expr.function.init_local_state(*result, expr, expr.bind_info.get());
 	}
-	return move(result);
+	return std::move(result);
 }
 
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {

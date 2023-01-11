@@ -61,7 +61,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 		result->entries.push_back(info);
 	});
 
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

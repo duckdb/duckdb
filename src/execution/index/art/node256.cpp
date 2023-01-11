@@ -105,7 +105,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 
 		auto new_node = Node48::New();
 		art.memory_size += new_node->MemorySize(art, false);
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->children[i]) {

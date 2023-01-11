@@ -15,7 +15,7 @@ namespace duckdb {
 class PhysicalEmptyResult : public PhysicalOperator {
 public:
 	explicit PhysicalEmptyResult(vector<LogicalType> types, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::EMPTY_RESULT, move(types), estimated_cardinality) {
+	    : PhysicalOperator(PhysicalOperatorType::EMPTY_RESULT, std::move(types), estimated_cardinality) {
 	}
 
 public:

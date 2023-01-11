@@ -7,7 +7,7 @@
 namespace duckdb {
 
 BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalType return_type)
-    : Expression(type, ExpressionClass::BOUND_OPERATOR, move(return_type)) {
+    : Expression(type, ExpressionClass::BOUND_OPERATOR, std::move(return_type)) {
 }
 
 string BoundOperatorExpression::ToString() const {
@@ -31,7 +31,7 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundOperatorExpression::Serialize(FieldWriter &writer) const {
@@ -45,8 +45,8 @@ unique_ptr<Expression> BoundOperatorExpression::Deserialize(ExpressionDeserializ
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto result = make_unique<BoundOperatorExpression>(state.type, return_type);
-	result->children = move(children);
-	return move(result);
+	result->children = std::move(children);
+	return std::move(result);
 }
 
 } // namespace duckdb

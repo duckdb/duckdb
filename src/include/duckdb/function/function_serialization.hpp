@@ -55,8 +55,8 @@ public:
 		auto functions = (CATALOG_ENTRY *)func_catalog;
 		auto function = functions->functions.GetFunctionByArguments(
 		    state.context, original_arguments.empty() ? arguments : original_arguments);
-		function.arguments = move(arguments);
-		function.original_arguments = move(original_arguments);
+		function.arguments = std::move(arguments);
+		function.original_arguments = std::move(original_arguments);
 
 		has_deserialize = reader.ReadRequired<bool>();
 		if (has_deserialize) {

@@ -21,7 +21,8 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable *table) : table(table) {
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable *table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(move(parent.partial_manager)), written_blocks(move(parent.written_blocks)) {
+    : table(table), partial_manager(std::move(parent.partial_manager)),
+      written_blocks(std::move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -125,7 +126,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, move(unbound_expressions),
+			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
 			                                  art.constraint_type, art.db, false));
 		}
 		return false;
@@ -136,7 +137,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
                                      idx_t changed_idx, const LogicalType &target_type,
                                      const vector<column_t> &bound_columns, Expression &cast_expr)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -144,7 +145,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -153,7 +154,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      ColumnDefinition &new_column, Expression *default_value)
     : table(&new_dt), allocator(Allocator::Get(table->db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(move(parent.optimistic_writers)) {
+      optimistic_writer(table, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
 	row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -281,7 +282,7 @@ void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendSta
 
 OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
 	auto writer = make_unique<OptimisticDataWriter>(table);
-	optimistic_writers.push_back(move(writer));
+	optimistic_writers.push_back(std::move(writer));
 	return optimistic_writers.back().get();
 }
 
@@ -308,7 +309,7 @@ LocalTableStorage *LocalTableManager::GetOrCreateStorage(DataTable *table) {
 	if (entry == table_storage.end()) {
 		auto new_storage = make_shared<LocalTableStorage>(*table);
 		auto storage = new_storage.get();
-		table_storage.insert(make_pair(table, move(new_storage)));
+		table_storage.insert(make_pair(table, std::move(new_storage)));
 		return storage;
 	} else {
 		return entry->second.get();
@@ -326,14 +327,14 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable *table) {
 	if (entry == table_storage.end()) {
 		return nullptr;
 	}
-	auto storage_entry = move(entry->second);
+	auto storage_entry = std::move(entry->second);
 	table_storage.erase(table);
 	return storage_entry;
 }
 
 unordered_map<DataTable *, shared_ptr<LocalTableStorage>> LocalTableManager::MoveEntries() {
 	lock_guard<mutex> l(table_storage_lock);
-	return move(table_storage);
+	return std::move(table_storage);
 }
 
 idx_t LocalTableManager::EstimatedSize() {
@@ -348,7 +349,7 @@ idx_t LocalTableManager::EstimatedSize() {
 void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStorage> entry) {
 	lock_guard<mutex> l(table_storage_lock);
 	D_ASSERT(table_storage.find(table) == table_storage.end());
-	table_storage[table] = move(entry);
+	table_storage[table] = std::move(entry);
 }
 
 //===--------------------------------------------------------------------===//
@@ -559,7 +560,7 @@ void LocalStorage::MoveStorage(DataTable *old_dt, DataTable *new_dt) {
 	}
 	// take over the storage from the old entry
 	new_storage->table = new_dt;
-	table_manager.InsertEntry(new_dt, move(new_storage));
+	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
@@ -570,7 +571,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 		return;
 	}
 	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
-	table_manager.InsertEntry(new_dt, move(new_storage));
+	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
 void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column) {
@@ -580,7 +581,7 @@ void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t remove
 		return;
 	}
 	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
-	table_manager.InsertEntry(new_dt, move(new_storage));
+	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
 void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
@@ -592,7 +593,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 	}
 	auto new_storage =
 	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
-	table_manager.InsertEntry(new_dt, move(new_storage));
+	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
 void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &verify_chunk) {

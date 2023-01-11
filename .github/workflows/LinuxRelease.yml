@@ -353,7 +353,7 @@ jobs:
 
 
  linux-clang:
-    name: Clang 12
+    name: Clang 14
     runs-on: ubuntu-18.04
     needs: linux-release-64
 
@@ -364,6 +364,7 @@ jobs:
       LD: /home/runner/work/llvm/bin/ld.lld
       EXTENSION_STATIC_BUILD: 1
       BUILD_JSON: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -373,7 +374,7 @@ jobs:
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
       with:
-        version: "12.0"
+        version: "14.0"
         directory: '/home/runner/work/llvm'
 
     - uses: actions/setup-python@v2

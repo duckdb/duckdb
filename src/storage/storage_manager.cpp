@@ -16,7 +16,7 @@
 namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(move(path_p)), read_only(read_only) {
+    : db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
 		path = ":memory:";
 	}
@@ -81,7 +81,7 @@ public:
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
-    : StorageManager(db, move(path), read_only) {
+    : StorageManager(db, std::move(path), read_only) {
 }
 
 void SingleFileStorageManager::LoadDatabase() {

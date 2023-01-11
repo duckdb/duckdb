@@ -38,19 +38,19 @@ void ChunkCollection::Merge(ChunkCollection &other) {
 		return;
 	}
 	if (count == 0) {
-		chunks = move(other.chunks);
-		types = move(other.types);
+		chunks = std::move(other.chunks);
+		types = std::move(other.types);
 		count = other.count;
 		return;
 	}
 	unique_ptr<DataChunk> old_back;
 	if (!chunks.empty() && chunks.back()->size() != STANDARD_VECTOR_SIZE) {
-		old_back = move(chunks.back());
+		old_back = std::move(chunks.back());
 		chunks.pop_back();
 		count -= old_back->size();
 	}
 	for (auto &chunk : other.chunks) {
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 	count += other.count;
 	if (old_back) {
@@ -122,7 +122,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(allocator, types);
 		new_chunk.Copy(*chunk, offset);
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 }
 
@@ -132,7 +132,7 @@ void ChunkCollection::Append(unique_ptr<DataChunk> new_chunk) {
 	}
 	D_ASSERT(types == new_chunk->GetTypes());
 	count += new_chunk->size();
-	chunks.push_back(move(new_chunk));
+	chunks.push_back(std::move(new_chunk));
 }
 
 void ChunkCollection::Fuse(ChunkCollection &other) {
@@ -146,7 +146,7 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 				lhs->data.emplace_back(Vector(v));
 			}
 			lhs->SetCardinality(rhs.size());
-			chunks.push_back(move(lhs));
+			chunks.push_back(std::move(lhs));
 		}
 		count = other.Count();
 	} else {

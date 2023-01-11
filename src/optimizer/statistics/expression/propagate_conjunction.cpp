@@ -60,7 +60,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 		return PropagateExpression(*expr_ptr);
 	} else if (expr.children.size() == 1) {
 		// if there is one child left, replace the conjunction with that one child
-		*expr_ptr = move(expr.children[0]);
+		*expr_ptr = std::move(expr.children[0]);
 	}
 	return nullptr;
 }

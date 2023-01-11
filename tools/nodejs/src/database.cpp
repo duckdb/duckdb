@@ -128,7 +128,7 @@ Database::~Database() {
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
-		task_queue.push(move(task));
+		task_queue.push(std::move(task));
 	}
 	Process(env);
 }
@@ -172,11 +172,11 @@ void Database::Process(Napi::Env env) {
 	}
 	task_inflight = true;
 
-	auto task = move(task_queue.front());
+	auto task = std::move(task_queue.front());
 	task_queue.pop();
 
 	auto holder = new TaskHolder();
-	holder->task = move(task);
+	holder->task = std::move(task);
 	holder->db = this;
 
 	napi_create_async_work(env, nullptr, Napi::String::New(env, "duckdb.Database.Task"), TaskExecuteCallback,

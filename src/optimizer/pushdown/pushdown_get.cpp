@@ -28,7 +28,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		vector<unique_ptr<Expression>> expressions;
 		expressions.reserve(filters.size());
 		for (auto &filter : filters) {
-			expressions.push_back(move(filter->filter));
+			expressions.push_back(std::move(filter->filter));
 		}
 		filters.clear();
 
@@ -40,15 +40,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		// re-generate the filters
 		for (auto &expr : expressions) {
 			auto f = make_unique<Filter>();
-			f->filter = move(expr);
+			f->filter = std::move(expr);
 			f->ExtractBindings();
-			filters.push_back(move(f));
+			filters.push_back(std::move(f));
 		}
 	}
 
 	if (!get.table_filters.filters.empty() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
-		return FinishPushdown(move(op));
+		return FinishPushdown(std::move(op));
 	}
 	PushFilters();
 
@@ -75,7 +75,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	GenerateFilters();
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
-	return FinishPushdown(move(op));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

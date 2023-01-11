@@ -31,7 +31,7 @@ unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, T
 		schema->Scan(context, CatalogType::COLLATION_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back(entry->name); });
 	}
-	return move(result);
+	return std::move(result);
 }
 
 static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

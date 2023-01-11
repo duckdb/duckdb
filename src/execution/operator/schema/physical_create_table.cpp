@@ -10,7 +10,7 @@ namespace duckdb {
 PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema,
                                          unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE, op.types, estimated_cardinality), schema(schema),
-      info(move(info)) {
+      info(std::move(info)) {
 }
 
 //===--------------------------------------------------------------------===//

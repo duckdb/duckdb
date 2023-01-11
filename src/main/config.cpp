@@ -164,7 +164,7 @@ void DBConfig::ResetOption(DatabaseInstance *db, const ConfigurationOption &opti
 
 void DBConfig::SetOption(const string &name, Value value) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables[name] = move(value);
+	options.set_variables[name] = std::move(value);
 }
 
 void DBConfig::ResetOption(const string &name) {
@@ -184,7 +184,7 @@ void DBConfig::ResetOption(const string &name) {
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function) {
 	extension_parameters.insert(
-	    make_pair(name, ExtensionOption(move(description), move(parameter), function, default_value)));
+	    make_pair(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value)));
 	if (!default_value.IsNull()) {
 		// Default value is set, insert it into the 'set_variables' list
 		options.set_variables[name] = default_value;

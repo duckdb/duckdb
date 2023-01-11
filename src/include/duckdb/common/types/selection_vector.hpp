@@ -40,7 +40,7 @@ struct SelectionVector {
 		Initialize(sel_vector);
 	}
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
-		Initialize(move(data));
+		Initialize(std::move(data));
 	}
 
 public:
@@ -53,7 +53,7 @@ public:
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
-		selection_data = move(data);
+		selection_data = std::move(data);
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(const SelectionVector &other) {

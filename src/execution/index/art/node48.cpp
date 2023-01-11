@@ -107,7 +107,7 @@ void Node48::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_chil
 		auto new_node = Node256::New();
 		art.memory_size += new_node->MemorySize(art, false);
 		new_node->count = n->count;
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
@@ -144,7 +144,7 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 
 		auto new_node = Node16::New();
 		art.memory_size += new_node->MemorySize(art, false);
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < Node256::GetSize(); i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {

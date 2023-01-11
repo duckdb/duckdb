@@ -41,8 +41,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	bind_data.is_create_index = true;
 
 	auto table_scan =
-	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, move(op.bind_data), op.info->column_ids,
-	                                   op.info->names, move(table_filters), op.estimated_cardinality);
+	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
+	                                   op.info->names, std::move(table_filters), op.estimated_cardinality);
 
 	dependencies.AddDependency(&op.table);
 	op.info->column_ids.pop_back();
@@ -56,13 +56,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	vector<unique_ptr<Expression>> select_list;
 	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		new_column_types.push_back(op.expressions[i]->return_type);
-		select_list.push_back(move(op.expressions[i]));
+		select_list.push_back(std::move(op.expressions[i]));
 	}
 	new_column_types.emplace_back(LogicalType::ROW_TYPE);
 	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
-	auto projection = make_unique<PhysicalProjection>(new_column_types, move(select_list), op.estimated_cardinality);
-	projection->children.push_back(move(table_scan));
+	auto projection =
+	    make_unique<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
+	projection->children.push_back(std::move(table_scan));
 
 	// filter operator for IS_NOT_NULL on each key column
 
@@ -74,14 +75,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		auto is_not_null_expr =
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 		auto bound_ref = make_unique<BoundReferenceExpression>(new_column_types[i], i);
-		is_not_null_expr->children.push_back(move(bound_ref));
-		filter_select_list.push_back(move(is_not_null_expr));
+		is_not_null_expr->children.push_back(std::move(bound_ref));
+		filter_select_list.push_back(std::move(is_not_null_expr));
 	}
 
 	auto null_filter =
-	    make_unique<PhysicalFilter>(move(filter_types), move(filter_select_list), op.estimated_cardinality);
+	    make_unique<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), op.estimated_cardinality);
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
-	null_filter->children.push_back(move(projection));
+	null_filter->children.push_back(std::move(projection));
 
 	// order operator
 
@@ -89,21 +90,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	vector<idx_t> projections;
 	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
 		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, move(col_expr));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(col_expr));
 		projections.emplace_back(i);
 	}
 	projections.emplace_back(new_column_types.size() - 1);
 
-	auto physical_order =
-	    make_unique<PhysicalOrder>(new_column_types, move(orders), move(projections), op.estimated_cardinality);
-	physical_order->children.push_back(move(null_filter));
+	auto physical_order = make_unique<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
+	                                                 op.estimated_cardinality);
+	physical_order->children.push_back(std::move(null_filter));
 
 	// actual physical create index operator
 
-	auto physical_create_index = make_unique<PhysicalCreateIndex>(
-	    op, op.table, op.info->column_ids, move(op.info), move(op.unbound_expressions), op.estimated_cardinality);
-	physical_create_index->children.push_back(move(physical_order));
-	return move(physical_create_index);
+	auto physical_create_index =
+	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
+	                                     std::move(op.unbound_expressions), op.estimated_cardinality);
+	physical_create_index->children.push_back(std::move(physical_order));
+	return std::move(physical_create_index);
 }
 
 } // namespace duckdb

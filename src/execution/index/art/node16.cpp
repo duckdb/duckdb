@@ -106,7 +106,7 @@ void Node16::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_chil
 		auto new_node = Node48::New();
 		art.memory_size += new_node->MemorySize(art, false);
 		new_node->count = node->count;
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
@@ -156,7 +156,7 @@ void Node16::EraseChild(ART &art, Node *&node, idx_t pos) {
 
 		auto new_node = Node4::New();
 		art.memory_size += new_node->MemorySize(art, false);
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 
 		for (idx_t i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];

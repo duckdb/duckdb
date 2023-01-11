@@ -123,7 +123,7 @@ public:
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
 			auto child = T::Deserialize(*this, std::forward<ARGS>(args)...);
-			list.push_back(move(child));
+			list.push_back(std::move(child));
 		}
 	}
 

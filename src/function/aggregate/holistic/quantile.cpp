@@ -1182,7 +1182,7 @@ static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
                                              AggregateFunction &bound_function) {
 	auto quantiles = reader.ReadRequiredList<Value>();
-	return make_unique<QuantileBindData>(move(quantiles));
+	return make_unique<QuantileBindData>(std::move(quantiles));
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,

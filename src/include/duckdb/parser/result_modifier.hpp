@@ -51,7 +51,7 @@ public:
 //! Single node in ORDER BY statement
 struct OrderByNode {
 	OrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<ParsedExpression> expression)
-	    : type(type), null_order(null_order), expression(move(expression)) {
+	    : type(type), null_order(null_order), expression(std::move(expression)) {
 	}
 
 	//! Sort order, ASC or DESC

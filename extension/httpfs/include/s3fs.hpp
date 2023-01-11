@@ -69,7 +69,7 @@ class S3FileSystem;
 class S3WriteBuffer {
 public:
 	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, BufferHandle buffer_p)
-	    : idx(0), buffer_start(buffer_start), buffer(move(buffer_p)) {
+	    : idx(0), buffer_start(buffer_start), buffer(std::move(buffer_p)) {
 		buffer_end = buffer_start + buffer_size;
 		part_no = buffer_start / buffer_size;
 		uploading = false;
@@ -96,7 +96,7 @@ public:
 	S3FileHandle(FileSystem &fs, string path_p, const string &stripped_path_p, uint8_t flags,
 	             const HTTPParams &http_params, const S3AuthParams &auth_params_p,
 	             const S3ConfigParams &config_params_p)
-	    : HTTPFileHandle(fs, move(path_p), flags, http_params), auth_params(auth_params_p),
+	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), stripped_path(stripped_path_p) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {

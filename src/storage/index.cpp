@@ -20,7 +20,7 @@ Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_mana
 		logical_types.push_back(expr->return_type);
 		auto unbound_expression = expr->Copy();
 		bound_expressions.push_back(BindExpression(unbound_expression->Copy()));
-		this->unbound_expressions.emplace_back(move(unbound_expression));
+		this->unbound_expressions.emplace_back(std::move(unbound_expression));
 	}
 	for (auto &bound_expr : bound_expressions) {
 		executor.AddExpression(*bound_expr);
@@ -70,8 +70,8 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 		auto &bound_colref = (BoundColumnRefExpression &)*expr;
 		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
-	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&](unique_ptr<Expression> &expr) { expr = BindExpression(move(expr)); });
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });
 	return expr;
 }
 

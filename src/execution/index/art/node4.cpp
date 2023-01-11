@@ -103,7 +103,7 @@ void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child
 		auto new_node = Node16::New();
 		art.memory_size += new_node->MemorySize(art, false);
 		new_node->count = n->count;
-		new_node->prefix = move(node->prefix);
+		new_node->prefix = std::move(node->prefix);
 
 		for (idx_t i = 0; i < n->count; i++) {
 			new_node->key[i] = n->key[i];
