@@ -74,8 +74,6 @@ public:
 
 	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
 
-	void AssertEquivalentRelationSize();
-
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
@@ -92,7 +90,7 @@ public:
 	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
 
-	void InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
+	void InitCardinalityEstimatorProps(vector<NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
 	double EstimateCardinalityWithSet(JoinRelationSet *new_set);
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);

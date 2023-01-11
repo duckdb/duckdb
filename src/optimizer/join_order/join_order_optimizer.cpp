@@ -156,7 +156,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
+			child_binding_maps.emplace_back(
+			    column_binding_map_t<ColumnBinding>()); // TODO after lunch add cardinality estimate to the
+			                                            // non-reordereable thing
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
 			// save the relation bindings from the optimized child. These later all get added to the
@@ -927,9 +929,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	expression_set_t filter_set;
-	for (auto &op : filter_operators) {
-		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = (LogicalComparisonJoin &)*op;
+	for (auto &f_op : filter_operators) {
+		if (f_op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = (LogicalComparisonJoin &)*f_op;
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
@@ -942,13 +944,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			}
 			join.conditions.clear();
 		} else {
-			for (auto &expression : op->expressions) {
+			for (auto &expression : f_op->expressions) {
 				if (filter_set.find(expression.get()) == filter_set.end()) {
 					filter_set.insert(expression.get());
 					filters.push_back(move(expression));
 				}
 			}
-			op->expressions.clear();
+			f_op->expressions.clear();
 		}
 	}
 	// create potential edges from the comparisons
