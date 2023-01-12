@@ -85,12 +85,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART
-	{
-		IndexLock local_lock;
-		lstate.local_index->InitializeLock(local_lock);
-		if (!lstate.local_index->MergeIndexes(local_lock, art.get())) {
-			throw ConstraintException("Data contains duplicates on indexed column(s)");
-		}
+	if (!lstate.local_index->MergeIndexes(art.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -102,7 +98,9 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 
 	// merge the local index into the global index
-	gstate.global_index->MergeIndexes(lstate.local_index.get());
+	if (!gstate.global_index->MergeIndexes(lstate.local_index.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
