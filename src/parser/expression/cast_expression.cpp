@@ -6,10 +6,10 @@
 namespace duckdb {
 
 CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> child, bool try_cast_p)
-    : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(move(target)),
+    : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(std::move(target)),
       try_cast(try_cast_p) {
 	D_ASSERT(child);
-	this->child = move(child);
+	this->child = std::move(child);
 }
 
 string CastExpression::ToString() const {
@@ -32,7 +32,7 @@ bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
 unique_ptr<ParsedExpression> CastExpression::Copy() const {
 	auto copy = make_unique<CastExpression>(cast_type, child->Copy(), try_cast);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void CastExpression::Serialize(FieldWriter &writer) const {
@@ -45,7 +45,7 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, Fi
 	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto cast_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto try_cast = reader.ReadRequired<bool>();
-	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child), try_cast);
+	return make_unique_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
 }
 
 } // namespace duckdb

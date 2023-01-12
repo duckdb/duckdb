@@ -108,7 +108,7 @@ CatalogEntry *Catalog::CreateSchema(CatalogTransaction transaction, CreateSchema
 	DependencyList dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info->schema, move(entry), dependencies)) {
+	if (!schemas->CreateEntry(transaction, info->schema, std::move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException("Schema with name %s already exists!", info->schema);
 		} else {
@@ -146,7 +146,7 @@ CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo 
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info) {
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 	return CreateTable(context, bound_info.get());
 }
 
@@ -303,7 +303,7 @@ CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCat
 // Lookup Structures
 //===--------------------------------------------------------------------===//
 struct CatalogLookup {
-	CatalogLookup(Catalog &catalog, string schema_p) : catalog(catalog), schema(move(schema_p)) {
+	CatalogLookup(Catalog &catalog, string schema_p) : catalog(catalog), schema(std::move(schema_p)) {
 	}
 
 	Catalog &catalog;
@@ -741,7 +741,7 @@ idx_t Catalog::GetCatalogVersion() {
 }
 
 idx_t Catalog::ModifyCatalog() {
-	return GetDatabase().GetDatabaseManager().catalog_version++;
+	return GetDatabase().GetDatabaseManager().ModifyCatalog();
 }
 
 bool Catalog::IsSystemCatalog() const {

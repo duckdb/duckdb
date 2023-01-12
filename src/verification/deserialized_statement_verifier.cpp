@@ -5,7 +5,7 @@
 namespace duckdb {
 
 DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::DESERIALIZED, "Deserialized", move(statement_p)) {
+    : StatementVerifier(VerificationType::DESERIALIZED, "Deserialized", std::move(statement_p)) {
 }
 
 unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLStatement &statement) {

@@ -96,7 +96,7 @@ CreateScalarFunctionInfo JSONFunctions::GetContainsFunction() {
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::JSON}, LogicalType::BOOLEAN, JSONContainsFunction));
 	// TODO: implement json_contains that accepts path argument as well
 
-	return CreateScalarFunctionInfo(move(set));
+	return CreateScalarFunctionInfo(std::move(set));
 }
 
 } // namespace duckdb

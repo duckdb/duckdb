@@ -470,7 +470,7 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
@@ -510,7 +510,7 @@ public:
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
 		handle.Destroy();
 
-		state.FlushSegment(move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
@@ -719,7 +719,7 @@ public:
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	auto result = make_unique<BitpackingScanState<T>>(segment);
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

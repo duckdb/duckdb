@@ -12,9 +12,9 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(move(catalog)),
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog)),
       schema(std::move(schema)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
-      children(move(children_p)), distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)),
+      children(std::move(children_p)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
       export_state(export_state_p) {
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
@@ -25,8 +25,8 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
 FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, move(children_p), move(filter),
-                         move(order_bys), distinct, is_operator, export_state_p) {
+    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children_p), std::move(filter),
+                         std::move(order_bys), distinct, is_operator, export_state_p) {
 }
 
 string FunctionExpression::ToString() const {
@@ -82,10 +82,11 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 		order_copy.reset(static_cast<OrderModifier *>(order_bys->Copy().release()));
 	}
 
-	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, move(copy_children), move(filter_copy),
-	                                            move(order_copy), distinct, is_operator, export_state);
+	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(copy_children),
+	                                            std::move(filter_copy), std::move(order_copy), distinct, is_operator,
+	                                            export_state);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void FunctionExpression::Serialize(FieldWriter &writer) const {
@@ -112,9 +113,9 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto catalog = reader.ReadField<string>(INVALID_CATALOG);
 
 	unique_ptr<FunctionExpression> function;
-	function = make_unique<FunctionExpression>(catalog, schema, function_name, move(children), move(filter),
-	                                           move(order_bys), distinct, is_operator, export_state);
-	return move(function);
+	function = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
+	                                           std::move(order_bys), distinct, is_operator, export_state);
+	return std::move(function);
 }
 
 void FunctionExpression::Verify() const {

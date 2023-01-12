@@ -12,6 +12,7 @@
 #include "httplib.hpp"
 
 #include <condition_variable>
+#include <exception>
 #include <iostream>
 
 namespace duckdb {
@@ -68,7 +69,7 @@ class S3FileSystem;
 class S3WriteBuffer {
 public:
 	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, BufferHandle buffer_p)
-	    : idx(0), buffer_start(buffer_start), buffer(move(buffer_p)) {
+	    : idx(0), buffer_start(buffer_start), buffer(std::move(buffer_p)) {
 		buffer_end = buffer_start + buffer_size;
 		part_no = buffer_start / buffer_size;
 		uploading = false;
@@ -95,7 +96,7 @@ public:
 	S3FileHandle(FileSystem &fs, string path_p, const string &stripped_path_p, uint8_t flags,
 	             const HTTPParams &http_params, const S3AuthParams &auth_params_p,
 	             const S3ConfigParams &config_params_p)
-	    : HTTPFileHandle(fs, move(path_p), flags, http_params), auth_params(auth_params_p),
+	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), stripped_path(stripped_path_p) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
@@ -112,25 +113,41 @@ public:
 	void Close() override;
 	void Initialize(FileOpener *opener) override;
 
+	shared_ptr<S3WriteBuffer> GetBuffer(uint16_t write_buffer_idx);
+
 protected:
 	string multipart_upload_id;
 	size_t part_size;
 
+	//! Write buffers for this file
 	mutex write_buffers_lock;
 	unordered_map<uint16_t, shared_ptr<S3WriteBuffer>> write_buffers;
 
+	//! Synchronization for upload threads
 	mutex uploads_in_progress_lock;
 	std::condition_variable uploads_in_progress_cv;
-	atomic<uint16_t> uploads_in_progress;
+	uint16_t uploads_in_progress;
 
-	// Etags are stored for each part
+	//! Etags are stored for each part
 	mutex part_etags_lock;
 	unordered_map<uint16_t, string> part_etags;
 
+	//! Info for upload
 	atomic<uint16_t> parts_uploaded;
 	bool upload_finalized;
 
+	//! Error handling in upload threads
+	atomic<bool> uploader_has_error {false};
+	std::exception_ptr upload_exception;
+
 	void InitializeClient() override;
+
+	//! Rethrow IO Exception originating from an upload thread
+	void RethrowIOError() {
+		if (uploader_has_error) {
+			std::rethrow_exception(upload_exception);
+		}
+	}
 };
 
 class S3FileSystem : public HTTPFileSystem {
@@ -141,8 +158,8 @@ public:
 	// Global limits to write buffers
 	mutex buffers_available_lock;
 	std::condition_variable buffers_available_cv;
-	atomic<uint16_t> buffers_available;
-	atomic<uint16_t> threads_waiting_for_memory = {0};
+	uint16_t buffers_in_use = 0;
+	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
 
@@ -183,6 +200,9 @@ public:
 
 	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
 
+	//! Wrapper around BufferManager::Allocate to limit the number of buffers
+	BufferHandle Allocate(idx_t part_size, uint16_t max_threads);
+
 protected:
 	unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
 	                                        FileLockType lock, FileCompressionType compression,
@@ -193,10 +213,6 @@ protected:
 
 	// helper for ReadQueryParams
 	void GetQueryParam(const string &key, string &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
-
-	// Allocate an S3WriteBuffer
-	// Note: call may block if no buffers are available or if the buffer manager fails to allocate more memory.
-	shared_ptr<S3WriteBuffer> GetBuffer(S3FileHandle &file_handle, uint16_t write_buffer_idx);
 };
 
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html

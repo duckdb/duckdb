@@ -21,7 +21,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
-		intermediate_chunks.push_back(move(chunk));
+		intermediate_chunks.push_back(std::move(chunk));
 
 		auto op_state = current_operator->GetOperatorState(context);
 		intermediate_states.push_back(std::move(op_state));

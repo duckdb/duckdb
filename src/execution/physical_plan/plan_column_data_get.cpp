@@ -11,9 +11,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalColumnData
 	// create a PhysicalChunkScan pointing towards the owned collection
 	auto chunk_scan =
 	    make_unique<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
-	chunk_scan->owned_collection = move(op.collection);
+	chunk_scan->owned_collection = std::move(op.collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
-	return move(chunk_scan);
+	return std::move(chunk_scan);
 }
 
 } // namespace duckdb

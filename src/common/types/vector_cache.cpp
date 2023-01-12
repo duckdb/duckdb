@@ -18,7 +18,7 @@ public:
 			auto &child_type = ListType::GetChildType(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type));
 			auto child_vector = make_unique<Vector>(child_type, false, false);
-			auxiliary = make_unique<VectorListBuffer>(move(child_vector));
+			auxiliary = make_unique<VectorListBuffer>(std::move(child_vector));
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -27,7 +27,7 @@ public:
 				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second));
 			}
 			auto struct_buffer = make_unique<VectorStructBuffer>(type);
-			auxiliary = move(struct_buffer);
+			auxiliary = std::move(struct_buffer);
 			break;
 		}
 		default:

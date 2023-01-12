@@ -71,8 +71,8 @@ void SortedData::Unswizzle() {
 		auto heap_handle_p = buffer_manager.Pin(heap_block->block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block->count);
 		data_block->block->SetSwizzling("SortedData::Unswizzle");
-		state.heap_blocks.push_back(move(heap_block));
-		state.pinned_blocks.push_back(move(heap_handle_p));
+		state.heap_blocks.push_back(std::move(heap_block));
+		state.pinned_blocks.push_back(std::move(heap_handle_p));
 	}
 	heap_blocks.clear();
 }
@@ -112,22 +112,22 @@ void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blo
 	D_ASSERT(Count() == 0);
 	for (auto &sb : sorted_blocks) {
 		for (auto &radix_block : sb->radix_sorting_data) {
-			radix_sorting_data.push_back(move(radix_block));
+			radix_sorting_data.push_back(std::move(radix_block));
 		}
 		if (!sort_layout.all_constant) {
 			for (auto &blob_block : sb->blob_sorting_data->data_blocks) {
-				blob_sorting_data->data_blocks.push_back(move(blob_block));
+				blob_sorting_data->data_blocks.push_back(std::move(blob_block));
 			}
 			for (auto &heap_block : sb->blob_sorting_data->heap_blocks) {
-				blob_sorting_data->heap_blocks.push_back(move(heap_block));
+				blob_sorting_data->heap_blocks.push_back(std::move(heap_block));
 			}
 		}
 		for (auto &payload_data_block : sb->payload_data->data_blocks) {
-			payload_data->data_blocks.push_back(move(payload_data_block));
+			payload_data->data_blocks.push_back(std::move(payload_data_block));
 		}
 		if (!payload_data->layout.AllConstant()) {
 			for (auto &payload_heap_block : sb->payload_data->heap_blocks) {
-				payload_data->heap_blocks.push_back(move(payload_heap_block));
+				payload_data->heap_blocks.push_back(std::move(payload_heap_block));
 			}
 		}
 	}
@@ -299,9 +299,9 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 
 	if (flush_p) {
 		// If we are flushing, we can just move the data
-		rows->blocks = move(sorted_data.data_blocks);
+		rows->blocks = std::move(sorted_data.data_blocks);
 		if (!layout.AllConstant()) {
-			heap->blocks = move(sorted_data.heap_blocks);
+			heap->blocks = std::move(sorted_data.heap_blocks);
 		}
 	} else {
 		// Not flushing, create references to the blocks
@@ -330,7 +330,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	// Create collections to put the data into so we can use RowDataCollectionScanner
 	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (flush_p) {
-		rows->blocks.emplace_back(move(sorted_data.data_blocks[block_idx]));
+		rows->blocks.emplace_back(std::move(sorted_data.data_blocks[block_idx]));
 	} else {
 		rows->blocks.emplace_back(sorted_data.data_blocks[block_idx]->Copy());
 	}
@@ -339,7 +339,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
 		if (flush_p) {
-			heap->blocks.emplace_back(move(sorted_data.heap_blocks[block_idx]));
+			heap->blocks.emplace_back(std::move(sorted_data.heap_blocks[block_idx]));
 		} else {
 			heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
 		}
