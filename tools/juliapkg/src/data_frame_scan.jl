@@ -223,7 +223,6 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
 end
 
 function register_data_frame(con::Connection, df::DataFrame, name::AbstractString)
-	ccall(:jl_breakpoint, Cvoid, (Any,), con)
     con.db.registered_objects[name] = df
     DBInterface.execute(
         con,
