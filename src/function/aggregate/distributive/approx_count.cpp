@@ -93,8 +93,8 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
-	uint64_t *indices;
-	uint8_t *counts;
+	uint64_t *indices = nullptr;
+	uint8_t *counts = nullptr;
 	for (idx_t i = 0; i < count; i++) {
 		auto agg_state = states[sdata.sel->get_index(i)];
 		if (!agg_state->log) {

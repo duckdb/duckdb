@@ -327,6 +327,8 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		deserialized_node = (Node *)Node256::New();
 		break;
 	}
+	default:
+		throw InternalException("Unrecognized node type");
 	}
 	deserialized_node->DeserializeInternal(art, reader);
 	art.memory_size += deserialized_node->MemorySize(art, false);

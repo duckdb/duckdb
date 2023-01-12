@@ -8,6 +8,7 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
@@ -200,7 +201,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p), -1),
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p),
+              DConstants::INVALID_INDEX),
       dummy_name(std::move(dummy_name_p)) {
 }
 
@@ -209,12 +211,20 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
 	}
-	ColumnBinding binding;
-	binding.table_index = index;
-	binding.column_index = column_index;
+	ColumnBinding binding(index, column_index);
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+}
+
+BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
+	}
+	ColumnBinding binding(index, column_index);
+	return BindResult(
+	    make_unique<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
