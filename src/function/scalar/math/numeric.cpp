@@ -847,6 +847,25 @@ void IsNanFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 //===--------------------------------------------------------------------===//
+// signbit
+//===--------------------------------------------------------------------===//
+struct SignBitOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::signbit(input);
+	}
+};
+
+void SignBitFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("signbit");
+	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<float, bool, SignBitOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<double, bool, SignBitOperator>));
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
 // isinf
 //===--------------------------------------------------------------------===//
 struct IsInfiniteOperator {

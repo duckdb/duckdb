@@ -102,7 +102,7 @@ struct EmptyPatasWriter {
 		using EXACT_TYPE = typename FloatingToExact<VALUE_TYPE>::type;
 
 		auto state_wrapper = (PatasAnalyzeState<VALUE_TYPE> *)state_p;
-		state_wrapper->WriteValue(*(EXACT_TYPE *)(&uncompressed_value), is_valid);
+		state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&uncompressed_value), is_valid);
 	}
 };
 
