@@ -22,10 +22,10 @@ unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNo
 			} else {
 				val = Value::BOOLEAN(true);
 			}
-			info->options[StringUtil::Lower(def_elem->defname)] = move(val);
+			info->options[StringUtil::Lower(def_elem->defname)] = std::move(val);
 		}
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

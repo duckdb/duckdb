@@ -171,7 +171,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 				auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
 				auto tmp = unique_ptr<char[]> {new char[new_size]};
 				memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
-				buffer_out = move(tmp);
+				buffer_out = std::move(tmp);
 				buffer_out_len = new_size;
 			}
 			memcpy(buffer_out.get() + out_offset, data, data_length);
@@ -323,7 +323,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 
 	auto handle = CreateHandle(stripped_path, query_param, flags, lock, compression, opener);
 	handle->Initialize(opener);
-	return move(handle);
+	return std::move(handle);
 }
 
 // Buffered read from http file.

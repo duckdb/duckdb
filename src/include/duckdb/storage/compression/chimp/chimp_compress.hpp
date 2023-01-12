@@ -118,7 +118,7 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 		next_group_byte_index_start = ChimpPrimitives::HEADER_SIZE;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -149,7 +149,7 @@ public:
 		current_segment->count++;
 
 		if (is_valid) {
-			T floating_point_value = *(T *)(&value);
+			T floating_point_value = Load<T>((const_data_ptr_t)&value);
 			NumericStatistics::Update<T>(current_segment->stats, floating_point_value);
 		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL
@@ -251,7 +251,7 @@ public:
 		//  Store the offset of the metadata of the first group (which is at the highest address).
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
-		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {

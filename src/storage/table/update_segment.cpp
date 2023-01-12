@@ -1179,7 +1179,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		transaction_node->Verify();
 		result->info->Verify();
 
-		root->info[vector_index] = move(result);
+		root->info[vector_index] = std::move(result);
 	}
 }
 

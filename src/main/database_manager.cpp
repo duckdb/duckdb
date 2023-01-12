@@ -37,7 +37,7 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (!databases->CreateEntry(context, name, move(db_instance), dependencies)) {
+	if (!databases->CreateEntry(context, name, std::move(db_instance), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 }

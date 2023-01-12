@@ -38,7 +38,7 @@ struct RStatement {
 };
 
 struct RelationWrapper {
-	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(move(rel_p)) {
+	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
 	}
 	shared_ptr<Relation> rel;
 };

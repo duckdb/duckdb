@@ -28,7 +28,7 @@ struct SingleJoinRelation {
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {
-	JoinRelationSet(unique_ptr<idx_t[]> relations, idx_t count) : relations(move(relations)), count(count) {
+	JoinRelationSet(unique_ptr<idx_t[]> relations, idx_t count) : relations(std::move(relations)), count(count) {
 	}
 
 	string ToString() const;

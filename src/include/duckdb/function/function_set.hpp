@@ -28,7 +28,7 @@ public:
 
 public:
 	void AddFunction(T function) {
-		functions.push_back(move(function));
+		functions.push_back(std::move(function));
 	}
 	idx_t Size() {
 		return functions.size();
@@ -82,7 +82,7 @@ public:
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
-	explicit PragmaFunctionSet(string name) : FunctionSet(move(name)) {
+	explicit PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {
 	}
 };
 

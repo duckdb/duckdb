@@ -18,7 +18,7 @@ class TableCatalogEntry;
 class BoundBaseTableRef : public BoundTableRef {
 public:
 	BoundBaseTableRef(TableCatalogEntry *table, unique_ptr<LogicalOperator> get)
-	    : BoundTableRef(TableReferenceType::BASE_TABLE), table(table), get(move(get)) {
+	    : BoundTableRef(TableReferenceType::BASE_TABLE), table(table), get(std::move(get)) {
 	}
 
 	TableCatalogEntry *table;

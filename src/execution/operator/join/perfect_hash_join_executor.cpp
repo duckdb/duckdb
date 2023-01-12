@@ -7,7 +7,7 @@ namespace duckdb {
 
 PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p,
                                                  PerfectHashJoinStats perfect_join_stats)
-    : join(join_p), ht(ht_p), perfect_join_statistics(move(perfect_join_stats)) {
+    : join(join_p), ht(ht_p), perfect_join_statistics(std::move(perfect_join_stats)) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
@@ -148,7 +148,7 @@ public:
 
 unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionContext &context) {
 	auto state = make_unique<PerfectHashJoinState>(context.client, join);
-	return move(state);
+	return std::move(state);
 }
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,

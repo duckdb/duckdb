@@ -16,7 +16,7 @@ EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewrite
 	auto equal_child = make_unique<ComparisonExpressionMatcher>();
 	equal_child->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	equal_child->policy = SetMatcher::Policy::SOME;
-	op->matchers.push_back(move(equal_child));
+	op->matchers.push_back(std::move(equal_child));
 
 	// AND conjuction on the other
 	auto and_child = make_unique<ConjunctionExpressionMatcher>();
@@ -29,11 +29,11 @@ EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewrite
 	// I could try to use std::make_unique for a copy, but it's available from C++14 only
 	auto isnull_child2 = make_unique<ExpressionMatcher>();
 	isnull_child2->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_IS_NULL);
-	and_child->matchers.push_back(move(isnull_child));
-	and_child->matchers.push_back(move(isnull_child2));
+	and_child->matchers.push_back(std::move(isnull_child));
+	and_child->matchers.push_back(std::move(isnull_child2));
 
-	op->matchers.push_back(move(and_child));
-	root = move(op);
+	op->matchers.push_back(std::move(and_child));
+	root = std::move(op);
 }
 
 // a=b OR (a IS NULL AND b IS NULL) to a IS NOT DISTINCT FROM b
@@ -78,8 +78,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(const Expression *equal_ex
 		}
 	}
 	if (valid && a_is_null_found && b_is_null_found) {
-		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(equal_cast->left),
-		                                              move(equal_cast->right));
+		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                              std::move(equal_cast->left), std::move(equal_cast->right));
 	}
 	return nullptr;
 }

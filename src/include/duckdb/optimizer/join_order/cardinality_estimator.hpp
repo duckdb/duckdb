@@ -44,7 +44,7 @@ struct NodeOp {
 	unique_ptr<JoinNode> node;
 	LogicalOperator *op;
 
-	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
+	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(std::move(node)), op(op) {};
 };
 
 struct Subgraph2Denominator {
