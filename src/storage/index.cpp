@@ -10,7 +10,9 @@ namespace duckdb {
 
 Index::Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids_p,
              const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type_p)
+
     : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p) {
+
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
