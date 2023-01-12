@@ -336,6 +336,16 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			                                     move(element_reader));
 		}
 
+		// if this is a hive partition col, we should not read it at all but instead do a constant reader.
+		if (parquet_options.hive_partitioning && hive_map && depth == 1) {
+			auto lookup = hive_map->find(s_ele.name);
+			if (lookup != hive_map->end()) {
+				Value val = Value(lookup->second);
+				return make_unique<GeneratedConstantColumnReader>(
+				    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx++, max_define, max_repeat, val);;
+			}
+		}
+
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
@@ -374,9 +384,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 	}
 
 	if (parquet_options.hive_partitioning) {
-		auto res = HivePartitioning::Parse(file_name);
-
-		for (auto &partition : res) {
+		for (auto &partition : *hive_map) {
 			Value val = Value(partition.second);
 			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
 			    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
@@ -432,10 +440,15 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 
 	// Add generated constant column for filename
 	if (parquet_options.hive_partitioning) {
-		auto partitions = HivePartitioning::Parse(file_name);
-		for (auto &part : partitions) {
-			return_types.emplace_back(LogicalType::VARCHAR);
-			names.emplace_back(part.first);
+		for (auto &part : *hive_map) {
+			// We need to lookup the hive col in the cols of the file to avoid duplicating columns that are both
+			// in the file and the hive path
+			auto lookup = std::find_if(child_types.begin(), child_types.end(),
+			                           [&part](const std::pair<std::string, LogicalType>& x) { return x.first == part.first;});
+			if (lookup == child_types.end()) {
+				return_types.emplace_back(LogicalType::VARCHAR);
+				names.emplace_back(part.first);
+			}
 		}
 	}
 
@@ -534,6 +547,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
+
+	if (parquet_options.hive_partitioning) {
+		hive_map = make_unique<std::map<string, string>>(HivePartitioning::Parse(file_name));
+	}
+
 	InitializeSchema(expected_names, expected_types_p, column_ids, initial_filename_p);
 }
 

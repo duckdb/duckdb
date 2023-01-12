@@ -108,6 +108,8 @@ public:
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
+	//! maps hive partition names to string columns
+	unique_ptr<std::map<string, string>> hive_map;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
