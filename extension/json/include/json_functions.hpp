@@ -20,7 +20,7 @@ class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
-	static void RegisterCastFunctions(CastFunctionSet &casts, GetCastFunctionInput input);
+	static void RegisterCastFunctions(CastFunctionSet &casts);
 
 private:
 	// Scalar functions

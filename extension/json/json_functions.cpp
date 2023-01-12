@@ -2,8 +2,10 @@
 
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "json_common.hpp"
+#include "json_scan.hpp"
 
 namespace duckdb {
 
@@ -46,16 +48,36 @@ vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	return functions;
 }
 
-static void RegisterCastFunction(CastFunctionSet &casts, GetCastFunctionInput input, const LogicalType &source,
-                                 const LogicalType &target) {
-	auto cost = casts.ImplicitCastCost(source.id(), target.id());
-	auto func = casts.GetCastFunction(source.id(), target.id(), input);
-	casts.RegisterCastFunction(source, target, DefaultCasts::ReinterpretCast, cost);
+static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	bool success = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+		    auto data = (char *)(input.GetDataUnsafe());
+		    auto length = input.GetSize();
+		    yyjson_read_err error;
+
+		    // We use YYJSON_INSITU to speed up the cast, then we restore the input string
+		    auto doc = JSONCommon::ReadDocumentFromFileStop(data, length, &error);
+		    JSONScan::RestoreParsedString(data, length);
+
+		    if (doc.IsNull()) {
+			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
+			                                 parameters.error_message);
+			    mask.SetInvalid(idx);
+			    success = false;
+		    }
+
+		    return input;
+	    });
+	return success;
 }
 
-void JSONFunctions::RegisterCastFunctions(CastFunctionSet &casts, GetCastFunctionInput input) {
-	RegisterCastFunction(casts, input, JSONCommon::JSONType(), LogicalType::VARCHAR);
-	RegisterCastFunction(casts, input, LogicalType::VARCHAR, JSONCommon::JSONType());
+void JSONFunctions::RegisterCastFunctions(CastFunctionSet &casts) {
+	// JSON to VARCHAR is free
+	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 0);
+	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than VARCHAR to STRUCT
+	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalTypeId::VARCHAR, LogicalTypeId::STRUCT) + 1;
+	casts.RegisterCastFunction(LogicalType::VARCHAR, JSONCommon::JSONType(), CastVarcharToJSON, varchar_to_json_cost);
 }
 
 } // namespace duckdb

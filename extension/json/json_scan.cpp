@@ -323,11 +323,6 @@ static inline const char *PreviousNewline(const char *ptr) {
 	return ptr;
 }
 
-static inline void RestoreParsedString(const char *line_start, const idx_t remaining) {
-	// YYJSON replaces some double-quotes with '\0' when parsing insitu
-	std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
-}
-
 static inline void TrimWhitespace(JSONLine &line) {
 	while (line.size != 0 && std::isspace(line[0])) {
 		line.pointer++;
@@ -349,12 +344,12 @@ static inline DocPointer<yyjson_doc> ParseLine(char *line_start, idx_t line_size
 	yyjson_read_err error;
 	auto result = JSONCommon::ReadDocumentFromFileNoStop(line_start, line_size, &error);
 	if (error.code != YYJSON_READ_SUCCESS) {
-		RestoreParsedString(line_start, line_size);
+		JSONScan::RestoreParsedString(line_start, line_size);
 		JSONCommon::ThrowParseError(line_start, line_size, error);
 	}
 
 	if (options.return_json_strings) {
-		RestoreParsedString(line_start, line_size);
+		JSONScan::RestoreParsedString(line_start, line_size);
 	}
 
 	return result;
@@ -411,6 +406,17 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	objects.emplace_back(ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0], options));
 }
 
+typedef struct yyjson_alc {
+	/** Same as libc's malloc(), should not be NULL. */
+	void *(*malloc)(void *ctx, size_t size);
+	/** Same as libc's realloc(), should not be NULL. */
+	void *(*realloc)(void *ctx, void *ptr, size_t size);
+	/** Same as libc's free(), should not be NULL. */
+	void (*free)(void *ctx, void *ptr);
+	/** A context for malloc/realloc/free, can be NULL. */
+	void *ctx;
+} yyjson_alc;
+
 void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReaderOptions &options) {
 	yyjson_read_err error;
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
@@ -427,7 +433,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			idx_t line_size = read_doc.ReadSize();
 
 			if (options.return_json_strings) {
-				RestoreParsedString(line_start, line_size);
+				JSONScan::RestoreParsedString(line_start, line_size);
 			}
 
 			lines[count].pointer = line_start;
@@ -438,12 +444,12 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END) {
 			if (remaining > options.maximum_object_size) {
-				RestoreParsedString(line_start, remaining);
+				JSONScan::RestoreParsedString(line_start, remaining);
 				JSONCommon::ThrowParseError(line_start, remaining, error,
 				                            "Have you tried increasing maximum_object_size?");
 			}
 
-			RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
+			JSONScan::RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
 			objects.pop_back();
 
 			if (!is_last) {
@@ -456,7 +462,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			buffer_offset = buffer_size;
 			break;
 		} else {
-			RestoreParsedString(line_start, remaining);
+			JSONScan::RestoreParsedString(line_start, remaining);
 			JSONCommon::ThrowParseError(line_start, remaining, error);
 		}
 	}

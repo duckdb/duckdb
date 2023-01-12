@@ -162,6 +162,11 @@ public:
 		table_function.filter_pushdown = false;
 		table_function.filter_prune = false;
 	}
+
+	static inline void RestoreParsedString(const char *line_start, const idx_t remaining) {
+		// YYJSON replaces some double-quotes with '\0' when parsing insitu
+		std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
+	}
 };
 
 } // namespace duckdb

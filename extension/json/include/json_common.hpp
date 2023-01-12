@@ -193,14 +193,17 @@ public:
 		}
 		return result;
 	}
-	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
+	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
 		D_ASSERT(error.code != YYJSON_READ_SUCCESS);
 		// Truncate, so we don't print megabytes worth of JSON
 		string input = length > 50 ? string(data, 47) + "..." : string(data, length);
 		// Have to replace \r, otherwise output is unreadable
 		input = StringUtil::Replace(input, "\r", "\\r");
-		throw InvalidInputException("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg,
-		                            extra, input);
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. %s Input: %s", error.pos, error.msg, extra,
+		                          input);
+	}
+	static void ThrowParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
+		throw InvalidInputException(FormatParseError(data, length, error, extra));
 	}
 	//! Some wrappers around writes so we don't have to free the malloc'ed char[]
 	static inline unique_ptr<char, void (*)(void *)> WriteVal(yyjson_val *val, idx_t &len) {

@@ -35,8 +35,7 @@ void JSONExtension::Load(DuckDB &db) {
 	catalog.CreateType(*con.context, &type_info);
 
 	// JSON casts
-	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(*con.context).GetCastFunctions(),
-	                                     GetCastFunctionInput(*con.context));
+	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(*con.context).GetCastFunctions());
 
 	// JSON scalar functions
 	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
