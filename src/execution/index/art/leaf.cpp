@@ -155,9 +155,10 @@ void Leaf::Remove(ART &art, row_t row_id) {
 	auto capacity = GetCapacity();
 	if (capacity > 2 && count < capacity / 2) {
 
-		D_ASSERT(art.memory_size >= capacity * sizeof(row_t));
-		art.memory_size -= capacity * sizeof(row_t);
 		auto new_capacity = capacity / 2;
+		D_ASSERT(art.memory_size >= (capacity - new_capacity) * sizeof(row_t));
+		art.memory_size -= (capacity - new_capacity) * sizeof(row_t);
+
 		auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
 		new_allocation[0] = new_capacity;
 
