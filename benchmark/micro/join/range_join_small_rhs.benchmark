@@ -1,0 +1,26 @@
+# name: benchmark/micro/join/range_join_small_rhs.benchmark
+# description: Range Join with a small RHS
+# group: [join]
+
+name Range Join with a small RHS
+group join
+
+load
+CREATE TABLE trip_data(fare_amount DOUBLE, trip_distance DOUBLE);
+INSERT INTO trip_data SELECT ((i * 458736436.734) % 100.0::DOUBLE), ((i * 745986489.963) % 1000.0::DOUBLE) FROM range(100000000) t(i);
+
+run
+SELECT COUNT(*)
+FROM
+    trip_data,
+    (
+        SELECT
+            AVG(fare_amount) + 3 * STDDEV_SAMP(fare_amount) as max_fare,
+            AVG(trip_distance) + 3 * STDDEV_SAMP(trip_distance) as max_distance
+        FROM trip_data
+    ) AS sub
+WHERE
+    fare_amount > 0 AND
+    fare_amount < sub.max_fare AND
+    trip_distance > 0 AND
+    trip_distance < sub.max_distance

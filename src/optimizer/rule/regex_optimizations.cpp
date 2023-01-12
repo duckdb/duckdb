@@ -15,7 +15,7 @@ RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rul
 	func->policy = SetMatcher::Policy::ORDERED;
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
 	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
-	root = move(func);
+	root = std::move(func);
 }
 
 unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -45,10 +45,10 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
 		auto contains = make_unique<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
-		                                                     move(root->children), nullptr);
+		                                                     std::move(root->children), nullptr);
 
 		contains->children[1] = make_unique<BoundConstantExpression>(Value(patt_str));
-		return move(contains);
+		return std::move(contains);
 	}
 	return nullptr;
 }

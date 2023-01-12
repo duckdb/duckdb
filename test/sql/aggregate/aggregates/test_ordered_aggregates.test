@@ -74,6 +74,19 @@ select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from gen
 ----
 [75.0, 50.0, 25.0]
 
+# DESC boundary condition
+query I
+SELECT percentile_disc(.5) WITHIN GROUP (order by col desc) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+2900
+
+query I
+SELECT percentile_disc([.25, .5, .75]) WITHIN GROUP (order by col desc) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+[3100, 2900, 2600]
+
 #
 # Error checking
 #
@@ -126,3 +139,17 @@ SELECT percentile_disc(strftime(DATE '1-11-25',NULL)) WITHIN GROUP (ORDER BY 1 D
 
 statement error
 SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);
+
+# Negative fractions are not allowed
+
+foreach sense ASC DESC
+
+statement error
+SELECT percentile_disc(-.5) WITHIN GROUP (order by col ${sense}) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+
+statement error
+SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ${sense}) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+
+endloop

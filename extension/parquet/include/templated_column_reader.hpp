@@ -33,13 +33,21 @@ class TemplatedColumnReader : public ColumnReader {
 public:
 	TemplatedColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                      idx_t max_define_p, idx_t max_repeat_p)
-	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
+	    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
 
-	shared_ptr<ByteBuffer> dict;
+	shared_ptr<ResizeableBuffer> dict;
 
 public:
-	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
-		dict = move(data);
+	void AllocateDict(idx_t size) {
+		if (!dict) {
+			dict = make_shared<ResizeableBuffer>(GetAllocator(), size);
+		} else {
+			dict->resize(GetAllocator(), size);
+		}
+	}
+
+	void Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) override {
+		dict = std::move(data);
 	}
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
@@ -64,20 +72,8 @@ public:
 
 	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
 	           idx_t result_offset, Vector &result) override {
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
-				continue;
-			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = VALUE_CONVERSION::PlainRead(*plain_data, *this);
-				result_ptr[row_idx + result_offset] = val;
-			} else { // there is still some data there that we have to skip over
-				VALUE_CONVERSION::PlainSkip(*plain_data, *this);
-			}
-		}
+		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(std::move(plain_data), defines, num_values, filter, result_offset,
+		                                             result);
 	}
 };
 

@@ -19,6 +19,18 @@ foreach url_style path vhost
 statement ok
 SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;
 
+statement ok
+SET http_retries=2;
+
+statement ok
+SET http_retry_wait_ms=10;
+
+statement ok
+SET http_retry_backoff=1;
+
+statement ok
+SET http_timeout=50000;
+
 # Test the vhost style urls (this is the default)
 statement ok
 SET s3_url_style='${url_style}';
@@ -75,3 +87,11 @@ SET s3_url_style='handwritten';
 
 statement error
 COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
+
+# 404
+statement error
+SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
+
+# Connection error
+statement error
+SELECT i FROM "http://test-bucket-public.duckdb-minio-non-existent-host.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3

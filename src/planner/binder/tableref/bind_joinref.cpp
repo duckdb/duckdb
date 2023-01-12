@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_unique<BoundExpression>(move(result));
+	return make_unique<BoundExpression>(std::move(result));
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
@@ -26,7 +27,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left), move(right));
+	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left), std::move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -124,7 +125,18 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.Bind(*ref.left);
-	result->right = right_binder.Bind(*ref.right);
+	{
+		LateralBinder binder(left_binder, context);
+		result->right = right_binder.Bind(*ref.right);
+		result->lateral = binder.HasCorrelatedColumns();
+		if (result->lateral) {
+			// lateral join: can only be an INNER or LEFT join
+			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
+			}
+		}
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
+	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<string> extra_using_columns;
@@ -227,20 +239,20 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			                                  using_column);
 			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, set.get(), right_binding,
 			                                  using_column);
-			AddUsingBindingSet(move(set));
+			AddUsingBindingSet(std::move(set));
 		}
 	}
 
-	bind_context.AddContext(move(left_binder.bind_context));
-	bind_context.AddContext(move(right_binder.bind_context));
+	bind_context.AddContext(std::move(left_binder.bind_context));
+	bind_context.AddContext(std::move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition),
-			                                                   move(condition));
+			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+			                                                   std::move(ref.condition), std::move(condition));
 		} else {
-			ref.condition = move(condition);
+			ref.condition = std::move(condition);
 		}
 	}
 	if (ref.condition) {
@@ -248,7 +260,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		result->condition = binder.Bind(ref.condition);
 	}
 	D_ASSERT(result->condition);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -7,7 +7,7 @@ namespace duckdb {
 
 PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
                                              vector<LogicalType> types_p)
-    : type(type_p), context(context_p), types(move(types_p)), allocators(make_shared<PartitionAllocators>()) {
+    : type(type_p), context(context_p), types(std::move(types_p)), allocators(make_shared<PartitionAllocators>()) {
 }
 
 PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
@@ -30,6 +30,12 @@ void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendSta
 	state.partition_sel.Initialize();
 	state.slice_chunk.Initialize(context, types);
 	InitializeAppendStateInternal(state);
+}
+
+unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
+	auto result = make_unique<DataChunk>();
+	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
+	return result;
 }
 
 void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
@@ -137,7 +143,7 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 	lock_guard<mutex> guard(lock);
 	if (partitions.empty()) {
 		// This is the first merge, we just copy them over
-		partitions = move(other.partitions);
+		partitions = std::move(other.partitions);
 	} else {
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {

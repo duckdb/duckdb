@@ -64,12 +64,12 @@ void Event::FinishTask() {
 }
 
 void Event::InsertEvent(shared_ptr<Event> replacement_event) {
-	replacement_event->parents = move(parents);
+	replacement_event->parents = std::move(parents);
 #ifdef DEBUG
-	replacement_event->parents_raw = move(parents_raw);
+	replacement_event->parents_raw = std::move(parents_raw);
 #endif
 	replacement_event->AddDependency(*this);
-	executor.AddEvent(move(replacement_event));
+	executor.AddEvent(std::move(replacement_event));
 }
 
 void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
@@ -78,7 +78,7 @@ void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
 	D_ASSERT(!tasks.empty());
 	this->total_tasks = tasks.size();
 	for (auto &task : tasks) {
-		ts.ScheduleTask(executor.GetToken(), move(task));
+		ts.ScheduleTask(executor.GetToken(), std::move(task));
 	}
 }
 

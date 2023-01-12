@@ -17,28 +17,29 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
-#ifndef NDEBUG
-	bool found_mark_reference = false;
+#ifdef DEBUG
+	bool simplified_mark_join = false;
 #endif
 	// now check the set of filters
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side: push into left
-			left_pushdown.filters.push_back(move(filters[i]));
+			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
 			filters.erase(filters.begin() + i);
 			i--;
 		} else if (side == JoinSide::RIGHT) {
-			// there can only be at most one filter referencing the marker
-#ifndef NDEBUG
-			D_ASSERT(!found_mark_reference);
-			found_mark_reference = true;
+#ifdef DEBUG
+			D_ASSERT(!simplified_mark_join);
 #endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
 				// filter just references the marker: turn into semi join
+#ifdef DEBUG
+				simplified_mark_join = true;
+#endif
 				join.join_type = JoinType::SEMI;
 				filters.erase(filters.begin() + i);
 				i--;
@@ -61,6 +62,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 						}
 					}
 					if (all_null_values_are_equal) {
+#ifdef DEBUG
+						simplified_mark_join = true;
+#endif
 						// all null values are equal, convert to ANTI join
 						join.join_type = JoinType::ANTI;
 						filters.erase(filters.begin() + i);
@@ -71,9 +75,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			}
 		}
 	}
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
-	return FinishPushdown(move(op));
+	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	return FinishPushdown(std::move(op));
 }
 
 } // namespace duckdb

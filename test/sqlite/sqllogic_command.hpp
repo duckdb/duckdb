@@ -14,6 +14,7 @@ namespace duckdb {
 class SQLLogicTestRunner;
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
+enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN };
 
 struct LoopDefinition {
 	string loop_iterator_name;
@@ -28,7 +29,7 @@ struct ExecuteContext {
 	ExecuteContext() : con(nullptr), is_parallel(false) {
 	}
 	ExecuteContext(Connection *con, vector<LoopDefinition> running_loops_p)
-	    : con(con), running_loops(move(running_loops_p)), is_parallel(true) {
+	    : con(con), running_loops(std::move(running_loops_p)), is_parallel(true) {
 	}
 
 	Connection *con;
@@ -67,7 +68,7 @@ class Statement : public Command {
 public:
 	Statement(SQLLogicTestRunner &runner);
 
-	bool expect_ok;
+	ExpectedResult expected_result;
 	string expected_error;
 
 public:

@@ -24,9 +24,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// have unnest live in catalog, too
 		return BindUnnest(function, depth);
 	}
-	auto &catalog = Catalog::GetCatalog(context);
-	auto func = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.schema, function.function_name,
-	                             false, error_context);
+	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+	                              function.function_name, false, error_context);
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
@@ -76,16 +75,16 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
 		D_ASSERT(child.expr);
-		children.push_back(move(child.expr));
+		children.push_back(std::move(child.expr));
 	}
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(*func, move(children), error, function.is_operator, &binder);
+	    function_binder.BindScalarFunction(*func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
-	return BindResult(move(result));
+	return BindResult(std::move(result));
 }
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
@@ -129,7 +128,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	} else {
 		// successfully bound: replace the node with a BoundExpression
 		auto alias = function.children[1]->alias;
-		function.children[1] = make_unique<BoundExpression>(move(bind_lambda_result.expression));
+		function.children[1] = make_unique<BoundExpression>(std::move(bind_lambda_result.expression));
 		auto be = (BoundExpression *)function.children[1].get();
 		D_ASSERT(be);
 		be->alias = alias;
@@ -151,7 +150,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
 		D_ASSERT(child.expr);
-		children.push_back(move(child.expr));
+		children.push_back(std::move(child.expr));
 	}
 
 	// capture the (lambda) columns
@@ -161,24 +160,24 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(*func, move(children), error, function.is_operator, &binder);
+	    function_binder.BindScalarFunction(*func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
 
 	// remove the lambda expression from the children
 	auto &bound_function_expr = (BoundFunctionExpression &)*result;
-	auto lambda = move(bound_function_expr.children.back());
+	auto lambda = std::move(bound_function_expr.children.back());
 	bound_function_expr.children.pop_back();
 	auto &bound_lambda = (BoundLambdaExpression &)*lambda;
 
 	// push back the captures into the children vector and the correct return types into the bound_function arguments
 	for (auto &capture : bound_lambda.captures) {
 		bound_function_expr.function.arguments.push_back(capture->return_type);
-		bound_function_expr.children.push_back(move(capture));
+		bound_function_expr.children.push_back(std::move(capture));
 	}
 
-	return BindResult(move(result));
+	return BindResult(std::move(result));
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,

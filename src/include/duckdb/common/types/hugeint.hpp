@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
 
@@ -25,9 +26,9 @@ public:
 
 	template <class T>
 	static T Cast(hugeint_t input) {
-		T value;
-		TryCast(input, value);
-		return value;
+		T result = 0;
+		TryCast(input, result);
+		return result;
 	}
 
 	template <class T>
@@ -157,5 +158,7 @@ template <>
 bool Hugeint::TryConvert(double value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(long double value, hugeint_t &result);
+template <>
+bool Hugeint::TryConvert(const char *value, hugeint_t &result);
 
 } // namespace duckdb

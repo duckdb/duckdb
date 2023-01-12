@@ -16,7 +16,7 @@ namespace duckdb {
 class LogicalCreateTable : public LogicalOperator {
 public:
 	LogicalCreateTable(SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_TABLE), schema(schema), info(move(info)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_TABLE), schema(schema), info(std::move(info)) {
 	}
 
 	//! Schema to insert to

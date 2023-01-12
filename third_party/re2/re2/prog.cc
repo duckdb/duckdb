@@ -512,6 +512,13 @@ void Prog::ComputeByteMap() {
   builder.Build(bytemap_, &bytemap_range_);
 }
 
+int TotalInstructions(int inst_count_[]) {
+  int total = 0;
+  for (int i = 0; i < kNumInst; i++)
+    total += inst_count_[i];
+  return total;
+}
+
 // Prog::Flatten() implements a graph rewriting algorithm.
 //
 // The overall process is similar to epsilon removal, but retains some epsilon
@@ -604,10 +611,7 @@ void Prog::Flatten() {
     inst_count_[ip->opcode()]++;
   }
 
-  int total = 0;
-  for (int i = 0; i < kNumInst; i++)
-    total += inst_count_[i];
-  DCHECK_EQ(total, static_cast<int>(flat.size()));
+  DCHECK_EQ(TotalInstructions(inst_count_), static_cast<int>(flat.size()));
 
   // Remap start_unanchored and start.
   if (start_unanchored() == 0) {

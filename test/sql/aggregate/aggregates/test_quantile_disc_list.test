@@ -25,6 +25,14 @@ FROM range(0,100) tbl(d)
 
 endloop
 
+# Negative quantiles (use descending intervals)
+query I
+SELECT quantile_disc(col, [-.25, -.5, -.75])
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+----
+[3100, 2900, 2600]
+
+
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
 query I
 SELECT quantile_disc(d::VARCHAR, [0.1, 0.5, 0.9])
@@ -139,6 +147,15 @@ SELECT quantile_disc(r, []) FROM quantiles
 ----
 []
 
+# Oracle boundaries
+query I
+SELECT quantile_disc(col, [0.1, 0.32, 0.33, 0.34, 0.49, .5, .51, 0.75, 0.9, 0.999, 1])
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[0, 1, 1, 1, 1, 1, 2, 2, 10, 10, 10]
+
+
+# Invalid use
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles
 

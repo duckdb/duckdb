@@ -260,7 +260,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 
 	// initialize the result_data object
 	auto result_data = new DuckDBResultData();
-	result_data->result = move(result_p);
+	result_data->result = std::move(result_p);
 	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_NONE;
 	out->internal_data = result_data;
 
@@ -397,7 +397,7 @@ duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col)
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
-	return new duckdb::LogicalType(result_data.result->types[col]);
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(result_data.result->types[col]));
 }
 
 idx_t duckdb_column_count(duckdb_result *result) {
@@ -485,5 +485,5 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	auto chunk = duckdb::make_unique<duckdb::DataChunk>();
 	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
 	collection.FetchChunk(chunk_idx, *chunk);
-	return chunk.release();
+	return reinterpret_cast<duckdb_data_chunk>(chunk.release());
 }

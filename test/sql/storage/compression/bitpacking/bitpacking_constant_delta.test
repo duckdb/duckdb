@@ -1,0 +1,66 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_constant_delta.test
+# description: Test that will use the BitpackingMode::CONSTANT_DELTA compression mode
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE test (c ${type});
+
+statement ok
+INSERT INTO test SELECT 2+i*2::${type} FROM range(0,5) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+----
+
+query I
+SELECT * FROM test;
+----
+2
+4
+6
+8
+10
+
+statement ok
+DROP TABLE test
+
+endloop
+
+statement ok
+CREATE TABLE test (c INT64);
+
+statement ok
+INSERT INTO test SELECT i from range(0,130000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+----
+
+query I
+SELECT avg(c) FROM test;
+----
+64999.5
+
+statement ok
+DROP TABLE test
+
+endloop

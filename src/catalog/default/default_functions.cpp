@@ -55,7 +55,7 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_get_viewdef", {"oid", nullptr}, "(select sql from duckdb_views() v where v.view_oid=oid)"},
 	{"pg_catalog", "pg_get_constraintdef", {"constraint_oid", "pretty_bool", nullptr}, "(select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid/1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
 	{"pg_catalog", "pg_get_expr", {"pg_node_tree", "relation_oid", nullptr}, "pg_node_tree"},
-	{"pg_catalog", "format_pg_type", {"type_name", nullptr}, "case when logical_type='FLOAT' then 'real' when logical_type='DOUBLE' then 'double precision' when logical_type='DECIMAL' then 'numeric' when logical_type='VARCHAR' then 'character varying' when logical_type='BLOB' then 'bytea' when logical_type='TIMESTAMP' then 'timestamp without time zone' when logical_type='TIME' then 'time without time zone' else lower(logical_type) end"},
+	{"pg_catalog", "format_pg_type", {"type_name", nullptr}, "case when logical_type='FLOAT' then 'real' when logical_type='DOUBLE' then 'double precision' when logical_type='DECIMAL' then 'numeric' when logical_type='ENUM' then lower(type_name) when logical_type='VARCHAR' then 'character varying' when logical_type='BLOB' then 'bytea' when logical_type='TIMESTAMP' then 'timestamp without time zone' when logical_type='TIME' then 'time without time zone' else lower(logical_type) end"},
 	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select format_pg_type(type_name) from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod/1000, ',', typemod%1000, ')') else '' end"},
 
 	{"pg_catalog", "pg_has_role", {"user", "role", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for role
@@ -145,7 +145,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
-	bind_info->function = move(function);
+	bind_info->function = std::move(function);
 	return bind_info;
 
 }
@@ -155,8 +155,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto result = make_unique<ScalarMacroFunction>(std::move(expressions[0]));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
@@ -166,8 +166,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
 	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(move(select.node));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto result = make_unique<TableMacroFunction>(std::move(select.node));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {

@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -38,21 +39,20 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-
 	auto state = make_unique<CreateIndexGlobalSinkState>();
 
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, *context.db);
+		                                       info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
 		throw InternalException("Unimplemented index type");
 	}
 
-	return (move(state));
+	return (std::move(state));
 }
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, *context.client.db);
+		                                      info->constraint_type, table.storage->db);
 		break;
 	}
 	default:
@@ -77,7 +77,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	vector<BoundOrderByNode> orders;
 	for (idx_t i = 0; i < state->local_index->logical_types.size(); i++) {
 		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(state->local_index->logical_types[i], i);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, move(col_expr));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(col_expr));
 	}
 
 	// row layout of the global sort state
@@ -90,7 +90,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	state->global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, state->payload_layout);
 	state->local_sort_state.Initialize(*state->global_sort_state, buffer_manager);
 
-	return move(state);
+	return std::move(state);
 }
 
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -174,7 +174,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
-	table.storage->info->indexes.AddIndex(move(state.global_index));
+	table.storage->info->indexes.AddIndex(std::move(state.global_index));
 	return SinkFinalizeType::READY;
 }
 

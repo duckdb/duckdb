@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+from glob import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -160,10 +161,14 @@ class get_numpy_include(object):
 extra_files = []
 header_files = []
 
+def list_source_files(directory):
+    sources = glob('src/**/*.cpp', recursive=True)
+    return sources
+
 script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
-main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
+main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 
 if len(existing_duckdb_dir) == 0:
@@ -239,6 +244,12 @@ else:
         library_dirs=library_dirs,
         language='c++')
 
+# Only include pytest-runner in setup_requires if we're invoking tests
+if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
+    setup_requires = ['pytest-runner']
+else:
+    setup_requires = []
+
 setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
 if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
     setuptools_scm_conf['local_scheme'] = 'no-local-version'
@@ -274,18 +285,16 @@ setup(
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
+    install_requires=[ # these version is still available for Python 2, newer ones aren't
+         'numpy>=1.14'
+    ],
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
         'duckdb-stubs'
     ],
     include_package_data=True,
-    setup_requires=[
-        "setuptools_scm",
-        "oldest-supported-numpy",  # compile against oldest supported numpy version, so we can support any version of numpy (numpy is always backward-compatible)
-        'pybind11>=2.6.0'
-    ],
-    requires=['numpy'],
+    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'numpy>=1.14', 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers = [

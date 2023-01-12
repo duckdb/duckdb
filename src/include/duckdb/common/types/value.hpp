@@ -12,6 +12,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -153,8 +157,8 @@ public:
 	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
-	//! Create a map value from a (key, value) pair
-	DUCKDB_API static Value MAP(Value key, Value value);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(LogicalType child_type, vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 

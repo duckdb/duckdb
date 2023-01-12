@@ -22,10 +22,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	bind_data.is_create_index = true;
 
 	auto table_scan =
-	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, move(op.bind_data), op.info->column_ids,
-	                                   op.info->names, move(table_filters), op.estimated_cardinality);
+	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
+	                                   op.info->names, std::move(table_filters), op.estimated_cardinality);
 
-	dependencies.insert(&op.table);
+	dependencies.AddDependency(&op.table);
 	op.info->column_ids.pop_back();
 
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
@@ -41,20 +41,21 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 		auto bound_ref =
 		    make_unique<BoundReferenceExpression>(op.info->names[op.info->column_ids[i]], op.info->scan_types[i], i);
-		is_not_null_expr->children.push_back(move(bound_ref));
-		filter_select_list.push_back(move(is_not_null_expr));
+		is_not_null_expr->children.push_back(std::move(bound_ref));
+		filter_select_list.push_back(std::move(is_not_null_expr));
 	}
 
-	auto null_filter = make_unique<PhysicalFilter>(move(filter_types), move(filter_select_list), STANDARD_VECTOR_SIZE);
+	auto null_filter =
+	    make_unique<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), STANDARD_VECTOR_SIZE);
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
-	null_filter->children.push_back(move(table_scan));
+	null_filter->children.push_back(std::move(table_scan));
 
 	// actual physical create index operator
-	auto physical_create_index =
-	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, move(op.expressions), move(op.info),
-	                                     move(op.unbound_expressions), op.estimated_cardinality);
-	physical_create_index->children.push_back(move(null_filter));
-	return move(physical_create_index);
+	auto physical_create_index = make_unique<PhysicalCreateIndex>(
+	    op, op.table, op.info->column_ids, std::move(op.expressions), std::move(op.info),
+	    std::move(op.unbound_expressions), op.estimated_cardinality);
+	physical_create_index->children.push_back(std::move(null_filter));
+	return std::move(physical_create_index);
 }
 
 } // namespace duckdb

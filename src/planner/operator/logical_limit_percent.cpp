@@ -1,5 +1,6 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
+#include <cmath>
 
 namespace duckdb {
 
@@ -15,12 +16,12 @@ unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(LogicalDeserializat
 	auto offset_val = reader.ReadRequired<int64_t>();
 	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, move(limit), move(offset));
+	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, std::move(limit), std::move(offset));
 }
 
 idx_t LogicalLimitPercent::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
-	if (limit_percent < 0 || limit_percent > 100) {
+	if ((limit_percent < 0 || limit_percent > 100) || std::isnan(limit_percent)) {
 		return child_cardinality;
 	}
 	return idx_t(child_cardinality * (limit_percent / 100.0));

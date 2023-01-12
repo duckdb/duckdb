@@ -12,7 +12,7 @@
 namespace duckdb {
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
-	query = move(info->query);
+	query = std::move(info->query);
 	this->aliases = info->aliases;
 	this->types = info->types;
 	this->temporary = info->temporary;
@@ -80,7 +80,7 @@ string ViewCatalogEntry::ToSQL() {
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
 	D_ASSERT(!internal);
-	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
+	auto create_info = make_unique<CreateViewInfo>(schema, name);
 	create_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	for (idx_t i = 0; i < aliases.size(); i++) {
 		create_info->aliases.push_back(aliases[i]);

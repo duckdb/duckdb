@@ -64,6 +64,9 @@ public:
 	void Reset();
 	void ResetSink();
 	void ResetSource(bool force);
+	void ClearSource() {
+		source_state.reset();
+	}
 	void Schedule(shared_ptr<Event> &event);
 
 	//! Finalize this pipeline

@@ -8,7 +8,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 
 	column_stats.reserve(data.column_stats.size());
 	for (auto &stats : data.column_stats) {
-		column_stats.push_back(make_shared<ColumnStatistics>(move(stats)));
+		column_stats.push_back(make_shared<ColumnStatistics>(std::move(stats)));
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");

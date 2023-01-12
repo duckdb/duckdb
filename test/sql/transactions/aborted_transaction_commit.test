@@ -1,0 +1,45 @@
+# name: test/sql/transactions/aborted_transaction_commit.test
+# description: Commit aborted transaction becomes a rollback
+# group: [transactions]
+
+statement ok
+CREATE TABLE keys(i INTEGER PRIMARY KEY);
+
+# start transactions
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO keys VALUES (1);
+
+statement error
+INSERT INTO keys VALUES (1);
+----
+constraint violated
+
+# commit becomes a rollback
+statement ok
+COMMIT
+
+query I
+SELECT COUNT(*) FROM keys
+----
+0
+
+# BEGIN TRANSACTION does require a valid transaction
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO keys VALUES (1);
+
+statement error
+INSERT INTO keys VALUES (1);
+----
+constraint violated
+
+# commit becomes a rollback
+statement error
+BEGIN TRANSACTION
+----
+ROLLBACK

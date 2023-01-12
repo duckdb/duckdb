@@ -9,10 +9,10 @@ unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &i
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
-	return make_unique<ListBoundCastData>(move(child_cast));
+	return make_unique<ListBoundCastData>(std::move(child_cast));
 }
 
-static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
 
 	// only handle constant and flat vectors here for now
@@ -53,7 +53,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
-	ListToListCast(source, varchar_list, count, parameters);
+	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -116,7 +116,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::LIST:
-		return BoundCastInfo(ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
+		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::JSON:
 		return BoundCastInfo(ListToVarcharCast, ListBoundCastData::BindListToListCast(
