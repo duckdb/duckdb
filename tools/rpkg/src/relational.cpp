@@ -212,15 +212,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto join_type = JoinType::INNER;
-	if (join == "left") {
-		join_type = JoinType::LEFT;
-	} else if (join == "right") {
-		join_type = JoinType::RIGHT;
-	} else if (join == "outer") {
-		join_type = JoinType::OUTER;
-	}
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), JoinType::INNER);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
