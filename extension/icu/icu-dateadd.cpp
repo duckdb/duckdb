@@ -58,7 +58,20 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	calendar->setTime(udate, status);
 
 	// Add interval fields from lowest to highest
-	calendar->add(UCAL_MILLISECOND, interval.micros / Interval::MICROS_PER_MSEC, status);
+
+	// Break units apart to avoid overflow
+	auto remaining = interval.micros / Interval::MICROS_PER_MSEC;
+	calendar->add(UCAL_MILLISECOND, remaining % Interval::MSECS_PER_SEC, status);
+
+	remaining /= Interval::MSECS_PER_SEC;
+	calendar->add(UCAL_SECOND, remaining % Interval::SECS_PER_MINUTE, status);
+
+	remaining /= Interval::SECS_PER_MINUTE;
+	calendar->add(UCAL_MINUTE, remaining % Interval::MINS_PER_HOUR, status);
+
+	remaining /= Interval::MINS_PER_HOUR;
+	calendar->add(UCAL_HOUR, remaining, status);
+
 	calendar->add(UCAL_DATE, interval.days, status);
 	calendar->add(UCAL_MONTH, interval.months, status);
 
