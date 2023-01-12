@@ -1,0 +1,45 @@
+# name: test/sql/types/bit/test_bit_bitwise_operations.test
+# description: Test bitwise operations of bit string type
+# group: [bit]
+
+statement ok
+PRAGMA enable_verification
+
+# bitwise &
+query I
+SELECT '10101'::BIT & '10001'::BIT
+----
+00010001
+
+query I
+SELECT '1000001101011111'::BIT & '1100101101000011'::BIT
+----
+1000001101000011
+
+# bitwise |
+query I
+SELECT '10001111'::BIT | '00011011'::BIT
+----
+10011111
+
+query I
+SELECT '10000010011101011111'::BIT | '110010110100111000011'::BIT
+----
+000110010110111111011111
+
+# bitwise xor
+query I
+SELECT xor('101'::BIT, '001'::BIT)
+----
+00000100
+
+query I
+SELECT xor('10000010011101011111'::BIT, '110010110100111000011'::BIT)
+----
+000100010100111010011100
+
+# bitwise not
+query I
+SELECT ~('101'::BIT)
+----
+11111010

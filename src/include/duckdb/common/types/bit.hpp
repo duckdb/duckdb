@@ -32,6 +32,8 @@ public:
 //	//! Convert a string object to a blob
 //	DUCKDB_API static string ToBlob(string_t str);
 //
+    DUCKDB_API static idx_t GetBit(string_t bit_string, idx_t n);
+    DUCKDB_API static void SetBit(string_t &bit_string, idx_t n, idx_t new_value);
 
 };
 } // namespace duckdb

@@ -15,11 +15,10 @@ namespace duckdb {
             for (idx_t j = 0; j < 8; j++) {
                 char c = 1;
                 c = c << (7 - j);
-                (data[i] & c) ? output[(i * 8) + j] = '1' : output[(i * 8) + j] = '0';
+                output[(i * 8) + j] = data[i] & c ? '1' : '0';
             }
         }
     }
-
 
     bool Bit::TryGetBitSize(string_t str, idx_t &str_len, string *error_message) {
         auto data = (const_data_ptr_t)str.GetDataUnsafe();
@@ -65,6 +64,27 @@ namespace duckdb {
                 }
             }
             *(output++) = c;
+        }
+    }
+
+    idx_t Bit::GetBit(string_t bit_string, idx_t n) {
+        const char *buf = bit_string.GetDataUnsafe();
+        char byte = buf[n / 8] >> (7 - (n % 8));
+
+        idx_t ret = byte & 1 ? 1 : 0;
+        return ret;
+    }
+
+    void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
+        char *buf = bit_string.GetDataWriteable();
+
+        char shift_byte = 1 << (7 - (n % 8));
+
+        if(new_value == 0){
+            shift_byte = ~shift_byte;
+            buf[n / 8] = buf[n / 8] & shift_byte;
+        } else {
+            buf[n / 8] = buf[n / 8] | shift_byte;
         }
     }
 

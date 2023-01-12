@@ -42,6 +42,15 @@ static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) 
 }
 
 template <class OP>
+static scalar_function_t GetScalarBitstringUnaryFunction(const LogicalType &type) {
+
+    if (type != LogicalTypeId::BIT){
+        throw NotImplementedException("Unimplemented type for GetScalarBitstringUnaryFunction");
+    }
+    return &ScalarFunction::UnaryFunction<string_t, string_t, OP>;
+}
+
+template <class OP>
 static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type) {
 	scalar_function_t function;
 	switch (type.id()) {
@@ -72,10 +81,22 @@ static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type)
 	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 		break;
+//    case LogicalTypeId::BIT:
+//        function = &ScalarFunction::BinaryFunction<string_t, string_t, string_t, OP>;
+//        break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
 	}
 	return function;
+}
+
+template <class OP>
+static scalar_function_t GetScalarBitstringBinaryFunction(const LogicalType &type) {
+
+    if (type != LogicalTypeId::BIT){
+        throw NotImplementedException("Unimplemented type for GetScalarBitstringBinaryFunction");
+    }
+    return &ScalarFunction::BinaryFunction<string_t, string_t, string_t, OP>;
 }
 
 //===--------------------------------------------------------------------===//
@@ -94,6 +115,8 @@ void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
+    functions.AddFunction(
+            ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, GetScalarBitstringBinaryFunction<BitwiseANDOperator>(LogicalType::BIT)));
 	set.AddFunction(functions);
 }
 
@@ -113,6 +136,8 @@ void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
+	functions.AddFunction(
+		ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, GetScalarBitstringBinaryFunction<BitwiseOROperator>(LogicalType::BIT)));
 	set.AddFunction(functions);
 }
 
@@ -132,6 +157,8 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
+    functions.AddFunction(
+        ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, GetScalarBitstringBinaryFunction<BitwiseXOROperator>(LogicalType::BIT)));
 	set.AddFunction(functions);
 }
 
@@ -165,6 +192,22 @@ struct BitwiseShiftLeftOperator {
 		}
 		return input << shift;
 	}
+
+    template<>
+    inline string_t Operation<string_t, int32_t, string_t>(string_t input, int32_t shift) {
+
+        idx_t max_shift = input.GetSize() * 8;
+        if (shift < 0) {
+            throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
+        }
+        if (shift >= max_shift) {
+            return (string_t (input.GetSize())); // all zero bit string
+        }
+        if (shift == 0) {
+            return input;
+        }
+        return input << shift;
+    }
 };
 
 void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
@@ -173,6 +216,8 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
 	}
+    functions.AddFunction(
+            ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, &ScalarFunction::BinaryFunction<string_t, int32_t, string_t, BitwiseShiftLeftOperator>));
 	set.AddFunction(functions);
 }
 
@@ -215,6 +260,8 @@ void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
+	functions.AddFunction(
+		ScalarFunction({LogicalType::BIT}, LogicalType::BIT, GetScalarBitstringUnaryFunction<BitwiseNotOperator>(LogicalType::BIT)));
 	set.AddFunction(functions);
 }
 
