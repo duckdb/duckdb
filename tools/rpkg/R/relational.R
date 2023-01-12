@@ -168,18 +168,10 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_join(left, right, cond, "right")
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
-# rel_cross_join <- function(left, right) {
-#     rapi_rel_join(left, right, list(), "cross")
-# }
-
-# rel_anti_join <- function(left, left_proj, right_proj) {
-#     rapi_rel_anti_semi_join(left, left_proj, right_proj, "anti")
-# }
-#
-# rel_semi_join <- function(left, left_proj, right_proj) {
-#     rapi_rel_anti_semi_join(left, left_proj, right_proj, "semi")
-# }
-
+#' rel2 <- rel_join(left, right, cond, "cross")
+#' anti_expr <- list(expr_reference("cyl", left))
+#' rel2 <- rel_join(left, right, anti_expr, "anti")
+#' rel2 <- rel_join(left, right, semi_expr, "semi")
 rel_inner_join <- function(left, right, conds) {
   rel_join(left, right, conds, "inner")
 }
