@@ -6,8 +6,8 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 
-#include <duckdb/parser/expression/subquery_expression.hpp>
 
 namespace duckdb {
 

@@ -173,18 +173,6 @@ test_that("Right join returns all right relations", {
     expect_equal(rel_df, expected_result)
 })
 
-
-# whatI need to figure out how to represent the condition for the anti and semi joins
-# the issue is that it is not just a normal expression function.
-# Function expressions need a name and children and they need to be in the catalog.
-# For anti and semi joins, the functions (either Exists or Not Exists) are in the catalog and the children are just projections or expression
-# references of the tables.
-# option 1 - pass the expressions in a list
-#          - Allows us to clean up the join code and we don't need 2 separate function signatures for joins vs. anti + semi joins
-#          - Documentation might be a little bit different and harder to understand.
-# option 2 - pass the expressions as arguments
-#          - Probably going to make error handling a little bit easier
-
 test_that("anti join works", {
     left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
@@ -208,19 +196,6 @@ test_that("semi join works", {
     expected_result <- data.frame(left_a=c(4), left_b=c(1))
     expect_equal(rel_df, expected_result)
 })
-
-# check * expressions as well for anti and semi joins
-# test_that("semi join works with * expressions", {
-#     left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 6)))
-#     right <- rel_from_df(con, data.frame(right_a=c(4, 2, 3), right_b=c(1, 1, 2)))
-#     right_projection <- rel_project(right, list(expr_reference("right_a", right)))
-#     left_projection <- rel_project(left, list(expr_reference("*", left)))
-#     rel2 <- rel_join(left, right_projection, list(left_projection), "semi")
-#     rel_df <- rel_to_altrep(rel2)
-#     dim(rel_df)
-#     expected_result <- data.frame(left_a=c(4), left_b=c(1))
-#     expect_equal(rel_df, expected_result)
-# })
 
 test_that("Full join returns all outer relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
