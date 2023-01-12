@@ -37,10 +37,12 @@ struct InternalType {
 };
 
 struct MergeInfo {
-	MergeInfo(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node)
-	    : l_art(l_art), r_art(r_art), l_node(l_node), r_node(r_node) {};
+	MergeInfo(ART *l_art, ART *r_art, ART *root_l_art, ART *root_r_art, Node *&l_node, Node *&r_node)
+	    : l_art(l_art), r_art(r_art), root_l_art(root_l_art), root_r_art(root_r_art), l_node(l_node), r_node(r_node) {};
 	ART *l_art;
 	ART *r_art;
+	ART *root_l_art;
+	ART *root_r_art;
 	Node *&l_node;
 	Node *&r_node;
 };

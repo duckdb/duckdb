@@ -349,36 +349,45 @@ void UpdateParentsOfNodes(Node *&l_node, Node *&r_node, ParentsOfNodes &parents)
 // forward declaration
 bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents);
 
+void SwapNodes(MergeInfo &info, ParentsOfNodes &parents) {
+	// adjust the memory sizes
+	auto l_node_memory_size = info.l_node->MemorySize(*info.l_art, true);
+	auto r_node_memory_size = info.r_node->MemorySize(*info.r_art, true);
+
+	D_ASSERT(info.root_l_art->memory_size >= l_node_memory_size);
+	D_ASSERT(info.root_r_art->memory_size >= r_node_memory_size);
+	info.root_l_art->memory_size -= l_node_memory_size;
+	info.root_r_art->memory_size -= r_node_memory_size;
+	info.root_l_art->memory_size += r_node_memory_size;
+	info.root_r_art->memory_size += l_node_memory_size;
+
+	// actual swap
+	swap(info.l_art, info.r_art);
+	swap(info.l_node, info.r_node);
+	UpdateParentsOfNodes(info.l_node, info.r_node, parents);
+}
+
 bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
+
+	D_ASSERT(info.l_node);
+	D_ASSERT(info.r_node);
 
 	// always try to merge the smaller node into the bigger node
 	// because maybe there is enough free space in the bigger node to fit the smaller one
 	// without too much recursion
 
-	// need to swap back ARTs for properly tracking ART size
-	auto swapped = false;
-
 	if (info.l_node->type < info.r_node->type) {
 		// swap subtrees to ensure that l_node has the bigger node type
-		swap(info.l_art, info.r_art);
-		swap(info.l_node, info.r_node);
-		UpdateParentsOfNodes(info.l_node, info.r_node, parents);
-		swapped = true;
+		SwapNodes(info, parents);
 	}
 
 	if (info.r_node->type == NodeType::NLeaf) {
 		D_ASSERT(info.l_node->type == NodeType::NLeaf);
 		D_ASSERT(info.r_node->type == NodeType::NLeaf);
 		if (info.l_art->IsUnique()) {
-			if (swapped) {
-				swap(info.l_art, info.r_art);
-			}
 			return false;
 		}
-		Leaf::Merge(*info.l_art, info.l_node, info.r_node);
-		if (swapped) {
-			swap(info.l_art, info.r_art);
-		}
+		Leaf::Merge(*info.root_l_art, info.l_node, info.r_node);
 		return true;
 	}
 
@@ -396,11 +405,11 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 		if (l_child_pos == DConstants::INVALID_INDEX) {
 			// insert child at empty position
 			auto r_memory_size = r_child->MemorySize(*info.r_art, true);
-			Node::InsertChild(*info.l_art, info.l_node, key_byte, r_child);
+			Node::InsertChild(*info.root_l_art, info.l_node, key_byte, r_child);
 
-			info.l_art->memory_size += r_memory_size;
-			D_ASSERT(info.r_art->memory_size >= r_memory_size);
-			info.r_art->memory_size -= r_memory_size;
+			info.root_l_art->memory_size += r_memory_size;
+			D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
+			info.root_r_art->memory_size -= r_memory_size;
 			if (parents.l_parent) {
 				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
 			}
@@ -409,53 +418,38 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 		} else {
 			// recurse
 			auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
-			MergeInfo child_info(info.l_art, info.r_art, l_child, r_child);
+			MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, l_child, r_child);
 			ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_child_pos);
 			if (!ResolvePrefixesAndMerge(child_info, depth + 1, child_parents)) {
-				if (swapped) {
-					swap(info.l_art, info.r_art);
-				}
 				return false;
 			}
 		}
-	}
-	if (swapped) {
-		swap(info.l_art, info.r_art);
 	}
 	return true;
 }
 
 bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
-	auto &l_node = info.l_node;
-	auto &r_node = info.r_node;
-	Node *null_parent = nullptr;
-
 	// NOTE: we always merge into the left ART
-	D_ASSERT(l_node);
-	auto l_prefix_size = l_node->prefix.Size();
-	auto r_prefix_size = r_node->prefix.Size();
 
-	// need to swap back ARTs for properly tracking ART size
-	auto swapped = false;
+	D_ASSERT(info.l_node);
+	D_ASSERT(info.r_node);
 
 	// make sure that r_node has the longer (or equally long) prefix
-	if (l_prefix_size > r_prefix_size) {
-		swap(info.l_art, info.r_art);
-		swap(l_node, r_node);
-		swap(l_prefix_size, r_prefix_size);
-		UpdateParentsOfNodes(l_node, r_node, parents);
-		swapped = true;
+	if (info.l_node->prefix.Size() > info.r_node->prefix.Size()) {
+		SwapNodes(info, parents);
 	}
+
+	Node *null_parent = nullptr;
+	auto &l_node = info.l_node;
+	auto &r_node = info.r_node;
+	auto l_prefix_size = l_node->prefix.Size();
+	auto r_prefix_size = r_node->prefix.Size();
 
 	auto mismatch_pos = l_node->prefix.MismatchPosition(r_node->prefix);
 
 	// both nodes have no prefix or the same prefix
 	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
-		auto success = Merge(info, depth + mismatch_pos, parents);
-		if (swapped) {
-			swap(info.l_art, info.r_art);
-		}
-		return success;
+		return Merge(info, depth + mismatch_pos, parents);
 	}
 
 	if (mismatch_pos == l_prefix_size) {
@@ -469,36 +463,27 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 		auto child_pos = l_node->GetChildPos(mismatch_byte);
 
 		// update the prefix of r_node to only consist of the bytes after mismatch_pos
-		r_node->prefix.Reduce(*info.r_art, mismatch_pos);
+		r_node->prefix.Reduce(*info.root_r_art, mismatch_pos);
 
 		// insert r_node as a child of l_node at empty position
 		if (child_pos == DConstants::INVALID_INDEX) {
 
 			auto r_memory_size = r_node->MemorySize(*info.r_art, true);
-			Node::InsertChild(*info.l_art, l_node, mismatch_byte, r_node);
+			Node::InsertChild(*info.root_l_art, l_node, mismatch_byte, r_node);
 
-			info.l_art->memory_size += r_memory_size;
-			D_ASSERT(info.r_art->memory_size >= r_memory_size);
-			info.r_art->memory_size -= r_memory_size;
+			info.root_l_art->memory_size += r_memory_size;
+			D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
+			info.root_r_art->memory_size -= r_memory_size;
 			UpdateParentsOfNodes(l_node, null_parent, parents);
 			r_node = nullptr;
-
-			if (swapped) {
-				swap(info.l_art, info.r_art);
-			}
 			return true;
 		}
 
 		// recurse
 		auto child_node = l_node->GetChild(*info.l_art, child_pos);
-		MergeInfo child_info(info.l_art, info.r_art, child_node, r_node);
+		MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, child_node, r_node);
 		ParentsOfNodes child_parents(l_node, child_pos, parents.r_parent, parents.r_pos);
-		auto success = ResolvePrefixesAndMerge(child_info, depth + mismatch_pos, child_parents);
-
-		if (swapped) {
-			swap(info.l_art, info.r_art);
-		}
-		return success;
+		return ResolvePrefixesAndMerge(child_info, depth + mismatch_pos, child_parents);
 	}
 
 	// prefixes differ, create new node and insert both nodes as children
@@ -506,35 +491,31 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	// create new node
 	Node *new_node = Node4::New();
 	new_node->prefix = Prefix(l_node->prefix, mismatch_pos);
-	info.l_art->memory_size += new_node->MemorySize(*info.l_art, false);
+	info.root_l_art->memory_size += new_node->MemorySize(*info.l_art, false);
 
 	// insert l_node, break up prefix of l_node
-	auto key_byte = l_node->prefix.Reduce(*info.l_art, mismatch_pos);
-	Node4::InsertChild(*info.l_art, new_node, key_byte, l_node);
+	auto key_byte = l_node->prefix.Reduce(*info.root_l_art, mismatch_pos);
+	Node4::InsertChild(*info.root_l_art, new_node, key_byte, l_node);
 
 	// insert r_node, break up prefix of r_node
-	key_byte = r_node->prefix.Reduce(*info.r_art, mismatch_pos);
+	key_byte = r_node->prefix.Reduce(*info.root_r_art, mismatch_pos);
 	auto r_memory_size = r_node->MemorySize(*info.r_art, true);
-	Node4::InsertChild(*info.l_art, new_node, key_byte, r_node);
+	Node4::InsertChild(*info.root_l_art, new_node, key_byte, r_node);
 
-	info.l_art->memory_size += r_memory_size;
-	D_ASSERT(info.r_art->memory_size >= r_memory_size);
-	info.r_art->memory_size -= r_memory_size;
+	info.root_l_art->memory_size += r_memory_size;
+	D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
+	info.root_r_art->memory_size -= r_memory_size;
 
 	l_node = new_node;
 	UpdateParentsOfNodes(l_node, null_parent, parents);
 	r_node = nullptr;
-
-	if (swapped) {
-		swap(info.l_art, info.r_art);
-	}
 	return true;
 }
 
 bool Node::MergeARTs(ART *l_art, ART *r_art) {
 
 	Node *null_parent = nullptr;
-	MergeInfo info(l_art, r_art, l_art->tree, r_art->tree);
+	MergeInfo info(l_art, r_art, l_art, r_art, l_art->tree, r_art->tree);
 	ParentsOfNodes parents(null_parent, 0, null_parent, 0);
 	return ResolvePrefixesAndMerge(info, 0, parents);
 }
