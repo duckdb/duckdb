@@ -406,17 +406,6 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	objects.emplace_back(ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0], options));
 }
 
-typedef struct yyjson_alc {
-	/** Same as libc's malloc(), should not be NULL. */
-	void *(*malloc)(void *ctx, size_t size);
-	/** Same as libc's realloc(), should not be NULL. */
-	void *(*realloc)(void *ctx, void *ptr, size_t size);
-	/** Same as libc's free(), should not be NULL. */
-	void (*free)(void *ctx, void *ptr);
-	/** A context for malloc/realloc/free, can be NULL. */
-	void *ctx;
-} yyjson_alc;
-
 void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReaderOptions &options) {
 	yyjson_read_err error;
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
