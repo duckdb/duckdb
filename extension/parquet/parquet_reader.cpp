@@ -341,8 +341,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			auto lookup = hive_map->find(s_ele.name);
 			if (lookup != hive_map->end()) {
 				Value val = Value(lookup->second);
-				return make_unique<GeneratedConstantColumnReader>(
-				    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx++, max_define, max_repeat, val);;
+				return make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(),
+				                                                  next_file_idx++, max_define, max_repeat, val);
+				;
 			}
 		}
 
@@ -443,8 +444,9 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		for (auto &part : *hive_map) {
 			// We need to lookup the hive col in the cols of the file to avoid duplicating columns that are both
 			// in the file and the hive path
-			auto lookup = std::find_if(child_types.begin(), child_types.end(),
-			                           [&part](const std::pair<std::string, LogicalType>& x) { return x.first == part.first;});
+			auto lookup =
+			    std::find_if(child_types.begin(), child_types.end(),
+			                 [&part](const std::pair<std::string, LogicalType> &x) { return x.first == part.first; });
 			if (lookup == child_types.end()) {
 				return_types.emplace_back(LogicalType::VARCHAR);
 				names.emplace_back(part.first);
