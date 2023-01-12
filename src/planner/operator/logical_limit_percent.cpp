@@ -16,7 +16,7 @@ unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(LogicalDeserializat
 	auto offset_val = reader.ReadRequired<int64_t>();
 	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, move(limit), move(offset));
+	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, std::move(limit), std::move(offset));
 }
 
 idx_t LogicalLimitPercent::EstimateCardinality(ClientContext &context) {

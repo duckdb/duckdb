@@ -64,16 +64,16 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
-		                       storage->db, index_block->block_id, index_block->offset);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions),
+		                       constraint_type, storage->db, index_block->block_id, index_block->offset);
 	} else {
-		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), move(unbound_expressions), constraint_type,
-		                       storage->db);
+		art = make_unique<ART>(column_ids, TableIOManager::Get(*storage), std::move(unbound_expressions),
+		                       constraint_type, storage->db);
 		if (!storage->IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
 	}
-	storage->info->indexes.AddIndex(move(art));
+	storage->info->indexes.AddIndex(std::move(art));
 }
 
 void AddDataTableIndex(DataTable *storage, const ColumnList &columns, vector<LogicalIndex> &keys,
@@ -88,10 +88,10 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, vector<Log
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
-      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
-      bound_constraints(move(info->bound_constraints)),
-      column_dependency_manager(move(info->column_dependency_manager)) {
+    : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table),
+      storage(std::move(inherited_storage)), columns(std::move(info->Base().columns)),
+      constraints(std::move(info->Base().constraints)), bound_constraints(std::move(info->bound_constraints)),
+      column_dependency_manager(std::move(info->column_dependency_manager)) {
 	this->temporary = info->Base().temporary;
 	if (!storage) {
 		// create the physical storage
@@ -99,9 +99,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		for (auto &col_def : columns.Physical()) {
 			storage_columns.push_back(col_def.Copy());
 		}
-		storage =
-		    make_shared<DataTable>(catalog->db, StorageManager::GetStorageManager(catalog->db).GetTableIOManager(info),
-		                           schema->name, name, move(storage_columns), move(info->data));
+		storage = make_shared<DataTable>(catalog->GetAttached(), StorageManager::Get(*catalog).GetTableIOManager(info),
+		                                 schema->name, name, std::move(storage_columns), std::move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;
@@ -237,7 +236,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot rename rowid column");
 	}
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
@@ -247,7 +246,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), rename_idx)) {
 			RenameExpression(copy.GeneratedExpressionMutable(), info);
 		}
-		create_info->columns.AddColumn(move(copy));
+		create_info->columns.AddColumn(std::move(copy));
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -294,10 +293,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
-		create_info->constraints.push_back(move(copy));
+		create_info->constraints.push_back(std::move(copy));
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
@@ -309,7 +308,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		return nullptr;
 	}
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	for (auto &col : columns.Logical()) {
@@ -318,15 +317,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.TypeMutable(), schema->name);
+	Binder::BindLogicalType(context, info.new_column.TypeMutable(), catalog->GetName(), schema->name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
 
-	create_info->columns.AddColumn(move(col));
+	create_info->columns.AddColumn(std::move(col));
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
@@ -342,7 +341,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		return nullptr;
 	}
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	logical_index_set_t removed_columns;
@@ -410,7 +409,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 				}
 				unique.index = adjusted_indices[unique.index.index];
 			}
-			create_info->constraints.push_back(move(copy));
+			create_info->constraints.push_back(std::move(copy));
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
@@ -431,7 +430,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 					    info.removed_column);
 				}
 			}
-			create_info->constraints.push_back(move(copy));
+			create_info->constraints.push_back(std::move(copy));
 			break;
 		}
 		default:
@@ -440,7 +439,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
@@ -452,7 +451,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	auto default_idx = GetColumnIndex(info.column_name);
 	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET DEFAULT for rowid column");
@@ -468,22 +467,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 			}
 			copy.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 		}
-		create_info->columns.AddColumn(move(copy));
+		create_info->columns.AddColumn(std::move(copy));
 	}
 	// Copy all the constraints
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
 
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	auto not_null_idx = GetColumnIndex(info.column_name);
@@ -499,13 +498,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 				has_not_null = true;
 			}
 		}
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 	if (!has_not_null) {
 		create_info->constraints.push_back(make_unique<NotNullConstraint>(not_null_idx));
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 
 	// Early return
 	if (has_not_null) {
@@ -521,7 +520,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	auto not_null_idx = GetColumnIndex(info.column_name);
@@ -534,21 +533,21 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 				continue;
 			}
 		}
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
-		auto &catalog = Catalog::GetCatalog(context);
-		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
+		info.target_type =
+		    Catalog::GetType(context, catalog->GetName(), schema->name, UserType::GetTypeName(info.target_type));
 	}
 	auto change_idx = GetColumnIndex(info.column_name);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	for (auto &col : columns.Logical()) {
@@ -566,7 +565,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
 			    copy.Name());
 		}
-		create_info->columns.AddColumn(move(copy));
+		create_info->columns.AddColumn(std::move(copy));
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -608,7 +607,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -617,7 +616,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	vector<column_t> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		storage_oids.push_back(columns.LogicalToPhysical(bound_columns[i]).index);
@@ -628,15 +627,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
-	                           info.target_type, move(storage_oids), *bound_expression);
+	                           info.target_type, std::move(storage_oids), *bound_expression);
 	auto result =
 	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	create_info->columns = columns.Copy();
@@ -650,10 +649,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContex
 	fk_info.pk_keys = info.pk_keys;
 	fk_info.fk_keys = info.fk_keys;
 	create_info->constraints.push_back(
-	    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
+	    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, std::move(fk_info)));
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
@@ -661,7 +660,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContex
 unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientContext &context,
                                                                      AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_DELETE);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 
 	create_info->columns = columns.Copy();
@@ -673,11 +672,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientConte
 				continue;
 			}
 		}
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
@@ -810,16 +809,16 @@ string TableCatalogEntry::ToSQL() {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
+		create_info->constraints.push_back(std::move(constraint));
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 

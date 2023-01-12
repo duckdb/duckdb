@@ -62,3 +62,21 @@ WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)
 statement error
 select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);
 
+# window specs are locally scoped.
+statement ok
+CREATE TABLE a (id INT);
+
+statement ok
+WITH
+  cte_a AS (
+    SELECT *
+    FROM a
+    WINDOW my_window AS ()
+  ),
+  cte_b AS (
+    SELECT *
+    FROM a
+    WINDOW my_window AS ()
+  )
+SELECT *
+FROM cte_a CROSS JOIN cte_b;

@@ -11,13 +11,14 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "arrow_array_stream.hpp"
-#include "duckdb_python/pyconnection.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/registered_py_object.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 namespace duckdb {
 
-struct DuckDBPyResult;
+struct DuckDBPyConnection;
 
 class PythonDependencies : public ExternalDependency {
 public:
@@ -25,13 +26,13 @@ public:
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(move(py_object));
+		py_object_list.push_back(std::move(py_object));
 	};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
 	                            unique_ptr<RegisteredObject> py_object_copy)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(move(py_object_original));
-		py_object_list.push_back(move(py_object_copy));
+		py_object_list.push_back(std::move(py_object_original));
+		py_object_list.push_back(std::move(py_object_copy));
 	};
 	py::function map_function;
 	vector<unique_ptr<RegisteredObject>> py_object_list;
@@ -40,11 +41,16 @@ public:
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
+	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
 	shared_ptr<Relation> rel;
 
 public:
 	static void Initialize(py::handle &m);
+
+	py::list Description();
+
+	void Close();
 
 	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -152,6 +158,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
+
 	idx_t Length();
 
 	py::tuple Shape();
@@ -171,15 +179,19 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	DataFrame ToDF(bool date_as_object);
+	DataFrame FetchDF(bool date_as_object);
 
-	py::object Fetchone();
+	py::object FetchOne();
 
-	py::object Fetchmany(idx_t size);
+	py::object FetchAll();
 
-	py::object Fetchall();
+	py::object FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
+
+	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
+
+	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
@@ -204,10 +216,11 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
 
-	unique_ptr<DuckDBPyResult> Execute();
+	// Update the internal result of the relation
+	DuckDBPyRelation &Execute();
 
-	static unique_ptr<DuckDBPyResult> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
-	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	void InsertInto(const string &table);
 
@@ -230,6 +243,12 @@ private:
 	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
+	void AssertResult() const;
+	void AssertResultOpen() const;
+	void ExecuteOrThrow();
+
+private:
+	unique_ptr<DuckDBPyResult> result;
 };
 
 } // namespace duckdb

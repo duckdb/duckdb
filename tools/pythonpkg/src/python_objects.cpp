@@ -15,7 +15,7 @@ PyDictionary::PyDictionary(py::object dict) {
 	keys = py::list(dict.attr("keys")());
 	values = py::list(dict.attr("values")());
 	len = py::len(keys);
-	this->dict = move(dict);
+	this->dict = std::move(dict);
 }
 
 PyTimeDelta::PyTimeDelta(py::handle &obj) {
@@ -363,7 +363,24 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		}
 		return std::move(list);
 	}
-	case LogicalTypeId::MAP:
+	case LogicalTypeId::MAP: {
+		auto &list_values = ListValue::GetChildren(val);
+
+		auto &key_type = MapType::KeyType(type);
+		auto &val_type = MapType::ValueType(type);
+
+		py::list keys;
+		py::list values;
+		for (auto &list_elem : list_values) {
+			auto &struct_children = StructValue::GetChildren(list_elem);
+			keys.append(PythonObject::FromValue(struct_children[0], key_type));
+			values.append(PythonObject::FromValue(struct_children[1], val_type));
+		}
+		py::dict py_struct;
+		py_struct["key"] = std::move(keys);
+		py_struct["value"] = std::move(values);
+		return std::move(py_struct);
+	}
 	case LogicalTypeId::STRUCT: {
 		auto &struct_values = StructValue::GetChildren(val);
 

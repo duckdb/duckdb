@@ -10,7 +10,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCrossProductRef &expr) {
 	auto right = CreatePlan(*expr.right);
 	if (expr.lateral) {
 		// lateral cross product
-		return PlanLateralJoin(move(left), move(right), expr.correlated_columns);
+		return PlanLateralJoin(std::move(left), std::move(right), expr.correlated_columns);
 	}
 	if (!expr.correlated_columns.empty()) {
 		// non-lateral join with correlated columns
@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCrossProductRef &expr) {
 		// we reduce expression depth of all columns in the "ref.correlated_columns" set by 1
 		LateralBinder::ReduceExpressionDepth(*right, expr.correlated_columns);
 	}
-	return LogicalCrossProduct::Create(move(left), move(right));
+	return LogicalCrossProduct::Create(std::move(left), std::move(right));
 }
 
 } // namespace duckdb

@@ -48,7 +48,7 @@ main
 query I
 SELECT current_schemas(true);
 ----
-[temp, main, pg_catalog]
+[main, main, main, pg_catalog]
 
 query I
 SELECT current_schemas(false);

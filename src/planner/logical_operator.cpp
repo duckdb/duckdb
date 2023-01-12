@@ -18,7 +18,7 @@ LogicalOperator::LogicalOperator(LogicalOperatorType type)
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : type(type), expressions(std::move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
 }
 
 LogicalOperator::~LogicalOperator() {
@@ -152,7 +152,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
 	D_ASSERT(child);
-	children.push_back(move(child));
+	children.push_back(std::move(child));
 }
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
@@ -282,9 +282,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_ALTER:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::Deserialize(state, reader);
 		break;
@@ -303,14 +300,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_DROP:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		result = LogicalPragma::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		result = LogicalCreate::Deserialize(state, reader);
@@ -330,13 +321,18 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		result = LogicalExport::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_VACUUM:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		result = LogicalReset::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
@@ -348,7 +344,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	}
 
 	reader.Finalize();
-	result->children = move(children);
+	result->children = std::move(children);
 
 	return result;
 }

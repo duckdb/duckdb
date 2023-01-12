@@ -17,7 +17,7 @@ namespace duckdb {
 struct BoundParameterData {
 	BoundParameterData() {
 	}
-	BoundParameterData(Value val) : value(move(val)), return_type(value.type()) {
+	BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
 
 	Value value;
@@ -34,7 +34,7 @@ public:
 	static shared_ptr<BoundParameterData> Deserialize(Deserializer &source) {
 		FieldReader reader(source);
 		auto value = Value::Deserialize(reader.GetSource());
-		auto result = make_shared<BoundParameterData>(move(value));
+		auto result = make_shared<BoundParameterData>(std::move(value));
 		result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		reader.Finalize();
 		return result;

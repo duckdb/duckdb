@@ -17,15 +17,15 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *tab
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk, bool parallel)
-    : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
+    : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)), return_chunk(return_chunk), parallel(parallel) {
+      bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel) {
 }
 
 PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(schema), info(move(info_p)), parallel(parallel) {
+      return_chunk(false), schema(schema), info(std::move(info_p)), parallel(parallel) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -75,13 +75,14 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = Catalog::GetCatalog(context);
-		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
+		auto &catalog = *schema->catalog;
+		result->table =
+		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
 		result->table = insert_table;
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
@@ -188,7 +189,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		gstate.insert_count += append_count;
 		auto table = gstate.table;
 		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = Transaction::GetTransaction(context.client);
+		auto &transaction = Transaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;

@@ -20,7 +20,7 @@ SELECT (SELECT 0) c0 WHERE (SELECT c0);
 statement error
 select (select 42) as a, (select a);
 ----
-Serialization Error: Cannot copy BoundSubqueryExpression
+This is not yet supported
 
 # The last a should resolve to 1 from the (select 1) a
 # The b should resolve to 3

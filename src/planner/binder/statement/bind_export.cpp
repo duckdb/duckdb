@@ -96,15 +96,16 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.names = {"Success"};
 
 	// lookup the format in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	auto copy_function =
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
 	// gather a list of all the tables
+	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
 	vector<TableCatalogEntry *> tables;
-	auto schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
@@ -153,6 +154,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
+		info->catalog = catalog;
 		info->schema = table->schema->name;
 		info->table = table->name;
 
@@ -161,6 +163,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			info->select_list.push_back(col.GetName());
 		}
 
+		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 		exported_data.file_path = info->file_path;
@@ -173,18 +176,18 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
-		copy_stmt.info = move(info);
+		copy_stmt.info = std::move(info);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union =
-			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                     move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
-			child_operator = move(copy_union);
+			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			                                     std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			child_operator = std::move(copy_union);
 		} else {
-			child_operator = move(bound_statement.plan);
+			child_operator = std::move(bound_statement.plan);
 		}
 	}
 
@@ -195,13 +198,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_unique<LogicalExport>(copy_function->function, move(stmt.info), exported_tables);
+	auto export_node = make_unique<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
 
 	if (child_operator) {
-		export_node->children.push_back(move(child_operator));
+		export_node->children.push_back(std::move(child_operator));
 	}
 
-	result.plan = move(export_node);
+	result.plan = std::move(export_node);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

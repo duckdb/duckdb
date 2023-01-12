@@ -167,23 +167,6 @@ void WindowSegmentTree::ConstructTree() {
 void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t end) {
 	D_ASSERT(input_ref);
 
-	// No arguments, so just count
-	if (inputs.ColumnCount() == 0) {
-		D_ASSERT(GetTypeIdSize(result_type.InternalType()) == sizeof(idx_t));
-		auto data = FlatVector::GetData<idx_t>(result);
-		// Slice to any filtered rows
-		if (!filter_mask.AllValid()) {
-			idx_t filtered = 0;
-			for (idx_t i = begin; i < end; ++i) {
-				filtered += filter_mask.RowIsValid(i);
-			}
-			data[rid] = filtered;
-		} else {
-			data[rid] = end - begin;
-		}
-		return;
-	}
-
 	// If we have a window function, use that
 	if (aggregate.window && UseWindowAPI()) {
 		// Frame boundaries

@@ -37,7 +37,7 @@ TEST_CASE("Test Fetch Bigger Than Vector Chunks", "[arrow]") {
 	// Create the Record Batch Reader
 	const idx_t vectors_per_chunk = 2048;
 	duckdb::ResultArrowArrayStreamWrapper *result_stream =
-	    new duckdb::ResultArrowArrayStreamWrapper(move(result), vectors_per_chunk);
+	    new duckdb::ResultArrowArrayStreamWrapper(std::move(result), vectors_per_chunk);
 	auto record_batch_reader_result = arrow::ImportRecordBatchReader(&result_stream->stream);
 
 	// Read the whole Record Batch Reader

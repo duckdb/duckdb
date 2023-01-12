@@ -14,7 +14,7 @@ namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-         DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+         AttachedDatabase &db, idx_t block_id, idx_t block_offset)
     : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
       estimated_art_size(0), estimated_key_size(16) {
 	if (!Radix::IsLittleEndian()) {
@@ -75,7 +75,7 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
@@ -86,7 +86,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

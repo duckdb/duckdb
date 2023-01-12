@@ -17,7 +17,7 @@ SegmentBase *SegmentTree::GetRootSegment(SegmentLock &l) {
 }
 
 vector<SegmentNode> SegmentTree::MoveSegments(SegmentLock &) {
-	return move(nodes);
+	return std::move(nodes);
 }
 
 SegmentBase *SegmentTree::GetRootSegment() {
@@ -133,13 +133,13 @@ void SegmentTree::AppendSegment(SegmentLock &, unique_ptr<SegmentBase> segment) 
 	}
 	SegmentNode node;
 	node.row_start = segment->start;
-	node.node = move(segment);
-	nodes.push_back(move(node));
+	node.node = std::move(segment);
+	nodes.push_back(std::move(node));
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 	auto l = Lock();
-	AppendSegment(l, move(segment));
+	AppendSegment(l, std::move(segment));
 }
 
 void SegmentTree::EraseSegments(SegmentLock &, idx_t segment_start) {
@@ -150,7 +150,7 @@ void SegmentTree::EraseSegments(SegmentLock &, idx_t segment_start) {
 }
 
 void SegmentTree::Replace(SegmentLock &, SegmentTree &other) {
-	nodes = move(other.nodes);
+	nodes = std::move(other.nodes);
 }
 
 void SegmentTree::Replace(SegmentTree &other) {

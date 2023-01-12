@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct CurrentSettingBindData : public FunctionData {
-	explicit CurrentSettingBindData(Value value_p) : value(move(value_p)) {
+	explicit CurrentSettingBindData(Value value_p) : value(std::move(value_p)) {
 	}
 
 	Value value;

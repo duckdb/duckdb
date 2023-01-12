@@ -7,9 +7,9 @@ PhysicalStreamingLimit::PhysicalStreamingLimit(vector<LogicalType> types, idx_t 
                                                unique_ptr<Expression> limit_expression,
                                                unique_ptr<Expression> offset_expression, idx_t estimated_cardinality,
                                                bool parallel)
-    : PhysicalOperator(PhysicalOperatorType::STREAMING_LIMIT, move(types), estimated_cardinality), limit_value(limit),
-      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)),
-      parallel(parallel) {
+    : PhysicalOperator(PhysicalOperatorType::STREAMING_LIMIT, std::move(types), estimated_cardinality),
+      limit_value(limit), offset_value(offset), limit_expression(std::move(limit_expression)),
+      offset_expression(std::move(offset_expression)), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//

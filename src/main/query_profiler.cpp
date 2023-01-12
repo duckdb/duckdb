@@ -64,7 +64,7 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze, bool start
 		return;
 	}
 	this->running = true;
-	this->query = move(query);
+	this->query = std::move(query);
 	tree_map.clear();
 	root = nullptr;
 	phase_timings.clear();
@@ -309,7 +309,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			if (int(entry->second->info.executors_info.size()) <= info_id) {
 				entry->second->info.executors_info.resize(info_id + 1);
 			}
-			entry->second->info.executors_info[info_id] = move(info);
+			entry->second->info.executors_info[info_id] = std::move(info);
 		}
 	}
 	profiler.timings.clear();
@@ -377,7 +377,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	if (context.client_data->http_stats) {
+	if (context.client_data->http_stats && !context.client_data->http_stats->IsEmpty()) {
 		string read =
 		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
 		string written =
@@ -621,7 +621,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	auto children = root->GetChildren();
 	for (auto &child : children) {
 		auto child_node = CreateTree(child, depth + 1);
-		node->children.push_back(move(child_node));
+		node->children.push_back(std::move(child_node));
 	}
 	return node;
 }
@@ -673,7 +673,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 			expr_info->tuples_count = child->profiler.tuples_count;
 		}
 		expr_info->ExtractExpressionsRecursive(child);
-		children.push_back(move(expr_info));
+		children.push_back(std::move(expr_info));
 	}
 	return;
 }
@@ -690,7 +690,7 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
       sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count),
       name(state.name), time(state.profiler.time) {
 	// Use the name of expression-tree as extra-info
-	extra_info = move(name);
+	extra_info = std::move(name);
 	auto expression_info_p = make_unique<ExpressionInfo>();
 	// Maybe root has a function
 	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
@@ -701,6 +701,6 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
 		expression_info_p->tuples_count = state.root_state->profiler.tuples_count;
 	}
 	expression_info_p->ExtractExpressionsRecursive(state.root_state);
-	root = move(expression_info_p);
+	root = std::move(expression_info_p);
 }
 } // namespace duckdb

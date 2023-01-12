@@ -120,7 +120,7 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, move(path)), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
 		Close();
@@ -552,7 +552,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
-	return move(handle);
+	return std::move(handle);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -966,7 +966,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (is_last_chunk) {
 			return result;
 		}
-		previous_directories = move(result);
+		previous_directories = std::move(result);
 	}
 	return vector<string>();
 }

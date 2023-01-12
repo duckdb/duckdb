@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class AttachedDatabase;
 class ClientContext;
 class Catalog;
 struct ClientLockWrapper;
@@ -29,7 +30,7 @@ class TransactionManager {
 	friend struct CheckpointLock;
 
 public:
-	explicit TransactionManager(DatabaseInstance &db);
+	explicit TransactionManager(AttachedDatabase &db);
 	~TransactionManager();
 
 	//! Start a new transaction
@@ -39,9 +40,6 @@ public:
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 
-	transaction_t GetQueryNumber() {
-		return current_query_number++;
-	}
 	transaction_t LowestActiveId() {
 		return lowest_active_id;
 	}
@@ -51,8 +49,7 @@ public:
 
 	void Checkpoint(ClientContext &context, bool force = false);
 
-	static TransactionManager &Get(ClientContext &context);
-	static TransactionManager &Get(DatabaseInstance &db);
+	static TransactionManager &Get(AttachedDatabase &db);
 
 	void SetBaseCommitId(transaction_t base) {
 		D_ASSERT(base >= TRANSACTION_ID_START);
@@ -65,10 +62,8 @@ private:
 	void RemoveTransaction(Transaction *transaction) noexcept;
 	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
-	//! The database instance
-	DatabaseInstance &db;
-	//! The current query number
-	atomic<transaction_t> current_query_number;
+	//! The attached database
+	AttachedDatabase &db;
 	//! The current start timestamp used by transactions
 	transaction_t current_start_timestamp;
 	//! The current transaction ID used by transactions

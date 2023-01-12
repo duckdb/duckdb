@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
@@ -46,11 +46,11 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->return_chunk = return_chunk;
-	result->insert_values = move(insert_values);
+	result->insert_values = std::move(insert_values);
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
-	result->bound_defaults = move(bound_defaults);
-	return move(result);
+	result->bound_defaults = std::move(bound_defaults);
+	return std::move(result);
 }
 
 idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {

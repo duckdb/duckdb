@@ -18,6 +18,10 @@ namespace duckdb {
 //! A table function in the catalog
 class ScalarFunctionCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::SCALAR_FUNCTION_ENTRY;
+	static constexpr const char *Name = "scalar function";
+
+public:
 	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info);
 
 	//! The scalar functions

@@ -13,6 +13,7 @@ add_library_unity(
   physical_reservoir_sample.cpp
   physical_result_collector.cpp
   physical_set.cpp
+  physical_reset.cpp
   physical_streaming_limit.cpp
   physical_streaming_sample.cpp
   physical_transaction.cpp

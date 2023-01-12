@@ -12,18 +12,18 @@ statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 statement ok
-CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, part FROM (VALUES
-	('0044-03-13 (BC) 10:33:41.987654+01', 'era'),
-	('1962-07-31 12:20:48.123456+00', 'epoch'),
-	('2021-01-01 00:00:00+00', 'year'),
-	('2021-02-02 00:00:00+00', 'month'),
-	('2021-11-26 10:15:13.123456+00', 'microsecond'),
-	('2021-11-15 02:30:00-08', 'hour'),
-	('2021-11-15 02:30:00-07', 'minute'),
-	('2021-12-25 00:00:00+02', 'day'),
-	('infinity', 'second'),
-	('-infinity', 'decade'),
-	(NULL, 'century'),
+CREATE TABLE timestamps AS SELECT * FROM (VALUES
+	('0044-03-13 (BC) 10:33:41.987654+01'::TIMESTAMPTZ, 'era'),
+	('1962-07-31 12:20:48.123456+00'::TIMESTAMPTZ, 'epoch'),
+	('2021-01-01 00:00:00+00'::TIMESTAMPTZ, 'year'),
+	('2021-02-02 00:00:00+00'::TIMESTAMPTZ, 'month'),
+	('2021-11-26 10:15:13.123456+00'::TIMESTAMPTZ, 'microsecond'),
+	('2021-11-15 02:30:00-08'::TIMESTAMPTZ, 'hour'),
+	('2021-11-15 02:30:00-07'::TIMESTAMPTZ, 'minute'),
+	('2021-12-25 00:00:00+02'::TIMESTAMPTZ, 'day'),
+	('infinity'::TIMESTAMPTZ, 'second'),
+	('-infinity'::TIMESTAMPTZ, 'decade'),
+	(NULL::TIMESTAMPTZ, 'century'),
 ) tbl(ts, part);
 
 query II
@@ -31,7 +31,7 @@ SELECT year(ts), year(ts::TIMESTAMP) FROM timestamps;
 ----
 44	-43
 1962	1962
-2020	2021
+2020	2020
 2021	2021
 2021	2021
 2021	2021
@@ -46,7 +46,7 @@ SELECT month(ts), month(ts::TIMESTAMP) FROM timestamps;
 ----
 3	3
 7	7
-12	1
+12	12
 2	2
 11	11
 11	11
@@ -59,10 +59,10 @@ NULL	NULL
 query II
 SELECT day(ts), day(ts::TIMESTAMP) FROM timestamps;
 ----
-15	13
+15	15
 31	31
-31	1
-1	2
+31	31
+1	1
 26	26
 15	15
 15	15
@@ -120,7 +120,7 @@ NULL	NULL
 query II
 SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;
 ----
-43987654	41987654
+43987654	43987654
 48123456	48123456
 0	0
 0	0
@@ -135,7 +135,7 @@ NULL	NULL
 query II
 SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;
 ----
-43987	41987
+43987	43987
 48123	48123
 0	0
 0	0
@@ -150,7 +150,7 @@ NULL	NULL
 query II
 SELECT second(ts), second(ts::TIMESTAMP) FROM timestamps;
 ----
-43	41
+43	43
 48	48
 0	0
 0	0
@@ -165,7 +165,7 @@ NULL	NULL
 query II
 SELECT minute(ts), minute(ts::TIMESTAMP) FROM timestamps;
 ----
-40	33
+40	40
 20	20
 0	0
 0	0
@@ -180,25 +180,26 @@ NULL	NULL
 query II
 SELECT hour(ts), hour(ts::TIMESTAMP) FROM timestamps;
 ----
-1	9
-5	12
-16	0
-16	0
-2	10
-2	10
-1	9
-14	22
+1	1
+5	5
+16	16
+16	16
+2	2
+2	2
+1	1
+14	14
 NULL	NULL
 NULL	NULL
 NULL	NULL
 
+# ICU uses the Julian calendar before the Gregorian Epoch.
 query II
 SELECT dayofweek(ts), dayofweek(ts::TIMESTAMP) FROM timestamps;
 ----
-3	3
+3	5
 2	2
-4	5
-1	2
+4	4
+1	1
 5	5
 1	1
 1	1
@@ -210,10 +211,10 @@ NULL	NULL
 query II
 SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
 ----
-4	3
+4	5
 3	2
-5	5
-2	2
+5	4
+2	1
 6	5
 2	1
 2	1
@@ -240,10 +241,10 @@ NULL	NULL
 query II
 SELECT dayofyear(ts), dayofyear(ts::TIMESTAMP) FROM timestamps;
 ----
-74	72
+74	74
 212	212
-366	1
-32	33
+366	366
+32	32
 330	330
 319	319
 319	319
@@ -257,7 +258,7 @@ SELECT quarter(ts), quarter(ts::TIMESTAMP) FROM timestamps;
 ----
 1	1
 3	3
-4	1
+4	4
 1	1
 4	4
 4	4
@@ -300,14 +301,14 @@ NULL	NULL
 query II
 SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
 ----
--63517990756	-63517962378
--234211151	-234185951
-1609430400	1609459200
-1612195200	1612224000
-1637892913	1637921713
-1636943400	1636972200
-1636939800	1636968600
-1640354400	1640383200
+-63517990756	-63517817956
+-234211151	-234211151
+1609430400	1609430400
+1612195200	1612195200
+1637892913	1637892913
+1636943400	1636943400
+1636939800	1636939800
+1640354400	1640354400
 NULL	NULL
 NULL	NULL
 NULL	NULL
@@ -316,11 +317,11 @@ query III
 SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps;
 ----
 0	0	era
--234211151	-234185951	epoch
-2020	2021	year
+-234211151	-234211151	epoch
+2020	2020	year
 2	2	month
 13123456	13123456	microsecond
-2	10	hour
+2	2	hour
 30	30	minute
 24	24	day
 NULL	NULL	second
@@ -438,10 +439,10 @@ FROM timestamps
 query II
 SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;
 ----
-15	13
+15	15
 31	31
-31	1
-1	2
+31	31
+1	1
 26	26
 15	15
 15	15
@@ -453,10 +454,10 @@ NULL	NULL
 query II
 SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;
 ----
-3	3
+3	5
 2	2
-4	5
-1	2
+4	4
+1	1
 5	5
 1	1
 1	1
@@ -684,7 +685,7 @@ SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 ----
 0044-03-15 (BC) 01:40:43.987654-07:52	0044-03-29 (BC)	0044-03-31 (BC)
 1962-07-31 05:20:48.123456-07	1962-07-31	1962-07-31
-2020-12-31 16:00:00-08	2020-12-31	2021-01-31
+2020-12-31 16:00:00-08	2020-12-31	2020-12-31
 2021-02-01 16:00:00-08	2021-02-28	2021-02-28
 2021-11-26 02:15:13.123456-08	2021-11-30	2021-11-30
 2021-11-15 02:30:00-08	2021-11-30	2021-11-30

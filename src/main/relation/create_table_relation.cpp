@@ -7,8 +7,8 @@
 namespace duckdb {
 
 CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
-    : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(move(child_p)),
-      schema_name(move(schema_name)), table_name(move(table_name)) {
+    : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
+      schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
@@ -20,9 +20,9 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = schema_name;
 	info->table = table_name;
-	info->query = move(select);
+	info->query = std::move(select);
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	stmt.info = move(info);
+	stmt.info = std::move(info);
 	return binder.Bind((SQLStatement &)stmt);
 }
 

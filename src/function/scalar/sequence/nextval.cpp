@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/sequence_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -9,6 +10,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -74,14 +76,12 @@ struct NextSequenceValueOperator {
 	}
 };
 
-struct NextValData {
-	NextValData(NextvalBindData &bind_data_p, Transaction &transaction_p)
-	    : bind_data(bind_data_p), transaction(transaction_p) {
-	}
-
-	NextvalBindData &bind_data;
-	Transaction &transaction;
-};
+SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
+	auto qname = QualifiedName::Parse(name);
+	// fetch the sequence from the catalog
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
+}
 
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -90,8 +90,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &input = args.data[0];
 
 	auto &context = state.GetContext();
-	auto &transaction = Transaction::GetTransaction(context);
 	if (info.sequence) {
+		auto &transaction = Transaction::Get(context, *info.sequence->catalog);
 		// sequence to use is hard coded
 		// increment the sequence
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -101,14 +101,12 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			result_data[i] = OP::Operation(transaction, info.sequence);
 		}
 	} else {
-		NextValData next_val_input(info, transaction);
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
-			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence =
-			    Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
+			auto sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
+			auto &transaction = Transaction::Get(context, *sequence->catalog);
 			return OP::Operation(transaction, sequence);
 		});
 	}
@@ -122,17 +120,16 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (!seqname.IsNull()) {
-			auto qname = QualifiedName::Parse(seqname.ToString());
-			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
+			sequence = BindSequence(context, seqname.ToString());
 		}
 	}
 	return make_unique<NextvalBindData>(sequence);
 }
 
-static void NextValDependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	if (info.sequence) {
-		dependencies.insert(info.sequence);
+		dependencies.AddDependency(info.sequence);
 	}
 }
 

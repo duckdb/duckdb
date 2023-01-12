@@ -476,7 +476,7 @@ SELECT 42;
 
 
 
-test('.databases', out='main:')
+test('.databases', out='memory')
 
 # .dump test
 test('''
@@ -906,6 +906,14 @@ if os.name != 'nt':
           )
 
      shutil.rmtree(shell_test_dir)
+
+# test backwards compatibility
+test('.open test/storage/bc/db_dev.db', err='older development version')
+test('.open test/storage/bc/db_031.db', err='v0.3.1')
+test('.open test/storage/bc/db_032.db', err='v0.3.2')
+test('.open test/storage/bc/db_04.db', err='v0.4.0')
+test('.open test/storage/bc/db_051.db', err='v0.5.1')
+test('.open test/storage/bc/db_060.db', err='v0.6.0')
 
 if os.name != 'nt':
      test('''

@@ -26,7 +26,7 @@ static DefaultMacro table_macros[] = {{nullptr, nullptr, {nullptr}, nullptr}};
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	auto json_type = JSONCommon::JSONType();
 	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);

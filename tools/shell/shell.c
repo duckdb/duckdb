@@ -14638,8 +14638,6 @@ static int sql_trace_callback(
 ** a useful spot to set a debugger breakpoint.
 */
 static void test_breakpoint(void){
-  static int nCall = 0;
-  nCall++;
 }
 
 /*
@@ -19414,11 +19412,11 @@ static int do_meta_command(char *zLine, ShellState *p){
     ShellText s;
     initText(&s);
     open_db(p, 0);
-    rc = sqlite3_prepare_v2(p->db, "PRAGMA database_list", -1, &pStmt, 0);
-    if( rc ){
-      sqlite3_finalize(pStmt);
-      return shellDatabaseError(p->db);
-    }
+//    rc = sqlite3_prepare_v2(p->db, "PRAGMA database_list", -1, &pStmt, 0);
+//    if( rc ){
+//      sqlite3_finalize(pStmt);
+//      return shellDatabaseError(p->db);
+//    }
 
     if( nArg>2 && c=='i' ){
       /* It is an historical accident that the .indexes command shows an error
@@ -19426,22 +19424,16 @@ static int do_meta_command(char *zLine, ShellState *p){
       ** command does not. */
       raw_printf(stderr, "Usage: .indexes ?LIKE-PATTERN?\n");
       rc = 1;
-      sqlite3_finalize(pStmt);
+//      sqlite3_finalize(pStmt);
       goto meta_command_exit;
     }
-    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
-      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
-      if( zDbName==0 ) continue;
-      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
-      if( sqlite3_stricmp(zDbName, "main")==0 ){
+//    for(ii=0; sqlite3_step(pStmt)==SQLITE_ROW; ii++){
+//      const char *zDbName = (const char*)sqlite3_column_text(pStmt, 1);
+//      if( zDbName==0 ) continue;
+//      if( s.z && s.z[0] ) appendText(&s, " UNION ALL ", 0);
         appendText(&s, "SELECT name FROM ", 0);
-      }else{
-        appendText(&s, "SELECT ", 0);
-        appendText(&s, zDbName, '\'');
-        appendText(&s, "||'.'||name FROM ", 0);
-      }
-      appendText(&s, zDbName, '"');
-      appendText(&s, ".sqlite_schema ", 0);
+//      appendText(&s, zDbName, '"');
+      appendText(&s, "sqlite_schema ", 0);
       if( c=='t' ){
         appendText(&s," WHERE type IN ('table','view')"
                       "   AND name NOT LIKE 'sqlite_%'"
@@ -19450,8 +19442,8 @@ static int do_meta_command(char *zLine, ShellState *p){
         appendText(&s," WHERE type='index'"
                       "   AND tbl_name LIKE ?1", 0);
       }
-    }
-    rc = sqlite3_finalize(pStmt);
+//    }
+//    rc = sqlite3_finalize(pStmt);
     appendText(&s, " ORDER BY 1", 0);
     rc = sqlite3_prepare_v2(p->db, s.z, -1, &pStmt, 0);
     freeText(&s);
