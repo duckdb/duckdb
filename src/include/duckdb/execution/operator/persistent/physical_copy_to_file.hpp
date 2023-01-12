@@ -57,7 +57,7 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return per_thread_output || parallel;
+		return per_thread_output || partition_output || parallel;
 	}
 };
 } // namespace duckdb

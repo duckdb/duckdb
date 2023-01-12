@@ -41,7 +41,9 @@ public:
 
 static void HashDataChunk2(DataChunk& chunk, Vector &result, vector<idx_t> column_ids) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	VectorOperations::Hash(chunk.data[0], result, chunk.size());
+	D_ASSERT(column_ids.size() > 0);
+
+	VectorOperations::Hash(chunk.data[column_ids[0]], result, chunk.size());
 	for (idx_t i = 1; i < column_ids.size(); i++) {
 		VectorOperations::CombineHash(result, chunk.data[column_ids[i]], chunk.size());
 	}
@@ -206,9 +208,10 @@ public:
 			state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 			state.partition_buffers.emplace_back(CreatePartitionBuffer());
 		}
+
 	}
 
-	void GrowPartitions() {
+	void GrowPartitions(PartitionedColumnDataAppendState &state) {
 		idx_t current_partitions = partitions.size();
 		idx_t required_partitions = local_partition_map.map.size();
 
@@ -216,12 +219,12 @@ public:
 
 		for (idx_t i = current_partitions; i < required_partitions; i++) {
 			partitions.emplace_back(CreatePartitionCollection(i));
+			partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		}
 		D_ASSERT(partitions.size() == local_partition_map.map.size());
 	}
 
 	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state) {
-		std::cout << "Registering new partition: " << key.ToString() << "\n";
 
 		if (global_state) {
 			// We need to lock both the GlobalHivePartitionState and the allocators while adding a partition
@@ -236,7 +239,7 @@ public:
 			// Grow all the things!
 			GrowAllocators();
 			GrowAppendState(state);
-			GrowPartitions();
+			GrowPartitions(state);
 
 			return partition_id;
 		} else {
