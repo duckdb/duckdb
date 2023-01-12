@@ -6,7 +6,7 @@ namespace duckdb {
 LogicalLimit::LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit,
                            unique_ptr<Expression> offset)
     : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
-      limit(move(limit)), offset(move(offset)) {
+      limit(std::move(limit)), offset(std::move(offset)) {
 }
 
 vector<ColumnBinding> LogicalLimit::GetColumnBindings() {
@@ -37,7 +37,7 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(LogicalDeserializationStat
 	auto offset_val = reader.ReadRequired<int64_t>();
 	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<LogicalLimit>(limit_val, offset_val, move(limit), move(offset));
+	return make_unique<LogicalLimit>(limit_val, offset_val, std::move(limit), std::move(offset));
 }
 
 } // namespace duckdb

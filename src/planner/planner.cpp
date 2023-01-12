@@ -41,7 +41,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
-		this->plan = move(bound_statement.plan);
+		this->plan = std::move(bound_statement.plan);
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
@@ -61,7 +61,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			if (bound_statement.plan != nullptr) {
 				this->names = bound_statement.names;
 				this->types = bound_statement.types;
-				this->plan = move(bound_statement.plan);
+				this->plan = std::move(bound_statement.plan);
 				break;
 			}
 		}
@@ -95,13 +95,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement) {
 	auto copied_statement = statement->Copy();
 	// create a plan of the underlying statement
-	CreatePlan(move(statement));
+	CreatePlan(std::move(statement));
 	// now create the logical prepare
 	auto prepared_data = make_shared<PreparedStatementData>(copied_statement->type);
-	prepared_data->unbound_statement = move(copied_statement);
+	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;
-	prepared_data->value_map = move(value_map);
+	prepared_data->value_map = std::move(value_map);
 	prepared_data->properties = properties;
 	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
@@ -197,9 +197,9 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	PlanDeserializationState state(context);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
 	if (map) {
-		*map = move(state.parameter_data);
+		*map = std::move(state.parameter_data);
 	}
-	op = move(new_plan);
+	op = std::move(new_plan);
 }
 
 } // namespace duckdb

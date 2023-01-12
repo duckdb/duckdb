@@ -173,14 +173,14 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// extract the first statement
 		vector<unique_ptr<SQLStatement>> statements;
-		statements.push_back(move(parser.statements[0]));
+		statements.push_back(std::move(parser.statements[0]));
 
 		db->con->context->HandlePragmaStatements(statements);
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto res = db->con->Query(move(statements[i]));
+			auto res = db->con->Query(std::move(statements[i]));
 			if (res->HasError()) {
 				db->last_error = res->GetErrorObject();
 				return SQLITE_ERROR;
@@ -188,7 +188,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		}
 
 		// now prepare the query
-		auto prepared = db->con->Prepare(move(statements.back()));
+		auto prepared = db->con->Prepare(std::move(statements.back()));
 		if (prepared->HasError()) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;
@@ -199,7 +199,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		unique_ptr<sqlite3_stmt> stmt = make_unique<sqlite3_stmt>();
 		stmt->db = db;
 		stmt->query_string = query;
-		stmt->prepared = move(prepared);
+		stmt->prepared = std::move(prepared);
 		stmt->current_row = -1;
 		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));

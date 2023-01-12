@@ -24,11 +24,11 @@ void StatementSimplifier::Simplification() {
 
 template <class T>
 void StatementSimplifier::SimplifyReplace(T &element, T &other) {
-	auto n = move(element);
-	element = move(other);
+	auto n = std::move(element);
+	element = std::move(other);
 	Simplification();
-	other = move(element);
-	element = move(n);
+	other = std::move(element);
+	element = std::move(n);
 }
 
 template <class T>
@@ -37,10 +37,10 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 		return;
 	}
 	for (idx_t i = 0; i < list.size(); i++) {
-		auto n = move(list[i]);
+		auto n = std::move(list[i]);
 		list.erase(list.begin() + i);
 		Simplification();
-		list.insert(list.begin() + i, move(n));
+		list.insert(list.begin() + i, std::move(n));
 	}
 }
 
@@ -64,9 +64,9 @@ void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
 	}
-	auto n = move(opt);
+	auto n = std::move(opt);
 	Simplification();
-	opt = move(n);
+	opt = std::move(n);
 }
 
 void StatementSimplifier::Simplify(TableRef &ref) {
@@ -130,10 +130,10 @@ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
 		cte_keys.push_back(kv.first);
 	}
 	for (idx_t i = 0; i < cte_keys.size(); i++) {
-		auto n = move(cte.map[cte_keys[i]]);
+		auto n = std::move(cte.map[cte_keys[i]]);
 		cte.map.erase(cte_keys[i]);
 		Simplification();
-		cte.map[cte_keys[i]] = move(n);
+		cte.map[cte_keys[i]] = std::move(n);
 
 		// simplify individual ctes
 		Simplify(*cte.map[cte_keys[i]]->query->node);
@@ -260,13 +260,13 @@ void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 	SimplifyExpression(stmt.condition);
 	if (stmt.columns.size() > 1) {
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
-			auto col = move(stmt.columns[i]);
-			auto expr = move(stmt.expressions[i]);
+			auto col = std::move(stmt.columns[i]);
+			auto expr = std::move(stmt.expressions[i]);
 			stmt.columns.erase(stmt.columns.begin() + i);
 			stmt.expressions.erase(stmt.expressions.begin() + i);
 			Simplification();
-			stmt.columns.insert(stmt.columns.begin() + i, move(col));
-			stmt.expressions.insert(stmt.expressions.begin() + i, move(expr));
+			stmt.columns.insert(stmt.columns.begin() + i, std::move(col));
+			stmt.expressions.insert(stmt.expressions.begin() + i, std::move(expr));
 		}
 	}
 	for (auto &expr : stmt.expressions) {

@@ -16,7 +16,7 @@ ExceptionFormatValue::ExceptionFormatValue(hugeint_t huge_val)
     : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(Hugeint::ToString(huge_val)) {
 }
 ExceptionFormatValue::ExceptionFormatValue(string str_val)
-    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(move(str_val)) {
+    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(std::move(str_val)) {
 }
 
 template <>
@@ -38,7 +38,7 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
-	return ExceptionFormatValue(move(value));
+	return ExceptionFormatValue(std::move(value));
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {

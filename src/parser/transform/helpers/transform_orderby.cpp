@@ -43,7 +43,7 @@ bool Transformer::TransformOrderBy(duckdb_libpgquery::PGList *order, vector<Orde
 					throw ParserException("COLUMNS expr is not supported in ORDER BY");
 				}
 			}
-			result.emplace_back(type, null_order, move(order_expression));
+			result.emplace_back(type, null_order, std::move(order_expression));
 		} else {
 			throw NotImplementedException("ORDER BY list member type %d\n", temp->type);
 		}

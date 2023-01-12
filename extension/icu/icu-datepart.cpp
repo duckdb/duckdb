@@ -411,7 +411,7 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
+		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
 		return make_unique<data_t>(context, adapters);
 	}
 

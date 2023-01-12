@@ -6,7 +6,7 @@
 namespace duckdb {
 
 StarExpression::StarExpression(string relation_name_p)
-    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(move(relation_name_p)) {
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), relation_name(std::move(relation_name_p)) {
 }
 
 string StarExpression::ToString() const {
@@ -109,11 +109,11 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, Fi
 	for (idx_t i = 0; i < replace_count; i++) {
 		auto name = source.Read<string>();
 		auto expr = ParsedExpression::Deserialize(source);
-		result->replace_list.insert(make_pair(name, move(expr)));
+		result->replace_list.insert(make_pair(name, std::move(expr)));
 	}
 	result->columns = reader.ReadField<bool>(false);
 	result->regex = reader.ReadField<string>(string());
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
@@ -125,7 +125,7 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->columns = columns;
 	copy->regex = regex;
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 } // namespace duckdb

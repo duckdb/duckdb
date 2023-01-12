@@ -10,17 +10,17 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	auto entry = filters.find(column_index);
 	if (entry == filters.end()) {
 		// no filter yet: push the filter directly
-		filters[column_index] = move(filter);
+		filters[column_index] = std::move(filter);
 	} else {
 		// there is already a filter: AND it together
 		if (entry->second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &and_filter = (ConjunctionAndFilter &)*entry->second;
-			and_filter.child_filters.push_back(move(filter));
+			and_filter.child_filters.push_back(std::move(filter));
 		} else {
 			auto and_filter = make_unique<ConjunctionAndFilter>();
-			and_filter->child_filters.push_back(move(entry->second));
-			and_filter->child_filters.push_back(move(filter));
-			filters[column_index] = move(and_filter);
+			and_filter->child_filters.push_back(std::move(entry->second));
+			and_filter->child_filters.push_back(std::move(filter));
+			filters[column_index] = std::move(and_filter);
 		}
 	}
 }
@@ -41,7 +41,7 @@ unique_ptr<TableFilterSet> TableFilterSet::Deserialize(Deserializer &source) {
 	for (idx_t i = 0; i < len; i++) {
 		auto key = source.Read<idx_t>();
 		auto value = TableFilter::Deserialize(source);
-		res->filters[key] = move(value);
+		res->filters[key] = std::move(value);
 	}
 	return res;
 }

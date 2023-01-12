@@ -40,7 +40,7 @@ template <>
 hash_t Hash(float val) {
 	static_assert(sizeof(float) == sizeof(uint32_t), "");
 	FloatingPointEqualityTransform<float>::OP(val);
-	uint32_t uval = *((uint32_t *)&val);
+	uint32_t uval = Load<uint32_t>((const_data_ptr_t)&val);
 	return murmurhash64(uval);
 }
 
@@ -48,7 +48,7 @@ template <>
 hash_t Hash(double val) {
 	static_assert(sizeof(double) == sizeof(uint64_t), "");
 	FloatingPointEqualityTransform<double>::OP(val);
-	uint64_t uval = *((uint64_t *)&val);
+	uint64_t uval = Load<uint64_t>((const_data_ptr_t)&val);
 	return murmurhash64(uval);
 }
 
