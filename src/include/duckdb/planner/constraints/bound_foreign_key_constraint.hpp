@@ -18,8 +18,8 @@ class BoundForeignKeyConstraint : public BoundConstraint {
 public:
 	BoundForeignKeyConstraint(ForeignKeyInfo info_p, physical_index_set_t pk_key_set_p,
 	                          physical_index_set_t fk_key_set_p)
-	    : BoundConstraint(ConstraintType::FOREIGN_KEY), info(move(info_p)), pk_key_set(move(pk_key_set_p)),
-	      fk_key_set(move(fk_key_set_p)) {
+	    : BoundConstraint(ConstraintType::FOREIGN_KEY), info(std::move(info_p)), pk_key_set(std::move(pk_key_set_p)),
+	      fk_key_set(std::move(fk_key_set_p)) {
 #ifdef DEBUG
 		D_ASSERT(info.pk_keys.size() == pk_key_set.size());
 		for (auto &key : info.pk_keys) {

@@ -48,17 +48,17 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 			auto column_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(target)->val.str);
 			result->using_columns.push_back(column_name);
 		}
-		return move(result);
+		return std::move(result);
 	}
 
 	if (!root->quals && result->using_columns.empty() && !result->is_natural) { // CROSS PRODUCT
 		auto cross = make_unique<CrossProductRef>();
-		cross->left = move(result->left);
-		cross->right = move(result->right);
-		return move(cross);
+		cross->left = std::move(result->left);
+		cross->right = std::move(result->right);
+		return std::move(cross);
 	}
 	result->condition = TransformExpression(root->quals);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

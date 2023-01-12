@@ -39,7 +39,7 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 		expr->parameter_nr = node->number;
 	}
 	SetParamCount(MaxValue<idx_t>(ParamCount(), expr->parameter_nr));
-	return move(expr);
+	return std::move(expr);
 }
 
 } // namespace duckdb

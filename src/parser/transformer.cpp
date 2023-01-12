@@ -35,7 +35,7 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
 		D_ASSERT(stmt);
 		stmt->n_param = ParamCount();
-		statements.push_back(move(stmt));
+		statements.push_back(std::move(stmt));
 	}
 	return true;
 }
@@ -63,7 +63,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 	result->n_param = ParamCount();
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
-		result->named_param_map = move(named_param_map);
+		result->named_param_map = std::move(named_param_map);
 	}
 	return result;
 }

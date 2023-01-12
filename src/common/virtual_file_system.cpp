@@ -26,14 +26,14 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 	// open the base file handle
 	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(move(file_handle));
+		file_handle = PipeFileSystem::OpenPipe(std::move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
 		auto entry = compressed_fs.find(compression);
 		if (entry == compressed_fs.end()) {
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(move(file_handle), flags & FileFlags::FILE_FLAGS_WRITE);
+		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags & FileFlags::FILE_FLAGS_WRITE);
 	}
 	return file_handle;
 }

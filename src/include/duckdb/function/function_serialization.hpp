@@ -47,7 +47,7 @@ public:
 		// note: original_arguments are optional (can be list of size 0)
 		auto original_arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
-		auto func_catalog = Catalog::GetEntry(context, type, INVALID_CATALOG, DEFAULT_SCHEMA, name);
+		auto func_catalog = Catalog::GetEntry(context, type, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
 		if (!func_catalog || func_catalog->type != type) {
 			throw InternalException("Cant find catalog entry for function %s", name);
 		}
@@ -55,8 +55,8 @@ public:
 		auto functions = (CATALOG_ENTRY *)func_catalog;
 		auto function = functions->functions.GetFunctionByArguments(
 		    state.context, original_arguments.empty() ? arguments : original_arguments);
-		function.arguments = move(arguments);
-		function.original_arguments = move(original_arguments);
+		function.arguments = std::move(arguments);
+		function.original_arguments = std::move(original_arguments);
 
 		has_deserialize = reader.ReadRequired<bool>();
 		if (has_deserialize) {

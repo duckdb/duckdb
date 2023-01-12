@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 
 	union_members.push_back(make_pair(child->alias, child->return_type));
 
-	bound_function.return_type = LogicalType::UNION(move(union_members));
+	bound_function.return_type = LogicalType::UNION(std::move(union_members));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

@@ -18,7 +18,7 @@ namespace duckdb {
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
 
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
-		op->children[child_idx] = Rewrite(move(op->children[child_idx]));
+		op->children[child_idx] = Rewrite(std::move(op->children[child_idx]));
 	}
 
 	if (op->type != LogicalOperatorType::LOGICAL_FILTER) {
@@ -46,16 +46,16 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			    make_unique<BoundConstantExpression>(
 			        Value::BLOB((const_data_ptr_t)info.range_max.c_str(), info.range_max.size())));
 			auto filter_expr = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-			                                                           move(filter_left), move(filter_right));
+			                                                           std::move(filter_left), std::move(filter_right));
 
-			new_filter->expressions.push_back(move(filter_expr));
+			new_filter->expressions.push_back(std::move(filter_expr));
 		}
 	}
 
 	if (!new_filter->expressions.empty()) {
-		new_filter->children = move(op->children);
+		new_filter->children = std::move(op->children);
 		op->children.clear();
-		op->children.push_back(move(new_filter));
+		op->children.push_back(std::move(new_filter));
 	}
 
 	return op;

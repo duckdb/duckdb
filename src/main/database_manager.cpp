@@ -32,11 +32,12 @@ AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const str
 
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
 	auto name = db_instance->GetName();
+	db_instance->oid = ModifyCatalog();
 	DependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
-	if (!databases->CreateEntry(context, name, move(db_instance), dependencies)) {
+	if (!databases->CreateEntry(context, name, std::move(db_instance), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}
 }
