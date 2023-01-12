@@ -52,6 +52,19 @@ const vector<string> &PreparedStatement::GetNames() {
 	return data->names;
 }
 
+vector<LogicalType> PreparedStatement::GetExpectedParameterTypes() const {
+	D_ASSERT(data);
+	vector<LogicalType> expected_types(data->value_map.size());
+	for (auto &it : data->value_map) {
+		D_ASSERT(it.first >= 1);
+		idx_t param_index = it.first - 1;
+		D_ASSERT(param_index < expected_types.size());
+		D_ASSERT(it.second);
+		expected_types[param_index] = it.second->value.type();
+	}
+	return expected_types;
+}
+
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
 	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {

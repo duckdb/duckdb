@@ -1673,7 +1673,7 @@ static const yytype_uint16 yyprhs[] =
     1260,  1262,  1264,  1267,  1270,  1273,  1276,  1278,  1279,  1281,
     1284,  1291,  1296,  1303,  1308,  1315,  1324,  1329,  1336,  1338,
     1340,  1342,  1344,  1346,  1349,  1351,  1354,  1356,  1359,  1361,
-    1363,  1365,  1369,  1373,  1377,  1381,  1384,  1387,  1389,  1393,
+    1363,  1365,  1367,  1371,  1375,  1379,  1383,  1386,  1389,  1391,
     1395,  1397,  1399,  1401,  1405,  1407,  1409,  1410,  1412,  1414,
     1416,  1418,  1422,  1431,  1443,  1454,  1462,  1473,  1483,  1485,
     1487,  1490,  1494,  1503,  1515,  1525,  1527,  1529,  1533,  1534,
@@ -1974,10 +1974,10 @@ static const yytype_int16 yyrhs[] =
      429,   190,   152,   621,   619,    -1,   407,    -1,   110,    -1,
      371,    -1,   173,    -1,   245,    -1,   245,   407,    -1,   455,
       -1,   249,   455,    -1,   200,    -1,   168,   407,    -1,    76,
-      -1,    92,    -1,   393,    -1,   414,   366,   304,    -1,   414,
-     366,   129,    -1,   414,   366,   412,    -1,   414,   366,    85,
-      -1,    23,   251,    -1,   146,   423,    -1,   156,    -1,   168,
-     109,   467,    -1,   327,    -1,   363,    -1,   374,    -1,   843,
+      -1,    92,    -1,   363,    -1,   393,    -1,   414,   366,   304,
+      -1,   414,   366,   129,    -1,   414,   366,   412,    -1,   414,
+     366,    85,    -1,    23,   251,    -1,   146,   423,    -1,   156,
+      -1,   168,   109,   467,    -1,   327,    -1,   374,    -1,   843,
       -1,   618,   505,   843,    -1,    60,    -1,   350,    -1,    -1,
      312,    -1,   360,    -1,   423,    -1,   727,    -1,   621,   505,
      727,    -1,    95,   613,   623,   829,   624,    38,   407,   643,
@@ -2466,7 +2466,7 @@ static const yytype_uint16 yyrline[] =
      718,   719,   720,   721,   722,   729,   736,   737,   742,   743,
        9,    19,    29,    39,    49,    59,    69,    79,    93,    94,
       95,    96,    97,    98,    99,   100,   101,   102,   103,   104,
-     105,   106,   107,   108,   109,   114,   115,   116,   117,   118,
+     105,   106,   107,   108,   109,   110,   115,   116,   117,   118,
      119,   120,   125,   126,   131,   132,   133,   138,   139,   140,
      143,   144,     8,    20,    33,    46,    58,    70,    86,    87,
       91,    95,     7,     1,    30,    53,    54,    59,    63,    68,
@@ -2930,7 +2930,7 @@ static const yytype_uint16 yyr1[] =
      613,   613,   613,   613,   613,   613,   613,   613,   614,   614,
      615,   615,   615,   615,   615,   615,   615,   615,   616,   616,
      616,   616,   616,   616,   616,   616,   616,   616,   616,   616,
-     616,   616,   616,   616,   616,   617,   617,   617,   617,   617,
+     616,   616,   616,   616,   616,   616,   617,   617,   617,   617,
      617,   617,   618,   618,   619,   619,   619,   620,   620,   620,
      621,   621,   622,   622,   622,   622,   622,   622,   623,   623,
      624,   624,   625,   626,   626,   627,   627,   628,   628,   629,
@@ -3133,7 +3133,7 @@ static const yytype_uint8 yyr2[] =
        1,     1,     2,     2,     2,     2,     1,     0,     1,     2,
        6,     4,     6,     4,     6,     8,     4,     6,     1,     1,
        1,     1,     1,     2,     1,     2,     1,     2,     1,     1,
-       1,     3,     3,     3,     3,     2,     2,     1,     3,     1,
+       1,     1,     3,     3,     3,     3,     2,     2,     1,     3,
        1,     1,     1,     3,     1,     1,     0,     1,     1,     1,
        1,     3,     8,    11,    10,     7,    10,     9,     1,     1,
        2,     3,     8,    11,     9,     1,     1,     3,     0,     1,
@@ -3354,8 +3354,8 @@ static const yytype_uint16 yydefact[] =
      214,   439,     0,     0,     0,     0,     0,     0,   351,   350,
        0,  1180,   356,     0,     0,  1130,   104,  1543,   102,  1129,
     1106,  1313,     0,  1314,  1307,     0,   378,   379,   369,     0,
-     387,     0,   371,   376,   372,     0,   397,   389,   398,   390,
-     370,   391,   380,   368,     0,   399,     0,   374,     0,     0,
+     388,     0,   371,   376,   372,     0,   397,   390,   398,   380,
+     370,   391,   381,   368,     0,   399,     0,   374,     0,     0,
        0,   215,   180,   133,     0,  1206,  1216,  1225,  1221,  1215,
     1223,  1213,  1219,  1205,  1227,  1214,  1218,  1211,  1228,  1209,
     1226,  1224,  1212,  1220,  1204,  1208,  1195,  1200,  1231,  1222,
@@ -3375,7 +3375,7 @@ static const yytype_uint16 yydefact[] =
     1312,     0,  1068,     0,  1069,  1109,     0,   322,   355,   354,
      353,   352,   357,  1458,  1164,     0,   408,   409,     0,     0,
        0,     0,     0,  1175,   105,   103,  1458,  1306,  1140,   392,
-       0,   385,   386,     0,   377,   373,   375,     0,  1137,  1748,
+       0,   386,   387,     0,   377,   373,   375,     0,  1137,  1748,
      716,  1749,   745,   723,   745,   745,  1750,  1751,  1752,  1753,
     1754,  1755,  1756,  1757,  1758,   712,   712,  1424,   725,  1759,
     1760,  1761,  1458,  1762,  1763,   713,   714,   750,  1764,  1765,
@@ -3433,8 +3433,8 @@ static const yytype_uint16 yydefact[] =
     1967,  1968,  1852,  1969,  1970,  1971,  1972,  1973,  1064,  1107,
     1149,  1148,  1150,  1070,     0,     0,   436,     0,     0,  1161,
        0,     0,  1458,   175,  1458,   322,     0,  1458,   322,  1458,
-       0,  1174,  1177,     0,     0,     0,  1141,  1315,   388,   384,
-     382,   381,   383,   744,   731,   739,   738,  1016,   721,   720,
+       0,  1174,  1177,     0,     0,     0,  1141,  1315,   389,   385,
+     383,   382,   384,   744,   731,   739,   738,  1016,   721,   720,
      719,     0,   718,     0,     0,   745,   745,   743,   722,   698,
        0,     0,     0,   749,     0,   747,     0,   394,   395,     0,
      366,     0,   691,   687,     0,   758,   759,   760,   761,   768,
@@ -20218,57 +20218,57 @@ yyreduce:
 
   case 380:
 #line 105 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_STATISTIC_EXT; ;}
+    { (yyval.objtype) = PG_OBJECT_SCHEMA; ;}
     break;
 
   case 381:
 #line 106 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_TSPARSER; ;}
+    { (yyval.objtype) = PG_OBJECT_STATISTIC_EXT; ;}
     break;
 
   case 382:
 #line 107 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_TSDICTIONARY; ;}
+    { (yyval.objtype) = PG_OBJECT_TSPARSER; ;}
     break;
 
   case 383:
 #line 108 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_TSTEMPLATE; ;}
+    { (yyval.objtype) = PG_OBJECT_TSDICTIONARY; ;}
     break;
 
   case 384:
 #line 109 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_TSCONFIGURATION; ;}
+    { (yyval.objtype) = PG_OBJECT_TSTEMPLATE; ;}
     break;
 
   case 385:
-#line 114 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_ACCESS_METHOD; ;}
+#line 110 "third_party/libpg_query/grammar/statements/drop.y"
+    { (yyval.objtype) = PG_OBJECT_TSCONFIGURATION; ;}
     break;
 
   case 386:
 #line 115 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_EVENT_TRIGGER; ;}
+    { (yyval.objtype) = PG_OBJECT_ACCESS_METHOD; ;}
     break;
 
   case 387:
 #line 116 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_EXTENSION; ;}
+    { (yyval.objtype) = PG_OBJECT_EVENT_TRIGGER; ;}
     break;
 
   case 388:
 #line 117 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_FDW; ;}
+    { (yyval.objtype) = PG_OBJECT_EXTENSION; ;}
     break;
 
   case 389:
 #line 118 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_PUBLICATION; ;}
+    { (yyval.objtype) = PG_OBJECT_FDW; ;}
     break;
 
   case 390:
 #line 119 "third_party/libpg_query/grammar/statements/drop.y"
-    { (yyval.objtype) = PG_OBJECT_SCHEMA; ;}
+    { (yyval.objtype) = PG_OBJECT_PUBLICATION; ;}
     break;
 
   case 391:

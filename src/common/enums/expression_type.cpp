@@ -133,6 +133,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COLLATE";
 	case ExpressionType::POSITIONAL_REFERENCE:
 		return "POSITIONAL_REFERENCE";
+	case ExpressionType::BOUND_LAMBDA_REF:
+		return "BOUND_LAMBDA_REF";
 	case ExpressionType::LAMBDA:
 		return "LAMBDA";
 	case ExpressionType::ARROW:

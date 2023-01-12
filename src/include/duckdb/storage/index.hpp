@@ -39,7 +39,7 @@ public:
 	TableIOManager &table_io_manager;
 	//! Column identifiers to extract from the base table
 	vector<column_t> column_ids;
-	//! unordered_set of column_ids used by the index
+	//! Unordered_set of column_ids used by the index
 	unordered_set<column_t> column_id_set;
 	//! Unbound expressions used by the index
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -47,7 +47,7 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	//! constraint type
+	//! Index constraint type (primary key, foreign key, ...)
 	IndexConstraintType constraint_type;
 
 public:
@@ -83,8 +83,6 @@ public:
 
 	//! Insert data into the index. Does not lock the index.
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
-	//! Construct an index from sorted chunks of keys.
-	virtual void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) = 0;
 
 	//! Merge other_index into this index.
 	virtual bool MergeIndexes(IndexLock &state, Index *other_index) = 0;
