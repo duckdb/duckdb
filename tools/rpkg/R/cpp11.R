@@ -72,10 +72,6 @@ rapi_rel_project <- function(rel, exprs) {
   .Call(`_duckdb_rapi_rel_project`, rel, exprs)
 }
 
-rapi_rel_anti_semi_join <- function(left, left_proj, right_proj, join) {
-  .Call(`_duckdb_rapi_rel_anti_semi_join`, left, left_proj, right_proj, join)
-}
-
 rapi_rel_join <- function(left, right, conds, join) {
   .Call(`_duckdb_rapi_rel_join`, left, right, conds, join)
 }

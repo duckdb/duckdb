@@ -19,11 +19,13 @@ public:
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
 	                        JoinType type);
 	// for anti and semi joins
-	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_proj, shared_ptr<Relation> right, JoinType type);
+	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr, shared_ptr<Relation> right, JoinType type);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
-	shared_ptr<Relation> left_proj;
+	// for anti and smei joins
+	// Select * from left where left_expr NOT IN (right_expr). right becomes treated as a right_expr
+	shared_ptr<Relation> left_expr;
 	unique_ptr<ParsedExpression> condition;
 	vector<string> using_columns;
 	JoinType join_type;

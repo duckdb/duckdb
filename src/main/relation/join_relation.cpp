@@ -13,8 +13,8 @@ namespace duckdb {
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                            unique_ptr<ParsedExpression> condition_p, JoinType type)
-    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)),
-      condition(move(condition_p)), join_type(type) {
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_p)), condition(move(condition_p)),
+      join_type(type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
@@ -31,8 +31,8 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
-JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_proj, shared_ptr<Relation> right_proj, JoinType type)
-    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_proj)), left_proj(left_proj),
+JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_expr, shared_ptr<Relation> right_proj, JoinType type)
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(move(left_p)), right(move(right_proj)), left_expr(left_expr),
       using_columns(), join_type(type) {
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI) {
 		throw Exception("Must pass conditions for join of type " + JoinTypeToString(join_type));
@@ -40,21 +40,21 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> lef
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	if (right->type != RelationType::PROJECTION_RELATION) {
-		throw Exception(JoinTypeToString(join_type) + " requires a projection relation as right relation");
+	if (right->type != RelationType::PROJECTION_RELATION && right->type != RelationType::CREATE_VIEW_RELATION) {
+		throw Exception(JoinTypeToString(join_type) + " requires a projection or view relation as right relation. Received " + RelationTypeToString(right->type));
 	}
+	condition = nullptr;
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-	if (join_type == JoinType::ANTI) {
+	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
 		result->from_table = left->GetTableRef();
 		D_ASSERT(right->type == RelationType::PROJECTION_RELATION);
 		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
-		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_proj);
-		auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
+		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_expr);
 		auto where_child = make_unique<SubqueryExpression>();
 		auto select_statement = make_unique<SelectStatement>();
 		select_statement->node = right->GetQueryNode();
@@ -62,10 +62,17 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 		where_child->subquery_type = SubqueryType::ANY;
 		where_child->child = left_projection->expressions.at(0)->Copy();
 		where_child->comparison_type = ExpressionType::COMPARE_EQUAL;
-		where_clause->children.push_back(move(where_child));
-		result->where_clause = move(where_clause);
+		// wrap anti joins in extra operator expression to compare a NOT.
+		if (join_type == JoinType::ANTI) {
+			auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
+			where_clause->children.push_back(move(where_child));
+			result->where_clause = move(where_clause);
+		} else {
+			result->where_clause = move(where_child);
+		}
 		return result;
 	}
+
 	result->from_table = GetTableRef();
 	return move(result);
 }
