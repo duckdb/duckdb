@@ -62,14 +62,15 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToMicrosCommon(int64_t bucket_width_micros, const timestamp_t ts,
 	                                                         const timestamp_t origin, icu::Calendar *calendar) {
-		int64_t ts_micros = Interval::GetMicro(Sub(calendar, ts, origin));
+		int64_t ts_micros = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(
+		    Timestamp::GetEpochMicroSeconds(ts), Timestamp::GetEpochMicroSeconds(origin));
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
 		if (ts_micros < 0 && ts_micros % bucket_width_micros != 0) {
 			result_micros =
 			    SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(result_micros, bucket_width_micros);
 		}
 
-		return Add(calendar, origin, Interval::FromMicro(result_micros));
+		return Add(calendar, origin, interval_t {0, 0, result_micros});
 	}
 
 	static inline timestamp_t WidthConvertibleToDaysCommon(int32_t bucket_width_days, const timestamp_t ts,
@@ -612,7 +613,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 	}
 
-	static void AddTimeBucketFunction(const string &name, ClientContext &context) {
+	static void AddTimeBucketFunction(ClientContext &context) {
 		ScalarFunctionSet set("time_bucket");
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
 		                               ICUTimeBucketFunction, Bind));
@@ -630,7 +631,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 };
 
 void RegisterICUTimeBucketFunctions(ClientContext &context) {
-	ICUTimeBucket::AddTimeBucketFunction("time_bucket", context);
+	ICUTimeBucket::AddTimeBucketFunction(context);
 }
 
 } // namespace duckdb
