@@ -118,6 +118,13 @@ extern "C" SEXP _duckdb_rapi_rel_filter(SEXP rel, SEXP exprs) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_project(duckdb::rel_extptr_t rel, list exprs);
+extern "C" SEXP _duckdb_rapi_rel_project(SEXP rel, SEXP exprs) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_project(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(exprs)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates);
 extern "C" SEXP _duckdb_rapi_rel_aggregate(SEXP rel, SEXP groups, SEXP aggregates) {
   BEGIN_CPP11
@@ -129,13 +136,6 @@ SEXP rapi_rel_order(duckdb::rel_extptr_t rel, list orders);
 extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   BEGIN_CPP11
     return cpp11::as_sexp(rapi_rel_order(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(orders)));
-  END_CPP11
-}
-// relational.cpp
-SEXP rapi_rel_project(duckdb::rel_extptr_t rel, list exprs);
-extern "C" SEXP _duckdb_rapi_rel_project(SEXP rel, SEXP exprs) {
-  BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_project(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<list>>(exprs)));
   END_CPP11
 }
 // relational.cpp
