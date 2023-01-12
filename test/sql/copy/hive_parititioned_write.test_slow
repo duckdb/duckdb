@@ -1,0 +1,86 @@
+# name: test/sql/copy/hive_parititioned_write.test_slow
+# description: basic test for the hive partitioned write
+# group: [copy]
+
+require parquet
+
+require tpch
+
+# Simple table that is easy to partition
+statement ok
+CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
+
+statement ok
+COPY test TO '__TEST_DIR__/per_thread_output2.parquet' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/per_thread_output2.parquet/part_col=0/*.parquet';
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/per_thread_output2.parquet/part_col=1/*.parquet';
+----
+1	2	1
+1	4	3
+1	1	5
+1	3	7
+1	0	9
+
+# Want a modified version of the partition_col? (for example to do custom string conversion?) No problem:
+# TODO: we want an option to not write the hive column to the file probably
+statement ok
+COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO '__TEST_DIR__/per_thread_output3.parquet' (FORMAT PARQUET, PARTITION_BY (part_col));
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/per_thread_output3.parquet/part_col=prefix-0/*.parquet';
+----
+prefix-0	1	0
+prefix-0	3	2
+prefix-0	0	4
+prefix-0	2	6
+prefix-0	4	8
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/per_thread_output3.parquet/part_col=prefix-1/*.parquet';
+----
+prefix-1	2	1
+prefix-1	4	3
+prefix-1	1	5
+prefix-1	3	7
+prefix-1	0	9
+
+statement ok
+call dbgen(sf=1);
+
+# Partition by 2 columns
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem_sf1_partitioned.parquet' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus));
+
+statement ok
+DROP TABLE lineitem;
+
+statement ok
+CREATE VIEW lineitem as SELECT * FROM '__TEST_DIR__/lineitem_sf1_partitioned.parquet/*/*/*.parquet';
+
+query I
+pragma tpch(6);
+----
+123141078.2283
+
+statement ok
+pragma threads=8;
+
+# threads x partitions = 8 x 4 = 16
+query I
+SELECT COUNT(DISTINCT filename) FROM parquet_scan('__TEST_DIR__/lineitem_sf1_partitioned.parquet/*/*/*.parquet', filename=1);
+----
+32
+
+
+
+
