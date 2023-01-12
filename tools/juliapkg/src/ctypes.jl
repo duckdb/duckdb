@@ -180,7 +180,7 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_LIST => duckdb_list_entry_t,
     DUCKDB_TYPE_STRUCT => Cvoid,
-    DUCKDB_TYPE_MAP => Cvoid,
+    DUCKDB_TYPE_MAP => duckdb_list_entry_t,
     DUCKDB_TYPE_UNION => Cvoid
 )
 

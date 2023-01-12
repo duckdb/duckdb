@@ -10,13 +10,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	dependencies.insert(op.table);
-	auto update = make_unique<PhysicalUpdate>(op.types, *op.table, *op.table->storage, op.columns, move(op.expressions),
-	                                          move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
+	dependencies.AddDependency(op.table);
+	auto update =
+	    make_unique<PhysicalUpdate>(op.types, *op.table, *op.table->storage, op.columns, std::move(op.expressions),
+	                                std::move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
 
 	update->update_is_del_and_insert = op.update_is_del_and_insert;
-	update->children.push_back(move(plan));
-	return move(update);
+	update->children.push_back(std::move(plan));
+	return std::move(update);
 }
 
 } // namespace duckdb

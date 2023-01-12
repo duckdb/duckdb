@@ -22,6 +22,12 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -65,15 +71,11 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	auto result = make_unique<DuckDBTablesData>();
 
 	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return std::move(result);
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
@@ -115,30 +117,35 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		}
 		auto &table = (TableCatalogEntry &)*entry;
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, entry->catalog->GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(table.schema->name));
+		output.SetValue(col++, count, Value(table.schema->name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(table.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(table.schema->oid));
 		// table_name, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(table.name));
+		output.SetValue(col++, count, Value(table.name));
 		// table_oid, LogicalType::BIGINT
-		output.SetValue(3, count, Value::BIGINT(table.oid));
+		output.SetValue(col++, count, Value::BIGINT(table.oid));
 		// internal, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(table.internal));
+		output.SetValue(col++, count, Value::BOOLEAN(table.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(5, count, Value::BOOLEAN(table.temporary));
+		output.SetValue(col++, count, Value::BOOLEAN(table.temporary));
 		// has_primary_key, LogicalType::BOOLEAN
-		output.SetValue(6, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
+		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		output.SetValue(7, count, Value::BIGINT(table.storage->info->cardinality.load()));
+		output.SetValue(col++, count, Value::BIGINT(table.storage->info->cardinality.load()));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(8, count, Value::BIGINT(table.columns.LogicalColumnCount()));
+		output.SetValue(col++, count, Value::BIGINT(table.columns.LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(9, count, Value::BIGINT(table.storage->info->indexes.Count()));
+		output.SetValue(col++, count, Value::BIGINT(table.storage->info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT
-		output.SetValue(10, count, Value::BIGINT(CheckConstraintCount(table)));
+		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(11, count, Value(table.ToSQL()));
+		output.SetValue(col++, count, Value(table.ToSQL()));
 
 		count++;
 	}

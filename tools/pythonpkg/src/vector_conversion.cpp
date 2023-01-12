@@ -200,13 +200,13 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	auto gil = make_unique<PythonGILWrapper>(); // We're creating python objects here, so we need the GIL
-
-	for (idx_t i = 0; i < count; i++) {
-		idx_t source_idx = offset + i;
-		ScanPandasObject(bind_data, col[source_idx], i, out);
+	{
+		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+		for (idx_t i = 0; i < count; i++) {
+			idx_t source_idx = offset + i;
+			ScanPandasObject(bind_data, col[source_idx], i, out);
+		}
 	}
-	gil.reset();
 	VerifyTypeConstraints(out, count);
 }
 
@@ -489,7 +489,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
 		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
 		return_types.push_back(duckdb_col_type);
-		bind_columns.push_back(move(bind_data));
+		bind_columns.push_back(std::move(bind_data));
 	}
 }
 

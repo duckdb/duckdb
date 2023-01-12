@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalColumnDataScan : public PhysicalOperator {
 public:
 	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality)
-	    : PhysicalOperator(op_type, move(types), estimated_cardinality), collection(nullptr) {
+	    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr) {
 	}
 
 	// the column data collection to scan

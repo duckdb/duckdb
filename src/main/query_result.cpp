@@ -5,15 +5,15 @@
 
 namespace duckdb {
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
                                  vector<LogicalType> types_p, vector<string> names_p)
-    : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
-      success(true) {
+    : type(type), statement_type(statement_type), properties(std::move(properties_p)), types(std::move(types_p)),
+      names(std::move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
-    : type(type), success(false), error(move(error)) {
+    : type(type), success(false), error(std::move(error)) {
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -26,7 +26,7 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 
 void BaseQueryResult::SetError(PreservedError error) {
 	success = !error;
-	this->error = move(error);
+	this->error = std::move(error);
 }
 
 bool BaseQueryResult::HasError() const {
@@ -53,11 +53,11 @@ idx_t BaseQueryResult::ColumnCount() {
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                          vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
-    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)),
-      client_properties(move(client_properties_p)) {
+    : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
+      client_properties(std::move(client_properties_p)) {
 }
 
-QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, move(error)) {
+QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, std::move(error)) {
 }
 
 QueryResult::~QueryResult() {

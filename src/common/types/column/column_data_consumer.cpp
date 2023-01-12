@@ -16,7 +16,7 @@ uint32_t ChunkReference::GetMinimumBlockID() const {
 }
 
 ColumnDataConsumer::ColumnDataConsumer(ColumnDataCollection &collection_p, vector<column_t> column_ids)
-    : collection(collection_p), column_ids(move(column_ids)) {
+    : collection(collection_p), column_ids(std::move(column_ids)) {
 }
 
 void ColumnDataConsumer::InitializeScan() {

@@ -49,10 +49,10 @@ static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &con
 static void SetValue(DataChunk &output, int index, int op_id, string name, double time, int64_t car,
                      string description) {
 	output.SetValue(0, index, op_id);
-	output.SetValue(1, index, move(name));
+	output.SetValue(1, index, std::move(name));
 	output.SetValue(2, index, time);
 	output.SetValue(3, index, car);
-	output.SetValue(4, index, move(description));
+	output.SetValue(4, index, std::move(description));
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaLastProfilingOutputInit(ClientContext &context,
@@ -83,7 +83,7 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunct
 			}
 		}
 		collection->Append(chunk);
-		data.collection = move(collection);
+		data.collection = std::move(collection);
 		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}

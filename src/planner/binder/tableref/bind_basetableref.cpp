@@ -13,6 +13,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -56,27 +57,34 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			(*cteref)++;
 
 			result->types = b->types;
-			result->bound_columns = move(names);
-			return move(result);
+			result->bound_columns = std::move(names);
+			return std::move(result);
 		}
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto table_or_view =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name, true, error_context);
+	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
+	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
+	                                       ref.table_name, true, error_context);
 	if (!table_or_view) {
-		auto table_name = ref.schema_name.empty() ? ref.table_name : (ref.schema_name + "." + ref.table_name);
+		string table_name = ref.catalog_name;
+		if (!ref.schema_name.empty()) {
+			table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
+		}
+		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
 		// table could not be found: try to bind a replacement scan
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &scan : config.replacement_scans) {
-			auto replacement_function = scan.function(context, table_name, scan.data.get());
-			if (replacement_function) {
-				replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				replacement_function->column_name_alias = ref.column_name_alias;
-				return Bind(*replacement_function);
+		if (context.config.use_replacement_scans) {
+			for (auto &scan : config.replacement_scans) {
+				auto replacement_function = scan.function(context, table_name, scan.data.get());
+				if (replacement_function) {
+					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
+					replacement_function->column_name_alias = ref.column_name_alias;
+					return Bind(*replacement_function);
+				}
 			}
 		}
+
 		// we still didn't find the table
 		if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 			// if we are in EXTRACT_NAMES, we create a dummy table ref
@@ -91,8 +99,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return make_unique_base<BoundTableRef, BoundEmptyTableRef>(table_index);
 		}
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
-		                                                      ref.table_name, false, error_context);
+		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
+		                                  ref.table_name, false, error_context);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
@@ -118,11 +126,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
-		                                           move(return_names));
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, std::move(bind_data),
+		                                           std::move(return_types), std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
 		                          logical_get->GetTable());
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents

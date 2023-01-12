@@ -48,8 +48,8 @@ static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const Selec
 	}
 }
 
-void RowOperations::ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[],
-                                            const SelectionVector &sel, const idx_t count, const idx_t offset = 0) {
+static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[], const SelectionVector &sel,
+                                    const idx_t count, const idx_t offset = 0) {
 	auto data = (const string_t *)col.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
@@ -140,10 +140,9 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			auto &col = col_data[col_no];
 			switch (types[col_no].InternalType()) {
 			case PhysicalType::VARCHAR:
-				RowOperations::ComputeStringEntrySizes(col, entry_sizes, sel, count);
+				ComputeStringEntrySizes(col, entry_sizes, sel, count);
 				break;
 			case PhysicalType::LIST:
-			case PhysicalType::MAP:
 			case PhysicalType::STRUCT:
 				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
@@ -215,7 +214,6 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;

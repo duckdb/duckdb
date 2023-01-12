@@ -21,6 +21,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != nullptr; c = c->next) {
 		auto command = reinterpret_cast<duckdb_libpgquery::PGAlterTableCmd *>(lfirst(c));
+		AlterEntryData data(qname.catalog, qname.schema, qname.name, stmt->missing_ok);
 		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
@@ -43,8 +44,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 					throw ParserException("Adding columns with constraints not yet supported");
 				}
 			}
-			result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, stmt->missing_ok, move(centry),
-			                                          command->missing_ok);
+			result->info = make_unique<AddColumnInfo>(std::move(data), std::move(centry), command->missing_ok);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {
@@ -53,8 +53,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Dropping columns is only supported for tables");
 			}
-			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, stmt->missing_ok, command->name,
-			                                             command->missing_ok, cascade);
+			result->info = make_unique<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {
@@ -63,8 +62,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Alter column's default is only supported for tables");
 			}
-			result->info =
-			    make_unique<SetDefaultInfo>(qname.schema, qname.name, stmt->missing_ok, command->name, move(expr));
+			result->info = make_unique<SetDefaultInfo>(std::move(data), command->name, std::move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_AlterColumnType: {
@@ -79,18 +77,18 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
-				expr = make_unique<CastExpression>(column_definition.Type(), move(colref));
+				expr = make_unique<CastExpression>(column_definition.Type(), std::move(colref));
 			}
-			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, stmt->missing_ok, command->name,
-			                                                 column_definition.Type(), move(expr));
+			result->info = make_unique<ChangeColumnTypeInfo>(std::move(data), command->name, column_definition.Type(),
+			                                                 std::move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_SetNotNull: {
-			result->info = make_unique<SetNotNullInfo>(qname.schema, qname.name, stmt->missing_ok, command->name);
+			result->info = make_unique<SetNotNullInfo>(std::move(data), command->name);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropNotNull: {
-			result->info = make_unique<DropNotNullInfo>(qname.schema, qname.name, stmt->missing_ok, command->name);
+			result->info = make_unique<DropNotNullInfo>(std::move(data), command->name);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:

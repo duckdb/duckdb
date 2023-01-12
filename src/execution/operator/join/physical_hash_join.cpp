@@ -20,12 +20,12 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    const vector<idx_t> &left_projection_map,
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)),
-      perfect_join_statistics(move(perfect_join_stats)) {
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+      right_projection_map(right_projection_map_p), delim_types(std::move(delim_types)),
+      perfect_join_statistics(std::move(perfect_join_stats)) {
 
-	children.push_back(move(left));
-	children.push_back(move(right));
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
 
 	D_ASSERT(left_projection_map.empty());
 	for (auto &condition : conditions) {
@@ -41,8 +41,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
-    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       std::move(perfect_join_state)) {
+    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
+                       estimated_cardinality, std::move(perfect_join_state)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -152,17 +152,17 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
-			info.correlated_aggregates.push_back(move(aggr));
+			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto count_fun = CountFun::GetFunction();
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr =
-			    function_binder.BindAggregateFunction(count_fun, move(children), nullptr, AggregateType::NON_DISTINCT);
+			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
+			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
-			info.correlated_aggregates.push_back(move(aggr));
+			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = Allocator::Get(context);
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(context, allocator, delim_types,
@@ -225,7 +225,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	auto &lstate = (HashJoinLocalSinkState &)lstate_p;
 	if (lstate.hash_table) {
 		lock_guard<mutex> local_ht_lock(gstate.lock);
-		gstate.local_hash_tables.push_back(move(lstate.hash_table));
+		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -239,7 +239,7 @@ class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink,
 	                     idx_t block_idx_start, idx_t block_idx_end, bool parallel)
-	    : ExecutorTask(context), event(move(event_p)), sink(sink), block_idx_start(block_idx_start),
+	    : ExecutorTask(context), event(std::move(event_p)), sink(sink), block_idx_start(block_idx_start),
 	      block_idx_end(block_idx_end), parallel(parallel) {
 	}
 
@@ -295,7 +295,7 @@ public:
 				}
 			}
 		}
-		SetTasks(move(finalize_tasks));
+		SetTasks(std::move(finalize_tasks));
 	}
 
 	void FinishEvent() override {
@@ -312,7 +312,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 	}
 	hash_table->InitializePointerTable();
 	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
-	event.InsertEvent(move(new_event));
+	event.InsertEvent(std::move(new_event));
 }
 
 void HashJoinGlobalSinkState::InitializeProbeSpill(ClientContext &context) {
@@ -326,7 +326,7 @@ class HashJoinPartitionTask : public ExecutorTask {
 public:
 	HashJoinPartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
 	                      JoinHashTable &local_ht)
-	    : ExecutorTask(context), event(move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	    : ExecutorTask(context), event(std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -361,7 +361,7 @@ public:
 			partition_tasks.push_back(
 			    make_unique<HashJoinPartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht));
 		}
-		SetTasks(move(partition_tasks));
+		SetTasks(std::move(partition_tasks));
 	}
 
 	void FinishEvent() override {
@@ -381,7 +381,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		sink.perfect_join_executor.reset();
 		sink.hash_table->ComputePartitionSizes(context.config, sink.local_hash_tables, sink.max_ht_size);
 		auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, sink, sink.local_hash_tables);
-		event.InsertEvent(move(new_event));
+		event.InsertEvent(std::move(new_event));
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
 	} else {
@@ -451,7 +451,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		sink.InitializeProbeSpill(context.client);
 	}
 
-	return move(state);
+	return std::move(state);
 }
 
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

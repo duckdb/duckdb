@@ -114,7 +114,6 @@ idx_t TupleDataCollection::AppendToBlock(TupleDataAppendState &state, idx_t offs
 	idx_t append_remaining = append_count - offset;
 	if (!layout.AllConstant()) {
 		auto entry_sizes = FlatVector::GetData<idx_t>(state.heap_row_sizes);
-		
 	}
 
 	idx_t next = MinValue<idx_t>(remaining_capacity, append_remaining);
@@ -123,7 +122,6 @@ idx_t TupleDataCollection::AppendToBlock(TupleDataAppendState &state, idx_t offs
 	PinRowBlock(state.management_state, row_block_id);
 	auto row_ptr = GetRowDataPointer(state.management_state, row_block_id, row_block.count);
 	if (!layout.AllConstant()) {
-
 	}
 
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
@@ -146,11 +144,7 @@ void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &state, DataChu
 
 		switch (type) {
 		case PhysicalType::VARCHAR:
-			RowOperations::ComputeStringEntrySizes(state.vector_data[i], entry_sizes,
-			                                       *FlatVector::IncrementalSelectionVector(), chunk.size());
-			break;
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			RowOperations::ComputeEntrySizes(chunk.data[i], state.vector_data[i], entry_sizes, chunk.size(),
 			                                 chunk.size(), *FlatVector::IncrementalSelectionVector());

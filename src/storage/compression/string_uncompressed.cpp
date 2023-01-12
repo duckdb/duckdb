@@ -12,7 +12,7 @@ namespace duckdb {
 UncompressedStringSegmentState::~UncompressedStringSegmentState() {
 	while (head) {
 		// prevent deep recursion here
-		head = move(head->next);
+		head = std::move(head->next);
 	}
 }
 
@@ -64,7 +64,7 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 	auto result = make_unique<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -108,7 +108,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 		// not pinned yet: pin it
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		auto entry = handles.insert(make_pair(primary_id, move(handle)));
+		auto entry = handles.insert(make_pair(primary_id, std::move(handle)));
 		return entry.first->second;
 	} else {
 		// already pinned: use the pinned handle
@@ -252,9 +252,9 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		// allocate an in-memory buffer for it
 		handle = buffer_manager.Allocate(alloc_size, false, &block);
 		state.overflow_blocks[block->BlockId()] = new_block.get();
-		new_block->block = move(block);
-		new_block->next = move(state.head);
-		state.head = move(new_block);
+		new_block->block = std::move(block);
+		new_block->next = std::move(state.head);
+		state.head = std::move(new_block);
 	} else {
 		// string fits, copy it into the current block
 		handle = buffer_manager.Pin(state.head->block);
@@ -329,7 +329,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		             uncompressed_size);
 
 		auto final_buffer = decompressed_target_handle.Ptr();
-		StringVector::AddHandle(result, move(decompressed_target_handle));
+		StringVector::AddHandle(result, std::move(decompressed_target_handle));
 		return ReadString(final_buffer, 0, uncompressed_size);
 	} else {
 		// read the overflow string from memory
@@ -338,7 +338,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		D_ASSERT(entry != state.overflow_blocks.end());
 		auto handle = buffer_manager.Pin(entry->second->block);
 		auto final_buffer = handle.Ptr();
-		StringVector::AddHandle(result, move(handle));
+		StringVector::AddHandle(result, std::move(handle));
 		return ReadStringWithLength(final_buffer, offset);
 	}
 }

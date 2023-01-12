@@ -14,9 +14,8 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	auto &create_info = (CreateTableInfo &)*op.info->base;
-	auto &catalog = Catalog::GetCatalog(context);
-	auto existing_entry =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.schema, create_info.table, true);
+	auto &catalog = *op.info->schema->catalog;
+	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table, true);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);
@@ -26,18 +25,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 		auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		unique_ptr<PhysicalOperator> create;
 		if (!parallel_streaming_insert && use_batch_index) {
-			create = make_unique<PhysicalBatchInsert>(op, op.schema, move(op.info), op.estimated_cardinality);
+			create = make_unique<PhysicalBatchInsert>(op, op.schema, std::move(op.info), op.estimated_cardinality);
 
 		} else {
-			create = make_unique<PhysicalInsert>(op, op.schema, move(op.info), op.estimated_cardinality,
+			create = make_unique<PhysicalInsert>(op, op.schema, std::move(op.info), op.estimated_cardinality,
 			                                     parallel_streaming_insert && num_threads > 1);
 		}
 
 		D_ASSERT(op.children.size() == 1);
-		create->children.push_back(move(plan));
+		create->children.push_back(std::move(plan));
 		return create;
 	} else {
-		return make_unique<PhysicalCreateTable>(op, op.schema, move(op.info), op.estimated_cardinality);
+		return make_unique<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);
 	}
 }
 

@@ -230,7 +230,7 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 
 CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types_p,
                                                  idx_t estimated_cardinality)
-    : PhysicalOperator(type, move(types_p), estimated_cardinality) {
+    : PhysicalOperator(type, std::move(types_p), estimated_cardinality) {
 
 	caching_supported = true;
 	for (auto &col_type : types) {

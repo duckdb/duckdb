@@ -67,9 +67,9 @@ unique_ptr<GlobalTableFunctionState> PragmaDetailedProfilingOutputInit(ClientCon
 static void SetValue(DataChunk &output, int index, int op_id, string annotation, int id, string name, double time,
                      int sample_counter, int tuple_counter, string extra_info) {
 	output.SetValue(0, index, op_id);
-	output.SetValue(1, index, move(annotation));
+	output.SetValue(1, index, std::move(annotation));
 	output.SetValue(2, index, id);
-	output.SetValue(3, index, move(name));
+	output.SetValue(3, index, std::move(name));
 #if defined(RDTSC)
 	output.SetValue(4, index, Value(nullptr));
 	output.SetValue(5, index, time);
@@ -80,7 +80,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 #endif
 	output.SetValue(6, index, sample_counter);
 	output.SetValue(7, index, tuple_counter);
-	output.SetValue(8, index, move(extra_info));
+	output.SetValue(8, index, std::move(extra_info));
 }
 
 static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
@@ -156,7 +156,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 			operator_counter++;
 		}
 		collection->Append(chunk);
-		data.collection = move(collection);
+		data.collection = std::move(collection);
 		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}

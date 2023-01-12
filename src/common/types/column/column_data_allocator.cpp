@@ -28,6 +28,20 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	}
 }
 
+ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
+	type = other.GetType();
+	switch (type) {
+	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+		alloc.allocator = other.alloc.allocator;
+		break;
+	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
+		alloc.buffer_manager = other.alloc.buffer_manager;
+		break;
+	default:
+		throw InternalException("Unrecognized column data allocator type");
+	}
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	shared_ptr<BlockHandle> handle;
@@ -49,7 +63,7 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	data.size = 0;
 	data.capacity = block_size;
 	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
-	blocks.push_back(move(data));
+	blocks.push_back(std::move(data));
 	return pin;
 }
 
@@ -65,7 +79,7 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	data.size = 0;
 	data.capacity = allocation_amount;
 	data.handle = nullptr;
-	blocks.push_back(move(data));
+	blocks.push_back(std::move(data));
 }
 
 void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {
@@ -88,7 +102,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 		if (chunk_state) {
 			D_ASSERT(!blocks.empty());
 			auto new_block_id = blocks.size() - 1;
-			chunk_state->handles[new_block_id] = move(pinned_block);
+			chunk_state->handles[new_block_id] = std::move(pinned_block);
 		}
 	}
 	auto &block = blocks.back();
@@ -109,7 +123,7 @@ void ColumnDataAllocator::AllocateMemory(idx_t size, uint32_t &block_id, uint32_
 		AllocateEmptyBlock(size);
 		auto &last_block = blocks.back();
 		auto allocated = alloc.allocator->Allocate(last_block.capacity);
-		allocated_data.push_back(move(allocated));
+		allocated_data.push_back(std::move(allocated));
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);

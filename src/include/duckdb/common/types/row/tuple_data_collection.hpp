@@ -17,6 +17,7 @@ struct TupleDataAppendState;
 struct TupleDataManagementState;
 
 //! TupleDataCollection represents a set of buffer-managed data stored in row format
+//! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
 public:
 	//! Constructs a buffer-managed tuple data collection with the specified types and aggregates

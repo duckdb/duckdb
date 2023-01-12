@@ -9,15 +9,15 @@ OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExp
                                        unique_ptr<ParsedExpression> right)
     : ParsedExpression(type, ExpressionClass::OPERATOR) {
 	if (left) {
-		children.push_back(move(left));
+		children.push_back(std::move(left));
 	}
 	if (right) {
-		children.push_back(move(right));
+		children.push_back(std::move(right));
 	}
 }
 
 OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children)
-    : ParsedExpression(type, ExpressionClass::OPERATOR), children(move(children)) {
+    : ParsedExpression(type, ExpressionClass::OPERATOR), children(std::move(children)) {
 }
 
 string OperatorExpression::ToString() const {
@@ -42,7 +42,7 @@ unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	for (auto &it : children) {
 		copy->children.push_back(it->Copy());
 	}
-	return move(copy);
+	return std::move(copy);
 }
 
 void OperatorExpression::Serialize(FieldWriter &writer) const {
@@ -52,7 +52,7 @@ void OperatorExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<OperatorExpression>(type);
 	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	return move(expression);
+	return std::move(expression);
 }
 
 } // namespace duckdb

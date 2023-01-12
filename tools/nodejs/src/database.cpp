@@ -1,6 +1,6 @@
 #include "duckdb_node.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "napi.h"
-#include "parquet-amalgamation.hpp"
 
 namespace node_duckdb {
 
@@ -56,8 +56,6 @@ struct OpenTask : public Task {
 	void DoWork() override {
 		try {
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &duckdb_config);
-			duckdb::ParquetExtension extension;
-			extension.Load(*Get<Database>().database);
 			success = true;
 
 		} catch (const duckdb::Exception &ex) {
@@ -130,7 +128,7 @@ Database::~Database() {
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
-		task_queue.push(move(task));
+		task_queue.push(std::move(task));
 	}
 	Process(env);
 }
@@ -174,11 +172,11 @@ void Database::Process(Napi::Env env) {
 	}
 	task_inflight = true;
 
-	auto task = move(task_queue.front());
+	auto task = std::move(task_queue.front());
 	task_queue.pop();
 
 	auto holder = new TaskHolder();
-	holder->task = move(task);
+	holder->task = std::move(task);
 	holder->db = this;
 
 	napi_create_async_work(env, nullptr, Napi::String::New(env, "duckdb.Database.Task"), TaskExecuteCallback,

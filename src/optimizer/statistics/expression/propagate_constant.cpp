@@ -31,7 +31,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		auto result = make_unique<NumericStatistics>(input.type(), input, input, StatisticsType::GLOBAL_STATS);
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		UpdateDistinctStats(*result->distinct_stats, input);
-		return move(result);
+		return std::move(result);
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
@@ -41,7 +41,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 			auto &string_value = StringValue::Get(input);
 			result->Update(string_t(string_value));
 		}
-		return move(result);
+		return std::move(result);
 	}
 	case PhysicalType::STRUCT: {
 		auto result = make_unique<StructStatistics>(input.type());
@@ -57,7 +57,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 				result->child_stats[i] = StatisticsFromValue(struct_children[i]);
 			}
 		}
-		return move(result);
+		return std::move(result);
 	}
 	case PhysicalType::LIST: {
 		auto result = make_unique<ListStatistics>(input.type());
@@ -75,7 +75,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 				}
 			}
 		}
-		return move(result);
+		return std::move(result);
 	}
 	default:
 		return nullptr;

@@ -47,11 +47,11 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 
 void StrTimeFormat::AddLiteral(string literal) {
 	constant_size += literal.size();
-	literals.push_back(move(literal));
+	literals.push_back(std::move(literal));
 }
 
 void StrTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
-	AddLiteral(move(preceding_literal));
+	AddLiteral(std::move(preceding_literal));
 	specifiers.push_back(specifier);
 }
 
@@ -65,7 +65,7 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 		// constant size specifier
 		constant_size += specifier_size;
 	}
-	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
+	StrTimeFormat::AddFormatSpecifier(std::move(preceding_literal), specifier);
 }
 
 idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
@@ -566,11 +566,11 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
 					D_ASSERT(error.empty());
 					// add the previous literal to the first literal of the subformat
-					locale_format.literals[0] = move(current_literal) + locale_format.literals[0];
+					locale_format.literals[0] = std::move(current_literal) + locale_format.literals[0];
 					current_literal = "";
 					// now push the subformat into the current format specifier
 					for (idx_t i = 0; i < locale_format.specifiers.size(); i++) {
-						format.AddFormatSpecifier(move(locale_format.literals[i]), locale_format.specifiers[i]);
+						format.AddFormatSpecifier(std::move(locale_format.literals[i]), locale_format.specifiers[i]);
 					}
 					pos = i + 1;
 					continue;
@@ -579,7 +579,7 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					return "Unrecognized format for strftime/strptime: %" + string(1, format_char);
 				}
 			}
-			format.AddFormatSpecifier(move(current_literal), specifier);
+			format.AddFormatSpecifier(std::move(current_literal), specifier);
 			current_literal = "";
 			pos = i + 1;
 		}
@@ -588,13 +588,13 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 	if (pos < format_string.size()) {
 		current_literal += format_string.substr(pos, format_string.size() - pos);
 	}
-	format.AddLiteral(move(current_literal));
+	format.AddLiteral(std::move(current_literal));
 	return string();
 }
 
 struct StrfTimeBindData : public FunctionData {
 	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p, bool is_null)
-	    : format(move(format_p)), format_string(move(format_string_p)), is_null(is_null) {
+	    : format(std::move(format_p)), format_string(std::move(format_string_p)), is_null(is_null) {
 	}
 
 	StrfTimeFormat format;
@@ -721,7 +721,7 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
 	numeric_width.push_back(NumericSpecifierWidth(specifier));
-	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
+	StrTimeFormat::AddFormatSpecifier(std::move(preceding_literal), specifier);
 }
 
 int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
@@ -1101,8 +1101,8 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					pos++;
 				}
 				const auto tz_begin = data + pos;
-				// stop when we encounter a space or the end of the string
-				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
+				// stop when we encounter a non-tz character
+				while (pos < size && Timestamp::CharacterIsTimeZone(data[pos])) {
 					pos++;
 				}
 				const auto tz_end = data + pos;
@@ -1187,7 +1187,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 
 struct StrpTimeBindData : public FunctionData {
 	explicit StrpTimeBindData(StrpTimeFormat format_p, string format_string_p)
-	    : format(move(format_p)), format_string(move(format_string_p)) {
+	    : format(std::move(format_p)), format_string(std::move(format_string_p)) {
 	}
 
 	StrpTimeFormat format;

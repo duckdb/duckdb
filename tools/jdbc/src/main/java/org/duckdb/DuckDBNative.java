@@ -79,6 +79,8 @@ public class DuckDBNative {
 
 	protected static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
 
+	protected static native String duckdb_jdbc_get_catalog(ByteBuffer conn_ref);
+
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
 

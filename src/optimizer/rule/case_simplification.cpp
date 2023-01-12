@@ -8,7 +8,7 @@ namespace duckdb {
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
 	auto op = make_unique<CaseExpressionMatcher>();
-	root = move(op);
+	root = std::move(op);
 }
 
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -30,7 +30,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 			} else {
 				// the condition is always true
 				// move the THEN clause to the ELSE of the case
-				root->else_expr = move(case_check.then_expr);
+				root->else_expr = std::move(case_check.then_expr);
 				// remove this case check and any case checks after this one
 				root->case_checks.erase(root->case_checks.begin() + i, root->case_checks.end());
 				break;
@@ -39,7 +39,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	}
 	if (root->case_checks.empty()) {
 		// no case checks left: return the ELSE expression
-		return move(root->else_expr);
+		return std::move(root->else_expr);
 	}
 	return nullptr;
 }

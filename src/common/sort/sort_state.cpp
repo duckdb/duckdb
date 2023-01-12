@@ -4,6 +4,8 @@
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/common/radix.hpp"
+
+#include <algorithm>
 #include <numeric>
 
 namespace duckdb {
@@ -26,7 +28,6 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 			// Lists get 2 bytes (null and empty list)
 			col_size += 2;
 			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			// Structs get 1 bytes (null)
 			col_size++;
@@ -237,16 +238,16 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 	auto &sb = *sorted_blocks.back();
 	// Fixed-size sorting data
 	auto sorting_block = ConcatenateBlocks(*radix_sorting_data);
-	sb.radix_sorting_data.push_back(move(sorting_block));
+	sb.radix_sorting_data.push_back(std::move(sorting_block));
 	// Variable-size sorting data
 	if (!sort_layout->all_constant) {
 		auto &blob_data = *blob_sorting_data;
 		auto new_block = ConcatenateBlocks(blob_data);
-		sb.blob_sorting_data->data_blocks.push_back(move(new_block));
+		sb.blob_sorting_data->data_blocks.push_back(std::move(new_block));
 	}
 	// Payload data
 	auto payload_block = ConcatenateBlocks(*payload_data);
-	sb.payload_data->data_blocks.push_back(move(payload_block));
+	sb.payload_data->data_blocks.push_back(std::move(payload_block));
 	// Now perform the actual sort
 	SortInMemory();
 	// Re-order before the merge sort
@@ -256,7 +257,7 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	//	Don't copy and delete if there is only one block.
 	if (row_data.blocks.size() == 1) {
-		auto new_block = move(row_data.blocks[0]);
+		auto new_block = std::move(row_data.blocks[0]);
 		row_data.blocks.clear();
 		row_data.count = 0;
 		return new_block;
@@ -305,7 +306,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	ordered_data_block->block->SetSwizzling(sd.layout.AllConstant() ? nullptr : "LocalSortState::ReOrder.ordered_data");
 	// Replace the unordered data block with the re-ordered data block
 	sd.data_blocks.clear();
-	sd.data_blocks.push_back(move(ordered_data_block));
+	sd.data_blocks.push_back(std::move(ordered_data_block));
 	// Deal with the heap (if necessary)
 	if (!sd.layout.AllConstant() && reorder_heap) {
 		// Swizzle the column pointers to offsets
@@ -334,7 +335,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		// Swizzle the base pointer to the offset of each row in the heap
 		RowOperations::SwizzleHeapPointer(sd.layout, ordered_data_handle.Ptr(), ordered_heap_handle.Ptr(), count);
 		// Move the re-ordered heap to the SortedData, and clear the local heap
-		sd.heap_blocks.push_back(move(ordered_heap_block));
+		sd.heap_blocks.push_back(std::move(ordered_heap_block));
 		heap.pinned_blocks.clear();
 		heap.blocks.clear();
 		heap.count = 0;
@@ -373,18 +374,18 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	// Append local state sorted data to this global state
 	lock_guard<mutex> append_guard(lock);
 	for (auto &sb : local_sort_state.sorted_blocks) {
-		sorted_blocks.push_back(move(sb));
+		sorted_blocks.push_back(std::move(sb));
 	}
 	auto &payload_heap = local_sort_state.payload_heap;
 	for (idx_t i = 0; i < payload_heap->blocks.size(); i++) {
-		heap_blocks.push_back(move(payload_heap->blocks[i]));
-		pinned_blocks.push_back(move(payload_heap->pinned_blocks[i]));
+		heap_blocks.push_back(std::move(payload_heap->blocks[i]));
+		pinned_blocks.push_back(std::move(payload_heap->pinned_blocks[i]));
 	}
 	if (!sort_layout.all_constant) {
 		auto &blob_heap = local_sort_state.blob_sorting_heap;
 		for (idx_t i = 0; i < blob_heap->blocks.size(); i++) {
-			heap_blocks.push_back(move(blob_heap->blocks[i]));
-			pinned_blocks.push_back(move(blob_heap->pinned_blocks[i]));
+			heap_blocks.push_back(std::move(blob_heap->blocks[i]));
+			pinned_blocks.push_back(std::move(blob_heap->pinned_blocks[i]));
 		}
 	}
 }
@@ -429,7 +430,7 @@ void GlobalSortState::InitializeMergeRound() {
 	std::reverse(sorted_blocks.begin(), sorted_blocks.end());
 	// Uneven number of blocks - keep one on the side
 	if (sorted_blocks.size() % 2 == 1) {
-		odd_one_out = move(sorted_blocks.back());
+		odd_one_out = std::move(sorted_blocks.back());
 		sorted_blocks.pop_back();
 	}
 	// Init merge path path indices
@@ -451,7 +452,7 @@ void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 	}
 	sorted_blocks_temp.clear();
 	if (odd_one_out) {
-		sorted_blocks.push_back(move(odd_one_out));
+		sorted_blocks.push_back(std::move(odd_one_out));
 		odd_one_out = nullptr;
 	}
 	// Only one block left: Done!

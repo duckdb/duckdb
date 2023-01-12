@@ -163,7 +163,6 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		GatherVarchar(rows, row_sel, col, col_sel, count, layout, col_no, build_size, heap_ptr);
 		break;
 	case PhysicalType::LIST:
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		GatherNestedVector(rows, row_sel, col, col_sel, count, layout, col_no, heap_ptr);
 		break;

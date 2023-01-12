@@ -10,10 +10,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	D_ASSERT(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto expr_scan = make_unique<PhysicalExpressionScan>(op.types, move(op.expressions), op.estimated_cardinality);
-	expr_scan->children.push_back(move(plan));
+	auto expr_scan = make_unique<PhysicalExpressionScan>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	expr_scan->children.push_back(std::move(plan));
 	if (!expr_scan->IsFoldable()) {
-		return move(expr_scan);
+		return std::move(expr_scan);
 	}
 	auto &allocator = Allocator::Get(context);
 	// simple expression scan (i.e. no subqueries to evaluate and no prepared statement parameters)
@@ -33,7 +33,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 		expr_scan->EvaluateExpression(context, expression_idx, nullptr, chunk);
 		chunk_scan->owned_collection->Append(append_state, chunk);
 	}
-	return move(chunk_scan);
+	return std::move(chunk_scan);
 }
 
 } // namespace duckdb

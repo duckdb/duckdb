@@ -13,18 +13,18 @@ namespace duckdb {
 
 PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, move(types), estimated_cardinality), join(move(original_join)),
-      delim_scans(move(delim_scans)) {
+    : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, std::move(types), estimated_cardinality),
+      join(std::move(original_join)), delim_scans(std::move(delim_scans)) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
-	children.push_back(move(join->children[0]));
+	children.push_back(std::move(join->children[0]));
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the DelimJoinGlobalState
 	auto cached_chunk_scan = make_unique<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
-	join->children[0] = move(cached_chunk_scan);
+	join->children[0] = std::move(cached_chunk_scan);
 }
 
 vector<PhysicalOperator *> PhysicalDelimJoin::GetChildren() const {
@@ -81,13 +81,13 @@ unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext 
 	if (delim_scans.size() > 1) {
 		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
 	}
-	return move(state);
+	return std::move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_unique<DelimJoinLocalState>(context.client, *this);
 	state->distinct_state = distinct->GetLocalSinkState(context);
-	return move(state);
+	return std::move(state);
 }
 
 SinkResultType PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalSinkState &state_p, LocalSinkState &lstate_p,

@@ -34,7 +34,7 @@
 
 namespace duckdb {
 
-Value::Value(LogicalType type) : type_(move(type)), is_null(true) {
+Value::Value(LogicalType type) : type_(std::move(type)), is_null(true) {
 }
 
 Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
@@ -62,7 +62,7 @@ Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
-Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
+Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(std::move(val)) {
 	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
 		throw Exception(ErrorManager::InvalidUnicodeError(str_value, "value construction"));
 	}
@@ -77,8 +77,9 @@ Value::Value(const Value &other)
 }
 
 Value::Value(Value &&other) noexcept
-    : type_(move(other.type_)), is_null(other.is_null), value_(other.value_), str_value(move(other.str_value)),
-      struct_value(move(other.struct_value)), list_value(move(other.list_value)) {
+    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_),
+      str_value(std::move(other.str_value)), struct_value(std::move(other.struct_value)),
+      list_value(std::move(other.list_value)) {
 }
 
 Value &Value::operator=(const Value &other) {
@@ -92,12 +93,12 @@ Value &Value::operator=(const Value &other) {
 }
 
 Value &Value::operator=(Value &&other) noexcept {
-	type_ = move(other.type_);
+	type_ = std::move(other.type_);
 	is_null = other.is_null;
 	value_ = other.value_;
-	str_value = move(other.str_value);
-	struct_value = move(other.struct_value);
-	list_value = move(other.list_value);
+	str_value = std::move(other.str_value);
+	struct_value = std::move(other.struct_value);
+	list_value = std::move(other.list_value);
 	return *this;
 }
 
@@ -519,26 +520,24 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	Value result;
 	child_list_t<LogicalType> child_types;
 	for (auto &child : values) {
-		child_types.push_back(make_pair(move(child.first), child.second.type()));
-		result.struct_value.push_back(move(child.second));
+		child_types.push_back(make_pair(std::move(child.first), child.second.type()));
+		result.struct_value.push_back(std::move(child.second));
 	}
-	result.type_ = LogicalType::STRUCT(move(child_types));
+	result.type_ = LogicalType::STRUCT(std::move(child_types));
 
 	result.is_null = false;
 	return result;
 }
 
-Value Value::MAP(Value key, Value value) {
+Value Value::MAP(LogicalType child_type, vector<Value> values) {
 	Value result;
-	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", key.type()});
-	child_types.push_back({"value", value.type()});
 
-	result.type_ = LogicalType::MAP(move(child_types));
-
-	result.struct_value.push_back(move(key));
-	result.struct_value.push_back(move(value));
+	result.type_ = LogicalType::MAP(std::move(child_type));
 	result.is_null = false;
+	if (values.empty()) {
+		return result;
+	}
+	result.list_value = std::move(values);
 	return result;
 }
 
@@ -560,9 +559,9 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 			result.struct_value.emplace_back(nullptr);
 		}
 	}
-	result.struct_value[tag + 1] = move(value);
+	result.struct_value[tag + 1] = std::move(value);
 
-	result.type_ = LogicalType::UNION(move(members));
+	result.type_ = LogicalType::UNION(std::move(members));
 	return result;
 }
 
@@ -578,24 +577,24 @@ Value Value::LIST(vector<Value> values) {
 #endif
 	Value result;
 	result.type_ = LogicalType::LIST(values[0].type());
-	result.list_value = move(values);
+	result.list_value = std::move(values);
 	result.is_null = false;
 	return result;
 }
 
 Value Value::LIST(LogicalType child_type, vector<Value> values) {
 	if (values.empty()) {
-		return Value::EMPTYLIST(move(child_type));
+		return Value::EMPTYLIST(std::move(child_type));
 	}
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
 	}
-	return Value::LIST(move(values));
+	return Value::LIST(std::move(values));
 }
 
 Value Value::EMPTYLIST(LogicalType child_type) {
 	Value result;
-	result.type_ = LogicalType::LIST(move(child_type));
+	result.type_ = LogicalType::LIST(std::move(child_type));
 	result.is_null = false;
 	return result;
 }
@@ -627,7 +626,7 @@ Value Value::JSON(string_t val) {
 }
 
 Value Value::JSON(string val) {
-	auto result = Value(move(val));
+	auto result = Value(std::move(val));
 	result.type_ = LogicalTypeId::JSON;
 	return result;
 }

@@ -21,7 +21,7 @@ unique_ptr<TableRef> CrossProductRef::Copy() {
 	copy->left = left->Copy();
 	copy->right = right->Copy();
 	copy->alias = alias;
-	return move(copy);
+	return std::move(copy);
 }
 
 void CrossProductRef::Serialize(FieldWriter &writer) const {
@@ -37,7 +37,7 @@ unique_ptr<TableRef> CrossProductRef::Deserialize(FieldReader &reader) {
 	D_ASSERT(result->left);
 	D_ASSERT(result->right);
 
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

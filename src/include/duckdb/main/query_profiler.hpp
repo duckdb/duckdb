@@ -232,10 +232,12 @@ private:
 //! The QueryProfilerHistory can be used to access the profiler of previous queries
 class QueryProfilerHistory {
 private:
+	static constexpr uint64_t DEFAULT_SIZE = 20;
+
 	//! Previous Query profilers
 	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> prev_profilers;
 	//! Previous Query profilers size
-	uint64_t prev_profilers_size = 20;
+	uint64_t prev_profilers_size = DEFAULT_SIZE;
 
 public:
 	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> &GetPrevProfilers() {
@@ -254,6 +256,9 @@ public:
 public:
 	void SetProfilerHistorySize(uint64_t size) {
 		this->prev_profilers_size = size;
+	}
+	void ResetProfilerHistorySize() {
+		this->prev_profilers_size = DEFAULT_SIZE;
 	}
 };
 } // namespace duckdb

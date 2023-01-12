@@ -10,113 +10,290 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 
 #include <functional>
 
 namespace duckdb {
 
-// Note that optimizations in scanning only work if this value is equal to STANDARD_VECTOR_SIZE, however we keep them
-// separated to prevent the code from break on lower vector sizes
-static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = 1024;
+static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
+
+BitpackingMode BitpackingModeFromString(const string &str) {
+	auto mode = StringUtil::Lower(str);
+
+	if (mode == "auto") {
+		return BitpackingMode::AUTO;
+	} else if (mode == "constant") {
+		return BitpackingMode::CONSTANT;
+	} else if (mode == "constant_delta") {
+		return BitpackingMode::CONSTANT_DELTA;
+	} else if (mode == "delta_for") {
+		return BitpackingMode::DELTA_FOR;
+	} else if (mode == "for") {
+		return BitpackingMode::FOR;
+	} else {
+		return BitpackingMode::AUTO;
+	}
+}
+
+string BitpackingModeToString(const BitpackingMode &mode) {
+	switch (mode) {
+	case (BitpackingMode::AUTO):
+		return "auto";
+	case (BitpackingMode::CONSTANT):
+		return "constant";
+	case (BitpackingMode::CONSTANT_DELTA):
+		return "constant_delta";
+	case (BitpackingMode::DELTA_FOR):
+		return "delta_for";
+	case (BitpackingMode::FOR):
+		return "for";
+	default:
+		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
+	}
+}
+
+typedef struct {
+	BitpackingMode mode;
+	uint32_t offset;
+} bitpacking_metadata_t;
+
+typedef uint32_t bitpacking_metadata_encoded_t;
+
+static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) {
+	D_ASSERT(metadata.offset <= 16777215); // max uint24_t
+	bitpacking_metadata_encoded_t encoded_value = metadata.offset;
+	encoded_value |= (uint8_t)metadata.mode << 24;
+	return encoded_value;
+}
+static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
+	bitpacking_metadata_t metadata;
+	metadata.mode = Load<BitpackingMode>((data_ptr_t)(metadata_encoded) + 3);
+	metadata.offset = *metadata_encoded & 0x00FFFFFF;
+	return metadata;
+}
 
 struct EmptyBitpackingWriter {
 	template <class T>
-	static void Operation(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
-	                      void *data_ptr) {
+	static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
+	}
+	template <class T, class T_S = typename std::make_signed<T>::type>
+	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
+	                               void *data_ptr) {
+	}
+	template <class T, class T_S = typename std::make_signed<T>::type>
+	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
+	                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
+	}
+	template <class T>
+	static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
+	                     void *data_ptr) {
 	}
 };
 
-template <class T>
+template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_signed<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
-		ResetMinMax();
+		compression_buffer_internal[0] = (T)0;
+		compression_buffer = &compression_buffer_internal[1];
+		Reset();
 	}
 
-	T compression_buffer[BITPACKING_METADATA_GROUP_SIZE];
+	// Extra val for delta encoding
+	T compression_buffer_internal[BITPACKING_METADATA_GROUP_SIZE + 1];
+	T *compression_buffer;
+	T_S delta_buffer[BITPACKING_METADATA_GROUP_SIZE];
 	bool compression_buffer_validity[BITPACKING_METADATA_GROUP_SIZE];
 	idx_t compression_buffer_idx;
 	idx_t total_size;
+
+	// Used to pass CompressionState ptr through the Bitpacking writer
 	void *data_ptr;
 
-	bool min_max_set;
+	// Stats on current compression buffer
 	T minimum;
 	T maximum;
+	T min_max_diff;
+	T_S minimum_delta;
+	T_S maximum_delta;
+	T_S min_max_delta_diff;
+	T_S delta_offset;
+	bool all_valid;
+	bool all_invalid;
+
+	bool can_do_delta;
+	bool can_do_for;
+
+	// Used to force a specific mode, useful in testing
+	BitpackingMode mode = BitpackingMode::AUTO;
 
 public:
-	void SubtractFrameOfReference(const T &frame_of_reference) {
-		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			compression_buffer[i] -= frame_of_reference;
-		}
-	}
-
-	void ResetMinMax() {
-		min_max_set = false;
-		//! We set these to 0, in case all values are NULL, in which case the min and max will never be set.
-		minimum = 0;
-		maximum = 0;
-	}
-
-	bool TryUpdateMinMax(T value) {
-		bool updated = false;
-		if (!min_max_set || value < minimum) {
-			minimum = value;
-			updated = true;
-		}
-		if (!min_max_set || value > maximum) {
-			maximum = value;
-			updated = true;
-		}
-		min_max_set = min_max_set || updated;
-		//! Only when either of the values are updated, do we need to test the overflow
-		if (updated) {
-			T ignore;
-			return TrySubtractOperator::Operation(maximum, minimum, ignore);
-		}
-		return true;
-	}
-
-	T GetFrameOfReference() {
-		return minimum;
-	}
-	T Maximum() {
-		return maximum;
-	}
-
-	template <class OP, class T_U = typename std::make_unsigned<T>::type>
-	void Flush() {
-		T frame_of_reference = GetFrameOfReference();
-		SubtractFrameOfReference(frame_of_reference);
-
-		//! Because of FOR, we can guarantee that all values are positive
-		T_U adjusted_maximum = T_U(Maximum() - frame_of_reference);
-
-		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T_U>((T_U)0, adjusted_maximum);
-		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
-		                          compression_buffer_idx, data_ptr);
-		total_size += (BITPACKING_METADATA_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
+	void Reset() {
+		minimum = NumericLimits<T>::Maximum();
+		minimum_delta = NumericLimits<T_S>::Maximum();
+		maximum = NumericLimits<T>::Minimum();
+		maximum_delta = NumericLimits<T_S>::Minimum();
+		delta_offset = 0;
+		all_valid = true;
+		all_invalid = true;
+		can_do_delta = false;
+		can_do_for = false;
 		compression_buffer_idx = 0;
-		ResetMinMax();
+		min_max_diff = 0;
+		min_max_delta_diff = 0;
+	}
+
+	void CalculateFORStats() {
+		can_do_for = TrySubtractOperator::Operation(maximum, minimum, min_max_diff);
+	}
+
+	void CalculateDeltaStats() {
+		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
+		// 		 we could support this with some clever substract trickery?
+		if (maximum > (T)NumericLimits<T_S>::Maximum()) {
+			return;
+		}
+
+		// Don't delta encoding 1 value makes no sense
+		if (compression_buffer_idx < 2) {
+			return;
+		};
+
+		// TODO: handle NULLS here?
+		// Currently we cannot handle nulls because we would need an additional step of patching for this.
+		// we could for example copy the last value on a null insert. This would help a bit, but not be optimal for
+		// large deltas since theres suddenly a zero then. Ideally we would insert a value that leads to a delta within
+		// the current domain of deltas however we dont know that domain here yet
+		if (!all_valid) {
+			return;
+		}
+
+		// Note: since we dont allow any values over NumericLimits<T_S>::Maximum(), all subtractions for unsigned types
+		// are guaranteed not to overflow
+		bool can_do_all = true;
+		if (std::is_signed<T>()) {
+			T_S bogus;
+			can_do_all = TrySubtractOperator::Operation((T_S)(minimum), (T_S)(maximum), bogus) &&
+			             TrySubtractOperator::Operation((T_S)(maximum), (T_S)(minimum), bogus);
+		}
+
+		// Calculate delta's
+		if (can_do_all) {
+			for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
+				delta_buffer[i] = (T_S)compression_buffer[i] - (T_S)compression_buffer[i - 1];
+			}
+		} else {
+			for (int64_t i = 0; i < (int64_t)compression_buffer_idx; i++) {
+				auto success = TrySubtractOperator::Operation((T_S)(compression_buffer[i]),
+				                                              (T_S)(compression_buffer[i - 1]), delta_buffer[i]);
+				if (!success) {
+					return;
+				}
+			}
+		}
+
+		can_do_delta = true;
+
+		for (int64_t i = 1; i < (int64_t)compression_buffer_idx; i++) {
+			maximum_delta = MaxValue<T_S>(maximum_delta, delta_buffer[i]);
+			minimum_delta = MinValue<T_S>(minimum_delta, delta_buffer[i]);
+		}
+
+		// Since we can set the first value arbitrarily, we want to pick one from the current domain, note that
+		// we will store the original first value - this offset as the  delta_offset to be able to decode this again.
+		delta_buffer[0] = minimum_delta;
+
+		can_do_delta = can_do_delta && TrySubtractOperator::Operation(maximum_delta, minimum_delta, min_max_delta_diff);
+		can_do_delta =
+		    can_do_delta && TrySubtractOperator::Operation((T_S)(compression_buffer[0]), minimum_delta, delta_offset);
+	}
+
+	template <class T_INNER>
+	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
+		for (idx_t i = 0; i < compression_buffer_idx; i++) {
+			buffer[i] -= frame_of_reference;
+		}
+	}
+
+	template <class OP>
+	bool Flush() {
+		if (compression_buffer_idx == 0) {
+			return true;
+		}
+
+		if ((all_invalid || maximum == minimum) && (mode == BitpackingMode::AUTO || mode == BitpackingMode::CONSTANT)) {
+			OP::WriteConstant(maximum, compression_buffer_idx, data_ptr, all_invalid);
+			total_size += sizeof(T) + sizeof(bitpacking_metadata_encoded_t);
+			return true;
+		}
+
+		CalculateFORStats();
+		CalculateDeltaStats();
+
+		if (can_do_delta) {
+			if (maximum_delta == minimum_delta && mode != BitpackingMode::FOR && mode != BitpackingMode::DELTA_FOR) {
+				idx_t frame_of_reference = compression_buffer[0];
+				OP::WriteConstantDelta((T_S)maximum_delta, (T)frame_of_reference, compression_buffer_idx,
+				                       (T *)compression_buffer, (bool *)compression_buffer_validity, data_ptr);
+				total_size += sizeof(T) + sizeof(T) + sizeof(bitpacking_metadata_encoded_t);
+				return true;
+			}
+
+			// Check if delta has benefit
+			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_delta_diff);
+			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
+
+			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
+				SubtractFrameOfReference(delta_buffer, minimum_delta);
+
+				OP::WriteDeltaFor((T *)delta_buffer, compression_buffer_validity, delta_required_bitwidth,
+				                  (T)minimum_delta, delta_offset, (T *)compression_buffer, compression_buffer_idx,
+				                  data_ptr);
+
+				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
+				total_size += sizeof(T);                              // FOR value
+				total_size += sizeof(T);                              // Delta offset value
+				total_size += AlignValue(sizeof(bitpacking_width_t)); // FOR value
+
+				return true;
+			}
+		}
+
+		if (can_do_for) {
+			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_diff);
+			SubtractFrameOfReference(compression_buffer, minimum);
+			OP::WriteFor(compression_buffer, compression_buffer_validity, width, minimum, compression_buffer_idx,
+			             data_ptr);
+
+			total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, width);
+			total_size += sizeof(T); // FOR value
+			total_size += AlignValue(sizeof(bitpacking_width_t));
+
+			return true;
+		}
+
+		return false;
 	}
 
 	template <class OP = EmptyBitpackingWriter>
-	bool Update(T *data, ValidityMask &validity, idx_t idx) {
+	bool Update(T value, bool is_valid) {
+		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		all_valid = all_valid && is_valid;
+		all_invalid = all_invalid && !is_valid;
 
-		if (validity.RowIsValid(idx)) {
-			compression_buffer_validity[compression_buffer_idx] = true;
-			compression_buffer[compression_buffer_idx++] = data[idx];
-			if (!TryUpdateMinMax(data[idx])) {
-				return false;
-			}
-		} else {
-			// We write zero for easy bitwidth analysis of the compression buffer later
-			compression_buffer_validity[compression_buffer_idx] = false;
-			compression_buffer[compression_buffer_idx++] = 0;
+		if (is_valid) {
+			compression_buffer[compression_buffer_idx] = value;
+			minimum = MinValue<T>(minimum, value);
+			maximum = MaxValue<T>(maximum, value);
 		}
 
+		compression_buffer_idx++;
+
 		if (compression_buffer_idx == BITPACKING_METADATA_GROUP_SIZE) {
-			// Calculate bitpacking width;
-			Flush<OP>();
+			bool success = Flush<OP>();
+			Reset();
+			return success;
 		}
 		return true;
 	}
@@ -132,7 +309,12 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<BitpackingAnalyzeState<T>>();
+	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
+
+	auto state = make_unique<BitpackingAnalyzeState<T>>();
+	state->state.mode = config.options.force_bitpacking_mode;
+
+	return std::move(state);
 }
 
 template <class T>
@@ -144,7 +326,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data, vdata.validity, idx)) {
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
 			return false;
 		}
 	}
@@ -154,14 +336,17 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
-	bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
+	auto flush_result = bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
+	if (!flush_result) {
+		return DConstants::INVALID_INDEX;
+	}
 	return bitpacking_state.state.total_size;
 }
 
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_S = typename std::make_signed<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
 	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
@@ -172,6 +357,8 @@ public:
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
+
+		state.mode = config.options.force_bitpacking_mode;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -188,33 +375,88 @@ public:
 
 public:
 	struct BitpackingWriter {
-
-		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width,
-		                      VALUE_TYPE frame_of_reference, idx_t count, void *data_ptr) {
+		static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
-			auto total_bits_needed = (width * BITPACKING_METADATA_GROUP_SIZE);
-			D_ASSERT(total_bits_needed % 8 == 0);
-			// FIXME: we call AlignValue in FlushSegment, this could add up to 7 bytes
-			// That space is unaccounted for here, which on rare occassions might lead to a heap-buffer overflow
-			auto total_bytes_needed = total_bits_needed / 8;
-			total_bytes_needed += sizeof(bitpacking_width_t);
-			total_bytes_needed += sizeof(VALUE_TYPE);
 
-			if (state->RemainingSize() < total_bytes_needed) {
-				// Segment is full
-				auto row_start = state->current_segment->start + state->current_segment->count;
-				state->FlushSegment();
-				state->CreateEmptySegment(row_start);
+			ReserveSpace(state, sizeof(T));
+			WriteMetaData(state, BitpackingMode::CONSTANT);
+			WriteData(state->data_ptr, constant);
+
+			UpdateStats(state, count);
+		}
+
+		static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
+		                               void *data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+
+			ReserveSpace(state, 2 * sizeof(T));
+			WriteMetaData(state, BitpackingMode::CONSTANT_DELTA);
+			WriteData(state->data_ptr, frame_of_reference);
+			WriteData(state->data_ptr, constant);
+
+			UpdateStats(state, count);
+		}
+
+		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
+		                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+
+			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
+			ReserveSpace(state, bp_size + 3 * sizeof(T));
+
+			WriteMetaData(state, BitpackingMode::DELTA_FOR);
+			WriteData(state->data_ptr, frame_of_reference);
+			WriteData(state->data_ptr, (T)width);
+			WriteData(state->data_ptr, delta_offset);
+
+			BitpackingPrimitives::PackBuffer<T, false>(state->data_ptr, values, count, width);
+			state->data_ptr += bp_size;
+
+			UpdateStats(state, count);
+		}
+
+		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
+		                     void *data_ptr) {
+			auto state = (BitpackingCompressState<T> *)data_ptr;
+
+			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
+			ReserveSpace(state, bp_size + 2 * sizeof(T));
+
+			WriteMetaData(state, BitpackingMode::FOR);
+			WriteData(state->data_ptr, frame_of_reference);
+			WriteData(state->data_ptr, (T)width);
+
+			BitpackingPrimitives::PackBuffer<T, false>(state->data_ptr, values, count, width);
+			state->data_ptr += bp_size;
+
+			UpdateStats(state, count);
+		}
+
+		template <class T_OUT>
+		static void WriteData(data_ptr_t &ptr, T_OUT val) {
+			*((T_OUT *)ptr) = val;
+			ptr += sizeof(T_OUT);
+		}
+
+		static void WriteMetaData(BitpackingCompressState<T> *state, BitpackingMode mode) {
+			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.Ptr())};
+			state->metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
+			Store<bitpacking_metadata_encoded_t>(EncodeMeta(metadata), state->metadata_ptr);
+		}
+
+		static void ReserveSpace(BitpackingCompressState<T> *state, idx_t data_bytes) {
+			idx_t meta_bytes = sizeof(bitpacking_metadata_encoded_t);
+			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
+			D_ASSERT(data_bytes + meta_bytes <= state->RemainingSize());
+		}
+
+		static void UpdateStats(BitpackingCompressState<T> *state, idx_t count) {
+			state->current_segment->count += count;
+
+			if (!state->state.all_invalid) {
+				NumericStatistics::Update<T>(state->current_segment->stats, state->state.minimum);
+				NumericStatistics::Update<T>(state->current_segment->stats, state->state.maximum);
 			}
-
-			for (idx_t i = 0; i < count; i++) {
-				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, values[i] + frame_of_reference);
-				}
-			}
-
-			state->WriteValues(values, width, frame_of_reference, count);
 		}
 	};
 
@@ -228,57 +470,51 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
 		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		metadata_ptr = handle.Ptr() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		metadata_ptr = handle.Ptr() + Storage::BLOCK_SIZE;
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressState<T>::BitpackingWriter>(data, vdata.validity, idx);
+			state.template Update<BitpackingCompressState<T, T_S>::BitpackingWriter>(data[idx],
+			                                                                         vdata.validity.RowIsValid(idx));
 		}
 	}
 
-	void WriteValues(T *values, bitpacking_width_t width, T frame_of_reference, idx_t count) {
-		// TODO we can optimize this by stopping early if count < BITPACKING_METADATA_GROUP_SIZE
-		BitpackingPrimitives::PackBuffer<T, false>(data_ptr, values, count, width);
-		data_ptr += (BITPACKING_METADATA_GROUP_SIZE * width) / 8;
-
-		Store<bitpacking_width_t>(width, metadata_ptr);
-		metadata_ptr -= sizeof(T);
-		Store<T>(frame_of_reference, metadata_ptr);
-		metadata_ptr -= sizeof(bitpacking_width_t);
-
-		current_segment->count += count;
+	void FlushAndCreateSegmentIfFull(idx_t required_space) {
+		if (RemainingSize() < required_space) {
+			auto row_start = current_segment->start + current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+		}
 	}
 
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
-		auto dataptr = handle.Ptr();
+		auto base_ptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		idx_t metadata_offset = data_ptr - dataptr;
-		D_ASSERT(ValueIsAligned(metadata_offset));
-		idx_t metadata_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
+		idx_t metadata_offset = AlignValue(data_ptr - base_ptr);
+		idx_t metadata_size = base_ptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
-		memmove(dataptr + metadata_offset, metadata_ptr + 1, metadata_size);
+		memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
 
 		// Store the offset of the metadata of the first group (which is at the highest address).
-		Store<idx_t>(metadata_offset + metadata_size - 1, dataptr);
+		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
 		handle.Destroy();
 
-		state.FlushSegment(move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
-		state.template Flush<BitpackingCompressState<T>::BitpackingWriter>();
+		state.template Flush<BitpackingCompressState<T, T_S>::BitpackingWriter>();
 		FlushSegment();
 		current_segment.reset();
 	}
@@ -308,71 +544,6 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 template <class T>
-struct BitpackingScanState : public SegmentScanState {
-public:
-	explicit BitpackingScanState(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
-		auto dataptr = handle.Ptr();
-		current_metadata_group_ptr = dataptr + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-
-		// load offset to bitpacking widths pointer
-		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
-		bitpacking_metadata_ptr = dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset;
-
-		// load the metadata of the first vector
-		LoadCurrentMetaData();
-	}
-
-	BufferHandle handle;
-
-	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-
-	idx_t position_in_group = 0;
-	data_ptr_t current_metadata_group_ptr;
-	data_ptr_t bitpacking_metadata_ptr;
-	bitpacking_width_t current_width;
-	T current_frame_of_reference;
-
-public:
-	//! Loads the current group header, and sets pointer to next header
-	void LoadCurrentMetaData() {
-		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
-		current_width = Load<bitpacking_width_t>(bitpacking_metadata_ptr);
-		bitpacking_metadata_ptr -= sizeof(T);
-		current_frame_of_reference = Load<T>(bitpacking_metadata_ptr);
-		bitpacking_metadata_ptr -= sizeof(bitpacking_width_t);
-	}
-
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		while (skip_count > 0) {
-			if (position_in_group + skip_count < BITPACKING_METADATA_GROUP_SIZE) {
-				// We're not leaving this bitpacking group, we can perform all skips.
-				position_in_group += skip_count;
-				break;
-			} else {
-				// The skip crosses the current bitpacking group, we skip the remainder of this group.
-				auto skipping = BITPACKING_METADATA_GROUP_SIZE - position_in_group;
-				position_in_group = 0;
-				current_metadata_group_ptr += (current_width * BITPACKING_METADATA_GROUP_SIZE) / 8;
-
-				// Load new width
-				LoadCurrentMetaData();
-
-				skip_count -= skipping;
-			}
-		}
-	}
-};
-
-template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
-	auto result = make_unique<BitpackingScanState<T>>(segment);
-	return move(result);
-}
-
-template <class T>
 static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
 	if (!frame_of_reference) {
 		return;
@@ -382,28 +553,185 @@ static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
 	}
 }
 
+// Based on https://github.com/lemire/FastPFor (Apache License 2.0)
+template <class T>
+static T DeltaDecode(T *data, T previous_value, const size_t size) {
+	D_ASSERT(size >= 1);
+
+	data[0] += previous_value;
+
+	const size_t UnrollQty = 4;
+	const size_t sz0 = (size / UnrollQty) * UnrollQty; // equal to 0, if size < UnrollQty
+	size_t i = 1;
+	if (sz0 >= UnrollQty) {
+		T a = data[0];
+		for (; i < sz0 - UnrollQty; i += UnrollQty) {
+			a = data[i] += a;
+			a = data[i + 1] += a;
+			a = data[i + 2] += a;
+			a = data[i + 3] += a;
+		}
+	}
+	for (; i != size; ++i) {
+		data[i] += data[i - 1];
+	}
+
+	return data[size - 1];
+}
+
+template <class T, class T_S = typename std::make_signed<T>::type>
+struct BitpackingScanState : public SegmentScanState {
+public:
+	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		handle = buffer_manager.Pin(segment.block);
+		auto dataptr = handle.Ptr();
+
+		// load offset to bitpacking widths pointer
+		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
+		bitpacking_metadata_ptr =
+		    dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+
+		// load the first group
+		LoadNextGroup();
+	}
+
+	BufferHandle handle;
+	ColumnSegment &current_segment;
+
+	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
+
+	bitpacking_metadata_t current_group;
+
+	bitpacking_width_t current_width;
+	T current_frame_of_reference;
+	T current_constant;
+	T current_delta_offset;
+
+	idx_t current_group_offset = 0;
+	data_ptr_t current_group_ptr;
+	data_ptr_t bitpacking_metadata_ptr;
+
+public:
+	//! Loads the metadata for the current metadata group. This will set bitpacking_metadata_ptr to the next group.
+	//! this will also load any metadata that is at the start of a compressed buffer (e.g. the width, for, or constant
+	//! value) depending on the bitpacking mode for that group
+	void LoadNextGroup() {
+		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
+		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
+		current_group_offset = 0;
+		current_group = DecodeMeta((bitpacking_metadata_encoded_t *)bitpacking_metadata_ptr);
+
+		bitpacking_metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
+		current_group_ptr = GetPtr(current_group);
+
+		// Read first value
+		switch (current_group.mode) {
+		case BitpackingMode::CONSTANT:
+			current_constant = *(T *)(current_group_ptr);
+			current_group_ptr += sizeof(T);
+			break;
+		case BitpackingMode::FOR:
+		case BitpackingMode::CONSTANT_DELTA:
+		case BitpackingMode::DELTA_FOR:
+			current_frame_of_reference = *(T *)(current_group_ptr);
+			current_group_ptr += sizeof(T);
+			break;
+		default:
+			throw InternalException("Invalid bitpacking mode");
+		}
+
+		// Read second value
+		switch (current_group.mode) {
+		case BitpackingMode::CONSTANT_DELTA:
+			current_constant = *(T *)(current_group_ptr);
+			current_group_ptr += sizeof(T);
+			break;
+		case BitpackingMode::FOR:
+		case BitpackingMode::DELTA_FOR:
+			current_width = (bitpacking_width_t) * (T *)(current_group_ptr);
+			current_group_ptr += MaxValue(sizeof(T), sizeof(bitpacking_width_t));
+			break;
+		case BitpackingMode::CONSTANT:
+			break;
+		default:
+			throw InternalException("Invalid bitpacking mode");
+		}
+
+		// Read third value
+		if (current_group.mode == BitpackingMode::DELTA_FOR) {
+			current_delta_offset = *(T *)(current_group_ptr);
+			current_group_ptr += sizeof(T);
+		}
+	}
+
+	void Skip(ColumnSegment &segment, idx_t skip_count) {
+		while (skip_count > 0) {
+			if (current_group_offset + skip_count < BITPACKING_METADATA_GROUP_SIZE) {
+				// Skipping Delta FOR requires a bit of decoding to figure out the new delta
+				if (current_group.mode == BitpackingMode::DELTA_FOR) {
+					// if current_group_offset points into the middle of a
+					// BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, we need to scan a few
+					// values before current_group_offset to align with the algorithm groups
+					idx_t extra_count = current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+					// Calculate total offset and count to bitunpack
+					idx_t base_decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(skip_count);
+					idx_t decompress_count = base_decompress_count + extra_count;
+					idx_t decompress_offset = current_group_offset - extra_count;
+					bool skip_sign_extension = true;
+
+					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer,
+					                                      current_group_ptr + decompress_offset, decompress_count,
+					                                      current_width, skip_sign_extension);
+
+					ApplyFrameOfReference<T_S>((T_S *)&decompression_buffer[extra_count], current_frame_of_reference,
+					                           skip_count);
+					DeltaDecode<T_S>((T_S *)&decompression_buffer[extra_count], (T_S)current_delta_offset,
+					                 (idx_t)skip_count);
+					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
+
+					current_group_offset += skip_count;
+				} else {
+					current_group_offset += skip_count;
+				}
+				break;
+			} else {
+				auto left_in_this_group = BITPACKING_METADATA_GROUP_SIZE - current_group_offset;
+				auto number_of_groups_to_skip = (skip_count - left_in_this_group) / BITPACKING_METADATA_GROUP_SIZE;
+
+				current_group_offset = 0;
+				bitpacking_metadata_ptr -= number_of_groups_to_skip * sizeof(bitpacking_metadata_encoded_t);
+
+				LoadNextGroup();
+
+				skip_count -= left_in_this_group;
+				skip_count -= number_of_groups_to_skip * BITPACKING_METADATA_GROUP_SIZE;
+			}
+		}
+	}
+
+	data_ptr_t GetPtr(bitpacking_metadata_t group) {
+		return handle.Ptr() + current_segment.GetBlockOffset() + group.offset;
+	}
+};
+
+template <class T>
+unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
+	auto result = make_unique<BitpackingScanState<T>>(segment);
+	return std::move(result);
+}
+
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, class T_S = typename std::make_signed<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	// Fast path for when no compression was used, we can do a single memcopy
-	if (STANDARD_VECTOR_SIZE == BITPACKING_METADATA_GROUP_SIZE) {
-		if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
-		    scan_count <= BITPACKING_METADATA_GROUP_SIZE && scan_state.position_in_group == 0) {
-
-			memcpy(result_data + result_offset, scan_state.current_metadata_group_ptr, scan_count * sizeof(T));
-			scan_state.current_metadata_group_ptr += scan_count * sizeof(T);
-			scan_state.LoadCurrentMetaData();
-			return;
-		}
-	}
 
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
@@ -412,21 +740,45 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	while (scanned < scan_count) {
 		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
-		if (scan_state.position_in_group >= BITPACKING_METADATA_GROUP_SIZE) {
-			scan_state.position_in_group = 0;
-			scan_state.current_metadata_group_ptr += (scan_state.current_width * BITPACKING_METADATA_GROUP_SIZE) / 8;
-			scan_state.LoadCurrentMetaData();
+		if (scan_state.current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
+			scan_state.LoadNextGroup();
 		}
 
 		idx_t offset_in_compression_group =
-		    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		    scan_state.current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+		if (scan_state.current_group.mode == BitpackingMode::CONSTANT) {
+			idx_t remaining = scan_count - scanned;
+			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			T *begin = result_data + result_offset + scanned;
+			T *end = begin + remaining;
+			std::fill(begin, end, scan_state.current_constant);
+			scanned += to_scan;
+			scan_state.current_group_offset += to_scan;
+			continue;
+		}
+		if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+			idx_t remaining = scan_count - scanned;
+			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+			T *target_ptr = result_data + result_offset + scanned;
+
+			for (idx_t i = 0; i < to_scan; i++) {
+				target_ptr[i] = ((scan_state.current_group_offset + i) * scan_state.current_constant) +
+				                scan_state.current_frame_of_reference;
+			}
+
+			scanned += to_scan;
+			scan_state.current_group_offset += to_scan;
+			continue;
+		}
+		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
+		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
-
 		// Calculate start of compression algorithm group
 		data_ptr_t current_position_ptr =
-		    scan_state.current_metadata_group_ptr + scan_state.position_in_group * scan_state.current_width / 8;
+		    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
 		data_ptr_t decompression_group_start_pointer =
 		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
 
@@ -445,9 +797,17 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
 		}
-		ApplyFrameOfReference((T *)current_result_ptr, scan_state.current_frame_of_reference, to_scan);
+
+		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+			ApplyFrameOfReference<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_frame_of_reference, to_scan);
+			DeltaDecode<T_S>((T_S *)current_result_ptr, (T_S)scan_state.current_delta_offset, to_scan);
+			scan_state.current_delta_offset = ((T *)current_result_ptr)[to_scan - 1];
+		} else {
+			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
+		}
+
 		scanned += to_scan;
-		scan_state.position_in_group += to_scan;
+		scan_state.current_group_offset += to_scan;
 	}
 }
 
@@ -467,23 +827,39 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	auto result_data = FlatVector::GetData<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
-	// TODO clean up, is reused in partialscan
 	idx_t offset_in_compression_group =
-	    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	    scan_state.current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 	data_ptr_t decompression_group_start_pointer =
-	    scan_state.current_metadata_group_ptr +
-	    (scan_state.position_in_group - offset_in_compression_group) * scan_state.current_width / 8;
+	    scan_state.current_group_ptr +
+	    (scan_state.current_group_offset - offset_in_compression_group) * scan_state.current_width / 8;
 
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
+
+	if (scan_state.current_group.mode == BitpackingMode::CONSTANT) {
+		*current_result_ptr = scan_state.current_constant;
+		return;
+	}
+
+	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		*current_result_ptr =
+		    ((scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
+		return;
+	}
+
+	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
+	         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
 	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
 	                                     scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
-	//! Apply FOR to result
 	*current_result_ptr += scan_state.current_frame_of_reference;
+
+	if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+		*current_result_ptr += scan_state.current_delta_offset;
+	}
 }
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
