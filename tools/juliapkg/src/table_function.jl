@@ -44,6 +44,7 @@ function add_result_column(bind_info::BindInfo, name::AbstractString, type::Logi
 end
 
 function get_extra_data(bind_info::BindInfo)
+	#ccall(:jl_breakpoint, Cvoid, (Any,), bind_info)
     return bind_info.main_function.extra_data
 end
 

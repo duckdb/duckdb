@@ -182,16 +182,16 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     if local_info.current_pos >= local_info.end_pos
         # ran out of data to scan in the local info: fetch new rows from the global state (if any)
         # we can in increments of 100 vectors
-        lock(global_info.global_lock)
-        row_count::Int64 = size(bind_info.df, 1)
-        local_info.current_pos = global_info.pos
-        total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
-        if local_info.current_pos + total_scan_amount >= row_count
-            total_scan_amount = row_count - local_info.current_pos
+        lock(global_info.global_lock) do
+			row_count::Int64 = size(bind_info.df, 1)
+			local_info.current_pos = global_info.pos
+			total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
+			if local_info.current_pos + total_scan_amount >= row_count
+				total_scan_amount = row_count - local_info.current_pos
+			end
+			local_info.end_pos = local_info.current_pos + total_scan_amount
+			global_info.pos += total_scan_amount
         end
-        local_info.end_pos = local_info.current_pos + total_scan_amount
-        global_info.pos += total_scan_amount
-        unlock(global_info.global_lock)
     end
     scan_count::Int64 = DuckDB.VECTOR_SIZE
     current_row::Int64 = local_info.current_pos
@@ -223,6 +223,7 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
 end
 
 function register_data_frame(con::Connection, df::DataFrame, name::AbstractString)
+	ccall(:jl_breakpoint, Cvoid, (Any,), con)
     con.db.registered_objects[name] = df
     DBInterface.execute(
         con,

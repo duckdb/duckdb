@@ -657,7 +657,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
     tasks = []
-    for i in 2:Threads.nthreads()
+    for i in 2:1
         task_val = @spawn execute_tasks(task_state)
         push!(tasks, task_val)
     end
