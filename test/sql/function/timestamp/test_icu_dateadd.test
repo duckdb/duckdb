@@ -372,4 +372,24 @@ SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
 statement error
 SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
 
+# DST arithmetic
+statement ok
+set timezone = 'Europe/London';
 
+statement ok
+CREATE TABLE london AS (
+	SELECT * 
+	FROM (VALUES 
+		('2000-10-29 03:00:00+00'::TIMESTAMPTZ, '2000-03-26 03:00:00+01'::TIMESTAMPTZ, '2000-01-03 00:00:00+00'::TIMESTAMPTZ)
+		) tbl(dst2, dst1, origin)
+	);
+
+query I
+SELECT origin + (dst1 - origin) FROM london;
+----
+2000-03-26 03:00:00+01
+
+query I
+SELECT origin + (dst2 - origin) FROM london;
+----
+2000-10-29 03:00:00+00

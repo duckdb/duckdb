@@ -57,23 +57,37 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	const auto udate = UDate(millis);
 	calendar->setTime(udate, status);
 
-	// Add interval fields from lowest to highest
-
 	// Break units apart to avoid overflow
-	auto remaining = interval.micros / Interval::MICROS_PER_MSEC;
-	calendar->add(UCAL_MILLISECOND, remaining % Interval::MSECS_PER_SEC, status);
+	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
 
-	remaining /= Interval::MSECS_PER_SEC;
-	calendar->add(UCAL_SECOND, remaining % Interval::SECS_PER_MINUTE, status);
+	const auto interval_ms = interval_h % Interval::MSECS_PER_SEC;
+	interval_h /= Interval::MSECS_PER_SEC;
 
-	remaining /= Interval::SECS_PER_MINUTE;
-	calendar->add(UCAL_MINUTE, remaining % Interval::MINS_PER_HOUR, status);
+	const auto interval_s = interval_h % Interval::SECS_PER_MINUTE;
+	interval_h /= Interval::SECS_PER_MINUTE;
 
-	remaining /= Interval::MINS_PER_HOUR;
-	calendar->add(UCAL_HOUR, remaining, status);
+	const auto interval_m = interval_h % Interval::MINS_PER_HOUR;
+	interval_h /= Interval::MINS_PER_HOUR;
 
-	calendar->add(UCAL_DATE, interval.days, status);
-	calendar->add(UCAL_MONTH, interval.months, status);
+	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
+		// Add interval fields from lowest to highest (non-ragged to ragged)
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		calendar->add(UCAL_HOUR, interval_h, status);
+
+		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->add(UCAL_MONTH, interval.months, status);
+	} else {
+		// Add interval fields from highest to lowest (ragged to non-ragged)
+		calendar->add(UCAL_MONTH, interval.months, status);
+		calendar->add(UCAL_DATE, interval.days, status);
+
+		calendar->add(UCAL_HOUR, interval_h, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+	}
 
 	return ICUDateFunc::GetTime(calendar, micros);
 }
