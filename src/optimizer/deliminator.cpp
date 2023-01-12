@@ -14,7 +14,7 @@ namespace duckdb {
 
 class DeliminatorPlanUpdater : LogicalOperatorVisitor {
 public:
-	DeliminatorPlanUpdater(ClientContext &context) : context(context) {
+	explicit DeliminatorPlanUpdater(ClientContext &context) : context(context) {
 	}
 	//! Update the plan after a DelimGet has been removed
 	void VisitOperator(LogicalOperator &op) override;

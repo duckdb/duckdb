@@ -21,7 +21,7 @@ class DeliminatorPlanUpdater;
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
 public:
-	Deliminator(ClientContext &context) : context(context) {
+	explicit Deliminator(ClientContext &context) : context(context) {
 	}
 	//! Perform DelimJoin elimination
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
