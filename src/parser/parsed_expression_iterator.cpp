@@ -195,18 +195,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
-	case TableReferenceType::CROSS_PRODUCT: {
-		auto &cp_ref = (CrossProductRef &)ref;
-		EnumerateTableRefChildren(*cp_ref.left, callback);
-		EnumerateTableRefChildren(*cp_ref.right, callback);
-		break;
-	}
-	case TableReferenceType::POSITIONAL_JOIN: {
-		auto &pj_ref = (PositionalJoinRef &)ref;
-		EnumerateTableRefChildren(*pj_ref.left, callback);
-		EnumerateTableRefChildren(*pj_ref.right, callback);
-		break;
-	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = (ExpressionListRef &)ref;
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {

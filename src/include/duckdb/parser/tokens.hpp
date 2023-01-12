@@ -88,13 +88,11 @@ class ForeignKeyConstraint;
 class TableRef;
 
 class BaseTableRef;
-class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
-class PositionalJoinRef;
 
 //===--------------------------------------------------------------------===//
 // Other

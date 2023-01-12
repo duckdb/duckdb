@@ -145,12 +145,6 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
                                                    const std::function<void(Expression &child)> &callback) {
 	switch (ref.type) {
-	case TableReferenceType::CROSS_PRODUCT: {
-		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
-		EnumerateTableRefChildren(*bound_crossproduct.left, callback);
-		EnumerateTableRefChildren(*bound_crossproduct.right, callback);
-		break;
-	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &bound_expr_list = (BoundExpressionListRef &)ref;
 		for (auto &expr_list : bound_expr_list.values) {
@@ -162,7 +156,9 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 	}
 	case TableReferenceType::JOIN: {
 		auto &bound_join = (BoundJoinRef &)ref;
-		EnumerateExpression(bound_join.condition, callback);
+		if (bound_join.condition) {
+			EnumerateExpression(bound_join.condition, callback);
+		}
 		EnumerateTableRefChildren(*bound_join.left, callback);
 		EnumerateTableRefChildren(*bound_join.right, callback);
 		break;

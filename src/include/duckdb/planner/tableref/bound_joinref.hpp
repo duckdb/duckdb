@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -18,7 +19,8 @@ namespace duckdb {
 //! Represents a join
 class BoundJoinRef : public BoundTableRef {
 public:
-	BoundJoinRef() : BoundTableRef(TableReferenceType::JOIN), lateral(false) {
+	explicit BoundJoinRef(JoinRefType ref_type)
+	    : BoundTableRef(TableReferenceType::JOIN), ref_type(ref_type), lateral(false) {
 	}
 
 	//! The binder used to bind the LHS of the join
@@ -33,6 +35,8 @@ public:
 	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
+	//! Join condition type
+	JoinRefType ref_type;
 	//! Whether or not this is a lateral join
 	bool lateral;
 	//! The correlated columns of the right-side with the left-side

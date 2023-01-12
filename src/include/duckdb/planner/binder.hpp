@@ -252,13 +252,11 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
-	unique_ptr<BoundTableRef> Bind(PositionalJoinRef &ref);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
@@ -274,14 +272,12 @@ private:
 	                          unique_ptr<ExternalDependency> external_dependency);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundPositionalJoinRef &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);

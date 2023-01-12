@@ -78,7 +78,6 @@ template class std::unique_ptr<UniqueConstraint>;
 template class std::unique_ptr<ForeignKeyConstraint>;
 // template class std::unique_ptr<TableRef>;
 template class std::unique_ptr<BaseTableRef>;
-template class std::unique_ptr<CrossProductRef>;
 template class std::unique_ptr<JoinRef>;
 template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;

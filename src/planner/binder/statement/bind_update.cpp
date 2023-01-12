@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
@@ -145,7 +145,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	if (stmt.from_table) {
-		BoundCrossProductRef bound_crossproduct;
+		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
 		bound_crossproduct.right = Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);

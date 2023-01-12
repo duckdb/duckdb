@@ -46,13 +46,11 @@ class BoundWindowExpression;
 class BoundTableRef;
 
 class BoundBaseTableRef;
-class BoundCrossProductRef;
 class BoundJoinRef;
 class BoundSubqueryRef;
 class BoundTableFunction;
 class BoundEmptyTableRef;
 class BoundExpressionListRef;
 class BoundCTERef;
-class BoundPositionalJoinRef;
 
 } // namespace duckdb
