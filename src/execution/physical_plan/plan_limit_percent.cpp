@@ -9,10 +9,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimitPerce
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto limit = make_unique<PhysicalLimitPercent>(op.types, op.limit_percent, op.offset_val, move(op.limit),
-	                                               move(op.offset), op.estimated_cardinality);
-	limit->children.push_back(move(plan));
-	return move(limit);
+	auto limit = make_unique<PhysicalLimitPercent>(op.types, op.limit_percent, op.offset_val, std::move(op.limit),
+	                                               std::move(op.offset), op.estimated_cardinality);
+	limit->children.push_back(std::move(plan));
+	return std::move(limit);
 }
 
 } // namespace duckdb

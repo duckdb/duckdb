@@ -45,13 +45,13 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 	// iterate expressions, get cost for each one
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		idx_t cost = Cost(*expressions[i]);
-		expression_costs.push_back({move(expressions[i]), cost});
+		expression_costs.push_back({std::move(expressions[i]), cost});
 	}
 
 	// sort by cost and put back in place
 	sort(expression_costs.begin(), expression_costs.end());
 	for (idx_t i = 0; i < expression_costs.size(); i++) {
-		expressions[i] = move(expression_costs[i].expr);
+		expressions[i] = std::move(expression_costs[i].expr);
 	}
 }
 

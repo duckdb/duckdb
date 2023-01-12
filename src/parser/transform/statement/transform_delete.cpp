@@ -21,7 +21,7 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 		for (auto n = stmt->usingClause->head; n != nullptr; n = n->next) {
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(n->data.ptr_value);
 			auto using_entry = TransformTableRefNode(target);
-			result->using_clauses.push_back(move(using_entry));
+			result->using_clauses.push_back(std::move(using_entry));
 		}
 	}
 

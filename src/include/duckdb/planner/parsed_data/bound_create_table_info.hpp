@@ -23,7 +23,7 @@ namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateTableInfo {
-	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base_p) : base(move(base_p)) {
+	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base_p) : base(std::move(base_p)) {
 		D_ASSERT(base);
 	}
 

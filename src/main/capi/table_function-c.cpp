@@ -120,7 +120,7 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	}
 
 	result->info = info;
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, TableFunctionInitInput &data_p) {
@@ -132,7 +132,7 @@ unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, 
 	if (!init_info.success) {
 		throw Exception(init_info.error);
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &context, TableFunctionInitInput &data_p,
@@ -140,7 +140,7 @@ unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &co
 	auto &bind_data = (CTableBindData &)*data_p.bind_data;
 	auto result = make_unique<CTableLocalInitData>();
 	if (!bind_data.info->local_init) {
-		return move(result);
+		return std::move(result);
 	}
 
 	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
@@ -148,7 +148,7 @@ unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &co
 	if (!init_info.success) {
 		throw Exception(init_info.error);
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<NodeStatistics> CTableFunctionCardinality(ClientContext &context, const FunctionData *bind_data_p) {

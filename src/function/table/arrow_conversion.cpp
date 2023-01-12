@@ -741,7 +741,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanL
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
 		                    col_idx, arrow_convert_idx);
-		dict_vectors[col_idx] = move(base_vector);
+		dict_vectors[col_idx] = std::move(base_vector);
 	}
 	auto dictionary_type = arrow_convert_data[col_idx]->dictionary_type;
 	//! Get Pointer to Indices of Dictionary

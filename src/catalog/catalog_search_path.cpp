@@ -9,7 +9,7 @@
 namespace duckdb {
 
 CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
-    : catalog(move(catalog_p)), schema(move(schema_p)) {
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -77,11 +77,11 @@ separator:
 	}
 	if (schema.empty()) {
 		// if we parse one entry it is the schema
-		schema = move(entry);
+		schema = std::move(entry);
 	} else if (catalog.empty()) {
 		// if we parse two entries it is [catalog.schema]
-		catalog = move(schema);
-		schema = move(entry);
+		catalog = std::move(schema);
+		schema = std::move(entry);
 	} else {
 		throw ParserException("Too many dots - expected [schema] or [catalog.schema] for CatalogSearchEntry");
 	}
@@ -95,7 +95,7 @@ final:
 	if (schema.empty()) {
 		throw ParserException("Unexpected end of entry - empty CatalogSearchEntry");
 	}
-	return CatalogSearchEntry(move(catalog), move(schema));
+	return CatalogSearchEntry(std::move(catalog), std::move(schema));
 }
 
 CatalogSearchEntry CatalogSearchEntry::Parse(const string &input) {
@@ -136,7 +136,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_sc
 				// only schema supplied - check if this is a database instead
 				auto schema = Catalog::GetSchema(context, path.schema, DEFAULT_SCHEMA, true);
 				if (schema) {
-					path.catalog = move(path.schema);
+					path.catalog = std::move(path.schema);
 					path.schema = schema->name;
 					continue;
 				}
@@ -145,13 +145,13 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_sc
 			                       is_set_schema ? "schema" : "search_path", path.ToString());
 		}
 	}
-	this->set_paths = move(new_paths);
+	this->set_paths = std::move(new_paths);
 	SetPaths(set_paths);
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, bool is_set_schema) {
-	vector<CatalogSearchEntry> new_paths {move(new_value)};
-	Set(move(new_paths), is_set_schema);
+	vector<CatalogSearchEntry> new_paths {std::move(new_value)};
+	Set(std::move(new_paths), is_set_schema);
 }
 
 const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {
@@ -213,7 +213,7 @@ void CatalogSearchPath::SetPaths(vector<CatalogSearchEntry> new_paths) {
 	paths.reserve(new_paths.size() + 3);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
 	for (auto &path : new_paths) {
-		paths.push_back(move(path));
+		paths.push_back(std::move(path));
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);

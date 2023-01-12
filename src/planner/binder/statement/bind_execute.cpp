@@ -33,7 +33,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
-		bind_values.push_back(move(value));
+		bind_values.push_back(std::move(value));
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
 	if (prepared->RequireRebind(context, bind_values)) {
@@ -43,7 +43,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			prepared_planner.parameter_data.emplace_back(bind_values[i]);
 		}
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
-		rebound_plan = move(prepared_planner.plan);
+		rebound_plan = std::move(prepared_planner.plan);
 		D_ASSERT(prepared->properties.bound_all_parameters);
 		this->bound_tables = prepared_planner.binder->bound_tables;
 	}
@@ -54,13 +54,13 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	result.names = prepared->names;
 	result.types = prepared->types;
 
-	prepared->Bind(move(bind_values));
+	prepared->Bind(std::move(bind_values));
 	if (rebound_plan) {
-		auto execute_plan = make_unique<LogicalExecute>(move(prepared));
-		execute_plan->children.push_back(move(rebound_plan));
-		result.plan = move(execute_plan);
+		auto execute_plan = make_unique<LogicalExecute>(std::move(prepared));
+		execute_plan->children.push_back(std::move(rebound_plan));
+		result.plan = std::move(execute_plan);
 	} else {
-		result.plan = make_unique<LogicalExecute>(move(prepared));
+		result.plan = make_unique<LogicalExecute>(std::move(prepared));
 	}
 	return result;
 }

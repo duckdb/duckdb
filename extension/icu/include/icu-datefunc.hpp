@@ -32,7 +32,7 @@ struct ICUDateFunc {
 	};
 
 	struct CastData : public BoundCastData {
-		explicit CastData(unique_ptr<FunctionData> info_p) : info(move(info_p)) {
+		explicit CastData(unique_ptr<FunctionData> info_p) : info(std::move(info_p)) {
 		}
 
 		unique_ptr<BoundCastData> Copy() const override {

@@ -139,7 +139,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastFromNaive, move(cast_data));
+		return BoundCastInfo(CastFromNaive, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {
@@ -202,7 +202,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastToNaive, move(cast_data));
+		return BoundCastInfo(CastToNaive, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {
@@ -346,7 +346,7 @@ void RegisterICUTimeZoneFunctions(ClientContext &context) {
 	//	Table functions
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
-	CreateTableFunctionInfo tz_names_info(move(tz_names));
+	CreateTableFunctionInfo tz_names_info(std::move(tz_names));
 	catalog.CreateTableFunction(context, &tz_names_info);
 
 	//	Scalar functions

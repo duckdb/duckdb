@@ -22,7 +22,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConju
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	return move(result);
+	return std::move(result);
 }
 
 void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, ExpressionState *state,

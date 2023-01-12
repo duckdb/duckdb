@@ -9,7 +9,7 @@ namespace duckdb {
 
 const idx_t BoxRenderer::SPLIT_COLUMN = idx_t(-1);
 
-BoxRenderer::BoxRenderer(BoxRendererConfig config_p) : config(move(config_p)) {
+BoxRenderer::BoxRenderer(BoxRendererConfig config_p) : config(std::move(config_p)) {
 }
 
 string BoxRenderer::ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result) {
@@ -645,7 +645,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		column_count--;
 		column_count_str += " (" + to_string(column_count) + " shown)";
 	}
-	RenderRowCount(move(row_count_str), move(shown_str), column_count_str, boundaries, has_hidden_rows,
+	RenderRowCount(std::move(row_count_str), std::move(shown_str), column_count_str, boundaries, has_hidden_rows,
 	               has_hidden_columns, total_length, row_count, column_count, minimum_row_length, ss);
 }
 

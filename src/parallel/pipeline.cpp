@@ -21,7 +21,7 @@ class PipelineTask : public ExecutorTask {
 
 public:
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-	    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(move(event_p)) {
+	    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
 	}
 
 	Pipeline &pipeline;
@@ -70,7 +70,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 	vector<unique_ptr<Task>> tasks;
 	tasks.push_back(make_unique<PipelineTask>(*this, event));
-	event->SetTasks(move(tasks));
+	event->SetTasks(std::move(tasks));
 }
 
 bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
@@ -142,7 +142,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	for (idx_t i = 0; i < max_threads; i++) {
 		tasks.push_back(make_unique<PipelineTask>(*this, event));
 	}
-	event->SetTasks(move(tasks));
+	event->SetTasks(std::move(tasks));
 	return true;
 }
 
@@ -260,7 +260,7 @@ PhysicalOperator *PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
 }
 
 void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators) {
-	pipeline.operators = move(operators);
+	pipeline.operators = std::move(operators);
 }
 
 shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor, Pipeline &pipeline,

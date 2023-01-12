@@ -222,7 +222,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastFromVarchar, move(cast_data));
+		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {
@@ -407,7 +407,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastToVarchar, move(cast_data));
+		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {

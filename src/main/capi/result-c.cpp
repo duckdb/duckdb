@@ -260,7 +260,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 
 	// initialize the result_data object
 	auto result_data = new DuckDBResultData();
-	result_data->result = move(result_p);
+	result_data->result = std::move(result_p);
 	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_NONE;
 	out->internal_data = result_data;
 

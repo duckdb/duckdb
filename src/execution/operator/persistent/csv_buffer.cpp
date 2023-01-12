@@ -17,7 +17,7 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 
 CSVBuffer::CSVBuffer(ClientContext &context, BufferHandle buffer_p, idx_t buffer_size_p, idx_t actual_size_p,
                      bool final_buffer)
-    : context(context), handle(move(buffer_p)), actual_size(actual_size_p), last_buffer(final_buffer) {
+    : context(context), handle(std::move(buffer_p)), actual_size(actual_size_p), last_buffer(final_buffer) {
 }
 
 unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t set_buffer_size) {
@@ -29,7 +29,7 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t set_buff
 	auto next_buffer = AllocateBuffer(set_buffer_size);
 	idx_t next_buffer_actual_size = file_handle.Read(next_buffer.Ptr(), set_buffer_size);
 
-	return make_unique<CSVBuffer>(context, move(next_buffer), set_buffer_size, next_buffer_actual_size,
+	return make_unique<CSVBuffer>(context, std::move(next_buffer), set_buffer_size, next_buffer_actual_size,
 	                              file_handle.FinishedReading());
 }
 

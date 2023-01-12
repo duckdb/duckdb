@@ -50,7 +50,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
 	}
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	properties.allow_stream_result = false;

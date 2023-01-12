@@ -34,19 +34,19 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 		auto &and_expr = (BoundConjunctionExpression &)*child;
 		for (idx_t i = 0; i < and_expr.children.size(); i++) {
 			if (Expression::Equals(and_expr.children[i].get(), &expr)) {
-				result = move(and_expr.children[i]);
+				result = std::move(and_expr.children[i]);
 				and_expr.children.erase(and_expr.children.begin() + i);
 				break;
 			}
 		}
 		if (and_expr.children.size() == 1) {
-			conj.children[idx] = move(and_expr.children[0]);
+			conj.children[idx] = std::move(and_expr.children[0]);
 		}
 	} else {
 		// not an AND node! remove the entire expression
 		// this happens in the case of e.g. (X AND B) OR X
 		D_ASSERT(Expression::Equals(child.get(), &expr));
-		result = move(child);
+		result = std::move(child);
 		conj.children[idx] = nullptr;
 	}
 	D_ASSERT(result);
@@ -94,7 +94,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 			ExtractExpression(*initial_or, i, *result);
 		}
 		// now we add the expression to the new root
-		new_root->children.push_back(move(result));
+		new_root->children.push_back(std::move(result));
 	}
 
 	// check if we completely erased one of the children of the OR
@@ -107,29 +107,29 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	for (idx_t i = 0; i < initial_or->children.size(); i++) {
 		if (!initial_or->children[i]) {
 			if (new_root->children.size() <= 1) {
-				return move(new_root->children[0]);
+				return std::move(new_root->children[0]);
 			} else {
-				return move(new_root);
+				return std::move(new_root);
 			}
 		}
 	}
 	// finally we need to add the remaining expressions in the OR to the new root
 	if (initial_or->children.size() == 1) {
 		// one child: skip the OR entirely and only add the single child
-		new_root->children.push_back(move(initial_or->children[0]));
+		new_root->children.push_back(std::move(initial_or->children[0]));
 	} else if (initial_or->children.size() > 1) {
 		// multiple children still remain: push them into a new OR and add that to the new root
 		auto new_or = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 		for (auto &child : initial_or->children) {
-			new_or->children.push_back(move(child));
+			new_or->children.push_back(std::move(child));
 		}
-		new_root->children.push_back(move(new_or));
+		new_root->children.push_back(std::move(new_or));
 	}
 	// finally return the new root
 	if (new_root->children.size() == 1) {
-		return move(new_root->children[0]);
+		return std::move(new_root->children[0]);
 	}
-	return move(new_root);
+	return std::move(new_root);
 }
 
 } // namespace duckdb

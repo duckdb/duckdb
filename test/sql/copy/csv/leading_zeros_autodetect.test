@@ -1,0 +1,47 @@
+# name: test/sql/copy/csv/leading_zeros_autodetect.test
+# description: Issue #5782: Test leading zeros auto-detect
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE leading_zeros AS SELECT * FROM read_csv_auto('data/csv/leading_zeros.csv')
+
+query I
+SELECT CODGEO FROM leading_zeros LIMIT 1;
+----
+09001
+
+query I
+SELECT typeof(CODGEO) FROM leading_zeros LIMIT 1;
+----
+VARCHAR
+
+statement ok
+CREATE TABLE leading_zeros2 AS SELECT * FROM read_csv_auto('data/csv/leading_zeros2.csv')
+
+query IIIIIII
+SELECT * FROM leading_zeros2;
+----
+030151360	03	015	1360	POLPENAZZE DEL GARDA	BS	2021-10-13
+030120530	03	012	0530	CAROBBIO DEGLI ANGELI	BG	2021-10-04
+020040580	02	004	0580	SAINT-DENIS	AO	2020-09-23
+030150870	03	015	0870	LOSINE	BS	2021-10-04
+190480090	19	048	0090	CAPO D'ORLANDO	ME	2021-10-27
+
+query III
+SELECT typeof(comune), typeof(codice_regione), typeof(codice_provincia) FROM leading_zeros2 LIMIT 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+# we can still cast integers with leading zeros normally
+query I
+select '09001'::int;
+----
+9001
+
+query I
+select '00009001'::int;
+----
+9001

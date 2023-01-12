@@ -55,7 +55,7 @@ void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set
 }
 
 void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	using_column_sets.push_back(move(set));
+	using_column_sets.push_back(std::move(set));
 }
 
 bool BindContext::FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **out) {
@@ -207,10 +207,10 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	names.push_back(table_name);
 	names.push_back(column_name);
 
-	auto result = make_unique<ColumnRefExpression>(move(names));
+	auto result = make_unique<ColumnRefExpression>(std::move(names));
 	auto binding = GetBinding(table_name, error_message);
 	if (!binding) {
-		return move(result);
+		return std::move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (ColumnIsGenerated(binding, column_index)) {
@@ -220,7 +220,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 		// as it appears in the binding itself
 		result->alias = binding->names[column_index];
 	}
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
@@ -312,7 +312,7 @@ bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, con
 		auto new_entry = entry->second->Copy();
 		new_entry->alias = entry->first;
 		excluded_columns.insert(entry->first);
-		new_select_list.push_back(move(new_entry));
+		new_select_list.push_back(std::move(new_entry));
 		return true;
 	}
 	return false;
@@ -371,7 +371,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 							coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->alias = column_name;
-						new_select_list.push_back(move(coalesce));
+						new_select_list.push_back(std::move(coalesce));
 					} else {
 						// primary binding: output the qualified column ref
 						new_select_list.push_back(
@@ -448,7 +448,7 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	bindings_list.emplace_back(alias, binding.get());
-	bindings[alias] = move(binding);
+	bindings[alias] = std::move(binding);
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
@@ -526,7 +526,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
-	cte_bindings[alias] = move(binding);
+	cte_bindings[alias] = std::move(binding);
 	cte_references[alias] = std::make_shared<idx_t>(0);
 }
 
@@ -535,10 +535,10 @@ void BindContext::AddContext(BindContext other) {
 		if (bindings.find(binding.first) != bindings.end()) {
 			throw BinderException("Duplicate alias \"%s\" in query!", binding.first);
 		}
-		bindings[binding.first] = move(binding.second);
+		bindings[binding.first] = std::move(binding.second);
 	}
 	for (auto &binding : other.bindings_list) {
-		bindings_list.push_back(move(binding));
+		bindings_list.push_back(std::move(binding));
 	}
 	for (auto &entry : other.using_columns) {
 		for (auto &alias : entry.second) {

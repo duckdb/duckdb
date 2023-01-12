@@ -40,7 +40,7 @@ struct IcuBindData : public FunctionData {
 	string language;
 	string country;
 
-	IcuBindData(string language_p, string country_p) : language(move(language_p)), country(move(country_p)) {
+	IcuBindData(string language_p, string country_p) : language(std::move(language_p)), country(std::move(country_p)) {
 		UErrorCode status = U_ZERO_ERROR;
 		auto locale = icu::Locale(language.c_str(), country.c_str());
 		if (locale.isBogus()) {
@@ -249,7 +249,7 @@ void ICUExtension::Load(DuckDB &db) {
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
 
-	CreateScalarFunctionInfo sort_key_info(move(sort_key));
+	CreateScalarFunctionInfo sort_key_info(std::move(sort_key));
 	catalog.CreateFunction(*con.context, &sort_key_info);
 
 	// Time Zones
@@ -277,7 +277,7 @@ void ICUExtension::Load(DuckDB &db) {
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
-	CreateTableFunctionInfo cal_names_info(move(cal_names));
+	CreateTableFunctionInfo cal_names_info(std::move(cal_names));
 	catalog.CreateTableFunction(*con.context, &cal_names_info);
 
 	con.Commit();
