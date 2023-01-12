@@ -42,9 +42,6 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
-	bool ParallelSink() const override {
-		return true;
-	}
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
