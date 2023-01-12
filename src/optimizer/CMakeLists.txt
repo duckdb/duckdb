@@ -11,6 +11,7 @@ add_library_unity(
   common_aggregate_optimizer.cpp
   cse_optimizer.cpp
   deliminator.cpp
+        unnest_rewriter.cpp
   column_lifetime_analyzer.cpp
   expression_heuristics.cpp
   filter_combiner.cpp

@@ -12,8 +12,7 @@
 
 namespace duckdb {
 
-//! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
-//! operator.
+//! LogicalUnnest represents the logical UNNEST operator.
 class LogicalUnnest : public LogicalOperator {
 public:
 	explicit LogicalUnnest(idx_t unnest_index)
