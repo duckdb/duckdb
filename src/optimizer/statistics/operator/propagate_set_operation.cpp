@@ -64,7 +64,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetO
 			throw InternalException("Unsupported setop type");
 		}
 		ColumnBinding binding(setop.table_index, i);
-		statistics_map[binding] = move(new_stats);
+		statistics_map[binding] = std::move(new_stats);
 	}
 	if (!left_stats || !right_stats) {
 		return nullptr;

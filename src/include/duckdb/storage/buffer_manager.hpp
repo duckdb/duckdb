@@ -52,8 +52,10 @@ public:
 	// Static methods
 
 	virtual void AdjustUsedMemory(int64_t amount) = 0;
-	static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
+	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
+	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
+
 	static idx_t GetAllocSize(idx_t block_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
 	}

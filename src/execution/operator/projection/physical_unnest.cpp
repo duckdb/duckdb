@@ -40,7 +40,7 @@ public:
 // this implements a sorted window functions variant
 PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
 	D_ASSERT(!this->select_list.empty());
 }
 
@@ -89,6 +89,7 @@ static void UnnestValidity(UnifiedVectorFormat &vdata, idx_t start, idx_t end, V
 
 static void UnnestVector(UnifiedVectorFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
                          Vector &result) {
+	D_ASSERT(source.GetType() == result.GetType());
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

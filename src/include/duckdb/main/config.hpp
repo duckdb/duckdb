@@ -72,8 +72,8 @@ typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Va
 struct ExtensionOption {
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p)
-	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p),
-	      default_value(move(default_value_p)) {
+	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
+	      default_value(std::move(default_value_p)) {
 	}
 
 	string description;
@@ -144,6 +144,8 @@ struct DBConfigOptions {
 	bool enable_fsst_vectors = false;
 	//! Experimental parallel CSV reader
 	bool experimental_parallel_csv_reader = false;
+	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
+	bool immediate_transaction_mode = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -189,6 +191,7 @@ public:
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
+	DUCKDB_API static DBConfig &Get(AttachedDatabase &db);
 	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
 	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();

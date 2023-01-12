@@ -13,7 +13,7 @@ namespace duckdb {
 
 class RegisteredObject {
 public:
-	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
+	explicit RegisteredObject(py::object obj_p) : obj(std::move(obj_p)) {
 	}
 	virtual ~RegisteredObject() {
 		py::gil_scoped_acquire acquire;

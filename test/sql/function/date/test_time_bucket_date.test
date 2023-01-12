@@ -1,0 +1,506 @@
+# name: test/sql/function/date/test_time_bucket_date.test
+# description: Test time bucket functionality
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(w INTERVAL, d DATE, shift INTERVAL, origin DATE);
+
+statement ok
+INSERT INTO dates VALUES ('10 days', '-infinity', '0 days', '1970-01-05'),
+	('10 days', '3000-01-02 (BC)', '3 days', '3000-01-01 (BC)'),
+	('2 months', '1024-04-10 (BC)', '10 days', '1024-03-01 (BC)'),
+	('10 days', '0044-06-15 (BC)', '6 days', '0044-02-01 (BC)'),
+	('10 days', '0794-11-15', '1 week', '0790-11-01'),
+	('10 days', '1700-01-01', '0 days', '1700-01-05'),
+	('1 week', '1832-05-03', '0 days', '1970-05-05'),
+	('10 days', '1897-07-05', '2 days', '1970-06-07'),
+	('10 days', '1906-02-08', '-2 days', '1970-10-03'),
+	('2 months', '1946-09-14', '0 months', '1970-07-05'),
+	('2 months', '2000-01-01', '1 month 1 week', '1970-05-01'),
+	('2 months', '2000-01-03', '-1 month 1 week', '1970-08-20'),
+	('2 year', '2004-05-20', '6 months', '1970-12-31'),
+	('2 year', '2032-12-06', '-6 months', '1969-07-01'),
+	('10 days', 'infinity', '0 days', '1970-01-01'),
+;
+
+query II
+select d, time_bucket('3 days'::interval, d) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3000-01-02 (BC)
+1024-04-10 (BC)	1024-04-10 (BC)
+0044-06-15 (BC)	0044-06-14 (BC)
+0794-11-15	0794-11-15
+1700-01-01	1699-12-31
+1832-05-03	1832-05-01
+1897-07-05	1897-07-04
+1906-02-08	1906-02-06
+1946-09-14	1946-09-13
+2000-01-01	1999-12-31
+2000-01-03	2000-01-03
+2004-05-20	2004-05-20
+2032-12-06	2032-12-04
+infinity	infinity
+
+query II
+select d, time_bucket('3 years'::interval, d) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3002-01-01 (BC)
+1024-04-10 (BC)	1025-01-01 (BC)
+0044-06-15 (BC)	0044-01-01 (BC)
+0794-11-15	0794-01-01
+1700-01-01	1700-01-01
+1832-05-03	1832-01-01
+1897-07-05	1895-01-01
+1906-02-08	1904-01-01
+1946-09-14	1946-01-01
+2000-01-01	2000-01-01
+2000-01-03	2000-01-01
+2004-05-20	2003-01-01
+2032-12-06	2030-01-01
+infinity	infinity
+
+query II
+select d, time_bucket(null::interval, d) from dates;
+----
+-infinity	NULL
+3000-01-02 (BC)	NULL
+1024-04-10 (BC)	NULL
+0044-06-15 (BC)	NULL
+0794-11-15	NULL
+1700-01-01	NULL
+1832-05-03	NULL
+1897-07-05	NULL
+1906-02-08	NULL
+1946-09-14	NULL
+2000-01-01	NULL
+2000-01-03	NULL
+2004-05-20	NULL
+2032-12-06	NULL
+infinity	NULL
+
+query III
+select w, d, time_bucket(w, d) from dates;
+----
+10 days	-infinity	-infinity
+10 days	3000-01-02 (BC)	3001-12-31 (BC)
+2 months	1024-04-10 (BC)	1024-03-01 (BC)
+10 days	0044-06-15 (BC)	0044-06-12 (BC)
+10 days	0794-11-15	0794-11-11
+10 days	1700-01-01	1699-12-26
+7 days	1832-05-03	1832-04-30
+10 days	1897-07-05	1897-07-01
+10 days	1906-02-08	1906-02-05
+2 months	1946-09-14	1946-09-01
+2 months	2000-01-01	2000-01-01
+2 months	2000-01-03	2000-01-01
+2 years	2004-05-20	2004-01-01
+2 years	2032-12-06	2032-01-01
+10 days	infinity	infinity
+
+query II
+select d, time_bucket('4 days'::interval, d, '6 hours'::interval) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3001-12-29 (BC)
+1024-04-10 (BC)	1024-04-08 (BC)
+0044-06-15 (BC)	0044-06-14 (BC)
+0794-11-15	0794-11-13
+1700-01-01	1699-12-30
+1832-05-03	1832-04-29
+1897-07-05	1897-07-01
+1906-02-08	1906-02-05
+1946-09-14	1946-09-11
+2000-01-01	1999-12-30
+2000-01-03	1999-12-30
+2004-05-20	2004-05-17
+2032-12-06	2032-12-04
+infinity	infinity
+
+query II
+select d, time_bucket('2 weeks'::interval, d, '6 days'::interval) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3001-12-21 (BC)
+1024-04-10 (BC)	1024-04-06 (BC)
+0044-06-15 (BC)	0044-06-02 (BC)
+0794-11-15	0794-11-13
+1700-01-01	1699-12-20
+1832-05-03	1832-04-29
+1897-07-05	1897-06-27
+1906-02-08	1906-01-28
+1946-09-14	1946-09-01
+2000-01-01	1999-12-26
+2000-01-03	1999-12-26
+2004-05-20	2004-05-09
+2032-12-06	2032-11-28
+infinity	infinity
+
+query II
+select d, time_bucket('3 months'::interval, d, '6 days'::interval) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3001-10-07 (BC)
+1024-04-10 (BC)	1024-04-07 (BC)
+0044-06-15 (BC)	0044-04-07 (BC)
+0794-11-15	0794-10-07
+1700-01-01	1699-10-07
+1832-05-03	1832-04-07
+1897-07-05	1897-04-07
+1906-02-08	1906-01-07
+1946-09-14	1946-07-07
+2000-01-01	1999-10-07
+2000-01-03	1999-10-07
+2004-05-20	2004-04-07
+2032-12-06	2032-10-07
+infinity	infinity
+
+query II
+select d, time_bucket(null::interval, d, '6 days'::interval) from dates;
+----
+-infinity	NULL
+3000-01-02 (BC)	NULL
+1024-04-10 (BC)	NULL
+0044-06-15 (BC)	NULL
+0794-11-15	NULL
+1700-01-01	NULL
+1832-05-03	NULL
+1897-07-05	NULL
+1906-02-08	NULL
+1946-09-14	NULL
+2000-01-01	NULL
+2000-01-03	NULL
+2004-05-20	NULL
+2032-12-06	NULL
+infinity	NULL
+
+query I
+select time_bucket('3 months'::interval, null::date, '6 days'::interval) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query II
+select d, time_bucket('3 months'::interval, d, null::interval) from dates;
+----
+-infinity	NULL
+3000-01-02 (BC)	NULL
+1024-04-10 (BC)	NULL
+0044-06-15 (BC)	NULL
+0794-11-15	NULL
+1700-01-01	NULL
+1832-05-03	NULL
+1897-07-05	NULL
+1906-02-08	NULL
+1946-09-14	NULL
+2000-01-01	NULL
+2000-01-03	NULL
+2004-05-20	NULL
+2032-12-06	NULL
+infinity	NULL
+
+query IIII
+select w, d, shift, time_bucket(w, d, shift) from dates;
+----
+10 days	-infinity	00:00:00	-infinity
+10 days	3000-01-02 (BC)	3 days	3001-12-24 (BC)
+2 months	1024-04-10 (BC)	10 days	1024-03-11 (BC)
+10 days	0044-06-15 (BC)	6 days	0044-06-08 (BC)
+10 days	0794-11-15	7 days	0794-11-08
+10 days	1700-01-01	00:00:00	1699-12-26
+7 days	1832-05-03	00:00:00	1832-04-30
+10 days	1897-07-05	2 days	1897-07-03
+10 days	1906-02-08	-2 days	1906-02-03
+2 months	1946-09-14	00:00:00	1946-09-01
+2 months	2000-01-01	1 month 7 days	1999-12-08
+2 months	2000-01-03	-1 months 7 days	1999-12-08
+2 years	2004-05-20	6 months	2002-07-01
+2 years	2032-12-06	-6 months	2031-07-01
+10 days	infinity	00:00:00	infinity
+
+query II
+select d, time_bucket('5 days'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3001-12-30 (BC)
+1024-04-10 (BC)	1024-04-09 (BC)
+0044-06-15 (BC)	0044-06-11 (BC)
+0794-11-15	0794-11-15
+1700-01-01	1699-12-30
+1832-05-03	1832-05-02
+1897-07-05	1897-07-05
+1906-02-08	1906-02-04
+1946-09-14	1946-09-12
+2000-01-01	1999-12-28
+2000-01-03	2000-01-02
+2004-05-20	2004-05-20
+2032-12-06	2032-12-04
+infinity	infinity
+
+query II
+select d, time_bucket('3 months'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3000-01-01 (BC)
+1024-04-10 (BC)	1024-04-01 (BC)
+0044-06-15 (BC)	0044-04-01 (BC)
+0794-11-15	0794-10-01
+1700-01-01	1700-01-01
+1832-05-03	1832-04-01
+1897-07-05	1897-07-01
+1906-02-08	1906-01-01
+1946-09-14	1946-07-01
+2000-01-01	2000-01-01
+2000-01-03	2000-01-01
+2004-05-20	2004-04-01
+2032-12-06	2032-10-01
+infinity	infinity
+
+query II
+select d, time_bucket('3 years'::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity	-infinity
+3000-01-02 (BC)	3002-01-01 (BC)
+1024-04-10 (BC)	1025-01-01 (BC)
+0044-06-15 (BC)	0044-01-01 (BC)
+0794-11-15	0794-01-01
+1700-01-01	1700-01-01
+1832-05-03	1832-01-01
+1897-07-05	1895-01-01
+1906-02-08	1904-01-01
+1946-09-14	1946-01-01
+2000-01-01	2000-01-01
+2000-01-03	2000-01-01
+2004-05-20	2003-01-01
+2032-12-06	2030-01-01
+infinity	infinity
+
+query II
+select d, time_bucket(null::interval, d, '1970-01-04'::date) from dates;
+----
+-infinity	NULL
+3000-01-02 (BC)	NULL
+1024-04-10 (BC)	NULL
+0044-06-15 (BC)	NULL
+0794-11-15	NULL
+1700-01-01	NULL
+1832-05-03	NULL
+1897-07-05	NULL
+1906-02-08	NULL
+1946-09-14	NULL
+2000-01-01	NULL
+2000-01-03	NULL
+2004-05-20	NULL
+2032-12-06	NULL
+infinity	NULL
+
+query I
+select time_bucket('3 years'::interval, null::date, '1970-01-04'::date) from dates;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query II
+select d, time_bucket('3 years'::interval, d, null::date) from dates;
+----
+-infinity	NULL
+3000-01-02 (BC)	NULL
+1024-04-10 (BC)	NULL
+0044-06-15 (BC)	NULL
+0794-11-15	NULL
+1700-01-01	NULL
+1832-05-03	NULL
+1897-07-05	NULL
+1906-02-08	NULL
+1946-09-14	NULL
+2000-01-01	NULL
+2000-01-03	NULL
+2004-05-20	NULL
+2032-12-06	NULL
+infinity	NULL
+
+query IIII
+select w, d, origin, time_bucket(w, d, origin) from dates;
+----
+10 days	-infinity	1970-01-05	-infinity
+10 days	3000-01-02 (BC)	3000-01-01 (BC)	3000-01-01 (BC)
+2 months	1024-04-10 (BC)	1024-03-01 (BC)	1024-03-01 (BC)
+10 days	0044-06-15 (BC)	0044-02-01 (BC)	0044-06-11 (BC)
+10 days	0794-11-15	0790-11-01	0794-11-10
+10 days	1700-01-01	1700-01-05	1699-12-26
+7 days	1832-05-03	1970-05-05	1832-05-01
+10 days	1897-07-05	1970-06-07	1897-06-29
+10 days	1906-02-08	1970-10-03	1906-02-01
+2 months	1946-09-14	1970-07-05	1946-09-01
+2 months	2000-01-01	1970-05-01	2000-01-01
+2 months	2000-01-03	1970-08-20	1999-12-01
+2 years	2004-05-20	1970-12-31	2002-12-01
+2 years	2032-12-06	1969-07-01	2031-07-01
+10 days	infinity	1970-01-01	infinity
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date);
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date, '1 hour 30 minutes'::interval);
+
+statement error
+select time_bucket('-3 hours'::interval, '2019-04-05'::date, '2019-04-05'::date);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date, '1 week'::interval);
+
+statement error
+select time_bucket('-1 month'::interval, '2019-04-05'::date, '2019-04-05'::date);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '1 hour 30 minutes'::interval);
+
+statement error
+select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05'::date, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2018-05-05'::date);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2018-05-05'::date, '1 week'::interval);
+
+statement error
+select time_bucket('1 month 1 day'::interval, '2019-05-05'::date, '2019-05-05'::date);
+
+statement error
+select time_bucket('3 days'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+
+statement error
+select time_bucket('3 days'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+
+statement error
+select time_bucket('3 months'::interval, '2019-05-05'::date, '2000000000 months'::interval);
+
+statement error
+select time_bucket('3 months'::interval, '2019-05-05'::date, '-2000000000 months'::interval);
+
+statement error
+select time_bucket('1 month'::interval, '5877642-06-25 (BC)'::date);
+
+query I
+select time_bucket('1 month'::interval, '5877642-07-01 (BC)'::date);
+----
+5877642-07-01 (BC)
+
+statement error
+select time_bucket('1 week'::interval, '5877642-07-01 (BC)'::date);
+
+statement error
+select time_bucket('1 month'::interval, '5881580-07-10'::date, '-1 day'::interval);
+
+query I
+select time_bucket('1 month'::interval, '5881580-07-10'::date);
+----
+5881580-07-01
+
+statement error
+select time_bucket('1 week'::interval, '290309-12-21 (BC)'::date);
+
+statement error
+select time_bucket('1 week'::interval, '290309-12-22 (BC)'::date);
+
+statement error
+select time_bucket('1 day'::interval, '290309-12-21 (BC)'::date);
+
+query I
+select time_bucket('1 day'::interval, '290309-12-22 (BC)'::date);
+----
+290309-12-22 (BC)
+
+statement error
+select time_bucket('1 week'::interval, '294247-01-11'::date);
+
+query I
+select time_bucket('1 week'::interval, '294247-01-10'::date);
+----
+294247-01-04
+
+statement error
+select time_bucket('1 day'::interval, '294247-01-11'::date);
+
+query I
+select time_bucket('1 day'::interval, '294247-01-10'::date);
+----
+294247-01-10
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('1 month 1 day'::interval, null::date, '2022-12-20'::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date, '6 days'::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22'::date, null::interval);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, null::date, '2022-12-20'::date);
+----
+NULL
+
+query I
+select time_bucket('-1 month'::interval, '2022-12-22'::date, null::date);
+----
+NULL

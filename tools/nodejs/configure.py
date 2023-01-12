@@ -22,7 +22,7 @@ import package_build
 
 defines = ['BUILD_{}_EXTENSION'.format(ext.upper()) for ext in extensions]
 
-if 'DUCKDB_NODE_BUILD_CACHE' in os.environ and os.path.isfile(cache_file):
+if os.environ.get('DUCKDB_NODE_BUILD_CACHE') == '1' and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
         cache = pickle.load(f)
     source_list = cache['source_list']

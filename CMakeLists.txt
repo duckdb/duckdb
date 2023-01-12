@@ -308,6 +308,7 @@ option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
+option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(
@@ -372,6 +373,10 @@ endif()
 
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
+endif()
+
+if(DEBUG_MOVE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_MOVE")
 endif()
 
 if(FORCE_ASSERT)
@@ -759,17 +764,19 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if (EXTENSION_STATIC_BUILD)
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-      # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      if (APPLE)
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+      else()
+        # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+        set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+      endif()
     elseif (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
-    elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-      set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
-      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
     else()
       error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()

@@ -50,8 +50,8 @@ TEST_CASE("Generate serialized plans file", "[.]") {
 
 		Planner planner(*con.context);
 
-		planner.CreatePlan(move(p.statements[0]));
-		auto plan = move(planner.plan);
+		planner.CreatePlan(std::move(p.statements[0]));
+		auto plan = std::move(planner.plan);
 		plan->Serialize(serializer);
 
 		con.Rollback();
@@ -75,17 +75,17 @@ TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
 		Parser p;
 		p.ParseQuery(query);
 		Planner planner(*con.context);
-		planner.CreatePlan(move(p.statements[0]));
-		auto expected_plan = move(planner.plan);
+		planner.CreatePlan(std::move(p.statements[0]));
+		auto expected_plan = std::move(planner.plan);
 		expected_plan->ResolveOperatorTypes();
-		auto expected_results = con.context->Query(make_unique<LogicalPlanStatement>(move(expected_plan)), false);
+		auto expected_results = con.context->Query(make_unique<LogicalPlanStatement>(std::move(expected_plan)), false);
 		REQUIRE_NO_FAIL(*expected_results);
 
 		PlanDeserializationState state(*con.context);
 		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
 		deserialized_plan->ResolveOperatorTypes();
 		auto deserialized_results =
-		    con.context->Query(make_unique<LogicalPlanStatement>(move(deserialized_plan)), false);
+		    con.context->Query(make_unique<LogicalPlanStatement>(std::move(deserialized_plan)), false);
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		REQUIRE(deserialized_results->Equals(*expected_results));

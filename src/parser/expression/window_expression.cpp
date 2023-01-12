@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type, string schema, const string &function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), schema(move(schema)),
+WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
+    : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
@@ -86,7 +86,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_unique<WindowExpression>(type, schema, function_name);
+	auto new_window = make_unique<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -111,7 +111,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 
-	return move(new_window);
+	return std::move(new_window);
 }
 
 void WindowExpression::Serialize(FieldWriter &writer) const {
@@ -136,12 +136,13 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(default_expr);
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
+	writer.WriteString(catalog);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, schema, function_name);
+	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
@@ -159,7 +160,8 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
-	return move(expr);
+	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
+	return std::move(expr);
 }
 
 } // namespace duckdb

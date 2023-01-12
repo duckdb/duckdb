@@ -7,29 +7,34 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
-StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only)
-    : db(db), path(move(path)), read_only(read_only) {
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
+    : db(db), path(std::move(path_p)), read_only(read_only) {
+	if (path.empty()) {
+		path = ":memory:";
+	}
 }
 
 StorageManager::~StorageManager() {
 }
 
-StorageManager &StorageManager::GetStorageManager(ClientContext &context) {
-	return StorageManager::GetStorageManager(*context.db);
+StorageManager &StorageManager::Get(AttachedDatabase &db) {
+	return db.GetStorageManager();
+}
+StorageManager &StorageManager::Get(Catalog &catalog) {
+	return StorageManager::Get(catalog.GetAttached());
 }
 
-BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
-	return BufferManager::GetBufferManager(*context.db);
+DatabaseInstance &StorageManager::GetDatabase() {
+	return db.GetDatabase();
 }
 
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
@@ -41,16 +46,8 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 bool StorageManager::InMemory() {
-	return path.empty() || path == ":memory:";
-}
-
-void StorageManager::CreateBufferManager() {
-	auto &config = DBConfig::GetConfig(db);
-	if (!config.custom_buffer_manager) {
-		// Only create a buffer manager if a custom one wasn't provided at creation
-		buffer_manager =
-		    make_unique<StandardBufferManager>(db, config.options.temporary_directory, config.options.maximum_memory);
-	}
+	D_ASSERT(!path.empty());
+	return path == ":memory:";
 }
 
 void StorageManager::Initialize() {
@@ -58,30 +55,6 @@ void StorageManager::Initialize() {
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
-	CreateBufferManager();
-
-	auto &config = DBConfig::GetConfig(db);
-	auto &catalog = Catalog::GetCatalog(db);
-
-	// first initialize the base system catalogs
-	// these are never written to the WAL
-	Connection con(db);
-	con.BeginTransaction();
-
-	// create the default schema
-	CreateSchemaInfo info;
-	info.schema = DEFAULT_SCHEMA;
-	info.internal = true;
-	catalog.CreateSchema(*con.context, &info);
-
-	if (config.options.initialize_default_database) {
-		// initialize default functions
-		BuiltinFunctions builtin(*con.context, catalog);
-		builtin.Initialize();
-	}
-
-	// commit transactions
-	con.Commit();
 
 	// create or load the database from disk, if not in-memory mode
 	LoadDatabase();
@@ -104,24 +77,24 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(DatabaseInstance &db, string path, bool read_only)
-    : StorageManager(db, move(path), read_only) {
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
+    : StorageManager(db, std::move(path), read_only) {
 }
 
 void SingleFileStorageManager::LoadDatabase() {
-	auto &config = db.config;
+	auto &config = DBConfig::Get(db);
 	if (InMemory()) {
 		if (config.custom_buffer_manager) {
 			block_manager = make_unique<InMemoryBlockManager>(*config.custom_buffer_manager);
 		} else {
-			block_manager = make_unique<InMemoryBlockManager>(*buffer_manager);
+			block_manager = make_unique<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		}
 		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
 
 	string wal_path = path + ".wal";
-	auto &fs = db.GetFileSystem();
+	auto &fs = FileSystem::Get(db);
 	bool truncate_wal = false;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
@@ -145,6 +118,8 @@ void SingleFileStorageManager::LoadDatabase() {
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
 		checkpointer.LoadFromStorage();
+		// finish load checkpoint, clear the cached handles of meta blocks
+		block_manager->ClearMetaBlockHandles();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
@@ -235,7 +210,8 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	if (InMemory() || read_only || !wal) {
 		return;
 	}
-	if (wal->GetWALSize() > 0 || db.config.options.force_checkpoint || force_checkpoint) {
+	auto &config = DBConfig::Get(db);
+	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
 		SingleFileCheckpointWriter checkpointer(db, *block_manager);
 		checkpointer.CreateCheckpoint();
@@ -268,9 +244,10 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 		return false;
 	}
 
+	auto &config = DBConfig::Get(db);
 	auto initial_size = log->GetWALSize();
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > db.config.options.checkpoint_wal_size;
+	return expected_wal_size > config.options.checkpoint_wal_size;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

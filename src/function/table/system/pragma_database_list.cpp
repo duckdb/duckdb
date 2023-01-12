@@ -1,14 +1,17 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
 struct PragmaDatabaseListData : public GlobalTableFunctionState {
-	PragmaDatabaseListData() : finished(false) {
+	PragmaDatabaseListData() : index(0) {
 	}
 
-	bool finished;
+	vector<AttachedDatabase *> databases;
+	idx_t index;
 };
 
 static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, TableFunctionBindInput &input,
@@ -26,21 +29,26 @@ static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseListInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaDatabaseListData>();
+	auto result = make_unique<PragmaDatabaseListData>();
+	auto &db_manager = DatabaseManager::Get(context);
+	result->databases = db_manager.GetDatabases(context);
+	return std::move(result);
 }
 
 void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (PragmaDatabaseListData &)*data_p.global_state;
-	if (data.finished) {
-		return;
+
+	idx_t count = 0;
+	for (; count < STANDARD_VECTOR_SIZE && data.index < data.databases.size(); data.index++, count++) {
+		output.data[0].SetValue(count, Value::INTEGER(data.index));
+		output.data[1].SetValue(count, Value(data.databases[data.index]->GetName()));
+		Value file_name;
+		if (!data.databases[data.index]->IsSystem()) {
+			file_name = Value(data.databases[data.index]->GetStorageManager().GetDBPath());
+		}
+		output.data[2].SetValue(count, file_name);
 	}
-
-	output.SetCardinality(1);
-	output.data[0].SetValue(0, Value::INTEGER(0));
-	output.data[1].SetValue(0, Value("main"));
-	output.data[2].SetValue(0, Value(StorageManager::GetStorageManager(context).GetDBPath()));
-
-	data.finished = true;
+	output.SetCardinality(count);
 }
 
 void PragmaDatabaseList::RegisterFunction(BuiltinFunctions &set) {

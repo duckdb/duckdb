@@ -5,18 +5,26 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
 struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
-	PragmaDatabaseSizeData() : finished(false) {
+	PragmaDatabaseSizeData() : index(0) {
 	}
 
-	bool finished;
+	idx_t index;
+	vector<AttachedDatabase *> databases;
+	Value memory_usage;
+	Value memory_limit;
 };
 
 static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, TableFunctionBindInput &input,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("database_size");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -45,33 +53,40 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaDatabaseSizeData>();
+	auto result = make_unique<PragmaDatabaseSizeData>();
+	result->databases = DatabaseManager::Get(context).GetDatabases(context);
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	result->memory_usage = Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory()));
+	auto max_memory = buffer_manager.GetMaxMemory();
+	result->memory_limit =
+	    max_memory == (idx_t)-1 ? Value("Unlimited") : Value(StringUtil::BytesToHumanReadableString(max_memory));
+
+	return std::move(result);
 }
 
 void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (PragmaDatabaseSizeData &)*data_p.global_state;
-	if (data.finished) {
-		return;
+	idx_t row = 0;
+	for (; data.index < data.databases.size() && row < STANDARD_VECTOR_SIZE; data.index++) {
+		auto db = data.databases[data.index];
+		if (db->IsSystem() || db->IsTemporary()) {
+			continue;
+		}
+		auto &storage = db->GetStorageManager();
+		auto ds = storage.GetDatabaseSize();
+		idx_t col = 0;
+		output.data[col++].SetValue(row, Value(db->GetName()));
+		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
+		output.data[col++].SetValue(row, Value::BIGINT(ds.block_size));
+		output.data[col++].SetValue(row, Value::BIGINT(ds.total_blocks));
+		output.data[col++].SetValue(row, Value::BIGINT(ds.used_blocks));
+		output.data[col++].SetValue(row, Value::BIGINT(ds.free_blocks));
+		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
+		output.data[col++].SetValue(row, data.memory_usage);
+		output.data[col++].SetValue(row, data.memory_limit);
+		row++;
 	}
-	auto &storage = StorageManager::GetStorageManager(context);
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
-
-	auto ds = storage.GetDatabaseSize();
-
-	output.SetCardinality(1);
-	output.data[0].SetValue(0, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
-	output.data[1].SetValue(0, Value::BIGINT(ds.block_size));
-	output.data[2].SetValue(0, Value::BIGINT(ds.total_blocks));
-	output.data[3].SetValue(0, Value::BIGINT(ds.used_blocks));
-	output.data[4].SetValue(0, Value::BIGINT(ds.free_blocks));
-	output.data[5].SetValue(0, Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
-
-	output.data[6].SetValue(0, Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory())));
-	auto max_memory = buffer_manager.GetMaxMemory();
-	output.data[7].SetValue(0, max_memory == (idx_t)-1 ? Value("Unlimited")
-	                                                   : Value(StringUtil::BytesToHumanReadableString(max_memory)));
-
-	data.finished = true;
+	output.SetCardinality(row);
 }
 
 void PragmaDatabaseSize::RegisterFunction(BuiltinFunctions &set) {

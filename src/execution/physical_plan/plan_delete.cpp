@@ -16,11 +16,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 	// get the index of the row_id column
 	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 
-	dependencies.insert(op.table);
+	dependencies.AddDependency(op.table);
 	auto del = make_unique<PhysicalDelete>(op.types, *op.table, *op.table->storage, bound_ref.index,
 	                                       op.estimated_cardinality, op.return_chunk);
-	del->children.push_back(move(plan));
-	return move(del);
+	del->children.push_back(std::move(plan));
+	return std::move(del);
 }
 
 } // namespace duckdb

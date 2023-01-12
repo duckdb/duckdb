@@ -18,7 +18,7 @@ struct LogicalExtensionOperator : public LogicalOperator {
 	LogicalExtensionOperator() : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 	}
 	LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, move(expressions)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, std::move(expressions)) {
 	}
 
 	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);

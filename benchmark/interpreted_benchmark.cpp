@@ -104,7 +104,7 @@ void InterpretedBenchmark::ReadResultFromFile(BenchmarkFileReader &reader, const
 		for (idx_t col_idx = 0; col_idx < result->ColumnCount(); col_idx++) {
 			row_values.push_back(row.GetValue<string>(col_idx));
 		}
-		result_values.push_back(move(row_values));
+		result_values.push_back(std::move(row_values));
 	}
 }
 
@@ -121,7 +121,7 @@ void InterpretedBenchmark::ReadResultFromReader(BenchmarkFileReader &reader, con
 			throw std::runtime_error(reader.FormatException("expected " + std::to_string(result_splits.size()) +
 			                                                " values but got " + std::to_string(result_column_count)));
 		}
-		result_values.push_back(move(result_splits));
+		result_values.push_back(std::move(result_splits));
 	}
 }
 
@@ -176,16 +176,11 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("require requires a single parameter"));
 			}
 			extensions.insert(splits[1]);
-		} else if (splits[0] == "connect") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("connect requires a database path"));
-			}
-			db_path = (splits[1]);
 		} else if (splits[0] == "cache") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
-			data_cache = splits[1];
+			cache_db = splits[1];
 		} else if (splits[0] == "storage") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
@@ -315,7 +310,16 @@ void InterpretedBenchmark::LoadBenchmark() {
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	auto state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
+	unique_ptr<InterpretedBenchmarkState> state;
+	auto full_db_path = GetDatabasePath();
+	try {
+		state = make_unique<InterpretedBenchmarkState>(full_db_path);
+	} catch (Exception(e)) {
+		// if the connection throws an error, chances are it's a storage format error.
+		// In this case delete the file and connect again.
+		DeleteDatabase(full_db_path);
+		state = make_unique<InterpretedBenchmarkState>(full_db_path);
+	}
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
@@ -334,7 +338,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			if (result->HasError()) {
 				result->ThrowError();
 			}
-			result = move(result->next);
+			result = std::move(result->next);
 		}
 	}
 
@@ -343,22 +347,34 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		load_query = queries["load"];
 	}
 
-	if (data_cache.empty()) {
-		// no cache specified: just run the initialization code
+	if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
+		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
-		// cache specified: try to load the cache
-		if (!BenchmarkRunner::TryLoadDatabase(state->db, data_cache)) {
+		// cache or db_path is specified: try to load from one of them
+		bool in_memory_db_has_data = false;
+		if (!cache_db.empty()) {
+			// Currently connected to a cached db. check if any tables exist.
+			// If tables exist, it's a good indication that the database is fine
+			// If they don't load the database
+			auto result = state->con.Query("SHOW TABLES;");
+			if (result->HasError()) {
+				result->ThrowError();
+			}
+			if (result->RowCount() > 0) {
+				in_memory_db_has_data = true;
+			}
+		}
+		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
 			result = state->con.Query(load_query);
-			BenchmarkRunner::SaveDatabase(state->db, data_cache);
 		}
 	}
 	while (result) {
 		if (result->HasError()) {
 			result->ThrowError();
 		}
-		result = move(result->next);
+		result = std::move(result->next);
 	}
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
@@ -389,21 +405,22 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 			if (result->HasError()) {
 				result->ThrowError();
 			}
-			result = move(result->next);
+			result = std::move(result->next);
 		}
 	}
 }
 
 string InterpretedBenchmark::GetDatabasePath() {
-	if (!InMemory()) {
-		string path = "duckdb_benchmark_db.db";
-		DeleteDatabase(path);
-		return path;
-	} else if (db_path != "") {
-		return db_path;
-	} else {
-		return string();
+	auto fs = FileSystem::CreateLocal();
+	if (!cache_db.empty()) {
+		return fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_db);
 	}
+	if (in_memory) {
+		return "";
+	}
+	auto db_path = fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, DEFAULT_DB_PATH);
+	DeleteDatabase(db_path);
+	return db_path;
 }
 
 string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result) {
@@ -464,7 +481,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		auto &names = state.result->names;
 		auto &types = state.result->types;
 		// first create the (empty) table
-		string create_tbl = "CREATE OR REPLACE TABLE __answer(";
+		string create_tbl = "CREATE OR REPLACE TEMP TABLE __answer(";
 		for (idx_t i = 0; i < names.size(); i++) {
 			if (i > 0) {
 				create_tbl += ", ";
@@ -480,6 +497,9 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		}
 		// now append the result to the answer table
 		auto table_info = state.con.TableInfo("__answer");
+		if (table_info == nullptr) {
+			throw std::runtime_error("Received a nullptr when querying table info of __answer");
+		}
 		state.con.Append(*table_info, collection);
 
 		// finally run the result query and verify the result of that query

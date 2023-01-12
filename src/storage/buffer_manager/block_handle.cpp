@@ -21,10 +21,10 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
                          bool can_destroy_p, idx_t block_size, BufferPoolReservation &&reservation)
     : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
       memory_charge(block_manager.buffer_manager), unswizzled(nullptr) {
-	buffer = move(buffer_p);
+	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
-	memory_charge = move(reservation);
+	memory_charge = std::move(reservation);
 }
 
 BlockHandle::~BlockHandle() {
@@ -62,7 +62,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
-	return move(buffer);
+	return std::move(buffer);
 }
 
 void BlockHandle::Unload() {
@@ -79,7 +79,7 @@ bool BlockHandle::CanUnload() {
 		// there are active readers
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && !block_manager.buffer_manager.HasTemporaryDirectory()) {
+	if (block_id >= MAXIMUM_BLOCK && !can_destroy && block_manager.buffer_manager.GetTemporaryDirectory().empty()) {
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!
 		// hence we cannot unload the block
@@ -100,7 +100,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 			// we can reuse the buffer entirely
 			auto &block = (Block &)*reusable_buffer;
 			block.id = block_id;
-			return unique_ptr_cast<FileBuffer, Block>(move(reusable_buffer));
+			return unique_ptr_cast<FileBuffer, Block>(std::move(reusable_buffer));
 		}
 		auto block = block_manager.CreateBlock(block_id, reusable_buffer.get());
 		reusable_buffer.reset();
@@ -120,14 +120,15 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 
 	auto &block_manager = handle->block_manager;
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = AllocateBlock(block_manager, move(reusable_buffer), handle->block_id);
+		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), handle->block_id);
 		block_manager.Read(*block);
-		handle->buffer = move(block);
+		handle->buffer = std::move(block);
 	} else {
 		if (handle->can_destroy) {
 			return BufferHandle();
 		} else {
-			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
+			handle->buffer =
+			    block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, std::move(reusable_buffer));
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;

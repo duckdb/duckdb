@@ -93,7 +93,7 @@ void Transformer::TransformExpressionList(duckdb_libpgquery::PGList &list,
 		auto expr = TransformExpression(target);
 		D_ASSERT(expr);
 
-		result.push_back(move(expr));
+		result.push_back(std::move(expr));
 	}
 }
 

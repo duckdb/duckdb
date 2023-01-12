@@ -44,7 +44,7 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 		auto &func = (FunctionExpression &)*expression;
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {
-				AddGroupByExpression(move(child), map, result, result_set);
+				AddGroupByExpression(std::move(child), map, result, result_set);
 			}
 			return;
 		}
@@ -54,7 +54,7 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 	if (entry == map.map.end()) {
 		result_idx = result.group_expressions.size();
 		map.map[expression.get()] = result_idx;
-		result.group_expressions.push_back(move(expression));
+		result.group_expressions.push_back(std::move(expression));
 	} else {
 		result_idx = entry->second;
 	}
@@ -75,7 +75,7 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &res
 void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map,
                                              GroupByNode &result, vector<idx_t> &indexes) {
 	auto expression = TransformExpression(n);
-	AddGroupByExpression(move(expression), map, result, indexes);
+	AddGroupByExpression(std::move(expression), map, result, indexes);
 }
 
 // If one GROUPING SETS clause is nested inside another,
@@ -156,7 +156,7 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 		CheckGroupingSetMax(result_sets.size());
 		if (result.grouping_sets.empty()) {
 			// no grouping sets yet: use the current set of grouping sets
-			result.grouping_sets = move(result_sets);
+			result.grouping_sets = std::move(result_sets);
 		} else {
 			// compute the cross product
 			vector<GroupingSet> new_sets;
@@ -170,10 +170,10 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 					GroupingSet set;
 					set.insert(current_set.begin(), current_set.end());
 					set.insert(new_set.begin(), new_set.end());
-					new_sets.push_back(move(set));
+					new_sets.push_back(std::move(set));
 				}
 			}
-			result.grouping_sets = move(new_sets);
+			result.grouping_sets = std::move(new_sets);
 		}
 	}
 	return true;

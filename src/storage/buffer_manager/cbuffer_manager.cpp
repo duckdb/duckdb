@@ -29,8 +29,8 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	reservation.size = alloc_size;
 
 	// create a new block pointer for this block
-	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), can_destroy, alloc_size,
-	                                     move(reservation));
+	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id, std::move(buffer), can_destroy, alloc_size,
+	                                     std::move(reservation));
 	return Pin(*handle_p);
 }
 
@@ -40,7 +40,8 @@ shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
 	// create a new block pointer for this block
 	BufferPoolReservation reservation(*this);
 	reservation.size = block_size;
-	return make_shared<BlockHandle>(*block_manager, ++temporary_id, move(buffer), false, block_size, move(reservation));
+	return make_shared<BlockHandle>(*block_manager, ++temporary_id, std::move(buffer), false, block_size,
+	                                std::move(reservation));
 }
 
 void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {

@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFu
 	result->files = fs.Glob(StringValue::Get(input.inputs[0]), context);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
-	return move(result);
+	return std::move(result);
 }
 
 struct GlobFunctionState : public GlobalTableFunctionState {

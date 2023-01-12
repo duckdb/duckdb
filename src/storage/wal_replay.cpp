@@ -17,16 +17,17 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
-bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
-	auto initial_reader = make_unique<BufferedFileReader>(database.GetFileSystem(), path.c_str());
+bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
+	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
 	}
-	Connection con(database);
+	Connection con(database.GetDatabase());
 	con.BeginTransaction();
 
 	// first deserialize the WAL to look for a checkpoint flag
@@ -58,7 +59,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	initial_reader.reset();
 	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
-		auto &manager = StorageManager::GetStorageManager(database);
+		auto &manager = database.GetStorageManager();
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
@@ -67,7 +68,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(database.GetFileSystem(), path.c_str());
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
@@ -190,9 +191,8 @@ void ReplayState::ReplayCreateTable() {
 
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, bound_info.get());
 }
 
@@ -206,7 +206,6 @@ void ReplayState::ReplayDropTable() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -215,7 +214,6 @@ void ReplayState::ReplayAlter() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.Alter(context, info.get());
 }
 
@@ -228,7 +226,6 @@ void ReplayState::ReplayCreateView() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateView(context, entry.get());
 }
 
@@ -240,7 +237,6 @@ void ReplayState::ReplayDropView() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -254,7 +250,6 @@ void ReplayState::ReplayCreateSchema() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSchema(context, &info);
 }
 
@@ -267,7 +262,6 @@ void ReplayState::ReplayDropSchema() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -280,7 +274,6 @@ void ReplayState::ReplayCreateType() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateType(context, info.get());
 }
 
@@ -294,7 +287,6 @@ void ReplayState::ReplayDropType() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -307,7 +299,6 @@ void ReplayState::ReplayCreateSequence() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSequence(context, entry.get());
 }
 
@@ -320,7 +311,6 @@ void ReplayState::ReplayDropSequence() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -334,7 +324,6 @@ void ReplayState::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto &catalog = Catalog::GetCatalog(context);
 	auto seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
 	if (usage_count > seq->usage_count) {
 		seq->usage_count = usage_count;
@@ -351,7 +340,6 @@ void ReplayState::ReplayCreateMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, entry.get());
 }
 
@@ -364,7 +352,6 @@ void ReplayState::ReplayDropMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -377,7 +364,6 @@ void ReplayState::ReplayCreateTableMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateFunction(context, entry.get());
 }
 
@@ -390,7 +376,6 @@ void ReplayState::ReplayDropTableMacro() {
 		return;
 	}
 
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
 }
 
@@ -403,7 +388,6 @@ void ReplayState::ReplayUseTable() {
 	if (deserialize_only) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context);
 	current_table = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
@@ -464,7 +448,7 @@ void ReplayState::ReplayUpdate() {
 	}
 
 	// remove the row id vector from the chunk
-	auto row_ids = move(chunk.data.back());
+	auto row_ids = std::move(chunk.data.back());
 	chunk.data.pop_back();
 
 	// now perform the update

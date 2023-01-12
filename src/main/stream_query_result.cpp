@@ -8,9 +8,9 @@ namespace duckdb {
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
                                      shared_ptr<ClientContext> context_p, vector<LogicalType> types,
                                      vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, properties, move(types), move(names),
-                  context_p->GetClientProperties()),
-      context(move(context_p)) {
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
+                  std::move(names), context_p->GetClientProperties()),
+      context(std::move(context_p)) {
 	D_ASSERT(context);
 }
 
@@ -78,8 +78,8 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result =
-	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	                                                   client_properties);
 	if (HasError()) {
 		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}

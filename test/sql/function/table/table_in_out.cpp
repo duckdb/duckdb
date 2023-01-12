@@ -23,7 +23,7 @@ struct ThrottlingSum {
 		auto result = make_unique<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
-		return move(result);
+		return std::move(result);
 	}
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
@@ -68,7 +68,7 @@ struct ThrottlingSum {
 		// Create our test TableFunction
 		con.BeginTransaction();
 		auto &client_context = *con.context;
-		auto &catalog = Catalog::GetCatalog(client_context);
+		auto &catalog = Catalog::GetSystemCatalog(client_context);
 		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind);
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;

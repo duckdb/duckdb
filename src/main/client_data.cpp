@@ -4,19 +4,24 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/http_stats.hpp"
 #include "duckdb/common/random_engine.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_unique<CatalogSearchPath>(context)) {
+	auto &db = DatabaseInstance::GetDatabase(context);
 	profiler = make_shared<QueryProfiler>(context);
 	query_profiler_history = make_unique<QueryProfilerHistory>();
-	temporary_objects = make_shared<SchemaCatalogEntry>(&Catalog::GetCatalog(context), TEMP_SCHEMA, true);
+	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
+	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
 	random_engine = make_unique<RandomEngine>();
 	file_opener = make_unique<ClientContextFileOpener>(context);
+	temporary_objects->Initialize();
 }
 ClientData::~ClientData() {
 }

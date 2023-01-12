@@ -5,8 +5,8 @@
 namespace duckdb {
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog *catalog_p, string name_p)
-    : oid(catalog_p->ModifyCatalog()), type(type), catalog(catalog_p), set(nullptr), name(move(name_p)), deleted(false),
-      temporary(false), internal(false), parent(nullptr) {
+    : oid(catalog_p ? catalog_p->ModifyCatalog() : 0), type(type), catalog(catalog_p), set(nullptr),
+      name(std::move(name_p)), deleted(false), temporary(false), internal(false), parent(nullptr) {
 }
 
 CatalogEntry::~CatalogEntry() {
@@ -31,5 +31,9 @@ string CatalogEntry::ToSQL() {
 	throw InternalException("Unsupported catalog type for ToSQL()");
 }
 // LCOV_EXCL_STOP
+
+void CatalogEntry::Verify(Catalog &catalog_p) {
+	D_ASSERT(&catalog_p == catalog);
+}
 
 } // namespace duckdb

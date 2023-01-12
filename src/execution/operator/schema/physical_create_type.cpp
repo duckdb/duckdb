@@ -7,7 +7,7 @@ namespace duckdb {
 
 PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
-      info(move(info)) {
+      info(std::move(info)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -108,7 +108,7 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 		info->type = LogicalType::ENUM(info->name, result, total_row_count);
 	}
 
-	auto &catalog = Catalog::GetCatalog(context.client);
+	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.CreateType(context.client, info.get());
 	state.finished = true;
 }

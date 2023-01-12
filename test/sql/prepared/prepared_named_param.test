@@ -1,0 +1,7 @@
+# name: test/sql/prepared/prepared_named_param.test
+# group: [prepared]
+
+statement error
+prepare q123 as select $param, $other_name, $param;
+----
+Named parameters are not supported in this client yet

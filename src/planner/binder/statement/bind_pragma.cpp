@@ -8,9 +8,9 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
-	auto &catalog = Catalog::GetCatalog(context);
 	// bind the pragma function
-	auto entry = catalog.GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->name, false);
+	auto entry =
+	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->name, false);
 	string error;
 	FunctionBinder function_binder(context);
 	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, *stmt.info, error);
