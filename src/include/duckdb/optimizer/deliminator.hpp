@@ -21,7 +21,7 @@ class DeliminatorPlanUpdater;
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
 public:
-	Deliminator() {
+	Deliminator(ClientContext &context) : context(context) {
 	}
 	//! Perform DelimJoin elimination
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
@@ -35,6 +35,9 @@ private:
 	//! Try to remove an inequality Join with a DelimGet, returns true if it was successful
 	bool RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
 	                               DeliminatorPlanUpdater &updater);
+
+private:
+	ClientContext &context;
 };
 
 } // namespace duckdb

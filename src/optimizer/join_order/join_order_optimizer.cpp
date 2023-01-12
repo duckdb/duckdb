@@ -156,9 +156,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.emplace_back(
-			    column_binding_map_t<ColumnBinding>()); // TODO after lunch add cardinality estimate to the
-			                                            // non-reordereable thing
+			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 			// save the relation bindings from the optimized child. These later all get added to the

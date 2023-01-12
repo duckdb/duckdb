@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -13,13 +14,15 @@ namespace duckdb {
 
 class DeliminatorPlanUpdater : LogicalOperatorVisitor {
 public:
-	DeliminatorPlanUpdater() {
+	DeliminatorPlanUpdater(ClientContext &context) : context(context) {
 	}
 	//! Update the plan after a DelimGet has been removed
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 public:
+	ClientContext &context;
+
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	column_binding_map_t<Expression *> reverse_proj_or_agg_map;
@@ -94,6 +97,10 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 		// change type if there are no more duplicate-eliminated columns
 		if (decs->empty()) {
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			// sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
+			// the DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
+			JoinOrderOptimizer optimizer(context);
+			delim_join.children[1] = optimizer.Optimize(std::move(delim_join.children[1]));
 		}
 	}
 }
@@ -111,7 +118,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	FindCandidates(&op, candidates);
 
 	for (auto &candidate : candidates) {
-		DeliminatorPlanUpdater updater;
+		DeliminatorPlanUpdater updater(context);
 		if (RemoveCandidate(&op, candidate, updater)) {
 			updater.VisitOperator(*op);
 		}
