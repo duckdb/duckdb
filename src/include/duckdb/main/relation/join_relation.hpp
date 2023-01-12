@@ -19,7 +19,8 @@ public:
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
 	                        JoinType type);
 	// for anti and semi joins
-	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr, shared_ptr<Relation> right, JoinType type);
+	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr, shared_ptr<Relation> right,
+	                        JoinType type);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;

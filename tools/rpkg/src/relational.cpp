@@ -23,7 +23,6 @@
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 
-
 using namespace duckdb;
 using namespace cpp11;
 
@@ -188,8 +187,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		join_type = JoinType::OUTER;
 	} else if (join == "cross") {
 		join_type = JoinType::INNER;
-		cond = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-		                                         make_unique<ConstantExpression>(1),
+		cond = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_unique<ConstantExpression>(1),
 		                                         make_unique<ConstantExpression>(1));
 		auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), join_type);
 		return make_external<RelationWrapper>("duckdb_relation", res);
@@ -202,7 +200,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		return make_external<RelationWrapper>("duckdb_relation", res);
 	}
 
-
 	if (conds.size() == 0 && join != "cross") { // nop
 		stop("join needs conditions");
 	} else if (conds.size() == 1) {
@@ -214,7 +211,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		}
 		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(cond_args));
 	}
-
 
 	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
