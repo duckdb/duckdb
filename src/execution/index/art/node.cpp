@@ -62,8 +62,8 @@ void Node::ReplaceChildPointer(idx_t pos, Node *node) {
 	throw InternalException("ReplaceChildPointer not implemented for the specific node type.");
 }
 
-bool Node::GetARTPointer(idx_t) {
-	throw InternalException("GetARTPointer not implemented for the specific node type.");
+bool Node::ChildIsInMemory(idx_t) {
+	throw InternalException("ChildIsInMemory not implemented for the specific node type.");
 }
 // LCOV_EXCL_STOP
 
@@ -296,7 +296,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	reader.offset = offset;
 
 	auto n = reader.Read<uint8_t>();
-	NodeType node_type(static_cast<NodeType>(n));
+	NodeType node_type((NodeType)(n));
 
 	Node *deserialized_node;
 	auto old_memory_size = art.memory_size;
@@ -349,7 +349,7 @@ void UpdateParentsOfNodes(Node *&l_node, Node *&r_node, ParentsOfNodes &parents)
 }
 
 // forward declaration
-bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents);
+bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfNodes &parents);
 
 void SwapNodes(MergeInfo &info, ParentsOfNodes &parents) {
 	// adjust the memory sizes
@@ -369,7 +369,7 @@ void SwapNodes(MergeInfo &info, ParentsOfNodes &parents) {
 	UpdateParentsOfNodes(info.l_node, info.r_node, parents);
 }
 
-bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
+bool Merge(MergeInfo &info, ParentsOfNodes &parents) {
 
 	D_ASSERT(info.l_node);
 	D_ASSERT(info.r_node);
@@ -422,7 +422,7 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 			auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
 			MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, l_child, r_child);
 			ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_child_pos);
-			if (!ResolvePrefixesAndMerge(child_info, depth + 1, child_parents)) {
+			if (!ResolvePrefixesAndMerge(child_info, child_parents)) {
 				return false;
 			}
 		}
@@ -430,7 +430,7 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 	return true;
 }
 
-bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
+bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfNodes &parents) {
 	// NOTE: we always merge into the left ART
 
 	D_ASSERT(info.l_node);
@@ -451,7 +451,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 
 	// both nodes have no prefix or the same prefix
 	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
-		return Merge(info, depth + mismatch_pos, parents);
+		return Merge(info, parents);
 	}
 
 	if (mismatch_pos == l_prefix_size) {
@@ -485,7 +485,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 		auto child_node = l_node->GetChild(*info.l_art, child_pos);
 		MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, child_node, r_node);
 		ParentsOfNodes child_parents(l_node, child_pos, parents.r_parent, parents.r_pos);
-		return ResolvePrefixesAndMerge(child_info, depth + mismatch_pos, child_parents);
+		return ResolvePrefixesAndMerge(child_info, child_parents);
 	}
 
 	// prefixes differ, create new node and insert both nodes as children
@@ -519,7 +519,7 @@ bool Node::MergeARTs(ART *l_art, ART *r_art) {
 	Node *null_parent = nullptr;
 	MergeInfo info(l_art, r_art, l_art, r_art, l_art->tree, r_art->tree);
 	ParentsOfNodes parents(null_parent, 0, null_parent, 0);
-	return ResolvePrefixesAndMerge(info, 0, parents);
+	return ResolvePrefixesAndMerge(info, parents);
 }
 
 idx_t Node::RecursiveMemorySize(ART &art) {
@@ -529,7 +529,7 @@ idx_t Node::RecursiveMemorySize(ART &art) {
 
 	auto next_pos = GetNextPos(DConstants::INVALID_INDEX);
 	while (next_pos != DConstants::INVALID_INDEX) {
-		if (GetARTPointer(next_pos)) {
+		if (ChildIsInMemory(next_pos)) {
 			auto child = GetChild(art, next_pos);
 			memory_size_children += child->MemorySize(art, true);
 		}

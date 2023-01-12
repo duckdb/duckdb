@@ -25,6 +25,8 @@ Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_mana
 	for (auto &bound_expr : bound_expressions) {
 		executor.AddExpression(*bound_expr);
 	}
+
+	// create the column id set
 	for (auto column_id : column_ids) {
 		column_id_set.insert(column_id);
 	}

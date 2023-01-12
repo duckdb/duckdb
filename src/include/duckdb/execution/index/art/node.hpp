@@ -102,8 +102,8 @@ public:
 	virtual Node *GetChild(ART &art, idx_t pos);
 	//! Replaces the pointer to a child node
 	virtual void ReplaceChildPointer(idx_t pos, Node *node);
-	//! Returns the ART pointer at pos
-	virtual bool GetARTPointer(idx_t pos);
+	//! Returns whether the child at pos is in memory
+	virtual bool ChildIsInMemory(idx_t pos);
 
 	//! Insert a new child node at key_byte into the node
 	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);

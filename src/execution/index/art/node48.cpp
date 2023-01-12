@@ -80,7 +80,7 @@ void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[child_index[pos]] = node;
 }
 
-bool Node48::GetARTPointer(idx_t pos) {
+bool Node48::ChildIsInMemory(idx_t pos) {
 	return children[child_index[pos]] && !children[child_index[pos]].IsSwizzled();
 }
 
@@ -128,7 +128,7 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 	auto n = (Node48 *)(node);
 
 	// adjust the ART size
-	if (n->GetARTPointer(pos)) {
+	if (n->ChildIsInMemory(pos)) {
 		auto child = n->GetChild(art, pos);
 		D_ASSERT(art.memory_size >= child->MemorySize(art, true));
 		art.memory_size -= child->MemorySize(art, true);
