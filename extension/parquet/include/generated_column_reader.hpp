@@ -35,7 +35,7 @@ public:
 			string string = constant.ToString();
 			string_stats->Update(string);
 			string_stats->max_string_length = string.length();
-			return move(string_stats);
+			return std::move(string_stats);
 		}
 		default:
 			return nullptr;

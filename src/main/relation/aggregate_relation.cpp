@@ -7,8 +7,8 @@ namespace duckdb {
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions)
-    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
-      child(move(child_p)) {
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
+      child(std::move(child_p)) {
 	// bind the expressions
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
@@ -16,8 +16,8 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions,
                                      vector<unique_ptr<ParsedExpression>> groups_p)
-    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
-      groups(move(groups_p)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
+      groups(std::move(groups_p)), child(std::move(child_p)) {
 	// bind the expressions
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
@@ -35,7 +35,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		// child node is not a join: create a new select node and push the child as a table reference
 		auto select = make_unique<SelectNode>();
 		select->from_table = child->GetTableRef();
-		result = move(select);
+		result = std::move(select);
 	}
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode &)*result;
@@ -48,7 +48,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 			select_node.groups.group_expressions.push_back(groups[i]->Copy());
 			grouping_set.insert(i);
 		}
-		select_node.groups.grouping_sets.push_back(move(grouping_set));
+		select_node.groups.grouping_sets.push_back(std::move(grouping_set));
 	} else {
 		// no groups provided: automatically figure out groups (if any)
 		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;

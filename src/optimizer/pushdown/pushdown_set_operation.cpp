@@ -56,18 +56,18 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		right_filter->ExtractBindings();
 
 		// move the filters into the child pushdown nodes
-		left_pushdown.filters.push_back(move(filters[i]));
-		right_pushdown.filters.push_back(move(right_filter));
+		left_pushdown.filters.push_back(std::move(filters[i]));
+		right_pushdown.filters.push_back(std::move(right_filter));
 	}
 
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
+	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
 
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	if (left_empty && right_empty) {
 		// both empty: return empty result
-		return make_unique<LogicalEmptyResult>(move(op));
+		return make_unique<LogicalEmptyResult>(std::move(op));
 	}
 	if (left_empty) {
 		// left child is empty result
@@ -77,14 +77,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				// union with empty left side: return right child
 				auto &projection = (LogicalProjection &)*op->children[1];
 				projection.table_index = setop.table_index;
-				return move(op->children[1]);
+				return std::move(op->children[1]);
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 			// except: if left child is empty, return empty result
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
-			return make_unique<LogicalEmptyResult>(move(op));
+			return make_unique<LogicalEmptyResult>(std::move(op));
 		default:
 			throw InternalException("Unsupported set operation");
 		}
@@ -97,12 +97,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				// union or except with empty right child: return left child
 				auto &projection = (LogicalProjection &)*op->children[0];
 				projection.table_index = setop.table_index;
-				return move(op->children[0]);
+				return std::move(op->children[0]);
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
-			return make_unique<LogicalEmptyResult>(move(op));
+			return make_unique<LogicalEmptyResult>(std::move(op));
 		default:
 			throw InternalException("Unsupported set operation");
 		}

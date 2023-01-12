@@ -19,13 +19,13 @@ public:
 	LogicalCreateIndex(unique_ptr<FunctionData> bind_data_p, unique_ptr<CreateIndexInfo> info_p,
 	                   vector<unique_ptr<Expression>> expressions_p, TableCatalogEntry &table_p,
 	                   TableFunction function_p)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX), bind_data(move(bind_data_p)), info(move(info_p)),
-	      table(table_p), function(move(function_p)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX), bind_data(std::move(bind_data_p)),
+	      info(std::move(info_p)), table(table_p), function(std::move(function_p)) {
 
 		for (auto &expr : expressions_p) {
 			this->unbound_expressions.push_back(expr->Copy());
 		}
-		this->expressions = move(expressions_p);
+		this->expressions = std::move(expressions_p);
 
 		if (info->column_ids.empty()) {
 			throw BinderException("CREATE INDEX does not refer to any columns in the base table!");

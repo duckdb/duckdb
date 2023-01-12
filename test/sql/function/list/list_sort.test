@@ -405,3 +405,16 @@ query IIII
 select k, v, map(k,v), map(k,v)[(array_sort(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
 ----
 [1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+
+# bug fixes test for #5694
+
+require parquet
+
+statement ok
+CREATE TABLE stage AS SELECT * FROM 'data/parquet-testing/list_sort_segfault.parquet';
+
+statement ok
+CREATE TABLE health (a VARCHAR[]);
+
+statement ok
+INSERT INTO health SELECT list_sort(string_to_array(s, ',')) AS a FROM stage;

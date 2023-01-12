@@ -16,7 +16,7 @@ struct StringAggState {
 };
 
 struct StringAggBindData : public FunctionData {
-	explicit StringAggBindData(string sep_p) : sep(move(sep_p)) {
+	explicit StringAggBindData(string sep_p) : sep(std::move(sep_p)) {
 	}
 
 	string sep;
@@ -148,7 +148,7 @@ static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_dat
 unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
                                               AggregateFunction &bound_function) {
 	auto sep = reader.ReadRequired<string>();
-	return make_unique<StringAggBindData>(move(sep));
+	return make_unique<StringAggBindData>(std::move(sep));
 }
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {

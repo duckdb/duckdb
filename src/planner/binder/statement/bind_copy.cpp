@@ -142,7 +142,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
 	// now create the copy information
-	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
+	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->per_thread_output = per_thread_output;
@@ -152,9 +152,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->expected_types = select_node.types;
 	copy->is_file_and_exists = config.file_system->FileExists(copy->file_path);
 
-	copy->AddChild(move(select_node.plan));
+	copy->AddChild(std::move(select_node.plan));
 
-	result.plan = move(copy);
+	result.plan = std::move(copy);
 
 	return result;
 }
@@ -211,12 +211,12 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
 	auto get = make_unique<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
-	                                   move(function_data), bound_insert.expected_types, expected_names);
+	                                   std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->column_ids.push_back(i);
 	}
-	insert_statement.plan->children.push_back(move(get));
-	result.plan = move(insert_statement.plan);
+	insert_statement.plan->children.push_back(std::move(get));
+	result.plan = std::move(insert_statement.plan);
 	return result;
 }
 
@@ -230,7 +230,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		ref->table_name = stmt.info->table;
 
 		auto statement = make_unique<SelectNode>();
-		statement->from_table = move(ref);
+		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
 				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
@@ -238,7 +238,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		} else {
 			statement->select_list.push_back(make_unique<StarExpression>());
 		}
-		stmt.select_statement = move(statement);
+		stmt.select_statement = std::move(statement);
 	}
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;

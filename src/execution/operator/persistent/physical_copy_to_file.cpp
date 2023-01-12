@@ -10,7 +10,7 @@ namespace duckdb {
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), last_file_offset(0), global_state(move(global_state)) {
+	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
 	}
 	mutex lock;
 	idx_t rows_copied;
@@ -23,7 +23,7 @@ public:
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(move(local_state)) {
+	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(std::move(local_state)) {
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -47,8 +47,8 @@ void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality),
-      function(move(function_p)), bind_data(move(bind_data)), parallel(false) {
+    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
+      function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -175,7 +175,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		}
 		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
 	}
-	return move(res);
+	return std::move(res);
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {

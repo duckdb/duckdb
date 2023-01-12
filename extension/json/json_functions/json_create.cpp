@@ -7,7 +7,7 @@ namespace duckdb {
 struct JSONCreateFunctionData : public FunctionData {
 public:
 	JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
-	    : const_struct_names(move(const_struct_names)) {
+	    : const_struct_names(std::move(const_struct_names)) {
 	}
 	unique_ptr<FunctionData> Copy() const override {
 		// Have to do this because we can't implicitly copy Vector
@@ -16,7 +16,7 @@ public:
 			// The vectors are const vectors of the key value
 			map_copy[kv.first] = make_unique<Vector>(Value(kv.first));
 		}
-		return make_unique<JSONCreateFunctionData>(move(map_copy));
+		return make_unique<JSONCreateFunctionData>(std::move(map_copy));
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -100,7 +100,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 			bound_function.arguments.push_back(GetJSONType(const_struct_names, type));
 		}
 	}
-	return make_unique<JSONCreateFunctionData>(move(const_struct_names));
+	return make_unique<JSONCreateFunctionData>(std::move(const_struct_names));
 }
 
 static unique_ptr<FunctionData> JSONObjectBind(ClientContext &context, ScalarFunction &bound_function,

@@ -14638,8 +14638,6 @@ static int sql_trace_callback(
 ** a useful spot to set a debugger breakpoint.
 */
 static void test_breakpoint(void){
-  static int nCall = 0;
-  nCall++;
 }
 
 /*

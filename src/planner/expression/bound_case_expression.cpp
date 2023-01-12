@@ -5,17 +5,17 @@
 namespace duckdb {
 
 BoundCaseExpression::BoundCaseExpression(LogicalType type)
-    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, move(type)) {
+    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, std::move(type)) {
 }
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> when_expr, unique_ptr<Expression> then_expr,
                                          unique_ptr<Expression> else_expr_p)
     : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, then_expr->return_type),
-      else_expr(move(else_expr_p)) {
+      else_expr(std::move(else_expr_p)) {
 	BoundCaseCheck check;
-	check.when_expr = move(when_expr);
-	check.then_expr = move(then_expr);
-	case_checks.push_back(move(check));
+	check.when_expr = std::move(when_expr);
+	check.then_expr = std::move(then_expr);
+	case_checks.push_back(std::move(check));
 }
 
 string BoundCaseExpression::ToString() const {
@@ -50,12 +50,12 @@ unique_ptr<Expression> BoundCaseExpression::Copy() {
 		BoundCaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();
 		new_check.then_expr = check.then_expr->Copy();
-		new_case->case_checks.push_back(move(new_check));
+		new_case->case_checks.push_back(std::move(new_check));
 	}
 	new_case->else_expr = else_expr->Copy();
 
 	new_case->CopyProperties(*this);
-	return move(new_case);
+	return std::move(new_case);
 }
 
 void BoundCaseCheck::Serialize(Serializer &serializer) const {
@@ -71,8 +71,8 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &source, PlanDeserializa
 	auto then_expr = reader.ReadRequiredSerializable<Expression>(state);
 	reader.Finalize();
 	BoundCaseCheck result;
-	result.when_expr = move(when_expr);
-	result.then_expr = move(then_expr);
+	result.when_expr = std::move(when_expr);
+	result.then_expr = std::move(then_expr);
 	return result;
 }
 
@@ -88,9 +88,9 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(ExpressionDeserializatio
 	auto else_expr = reader.ReadRequiredSerializable<Expression>(state.gstate);
 
 	auto result = make_unique<BoundCaseExpression>(return_type);
-	result->else_expr = move(else_expr);
-	result->case_checks = move(case_checks);
-	return move(result);
+	result->else_expr = std::move(else_expr);
+	result->case_checks = std::move(case_checks);
+	return std::move(result);
 }
 
 } // namespace duckdb

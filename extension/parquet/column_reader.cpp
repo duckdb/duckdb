@@ -43,7 +43,7 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(move(type_p)), page_rows_available(0) {
+      type(std::move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -199,7 +199,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		break;
 	case PageType::DICTIONARY_PAGE:
 		PreparePage(page_hdr);
-		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
+		Dictionary(std::move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:
 		break; // ignore INDEX page type and any other custom extensions
@@ -519,7 +519,7 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 //===--------------------------------------------------------------------===//
 StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                        idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, move(type_p), schema_p, schema_idx_p,
+    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, std::move(type_p), schema_p, schema_idx_p,
                                                                     max_define_p, max_repeat_p) {
 	fixed_width_string_length = 0;
 	if (schema_p.type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -545,7 +545,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 }
 
 void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
-	dict = move(data);
+	dict = std::move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
 		uint32_t str_len;
@@ -652,7 +652,7 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 class ParquetStringVectorBuffer : public VectorBuffer {
 public:
 	explicit ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(move(buffer_p)) {
+	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(std::move(buffer_p)) {
 	}
 
 private:
@@ -663,7 +663,7 @@ void StringColumnReader::DictReference(Vector &result) {
 	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
 }
 void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(move(plain_data)));
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(std::move(plain_data)));
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
@@ -794,9 +794,9 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
-    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), read_cache(reader.allocator, ListType::GetChildType(Type())),
-      read_vector(read_cache), overflow_child_count(0) {
+    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_column_reader(std::move(child_column_reader_p)),
+      read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -834,8 +834,8 @@ void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p,
                                                              const SchemaElement &schema_p, idx_t schema_idx_p,
                                                              idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
-    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      constant(move(constant_p)) {
+    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      constant(std::move(constant_p)) {
 }
 idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
                                           uint8_t *repeat_out, Vector &result) {
@@ -849,7 +849,7 @@ idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t 
 //===--------------------------------------------------------------------===//
 RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                              idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
+    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 
 unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
@@ -866,7 +866,7 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
 
 	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
-	return move(stats);
+	return std::move(stats);
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
@@ -892,9 +892,9 @@ idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter,
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
 CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
-    : ColumnReader(child_reader_p->Reader(), move(target_type_p), child_reader_p->Schema(), child_reader_p->FileIdx(),
-                   child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
-      child_reader(move(child_reader_p)) {
+    : ColumnReader(child_reader_p->Reader(), std::move(target_type_p), child_reader_p->Schema(),
+                   child_reader_p->FileIdx(), child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
+      child_reader(std::move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
@@ -944,8 +944,8 @@ idx_t CastColumnReader::GroupRowsAvailable() {
 StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                        idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_readers(move(child_readers_p)) {
+    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_readers(std::move(child_readers_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 }
 
@@ -1079,7 +1079,7 @@ public:
 	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
-	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
+	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
@@ -1169,7 +1169,7 @@ class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConver
 public:
 	UUIDColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	                 idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, move(type_p), schema_p, file_idx_p,
+	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
 	                                                            max_define_p, max_repeat_p) {};
 
 protected:
@@ -1220,7 +1220,7 @@ class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalVa
 public:
 	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	                     idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, move(type_p), schema_p, file_idx_p,
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
 	                                                                 max_define_p, max_repeat_p) {};
 
 protected:

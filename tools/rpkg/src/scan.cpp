@@ -206,7 +206,7 @@ static unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContex
                                                                     TableFunctionInitInput &input) {
 	auto result = make_unique<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data));
 	result->position = 0;
-	return move(result);
+	return std::move(result);
 }
 
 static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
@@ -238,7 +238,7 @@ static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionConte
 
 	result->column_ids = input.column_ids;
 	DataFrameScanParallelStateNext(context.client, input.bind_data, *result, gstate);
-	return move(result);
+	return std::move(result);
 }
 
 struct DedupPointerEnumType {
