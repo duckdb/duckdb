@@ -8,7 +8,7 @@
 namespace duckdb {
 
 StringStatistics::StringStatistics(LogicalType type_p, StatisticsType stats_type)
-    : BaseStatistics(move(type_p), stats_type) {
+    : BaseStatistics(std::move(type_p), stats_type) {
 	InitializeBase();
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
@@ -27,7 +27,7 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() const {
 	memcpy(result->max, max, MAX_STRING_MINMAX_SIZE);
 	result->has_unicode = has_unicode;
 	result->max_string_length = max_string_length;
-	return move(result);
+	return std::move(result);
 }
 
 void StringStatistics::Serialize(FieldWriter &writer) const {
@@ -39,13 +39,13 @@ void StringStatistics::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(move(type), StatisticsType::LOCAL_STATS);
+	auto stats = make_unique<StringStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
 	reader.ReadBlob(stats->min, MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = reader.ReadRequired<bool>();
 	stats->max_string_length = reader.ReadRequired<uint32_t>();
 	stats->has_overflow_strings = reader.ReadRequired<bool>();
-	return move(stats);
+	return std::move(stats);
 }
 
 static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {

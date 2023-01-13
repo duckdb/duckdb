@@ -15,16 +15,17 @@ namespace duckdb {
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
                                              vector<Value> parameters_p, named_parameter_map_t named_parameters,
                                              shared_ptr<Relation> input_relation_p)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
-      named_parameters(move(named_parameters)), input_relation(move(input_relation_p)) {
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      parameters(std::move(parameters_p)), named_parameters(std::move(named_parameters)),
+      input_relation(std::move(input_relation_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
                                              vector<Value> parameters_p,
 
                                              shared_ptr<Relation> input_relation_p)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
-      input_relation(move(input_relation_p)) {
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      parameters(std::move(parameters_p)), input_relation(std::move(input_relation_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 
@@ -32,7 +33,7 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->from_table = GetTableRef();
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
@@ -42,7 +43,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		subquery->subquery = make_unique<SelectStatement>();
 		subquery->subquery->node = input_relation->GetQueryNode();
 		subquery->subquery_type = SubqueryType::SCALAR;
-		children.push_back(move(subquery));
+		children.push_back(std::move(subquery));
 	}
 	for (auto &parameter : parameters) {
 		children.push_back(make_unique<ConstantExpression>(parameter));
@@ -54,15 +55,15 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 		// the function binder likes
 		auto column_ref = make_unique<ColumnRefExpression>(parameter.first);
 		auto constant_value = make_unique<ConstantExpression>(parameter.second);
-		auto comparison =
-		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(column_ref), move(constant_value));
-		children.push_back(move(comparison));
+		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
+		                                                    std::move(constant_value));
+		children.push_back(std::move(comparison));
 	}
 
 	auto table_function = make_unique<TableFunctionRef>();
-	auto function = make_unique<FunctionExpression>(name, move(children));
-	table_function->function = move(function);
-	return move(table_function);
+	auto function = make_unique<FunctionExpression>(name, std::move(children));
+	table_function->function = std::move(function);
+	return std::move(table_function);
 }
 
 string TableFunctionRelation::GetAlias() {

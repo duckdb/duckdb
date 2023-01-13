@@ -6,8 +6,14 @@ add_library_unity(
   alter_table_info.cpp
   create_info.cpp
   create_index_info.cpp
+  create_aggregate_function_info.cpp
+  create_collation_info.cpp
+  create_copy_function_info.cpp
+  create_pragma_function_info.cpp
   create_scalar_function_info.cpp
+  create_table_function_info.cpp
   create_table_info.cpp
+  create_view_info.cpp
   sample_options.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parsed_data>

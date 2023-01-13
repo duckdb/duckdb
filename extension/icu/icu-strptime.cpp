@@ -142,7 +142,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		// Find the old function
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto &func = (ScalarFunctionCatalogEntry &)*entry;
@@ -222,7 +222,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastFromVarchar, move(cast_data));
+		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {
@@ -330,7 +330,7 @@ struct ICUStrftime : public ICUDateFunc {
 		                               ICUStrftimeFunction, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
 
@@ -407,7 +407,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
 
-		return BoundCastInfo(CastToVarchar, move(cast_data));
+		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}
 
 	static void AddCasts(ClientContext &context) {

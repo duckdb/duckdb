@@ -28,7 +28,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table->temporary) {
 		// delete from persistent table: not read only!
-		properties.read_only = false;
+		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
 	// Add CTEs as bindable
@@ -39,17 +39,19 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		unique_ptr<LogicalOperator> child_operator;
 		for (auto &using_clause : stmt.using_clauses) {
 			// bind the using clause
-			auto bound_node = Bind(*using_clause);
+			auto using_binder = Binder::CreateBinder(context, this);
+			auto bound_node = using_binder->Bind(*using_clause);
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				child_operator = LogicalCrossProduct::Create(move(child_operator), move(op));
+				child_operator = LogicalCrossProduct::Create(std::move(child_operator), std::move(op));
 			} else {
-				child_operator = move(op);
+				child_operator = std::move(op);
 			}
+			bind_context.AddContext(std::move(using_binder->bind_context));
 		}
 		if (child_operator) {
-			root = LogicalCrossProduct::Create(move(root), move(child_operator));
+			root = LogicalCrossProduct::Create(std::move(root), std::move(child_operator));
 		}
 	}
 
@@ -60,13 +62,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		condition = binder.Bind(stmt.condition);
 
 		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(move(condition));
-		filter->AddChild(move(root));
-		root = move(filter);
+		auto filter = make_unique<LogicalFilter>(std::move(condition));
+		filter->AddChild(std::move(root));
+		root = std::move(filter);
 	}
 	// create the delete node
-	auto del = make_unique<LogicalDelete>(table);
-	del->AddChild(move(root));
+	auto del = make_unique<LogicalDelete>(table, GenerateTableIndex());
+	del->AddChild(std::move(root));
 
 	// set up the delete expression
 	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
@@ -79,11 +81,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		auto update_table_index = GenerateTableIndex();
 		del->table_index = update_table_index;
 
-		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
-		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
-		                     move(result));
+		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
+		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		                     std::move(del_as_logicaloperator), std::move(result));
 	}
-	result.plan = move(del);
+	result.plan = std::move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	properties.allow_stream_result = false;

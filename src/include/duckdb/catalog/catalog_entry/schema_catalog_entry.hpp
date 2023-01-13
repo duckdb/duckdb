@@ -44,6 +44,10 @@ class SchemaCatalogEntry : public CatalogEntry {
 	friend class Catalog;
 
 public:
+	static constexpr const CatalogType Type = CatalogType::SCHEMA_ENTRY;
+	static constexpr const char *Name = "schema";
+
+public:
 	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
 
 private:
@@ -67,8 +71,6 @@ private:
 	CatalogSet types;
 
 public:
-	static SchemaCatalogEntry *GetTemporaryObjects(ClientContext &context);
-
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
@@ -84,42 +86,44 @@ public:
 	//! Creates an index with the given name in the schema
 	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
 
+	void Verify(Catalog &catalog) override;
+
 private:
 	//! Create a scalar or aggregate function within the given schema
-	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
+	CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info);
 	//! Creates a table with the given name in the schema
-	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
+	CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info);
 	//! Creates a view with the given name in the schema
-	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
+	CatalogEntry *CreateView(CatalogTransaction transaction, CreateViewInfo *info);
 	//! Creates a sequence with the given name in the schema
-	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
+	CatalogEntry *CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info);
 	//! Create a table function within the given schema
-	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	CatalogEntry *CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info);
 	//! Create a copy function within the given schema
-	CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
+	CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info);
 	//! Create a pragma function within the given schema
-	CatalogEntry *CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info);
+	CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info);
 	//! Create a collation within the given schema
-	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info);
 	//! Create a enum within the given schema
-	CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
+	CatalogEntry *CreateType(CatalogTransaction transaction, CreateTypeInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);
-
-	//! Append a scalar or aggregate function within the given schema
-	CatalogEntry *AddFunction(ClientContext &context, CreateFunctionInfo *info);
 
 	//! Alters a catalog entry
 	void Alter(ClientContext &context, AlterInfo *info);
 
 	//! Add a catalog entry to this schema
-	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);
+	CatalogEntry *AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+	                       OnCreateConflict on_conflict);
 	//! Add a catalog entry to this schema
-	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict,
-	                       unordered_set<CatalogEntry *> dependencies);
+	CatalogEntry *AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+	                       OnCreateConflict on_conflict, DependencyList dependencies);
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
+
+	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 };
 } // namespace duckdb

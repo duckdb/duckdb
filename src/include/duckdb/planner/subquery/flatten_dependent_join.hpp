@@ -23,7 +23,7 @@ struct FlattenDependentJoins {
 
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator *op);
+	bool DetectCorrelatedExpressions(LogicalOperator *op, bool lateral = false);
 
 	//! Push the dependent join down a LogicalOperator
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan);

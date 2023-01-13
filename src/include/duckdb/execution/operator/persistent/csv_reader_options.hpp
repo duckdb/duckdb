@@ -52,6 +52,11 @@ struct BufferedCSVReaderOptions {
 	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
+	// CSVAutoOptions
+	//===--------------------------------------------------------------------===//
+	//! SQL Types defined per specific column
+	unordered_map<string, LogicalType> sql_types_per_column;
+	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
 

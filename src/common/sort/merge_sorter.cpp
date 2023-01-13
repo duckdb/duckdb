@@ -364,18 +364,24 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 		const bool l_done = l.block_idx == l_blocks.size();
 		const bool r_done = r.block_idx == r_blocks.size();
 		// Pin the radix sortable blocks
+		idx_t l_count;
 		if (!l_done) {
 			l_block = l_blocks[l.block_idx].get();
 			left->PinRadix(l.block_idx);
 			l_ptr = l.RadixPtr();
+			l_count = l_block->count;
+		} else {
+			l_count = 0;
 		}
+		idx_t r_count;
 		if (!r_done) {
 			r_block = r_blocks[r.block_idx].get();
 			r.PinRadix(r.block_idx);
 			r_ptr = r.RadixPtr();
+			r_count = r_block->count;
+		} else {
+			r_count = 0;
 		}
-		const idx_t &l_count = !l_done ? l_block->count : 0;
-		const idx_t &r_count = !r_done ? r_block->count : 0;
 		// Copy using computed merge
 		if (!l_done && !r_done) {
 			// Both sides have data - merge
@@ -420,7 +426,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 	auto result_data_handle = buffer_manager.Pin(result_data_block->block);
 	data_ptr_t result_data_ptr = result_data_handle.Ptr() + result_data_block->count * row_width;
 	// Result heap to write to (if needed)
-	RowDataBlock *result_heap_block;
+	RowDataBlock *result_heap_block = nullptr;
 	BufferHandle result_heap_handle;
 	data_ptr_t result_heap_ptr;
 	if (!layout.AllConstant() && state.external) {

@@ -102,13 +102,14 @@ bool PhysicalHashAggregate::CanSkipRegularSink() const {
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality) {
+    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), {}, estimated_cardinality) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality)
-    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, {}, estimated_cardinality) {
+    : PhysicalHashAggregate(context, std::move(types), std::move(expressions), std::move(groups_p), {}, {},
+                            estimated_cardinality) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
@@ -116,8 +117,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, move(types), estimated_cardinality),
-      grouping_sets(move(grouping_sets_p)) {
+    : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
+      grouping_sets(std::move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
 	const idx_t group_count = groups_p.size();
 	if (grouping_sets.empty()) {
@@ -125,11 +126,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		for (idx_t i = 0; i < group_count; i++) {
 			set.insert(i);
 		}
-		grouping_sets.push_back(move(set));
+		grouping_sets.push_back(std::move(set));
 	}
 	input_group_types = CreateGroupChunkTypes(groups_p);
 
-	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions), move(grouping_functions_p));
+	grouped_aggregate_data.InitializeGroupby(std::move(groups_p), std::move(expressions),
+	                                         std::move(grouping_functions_p));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
@@ -459,7 +461,7 @@ public:
 			table.ScheduleTasks(pipeline->executor, shared_from_this(), *grouping_gstate.table_state, tasks);
 		}
 		D_ASSERT(!tasks.empty());
-		SetTasks(move(tasks));
+		SetTasks(std::move(tasks));
 	}
 };
 
@@ -469,8 +471,8 @@ class HashAggregateFinalizeTask : public ExecutorTask {
 public:
 	HashAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
 	                          ClientContext &context, const PhysicalHashAggregate &op)
-	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(move(event_p)), gstate(state_p), context(context),
-	      op(op) {
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p),
+	      context(context), op(op) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -505,7 +507,7 @@ public:
 		vector<unique_ptr<Task>> tasks;
 		tasks.push_back(make_unique<HashAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
 		D_ASSERT(!tasks.empty());
-		SetTasks(move(tasks));
+		SetTasks(std::move(tasks));
 	}
 };
 
@@ -516,8 +518,8 @@ public:
 	HashDistinctAggregateFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
 	                                  ClientContext &context, const PhysicalHashAggregate &op,
 	                                  vector<vector<unique_ptr<GlobalSourceState>>> &global_sources_p)
-	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(move(event_p)), gstate(state_p), context(context),
-	      op(op), global_sources(global_sources_p) {
+	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), gstate(state_p),
+	      context(context), op(op), global_sources(global_sources_p) {
 	}
 
 	void AggregateDistinctGrouping(DistinctAggregateCollectionInfo &info,
@@ -657,13 +659,13 @@ public:
 			                                                               context, op, global_sources));
 		}
 		D_ASSERT(!tasks.empty());
-		SetTasks(move(tasks));
+		SetTasks(std::move(tasks));
 	}
 
 	void FinishEvent() override {
 		//! Now that everything is added to the main ht, we can actually finalize
 		auto new_event = make_shared<HashAggregateFinalizeEvent>(op, gstate, pipeline.get(), context);
-		this->InsertEvent(move(new_event));
+		this->InsertEvent(std::move(new_event));
 	}
 
 private:
@@ -691,7 +693,7 @@ private:
 				auto &radix_table_p = data.radix_tables[table_idx];
 				aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
 			}
-			grouping_sources.push_back(move(aggregate_sources));
+			grouping_sources.push_back(std::move(aggregate_sources));
 		}
 		return grouping_sources;
 	}
@@ -727,13 +729,13 @@ public:
 		}
 
 		D_ASSERT(!tasks.empty());
-		SetTasks(move(tasks));
+		SetTasks(std::move(tasks));
 	}
 
 	void FinishEvent() override {
 		//! Now that all tables are combined, it's time to do the distinct aggregations
 		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(move(new_event));
+		this->InsertEvent(std::move(new_event));
 	}
 };
 
@@ -765,12 +767,12 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 	if (any_partitioned) {
 		// If any of the groupings are partitioned then we first need to combine those, then aggregate
 		auto new_event = make_shared<HashDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(move(new_event));
+		event.InsertEvent(std::move(new_event));
 	} else {
 		// Hashtables aren't partitioned, they dont need to be joined first
 		// so we can already compute the aggregate
 		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(move(new_event));
+		event.InsertEvent(std::move(new_event));
 	}
 	return SinkFinalizeType::READY;
 }
@@ -798,7 +800,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 	}
 	if (any_partitioned) {
 		auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
-		event.InsertEvent(move(new_event));
+		event.InsertEvent(std::move(new_event));
 	}
 	return SinkFinalizeType::READY;
 }

@@ -20,7 +20,7 @@ namespace duckdb {
 enum class AlterFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
 
 struct AlterFunctionInfo : public AlterInfo {
-	AlterFunctionInfo(AlterFunctionType type, string schema, string name, bool if_exists);
+	AlterFunctionInfo(AlterFunctionType type, AlterEntryData data);
 	virtual ~AlterFunctionInfo() override;
 
 	AlterFunctionType alter_function_type;
@@ -35,7 +35,7 @@ public:
 // AddFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
 struct AddFunctionOverloadInfo : public AlterFunctionInfo {
-	AddFunctionOverloadInfo(string schema, string name, bool if_exists, ScalarFunctionSet new_overloads);
+	AddFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads);
 	~AddFunctionOverloadInfo() override;
 
 	ScalarFunctionSet new_overloads;

@@ -35,12 +35,26 @@ struct VectorDataIndex {
 	}
 };
 
+struct SwizzleMetaData {
+	SwizzleMetaData(VectorDataIndex child_index_p, uint16_t offset_p, uint16_t count_p)
+	    : child_index(child_index_p), offset(offset_p), count(count_p) {
+	}
+	//! Index of block storing heap
+	VectorDataIndex child_index;
+	//! Offset into the string_t vector
+	uint16_t offset;
+	//! Number of strings starting at 'offset' that have strings stored in the block with index 'child_index'
+	uint16_t count;
+};
+
 struct VectorMetaData {
 	//! Where the vector data lives
 	uint32_t block_id;
 	uint32_t offset;
 	//! The number of entries present in this vector
 	uint16_t count;
+	//! Meta data about string pointers
+	vector<SwizzleMetaData> swizzle_data;
 
 	//! Child data of this vector (used only for lists and structs)
 	//! Note: child indices are stored with one layer of indirection
@@ -79,8 +93,7 @@ public:
 	vector<VectorMetaData> vector_data;
 	//! The set of child indices
 	vector<VectorDataIndex> child_indices;
-	//! The string heap for the column data collection
-	// FIXME: we should get rid of the string heap and store strings as LIST<UINT8>
+	//! The string heap for the column data collection (only used for IN_MEMORY_ALLOCATOR)
 	StringHeap heap;
 
 public:
@@ -89,9 +102,12 @@ public:
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
 	                               ChunkManagementState *chunk_state = nullptr,
 	                               VectorDataIndex prev_index = VectorDataIndex());
-	//! Allocate space for a vector during append,
+	//! Allocate space for a vector during append
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
 	                               ColumnDataAppendState &append_state, VectorDataIndex prev_index = VectorDataIndex());
+	//! Allocate space for string data during append (BUFFER_MANAGER_ALLOCATOR only)
+	VectorDataIndex AllocateStringHeap(idx_t size, ChunkMetaData &chunk_meta, ColumnDataAppendState &append_state,
+	                                   VectorDataIndex prev_index = VectorDataIndex());
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

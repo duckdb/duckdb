@@ -33,6 +33,11 @@ struct PreparedStatementWrapper {
 	vector<Value> values;
 };
 
+struct ExtractStatementsWrapper {
+	vector<unique_ptr<SQLStatement>> statements;
+	string error;
+};
+
 struct PendingStatementWrapper {
 	unique_ptr<PendingQueryResult> statement;
 };

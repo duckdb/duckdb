@@ -87,6 +87,7 @@ class LimitPercentOperatorState : public GlobalSourceState {
 public:
 	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op)
 	    : limit(DConstants::INVALID_INDEX), current_offset(0) {
+		D_ASSERT(op.sink_state);
 		auto &gstate = (LimitPercentGlobalState &)*op.sink_state;
 		gstate.data.InitializeScan(scan_state);
 	}

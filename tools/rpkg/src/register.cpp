@@ -12,7 +12,7 @@
 using namespace duckdb;
 
 [[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value,
-                                          bool integer64, bool overwrite) {
+                                          bool integer64, bool overwrite, bool experimental) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_register_df: Invalid connection");
 	}
@@ -25,6 +25,8 @@ using namespace duckdb;
 	try {
 		named_parameter_map_t parameter_map;
 		parameter_map["integer64"] = Value::BOOLEAN(integer64);
+		parameter_map["experimental"] = Value::BOOLEAN(experimental);
+
 		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())}, parameter_map)
 		    ->CreateView(name, overwrite, true);
 		static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = value;
@@ -221,7 +223,7 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+			table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
 			return table_function;
 		}
 	}

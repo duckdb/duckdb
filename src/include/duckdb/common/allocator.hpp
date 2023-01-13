@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class Allocator;
+class AttachedDatabase;
 class ClientContext;
 class DatabaseInstance;
 class ExecutionContext;
@@ -61,6 +62,9 @@ private:
 };
 
 class Allocator {
+	// 281TB ought to be enough for anybody
+	static constexpr const idx_t MAXIMUM_ALLOC_SIZE = 281474976710656ULL;
+
 public:
 	DUCKDB_API Allocator();
 	DUCKDB_API Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
@@ -88,13 +92,14 @@ public:
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+	static Allocator &Get(AttachedDatabase &db);
 
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
 
-	static Allocator &DefaultAllocator();
-	static shared_ptr<Allocator> &DefaultAllocatorReference();
+	DUCKDB_API static Allocator &DefaultAllocator();
+	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -133,6 +138,8 @@ void DestroyObject(T *ptr) {
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
+	DUCKDB_API static Allocator &Get(AttachedDatabase &db);
 };
 
 } // namespace duckdb

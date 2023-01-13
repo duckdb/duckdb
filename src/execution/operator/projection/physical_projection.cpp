@@ -20,8 +20,8 @@ public:
 
 PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                        idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::PROJECTION, move(types), estimated_cardinality),
-      select_list(move(select_list)) {
+    : PhysicalOperator(PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 }
 
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

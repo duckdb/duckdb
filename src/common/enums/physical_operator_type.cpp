@@ -119,12 +119,16 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::RESET:
+		return "RESET";
 	case PhysicalOperatorType::LOAD:
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
 		return "INOUT_FUNCTION";
 	case PhysicalOperatorType::CREATE_TYPE:
 		return "CREATE_TYPE";
+	case PhysicalOperatorType::ATTACH:
+		return "ATTACH";
 	case PhysicalOperatorType::RESULT_COLLECTOR:
 		return "RESULT_COLLECTOR";
 	case PhysicalOperatorType::INVALID:

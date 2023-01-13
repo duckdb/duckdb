@@ -33,14 +33,14 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
 				for (idx_t j = 0; j < parser.statements.size(); j++) {
-					new_statements.push_back(move(parser.statements[j]));
+					new_statements.push_back(std::move(parser.statements[j]));
 				}
 				continue;
 			}
 		}
-		new_statements.push_back(move(statements[i]));
+		new_statements.push_back(std::move(statements[i]));
 	}
-	statements = move(new_statements);
+	statements = std::move(new_statements);
 }
 
 void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements) {
@@ -62,7 +62,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info
 	auto info = *((PragmaStatement &)*statement).info;
 	auto entry =
-	    Catalog::GetCatalog(context).GetEntry<PragmaFunctionCatalogEntry>(context, DEFAULT_SCHEMA, info.name, false);
+	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name, false);
 	string error;
 
 	FunctionBinder function_binder(context);

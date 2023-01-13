@@ -5,8 +5,8 @@ namespace duckdb {
 
 BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, unique_ptr<ParsedExpression> lower_p,
                                      unique_ptr<ParsedExpression> upper_p)
-    : ParsedExpression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BETWEEN), input(move(input_p)),
-      lower(move(lower_p)), upper(move(upper_p)) {
+    : ParsedExpression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BETWEEN), input(std::move(input_p)),
+      lower(std::move(lower_p)), upper(std::move(upper_p)) {
 }
 
 string BetweenExpression::ToString() const {
@@ -29,7 +29,7 @@ bool BetweenExpression::Equals(const BetweenExpression *a, const BetweenExpressi
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	auto copy = make_unique<BetweenExpression>(input->Copy(), lower->Copy(), upper->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void BetweenExpression::Serialize(FieldWriter &writer) const {
@@ -42,7 +42,7 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type,
 	auto input = source.ReadRequiredSerializable<ParsedExpression>();
 	auto lower = source.ReadRequiredSerializable<ParsedExpression>();
 	auto upper = source.ReadRequiredSerializable<ParsedExpression>();
-	return make_unique<BetweenExpression>(move(input), move(lower), move(upper));
+	return make_unique<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
 }
 
 } // namespace duckdb

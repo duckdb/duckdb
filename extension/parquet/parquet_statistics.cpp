@@ -38,7 +38,7 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	} else {
 		stats->max = Value(type);
 	}
-	return move(stats);
+	return std::move(stats);
 }
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
@@ -169,6 +169,18 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
 			auto val = Load<int64_t>((data_ptr_t)stats.c_str());
+			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
+				// logical type
+				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return Value::TIMESTAMPMS(timestamp_t(val));
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return Value::TIMESTAMPNS(timestamp_t(val));
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return Value::TIMESTAMP(timestamp_t(val));
+				} else {
+					throw InternalException("Timestamp logicalType is set but unit is not defined");
+				}
+			}
 			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
 				return Value::TIMESTAMPMS(timestamp_t(val));
 			} else {
@@ -229,7 +241,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		string_stats->has_unicode = true; // we dont know better
 		string_stats->max_string_length = NumericLimits<uint32_t>::Maximum();
-		row_group_stats = move(string_stats);
+		row_group_stats = std::move(string_stats);
 		break;
 	}
 	default:

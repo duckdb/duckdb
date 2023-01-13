@@ -249,6 +249,20 @@ select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
 
+# Don't swallow non-spaces
+query I
+SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z)') as fixed;
+----
+2022-10-17 22:00:00+00
+
+query I
+SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT', '%a %b %d %Y %X GMT%z (%Z') as working;
+----
+2022-10-17 22:00:00+00
+
+statement error
+SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;
+
 # incorrect usage
 statement error
 select strptime('2020-12-31 21:25:58.745232+0', '%Y-%m-%d %H:%M:%S.%f%z');

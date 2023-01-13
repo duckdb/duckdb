@@ -8,7 +8,7 @@ namespace duckdb {
 
 ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_p)
     : TableFilter(TableFilterType::CONSTANT_COMPARISON), comparison_type(comparison_type_p),
-      constant(move(constant_p)) {
+      constant(std::move(constant_p)) {
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {

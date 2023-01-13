@@ -18,14 +18,14 @@ void INETExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	// add the "inet" type
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("ip_type", LogicalType::UTINYINT));
 	children.push_back(make_pair("address", LogicalType::HUGEINT));
 	children.push_back(make_pair("mask", LogicalType::USMALLINT));
-	auto inet_type = LogicalType::STRUCT(move(children));
+	auto inet_type = LogicalType::STRUCT(std::move(children));
 	inet_type.SetAlias("inet");
 
 	CreateTypeInfo info("inet", inet_type);

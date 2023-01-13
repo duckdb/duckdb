@@ -1,0 +1,59 @@
+# name: test/sql/subquery/lateral/lateral_arrays.test
+# description: Test LATERAL joins with arrays
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INTEGER, arr INT[]);
+
+statement ok
+INSERT INTO tbl VALUES (1, ARRAY[1, 3, 7]), (2, ARRAY[8, NULL]), (3, ARRAY[3, NULL, 4]), (NULL, ARRAY[]::INT[]);
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT UNNEST(tbl.arr)) t(b) ON (i=b) ORDER BY i;
+----
+1	[1, 3, 7]	1
+3	[3, NULL, 4]	3
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT UNNEST(tbl.arr)) t(b) ON (i<>b) ORDER BY i, b;
+----
+1	[1, 3, 7]	3
+1	[1, 3, 7]	7
+2	[8, NULL]	8
+3	[3, NULL, 4]	4
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT UNNEST(tbl.arr)) t(b) ON (i<b) ORDER BY i, b;
+----
+1	[1, 3, 7]	3
+1	[1, 3, 7]	7
+2	[8, NULL]	8
+3	[3, NULL, 4]	4
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT UNNEST(tbl.arr)) t(b) ON (i>=b) ORDER BY i, b;
+----
+1	[1, 3, 7]	1
+3	[3, NULL, 4]	3
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT UNNEST(ARRAY[tbl.i * tbl.i])) t(b) ON (i>=b) ORDER BY i, b;
+----
+1	[1, 3, 7]	1
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT x FROM generate_series(0,5,1) t(x) WHERE x>i) t(b) ON (i>=b) ORDER BY i, b;
+----
+
+query III
+SELECT * FROM tbl JOIN LATERAL (SELECT x FROM generate_series(0,5,1) t(x) WHERE x<i) t(b) ON (i>=b) ORDER BY i, b;
+----
+1	[1, 3, 7]	0
+2	[8, NULL]	0
+2	[8, NULL]	1
+3	[3, NULL, 4]	0
+3	[3, NULL, 4]	1
+3	[3, NULL, 4]	2

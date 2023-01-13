@@ -2,6 +2,9 @@
 # description: Test update behavior with multiple updaters
 # group: [update]
 
+statement ok
+SET immediate_transaction_mode=true
+
 # this test contains four query connections (con1, con2, con3, con4)
 # and one updating connection (updater)
 # first create a table, filled with 3 values (1), (2), (3)

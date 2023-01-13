@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 
@@ -7,7 +8,12 @@ void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, G
                                   LocalSourceState &lstate) const {
 	auto &client = context.client;
 
-	switch (info->type) {
+	auto type = info->type;
+	if (type == TransactionType::COMMIT && ValidChecker::IsInvalidated(client.ActiveTransaction())) {
+		// transaction is invalidated - turn COMMIT into ROLLBACK
+		type = TransactionType::ROLLBACK;
+	}
+	switch (type) {
 	case TransactionType::BEGIN_TRANSACTION: {
 		if (client.transaction.IsAutoCommit()) {
 			// start the active transaction

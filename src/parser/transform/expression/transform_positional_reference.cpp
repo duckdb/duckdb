@@ -10,7 +10,7 @@ unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_li
 	}
 	auto result = make_unique<PositionalReferenceExpression>(node->position);
 	result->query_location = node->location;
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

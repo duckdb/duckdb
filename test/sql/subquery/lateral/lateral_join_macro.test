@@ -1,0 +1,25 @@
+# name: test/sql/subquery/lateral/lateral_join_macro.test
+# description: Test lateral joins with macros
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE FUNCTION my_func(x) AS (x + x)
+
+statement ok
+CREATE TABLE tbl (
+	x INTEGER
+);
+
+statement ok
+INSERT INTO tbl VALUES (1), (2), (3), (NULL);
+
+query II
+SELECT * FROM tbl, (SELECT my_func(x)) ORDER BY x NULLS LAST
+----
+1	2
+2	4
+3	6
+NULL	NULL

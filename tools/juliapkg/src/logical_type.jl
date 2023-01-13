@@ -97,9 +97,14 @@ function get_list_child_type(type::LogicalType)
     return LogicalType(duckdb_list_type_child_type(type.handle))
 end
 
+##===--------------------------------------------------------------------===##
+## Struct methods
+##===--------------------------------------------------------------------===##
+
 function get_struct_child_count(type::LogicalType)
     return duckdb_struct_type_child_count(type.handle)
 end
+
 
 function get_struct_child_name(type::LogicalType, index::UInt64)
     val = duckdb_struct_type_child_name(type.handle, index)
@@ -110,4 +115,23 @@ end
 
 function get_struct_child_type(type::LogicalType, index::UInt64)
     return LogicalType(duckdb_struct_type_child_type(type.handle, index))
+end
+
+##===--------------------------------------------------------------------===##
+## Union methods
+##===--------------------------------------------------------------------===##
+
+function get_union_member_count(type::LogicalType)
+    return duckdb_union_type_member_count(type.handle)
+end
+
+function get_union_member_name(type::LogicalType, index::UInt64)
+    val = duckdb_union_type_member_name(type.handle, index)
+    result = unsafe_string(val)
+    duckdb_free(val)
+    return result
+end
+
+function get_union_member_type(type::LogicalType, index::UInt64)
+    return LogicalType(duckdb_union_type_member_type(type.handle, index))
 end

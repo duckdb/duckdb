@@ -1,0 +1,28 @@
+# name: test/fuzzer/pedro/currval_sequence_dependency.test
+# description: Test sequence dependency in currval
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+foreach fun nextval currval
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE t1(c1 INT, CHECK(${fun}('seq')));
+
+statement error
+DROP SEQUENCE seq;
+----
+there are entries that depend
+
+statement ok
+DROP SEQUENCE seq CASCADE;
+
+# this also drops the table
+statement error
+INSERT INTO t1 VALUES (1)
+
+endloop

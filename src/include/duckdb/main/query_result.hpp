@@ -76,6 +76,8 @@ public:
 	unique_ptr<QueryResult> next;
 
 public:
+	//! Returns the name of the column for the given index
+	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
 	//! Returns nullptr if there are no more results to fetch.
 	DUCKDB_API virtual unique_ptr<DataChunk> Fetch();

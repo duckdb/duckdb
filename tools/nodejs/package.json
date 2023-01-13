@@ -26,6 +26,7 @@
     "test": "test"
   },
   "devDependencies": {
+    "@types/chai": "^4.3.4",
     "@types/mocha": "^10.0.0",
     "@types/node": "^18.11.0",
     "apache-arrow": "^9.0.0",

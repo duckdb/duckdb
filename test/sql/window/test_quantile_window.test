@@ -286,12 +286,12 @@ SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PR
 FROM t
 ORDER BY 1
 ----
-0	[0, 1, 1]
+0	[0, 1, 2]
 1	[0, 1, 2]
 2	[1, 2, 3]
 3	[2, 3, 4]
-4	[3, 4, 4]
-5	[4, 4, 4]
+4	[3, 4, 5]
+5	[4, 4, 5]
 
 # Moving discrete list with NULLs
 query II
@@ -307,12 +307,12 @@ SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PR
 FROM t
 ORDER BY 1
 ----
-0	[1, 1, 1]
-1	[1, 2, 2]
+0	[1, 1, 2]
+1	[1, 2, 3]
 2	[1, 2, 3]
 3	[2, 3, 4]
-4	[3, 4, 4]
-5	[4, 4, 4]
+4	[3, 4, 5]
+5	[4, 4, 5]
 
 # Moving discrete list with all NULLs
 query II
@@ -501,12 +501,12 @@ SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PR
 FROM t
 ORDER BY 1
 ----
-0	[1, 1, 1]
-1	[1, 2, 2]
+0	[1, 1, 2]
+1	[1, 2, 3]
 2	[1, 2, 3]
 3	[2, 3, 4]
-4	[3, 4, 4]
-5	[4, 4, 4]
+4	[3, 4, 5]
+5	[4, 4, 5]
 
 query II
 WITH t(r, i, p, f) AS (VALUES

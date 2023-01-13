@@ -18,3 +18,17 @@ SELECT * FROM read_csv_auto('data/csv/empty_first_line.csv', delim='|');
 a 1
 b 2
 c 3
+
+query I
+SELECT * FROM read_csv_auto("data/csv/empty_first_line.csv", delim="|");
+----
+a 1
+b 2
+c 3
+
+query I
+SELECT * FROM read_csv_auto("data/csv/empty_first_line"."csv", delim="|");
+----
+a 1
+b 2
+c 3

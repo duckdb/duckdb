@@ -95,7 +95,7 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
 	auto info = make_unique<ChunkConstantInfo>(start);
 	info->insert_id = 0;
 	info->delete_id = 0;
-	return move(info);
+	return std::move(info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -256,7 +256,7 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 			result->deleted[i] = 0;
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb
