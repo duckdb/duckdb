@@ -155,7 +155,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 		auto child_ref = n->GetChild(art, 0);
 		// concatenate prefixes
 		child_ref->prefix.Concatenate(art, n->key[0], node->prefix);
-		// free this node
+		// ensure that when deleting the node, we do not delete the child (because we move it)
 		n->children[0] = nullptr;
 
 		D_ASSERT(art.memory_size >= n->MemorySize(art, false));
