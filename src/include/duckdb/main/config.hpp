@@ -184,7 +184,7 @@ public:
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
-	//! Callback functions to allow users to pass custom create database table function
+	//! Extensions made to binder to implement the create_database functionality
 	vector<CreateDatabaseExtension> create_database_extensions;
 
 public:

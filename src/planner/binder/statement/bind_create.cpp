@@ -619,14 +619,16 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {
-		// not supported in DuckDB but allow replacement scan
+		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
 		auto &base = (CreateDatabaseInfo &)*stmt.info;
 		string extension_name = base.extension_name;
 		string database_name = base.name;
+		string source_path = base.path;
+
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &extension : config.create_database_extensions) {
 			auto create_database_function_ref =
-			    extension.function(context, extension_name, database_name, extension.data.get());
+			    extension.function(context, extension_name, database_name, source_path, extension.data.get());
 			if (create_database_function_ref) {
 				auto bound_create_database_func = Bind(*create_database_function_ref);
 				result.plan = CreatePlan(*bound_create_database_func);

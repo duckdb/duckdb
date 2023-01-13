@@ -19,8 +19,11 @@ struct CreateDatabaseInfo : public CreateInfo {
 	//! Extension name which creates databases
 	string extension_name;
 
-	//! Database name to create
+	//! Name of the database
 	string name;
+
+	//! Source path of the database if it's created from another database
+	string path;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
@@ -28,6 +31,7 @@ public:
 		CopyProperties(*result);
 		result->extension_name = extension_name;
 		result->name = name;
+		result->path = path;
 		return move(result);
 	}
 

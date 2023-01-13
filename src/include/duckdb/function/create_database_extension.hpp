@@ -21,7 +21,7 @@ struct CreateDatabaseExtensionData {
 };
 
 typedef unique_ptr<TableFunctionRef> (*create_database_t)(ClientContext &context, const string &extension_name,
-                                                          const string &database_name,
+                                                          const string &database_name, const string &source_path,
                                                           CreateDatabaseExtensionData *data);
 
 struct CreateDatabaseExtension {
