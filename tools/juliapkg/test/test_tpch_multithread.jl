@@ -3,10 +3,11 @@
 # DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
 
 @testset "Test TPC-H Multithreaded" begin
-    sf = "0.01"
+    sf = "0.1"
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
+    #df_con = DBInterface.connect(DuckDB.DB)
     DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
 
     # convert all tables to Julia DataFrames
@@ -20,10 +21,10 @@
     supplier = DataFrame(DBInterface.execute(native_con, "SELECT * FROM supplier"))
 
 	Threads.@threads for _ in 1:Threads.nthreads()
-			db = DuckDB.DB()
+			#db = DuckDB.DB()
 			id = Threads.threadid()
 			# now open a new in-memory database, and register the dataframes there
-			df_con = DBInterface.connect(db)
+			df_con = DBInterface.connect(DuckDB.DB)
 			#DBInterface.execute(df_con, "SET external_threads=1");
 			DuckDB.register_data_frame(df_con, customer, "customer")
 			DuckDB.register_data_frame(df_con, lineitem, "lineitem")
@@ -37,10 +38,12 @@
 
 			#throw(UndefVarError(:df_con))
 			# Execute all the queries
-			for i in 1:100
+			for _ in 1:100
+				for i in 1:22
 
-	            print("T:$id | Q:$i\n")
-				res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch(1)"))
+					print("T:$id | Q:$i\n")
+					res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
+				end
 			end
     		DBInterface.close!(df_con)
        end
