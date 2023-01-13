@@ -352,7 +352,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
 	auto &root_struct_reader = (StructColumnReader &)*ret;
-
 	// add casts if required
 	for (auto &entry : cast_map) {
 		auto column_idx = entry.first;
@@ -700,11 +699,35 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
 	state.root_reader = CreateReader(GetFileMetadata());
+	if (parquet_options.union_by_name) {
+		RearrangeChildReaders(state.root_reader, state.column_ids);
+	}
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
+void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids) {
+	auto &root_struct_reader = (StructColumnReader &)*root_reader;
+	unordered_map<idx_t, idx_t> reverse_union_idx;
+
+	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
+		auto child_reader = move(root_struct_reader.child_readers[col]);
+		auto cast_reader = make_unique<CastColumnReader>(move(child_reader), union_col_types[union_idx_map[col]]);
+		root_struct_reader.child_readers[col] = move(cast_reader);
+		reverse_union_idx[union_idx_map[col]] = col;
+	}
+
+	vector<bool> column_id_nulls(column_ids.size(), true);
+	for (idx_t col = 0; col < column_ids.size(); ++col) {
+		auto find = reverse_union_idx.find(column_ids[col]);
+		if (find != reverse_union_idx.end()) {
+			column_ids[col] = find->second;
+			column_id_nulls[col] = false;
+		}
+	}
+	union_null_cols = move(column_id_nulls);
+}
 void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &mask = ConstantVector::Validity(v);
@@ -898,6 +921,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		return false;
 	}
 
+	D_ASSERT(union_null_cols.size() >= result.ColumnCount());
+
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
 		state.current_group++;
@@ -915,7 +940,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 			// this is a special case where we are not interested in the actual contents of the file
-			if (IsRowIdColumnId(state.column_ids[out_col_idx])) {
+			if (IsRowIdColumnId(state.column_ids[out_col_idx]) || union_null_cols[out_col_idx]) {
 				continue;
 			}
 
@@ -956,7 +981,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// Prefetch column-wise
 				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
 
-					if (IsRowIdColumnId(state.column_ids[out_col_idx])) {
+					if (IsRowIdColumnId(state.column_ids[out_col_idx]) || union_null_cols[out_col_idx]) {
 						continue;
 					}
 
@@ -1007,6 +1032,10 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	if (state.filters) {
 		vector<bool> need_to_read(result.ColumnCount(), true);
 
+		for (idx_t col = 0; col < need_to_read.size(); ++col) {
+			need_to_read[col] = need_to_read[col] && !union_null_cols[col];
+		}
+
 		// first load the columns that are used in filters
 		for (auto &filter_col : state.filters->filters) {
 			auto file_col_idx = state.column_ids[filter_col.first];
@@ -1056,6 +1085,9 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			if (IsRowIdColumnId(file_col_idx)) {
 				Value constant_42 = Value::BIGINT(42);
 				result.data[out_col_idx].Reference(constant_42);
+				continue;
+			}
+			if (union_null_cols[out_col_idx]) {
 				continue;
 			}
 

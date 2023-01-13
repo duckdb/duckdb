@@ -314,6 +314,9 @@ void UpdateParentsOfNodes(Node *&l_node, Node *&r_node, ParentsOfNodes &parents)
 	}
 }
 
+// forward declaration
+bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents);
+
 bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 
 	// always try to merge the smaller node into the bigger node
@@ -327,16 +330,7 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 		UpdateParentsOfNodes(info.l_node, info.r_node, parents);
 	}
 
-	switch (info.r_node->type) {
-	case NodeType::N256:
-		return Node256::Merge(info, depth, parents.l_parent, parents.l_pos);
-	case NodeType::N48:
-		return Node48::Merge(info, depth, parents.l_parent, parents.l_pos);
-	case NodeType::N16:
-		return Node16::Merge(info, depth, parents.l_parent, parents.l_pos);
-	case NodeType::N4:
-		return Node4::Merge(info, depth, parents.l_parent, parents.l_pos);
-	case NodeType::NLeaf:
+	if (info.r_node->type == NodeType::NLeaf) {
 		D_ASSERT(info.l_node->type == NodeType::NLeaf);
 		D_ASSERT(info.r_node->type == NodeType::NLeaf);
 		if (info.l_art->IsUnique()) {
@@ -345,7 +339,37 @@ bool Merge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
 		Leaf::Merge(info.l_node, info.r_node);
 		return true;
 	}
-	throw InternalException("Invalid node type for right node in merge.");
+
+	uint8_t key_byte;
+	idx_t r_child_pos = DConstants::INVALID_INDEX;
+
+	while (true) {
+		r_child_pos = info.r_node->GetNextPosAndByte(r_child_pos, key_byte);
+		if (r_child_pos == DConstants::INVALID_INDEX) {
+			break;
+		}
+		auto r_child = info.r_node->GetChild(*info.r_art, r_child_pos);
+		auto l_child_pos = info.l_node->GetChildPos(key_byte);
+
+		if (l_child_pos == DConstants::INVALID_INDEX) {
+			// insert child at empty position
+			Node::InsertChild(info.l_node, key_byte, r_child);
+			if (parents.l_parent) {
+				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
+			}
+			info.r_node->ReplaceChildPointer(r_child_pos, nullptr);
+
+		} else {
+			// recurse
+			auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
+			MergeInfo child_info(info.l_art, info.r_art, l_child, r_child);
+			ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_child_pos);
+			if (!ResolvePrefixesAndMerge(child_info, depth + 1, child_parents)) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &parents) {
@@ -355,22 +379,25 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 
 	// NOTE: we always merge into the left ART
 	D_ASSERT(l_node);
+	auto l_prefix_size = l_node->prefix.Size();
+	auto r_prefix_size = r_node->prefix.Size();
 
 	// make sure that r_node has the longer (or equally long) prefix
-	if (l_node->prefix.Size() > r_node->prefix.Size()) {
+	if (l_prefix_size > r_prefix_size) {
 		swap(info.l_art, info.r_art);
 		swap(l_node, r_node);
+		swap(l_prefix_size, r_prefix_size);
 		UpdateParentsOfNodes(l_node, r_node, parents);
 	}
 
 	auto mismatch_pos = l_node->prefix.MismatchPosition(r_node->prefix);
 
 	// both nodes have no prefix or the same prefix
-	if (mismatch_pos == l_node->prefix.Size() && l_node->prefix.Size() == r_node->prefix.Size()) {
+	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
 		return Merge(info, depth + mismatch_pos, parents);
 	}
 
-	if (mismatch_pos == l_node->prefix.Size()) {
+	if (mismatch_pos == l_prefix_size) {
 		// r_node's prefix contains l_node's prefix
 		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
 		// which is not possible by our construction
@@ -416,28 +443,6 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, idx_t depth, ParentsOfNodes &paren
 	UpdateParentsOfNodes(l_node, null_parent, parents);
 	r_node = nullptr;
 	return true;
-}
-
-bool Node::MergeAtByte(MergeInfo &info, idx_t depth, idx_t &l_child_pos, idx_t &r_pos, uint8_t &key_byte,
-                       Node *&l_parent, idx_t l_pos) {
-
-	auto r_child = info.r_node->GetChild(*info.r_art, r_pos);
-
-	// insert child at empty position
-	if (l_child_pos == DConstants::INVALID_INDEX) {
-		Node::InsertChild(info.l_node, key_byte, r_child);
-		if (l_parent) {
-			l_parent->ReplaceChildPointer(l_pos, info.l_node);
-		}
-		info.r_node->ReplaceChildPointer(r_pos, nullptr);
-		return true;
-	}
-
-	// recurse
-	auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
-	MergeInfo child_info(info.l_art, info.r_art, l_child, r_child);
-	ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_pos);
-	return ResolvePrefixesAndMerge(child_info, depth + 1, child_parents);
 }
 
 bool Node::MergeARTs(ART *l_art, ART *r_art) {

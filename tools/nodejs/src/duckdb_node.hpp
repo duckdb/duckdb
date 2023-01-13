@@ -56,6 +56,11 @@ struct Task {
 
 class Connection;
 
+struct JSRSArgs;
+void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, JSRSArgs *data);
+
+typedef Napi::TypedThreadSafeFunction<std::nullptr_t, JSRSArgs, DuckDBNodeRSLauncher> duckdb_node_rs_function_t;
+
 class Database : public Napi::ObjectWrap<Database> {
 public:
 	explicit Database(const Napi::CallbackInfo &info);
@@ -83,6 +88,7 @@ public:
 	Napi::Value Parallelize(const Napi::CallbackInfo &info);
 	Napi::Value Interrupt(const Napi::CallbackInfo &info);
 	Napi::Value Close(const Napi::CallbackInfo &info);
+	Napi::Value RegisterReplacementScan(const Napi::CallbackInfo &info);
 
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;
@@ -97,6 +103,7 @@ private:
 	static Napi::FunctionReference constructor;
 	Napi::Env env;
 	int64_t bytes_allocated = 0;
+	int replacement_scan_count = 0;
 };
 
 struct JSArgs;
@@ -199,6 +206,7 @@ public:
 		auto obj = T::constructor.New(args);
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}
+	static duckdb::Value BindParameter(const Napi::Value source);
 };
 
 Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_types, bool with_data);
