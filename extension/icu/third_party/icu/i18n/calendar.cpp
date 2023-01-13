@@ -2350,7 +2350,7 @@ int32_t Calendar::fieldDifference(UDate targetMs, UCalendarDateFields field, UEr
                 break;
             } else {
                 min = max;
-                max <<= 1;
+                max = ((uint32_t) max) << 1;
                 if (max == 0) {
                     // Field difference too large to fit into int32_t
 #if defined (U_DEBUG_CAL)
