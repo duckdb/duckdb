@@ -122,7 +122,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			if (!SkipToClose(pos, buf, len, ++lvl, ']')) {
 				return false;
 			}
-		} else if (buf[pos] == '"' || buf[pos] == '\'') {
+		} else if ((buf[pos] == '"' || buf[pos] == '\'') && pos == start_pos) {
 			SkipToCloseQuotes(pos, buf, len);
 		} else if (buf[pos] == '{') {
 			idx_t struct_lvl = 0;

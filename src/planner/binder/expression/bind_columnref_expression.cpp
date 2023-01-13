@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -32,7 +33,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 			for (auto &entry : using_binding->bindings) {
 				coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, entry));
 			}
-			return move(coalesce);
+			return std::move(coalesce);
 		}
 	}
 
@@ -90,7 +91,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 				new_expr->alias = expr->alias;
 			}
 			new_expr->query_location = colref.query_location;
-			expr = move(new_expr);
+			expr = std::move(new_expr);
 		}
 		break;
 	}
@@ -135,10 +136,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	}
 
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(move(base));
-	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(move(field_name))));
-	auto extract_fun = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, move(children));
-	return move(extract_fun);
+	children.push_back(std::move(base));
+	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(std::move(field_name))));
+	auto extract_fun = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
+	return std::move(extract_fun);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
@@ -178,7 +179,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	for (const auto &column_name : binding->names) {
 		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
 	}
-	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
+	return make_unique<FunctionExpression>("struct_pack", std::move(child_exprs));
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
@@ -213,7 +214,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
 			if (qualified_colref) {
 				// we could: create a struct extract
-				return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
+				return CreateStructExtract(std::move(qualified_colref), colref.column_names[1]);
 			}
 			// we could not! Try creating an implicit struct_pack
 			return CreateStructPack(colref);
@@ -275,7 +276,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			struct_extract_start = 1;
 		}
 		for (idx_t i = struct_extract_start; i < colref.column_names.size(); i++) {
-			result_expr = CreateStructExtract(move(result_expr), colref.column_names[i]);
+			result_expr = CreateStructExtract(std::move(result_expr), colref.column_names[i]);
 		}
 		return result_expr;
 	}
@@ -297,7 +298,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		auto alias = expr->alias;
 		auto result = BindExpression(&expr, depth);
 		if (result.expression) {
-			result.expression->alias = move(alias);
+			result.expression->alias = std::move(alias);
 		}
 		return result;
 	}
@@ -317,7 +318,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (lambda_bindings) {
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (table_name == (*lambda_bindings)[i].alias) {
-				result = (*lambda_bindings)[i].Bind(colref, depth);
+				result = (*lambda_bindings)[i].Bind(colref, i, depth);
 				found_lambda_binding = true;
 				break;
 			}
@@ -336,7 +337,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		BoundColumnReferenceInfo ref;
 		ref.name = colref.column_names.back();
 		ref.query_location = colref.query_location;
-		bound_columns.push_back(move(ref));
+		bound_columns.push_back(std::move(ref));
 	} else {
 		result.error = binder.FormatError(colref_p, result.error);
 	}

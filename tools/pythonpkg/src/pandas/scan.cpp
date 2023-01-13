@@ -12,8 +12,8 @@ namespace duckdb {
 struct PandasScanFunctionData : public PyTableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
 	                       vector<LogicalType> sql_types)
-	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(move(pandas_bind_data)),
-	      sql_types(move(sql_types)) {
+	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(std::move(pandas_bind_data)),
+	      sql_types(std::move(sql_types)) {
 	}
 	py::handle df;
 	idx_t row_count;
@@ -79,7 +79,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	auto get_fun = df.attr("__getitem__");
 
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
+	return make_unique<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
@@ -93,7 +93,7 @@ unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(Exec
 	auto result = make_unique<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
 	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
-	return move(result);
+	return std::move(result);
 }
 
 idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {

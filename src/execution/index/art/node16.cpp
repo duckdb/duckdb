@@ -47,6 +47,19 @@ idx_t Node16::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
+idx_t Node16::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
+	if (pos == DConstants::INVALID_INDEX) {
+		byte = key[0];
+		return 0;
+	}
+	pos++;
+	if (pos < count) {
+		byte = key[pos];
+		return pos;
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 Node *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
 	return children[pos].Unswizzle(art);
@@ -83,7 +96,7 @@ void Node16::InsertChild(Node *&node, uint8_t key_byte, Node *new_child) {
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 		new_node->count = node->count;
 		Node::Delete(node);
 		node = new_node;
@@ -118,24 +131,10 @@ void Node16::EraseChild(Node *&node, int pos, ART &art) {
 			new_node->children[new_node->count++] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		new_node->prefix = move(n->prefix);
+		new_node->prefix = std::move(n->prefix);
 		Node::Delete(node);
 		node = new_node;
 	}
-}
-
-bool Node16::Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos) {
-
-	Node16 *r_n = (Node16 *)info.r_node;
-
-	for (idx_t i = 0; i < info.r_node->count; i++) {
-
-		auto l_child_pos = info.l_node->GetChildPos(r_n->key[i]);
-		if (!Node::MergeAtByte(info, depth, l_child_pos, i, r_n->key[i], l_parent, l_pos)) {
-			return false;
-		}
-	}
-	return true;
 }
 
 idx_t Node16::GetSize() {

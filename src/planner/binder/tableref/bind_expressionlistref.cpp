@@ -30,9 +30,9 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 				binder.target_type = result->types[val_idx];
 			}
 			auto expr = binder.Bind(expression_list[val_idx]);
-			list.push_back(move(expr));
+			list.push_back(std::move(expr));
 		}
-		result->values.push_back(move(list));
+		result->values.push_back(std::move(list));
 	}
 	if (result->types.empty() && !expr.values.empty()) {
 		// there are no types specified
@@ -53,13 +53,13 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 			auto &list = result->values[list_idx];
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
 				list[val_idx] =
-				    BoundCastExpression::AddCastToType(context, move(list[val_idx]), result->types[val_idx]);
+				    BoundCastExpression::AddCastToType(context, std::move(list[val_idx]), result->types[val_idx]);
 			}
 		}
 	}
 	result->bind_index = GenerateTableIndex();
 	bind_context.AddGenericBinding(result->bind_index, expr.alias, result->names, result->types);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

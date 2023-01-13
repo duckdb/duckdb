@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type, StatisticsType stats_type) : type(move(type)), stats_type(stats_type) {
+BaseStatistics::BaseStatistics(LogicalType type, StatisticsType stats_type)
+    : type(std::move(type)), stats_type(stats_type) {
 }
 
 BaseStatistics::~BaseStatistics() {
@@ -93,20 +94,20 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, Statist
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = make_unique<NumericStatistics>(move(type), stats_type);
+		result = make_unique<NumericStatistics>(std::move(type), stats_type);
 		break;
 	case PhysicalType::VARCHAR:
-		result = make_unique<StringStatistics>(move(type), stats_type);
+		result = make_unique<StringStatistics>(std::move(type), stats_type);
 		break;
 	case PhysicalType::STRUCT:
-		result = make_unique<StructStatistics>(move(type));
+		result = make_unique<StructStatistics>(std::move(type));
 		break;
 	case PhysicalType::LIST:
-		result = make_unique<ListStatistics>(move(type));
+		result = make_unique<ListStatistics>(std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
 	default:
-		result = make_unique<BaseStatistics>(move(type), stats_type);
+		result = make_unique<BaseStatistics>(std::move(type), stats_type);
 	}
 	result->InitializeBase();
 	return result;
@@ -163,26 +164,26 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStatistics::Deserialize(reader, move(type));
+		result = NumericStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(reader, move(type));
+		result = StringStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::STRUCT:
-		result = StructStatistics::Deserialize(reader, move(type));
+		result = StructStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::LIST:
-		result = ListStatistics::Deserialize(reader, move(type));
+		result = ListStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>(move(type), StatisticsType::LOCAL_STATS);
+		result = make_unique<BaseStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
 
 	if (ptype != PhysicalType::BIT) {
-		result->validity_stats = move(validity_stats);
+		result->validity_stats = std::move(validity_stats);
 		result->stats_type = reader.ReadField<StatisticsType>(StatisticsType::LOCAL_STATS);
 		result->distinct_stats = reader.ReadOptional<DistinctStatistics>(nullptr);
 	}

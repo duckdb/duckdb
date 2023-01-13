@@ -110,6 +110,10 @@ struct IsNanFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct SignBitFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct IsInfiniteFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

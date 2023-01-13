@@ -274,7 +274,7 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		}
 		disabled_optimizers.insert(OptimizerTypeFromString(param));
 	}
-	config.options.disabled_optimizers = move(disabled_optimizers);
+	config.options.disabled_optimizers = std::move(disabled_optimizers);
 }
 
 void DisabledOptimizersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -627,7 +627,7 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	// TODO: verify that this does the right thing
-	client_data.log_query_writer = move(ClientData(context).log_query_writer);
+	client_data.log_query_writer = std::move(ClientData(context).log_query_writer);
 }
 
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -875,7 +875,8 @@ void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
-	return SearchPathSetting::GetSetting(context);
+	auto &client_data = ClientData::Get(context);
+	return client_data.catalog_search_path->GetDefault().schema;
 }
 
 //===--------------------------------------------------------------------===//

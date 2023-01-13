@@ -11,7 +11,7 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	auto op = make_unique<ComparisonExpressionMatcher>();
 	op->matchers.push_back(make_unique<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
-	root = move(op);
+	root = std::move(op);
 }
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -63,14 +63,14 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-		auto child_expression = move(cast_expression->child);
+		auto child_expression = std::move(cast_expression->child);
 		auto new_constant_expr = make_unique<BoundConstantExpression>(cast_constant);
 		if (column_ref_left) {
-			expr->left = move(child_expression);
-			expr->right = move(new_constant_expr);
+			expr->left = std::move(child_expression);
+			expr->right = std::move(new_constant_expr);
 		} else {
-			expr->left = move(new_constant_expr);
-			expr->right = move(child_expression);
+			expr->left = std::move(new_constant_expr);
+			expr->right = std::move(child_expression);
 		}
 	}
 	return nullptr;

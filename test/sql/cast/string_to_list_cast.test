@@ -156,7 +156,7 @@ SELECT col1::INT[][][][][][] FROM crazyNested;
 [[[[[[1]], [[3, 4, 9]]], [[[0, 1]]]]]]
 [[[[[[4]]]]]]
 
-#               Quote escaping
+#               Quote handling
 # ---------------------------------------------------
 query I
 SELECT CAST('[''hello'',''world'', ''!'']' AS VARCHAR[]);
@@ -177,6 +177,11 @@ query I
 SELECT CAST('["can''t", "you''re", "i''m"]' AS VARCHAR[]);
 ----
 ["can't", "you're", "i'm"]
+
+query I
+SELECT CAST('[can''t, you''re, i''m]' AS VARCHAR[]);
+----
+[can't, you're, i'm]
 
 query I
 SELECT CAST('["]", "hello", "world"]' AS VARCHAR[]);
@@ -431,7 +436,7 @@ statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
 
 statement ok
-COPY (SELECT [8,7,6], '[hello, DuckDB]', '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv';
+COPY (SELECT [8,7,6], '[hello, Duck''DB]', '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv';
 
 statement ok
 COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
@@ -439,4 +444,4 @@ COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
 query III
 SELECT * FROM assorted_lists;
 ----
-[8, 7, 6]	[hello, DuckDB]	[2022-12-02, 1929-01-25]
+[8, 7, 6]	[hello, Duck'DB]	[2022-12-02, 1929-01-25]

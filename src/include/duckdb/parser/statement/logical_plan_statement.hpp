@@ -16,7 +16,7 @@ namespace duckdb {
 class LogicalPlanStatement : public SQLStatement {
 public:
 	explicit LogicalPlanStatement(unique_ptr<LogicalOperator> plan_p)
-	    : SQLStatement(StatementType::LOGICAL_PLAN_STATEMENT), plan(move(plan_p)) {};
+	    : SQLStatement(StatementType::LOGICAL_PLAN_STATEMENT), plan(std::move(plan_p)) {};
 
 	unique_ptr<LogicalOperator> plan;
 

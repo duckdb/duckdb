@@ -24,7 +24,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			continue;
 		}
 		ColumnBinding group_binding(aggr.group_index, group_idx);
-		statistics_map[group_binding] = move(stats);
+		statistics_map[group_binding] = std::move(stats);
 	}
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
@@ -33,10 +33,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			continue;
 		}
 		ColumnBinding aggregate_binding(aggr.aggregate_index, aggregate_idx);
-		statistics_map[aggregate_binding] = move(stats);
+		statistics_map[aggregate_binding] = std::move(stats);
 	}
 	// the max cardinality of an aggregate is the max cardinality of the input (i.e. when every row is a unique group)
-	return move(node_stats);
+	return std::move(node_stats);
 }
 
 } // namespace duckdb

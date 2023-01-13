@@ -60,7 +60,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, Tab
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
