@@ -38,9 +38,9 @@ ParallelCSVReader::~ParallelCSVReader() {
 }
 
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	sql_types = requested_types;
-	InitParseChunk(sql_types.size());
-	InitInsertChunkIdx(sql_types.size());
+	return_types = requested_types;
+	InitParseChunk(return_types.size());
+	InitInsertChunkIdx(return_types.size());
 }
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
@@ -360,7 +360,7 @@ final_state : {
 			// remaining values to be added to the chunk
 			AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes);
 			if (try_add_line) {
-				bool success = column == sql_types.size();
+				bool success = column == return_types.size();
 				if (success) {
 					AddRow(insert_chunk, column, error_message);
 					success = Flush(insert_chunk);
