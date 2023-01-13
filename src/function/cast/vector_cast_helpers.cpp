@@ -177,6 +177,8 @@ struct SplitStringMapOperation {
 
 	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
 		if ((pos - start_pos) == 4 && IsNull(buf, start_pos, varchar_key, child_start)) {
+			FlatVector::SetNull(varchar_val, child_start, true);
+			child_start++;
 			return false;
 		}
 		child_key_data[child_start] = StringVector::AddString(varchar_key, buf + start_pos, pos - start_pos);
@@ -228,19 +230,22 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 		return false;
 	}
 	SkipWhitespace(buf, ++pos, len);
+	if (pos == len) {
+		return false;
+	}
 	if (buf[pos] == '}') {
-		pos++;
-	} else {
-		while (pos < len) {
-			if (!FindKeyOrValueMap(buf, len, pos, state, true)) {
-				return false;
-			}
-			SkipWhitespace(buf, ++pos, len);
-			if (!FindKeyOrValueMap(buf, len, pos, state, false)) {
-				return false;
-			}
-			SkipWhitespace(buf, ++pos, len);
+		SkipWhitespace(buf, ++pos, len);
+		return (pos == len);
+	}
+	while (pos < len) {
+		if (!FindKeyOrValueMap(buf, len, pos, state, true)) {
+			return false;
 		}
+		SkipWhitespace(buf, ++pos, len);
+		if (!FindKeyOrValueMap(buf, len, pos, state, false)) {
+			return false;
+		}
+		SkipWhitespace(buf, ++pos, len);
 	}
 	return true;
 }

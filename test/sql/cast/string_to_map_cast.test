@@ -150,8 +150,13 @@ SELECT CAST('{NULL=5}' AS MAP(INT, INT));
 ----
 Conversion Error: Type VARCHAR with value '{NULL=5}' can't be cast to the destination type MAP
 
+query I
+SELECT CAST('{}' AS MAP(INT, INT));
+----
+{}
+
 #               Try Cast
-# ---------------------------------------------------
+#---------------------------------------------------
 query I
 SELECT TRY_CAST('Hello World' AS MAP(VARCHAR, VARCHAR));
 ----
@@ -161,7 +166,7 @@ statement ok
 CREATE TABLE try_cast_tbl (col1 VARCHAR);
 
 statement ok
-INSERT INTO try_cast_tbl VALUES ('{1=2, XXX=2}'), ('{hello=DuckDB}'), ('{3=oops, 5=5 44=4.0}'), ('{12345678901=0}'), ('{5=6!, 7=7000}'), ('{3 0, 1=1}');
+INSERT INTO try_cast_tbl VALUES ('{1=2, XXX=2}'), ('{NULL=DuckDB}'), ('{3=oops, 5=5 44=4.0}'), ('{12345678901=0}'), ('{5=6!, 7=7000}'), ('{3 0, 1=1}');
 
 query I
 SELECT TRY_CAST(col1 AS MAP(INT, INT)) FROM try_cast_tbl;
@@ -193,6 +198,11 @@ SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));
 statement error
 SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));
 
+statement error
+SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{                                                                      ' AS MAP(INT, INT));
 
 #               Test WHERE clause
 # ---------------------------------------------------
