@@ -16,17 +16,17 @@ CREATE SEQUENCE seq
 statement error
 CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
 ----
-Binder Error: Index keys cannot contain the "get_current_timestamp" function.
+Index keys cannot contain expressions with side effects.
 
 statement error
 CREATE INDEX i1 ON t1((random()), c1);
 ----
-Binder Error: Index keys cannot contain the "random" function.
+Index keys cannot contain expressions with side effects.
 
 statement error
 CREATE INDEX i1 ON t1((nextval('seq')), c1);
 ----
-Binder Error: Index keys cannot contain the "nextval" function.
+Index keys cannot contain expressions with side effects.
 
 statement ok
 DELETE FROM t1;
@@ -36,7 +36,7 @@ DELETE FROM t1;
 statement error
 CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
 ----
-Binder Error: Index keys cannot contain the "get_current_timestamp" function.
+Index keys cannot contain expressions with side effects.
 
 # but attempting to insert a value borks it up
 statement ok
@@ -47,7 +47,7 @@ restart
 statement error
 CREATE INDEX i1 ON t1((get_current_timestamp()), c1);
 ----
-Binder Error: Index keys cannot contain the "get_current_timestamp" function.
+Index keys cannot contain expressions with side effects.
 
 statement ok
 INSERT INTO t1 VALUES (42, 'hello')
