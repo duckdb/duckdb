@@ -454,12 +454,18 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			if (is_window) {
 				throw BinderException("Cannot group on a window clause");
 			}
+			if (!result->unnests.empty()) {
+				throw BinderException("Cannot have unnest in a window clause");
+			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
 			auto group_ref = make_unique<BoundColumnRefExpression>(
 			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 			result->groups.group_expressions.push_back(std::move(expr));
 			expr = std::move(group_ref);
+		}
+		if (!result->unnests.empty() && is_window) {
+			throw BinderException("Cannot have unnest in a window clause");
 		}
 		result->select_list.push_back(std::move(expr));
 		if (i < result->column_count) {

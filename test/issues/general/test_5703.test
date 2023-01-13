@@ -1,0 +1,12 @@
+# name: test/issues/general/test_5703.test
+# description: Issue 5703: Can't select by blob field
+# group: [general]
+
+
+statement error
+select unnest([5,4,3]) as r, r as x, sum(r) OVER ();
+----
+Binder Error
+
+statement ok
+select 1;
