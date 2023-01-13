@@ -2069,6 +2069,16 @@ typedef struct PGAttachStmt
     PGNode *query;
 } PGAttachStmt;
 
+/* ----------------------
+ *		CREATE DATABASE Statement
+ * ----------------------
+ */
+typedef struct PGCreateDatabaseStmt
+{
+	PGNodeTag		type;
+	char *name;			/* The name of the created database */
+	char *extension;	/* The name of the extension which will create the database */
+} PGCreateDatabaseStmt;
 
 /* ----------------------
  *		Use Statement

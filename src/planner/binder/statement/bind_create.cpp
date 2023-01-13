@@ -10,6 +10,9 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_database_info.hpp"
+#include "duckdb/function/create_database_extension.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -609,6 +612,23 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			create_type_info.type = inner_type;
 		}
 		break;
+	}
+	case CatalogType::DATABASE_ENTRY: {
+		// not supported in DuckDB but allow replacement scan
+		auto &base = (CreateDatabaseInfo &)*stmt.info;
+		string extension_name = base.extension_name;
+		string database_name = base.name;
+		auto &config = DBConfig::GetConfig(context);
+		for (auto &extension : config.create_database_extensions) {
+			auto create_database_function_ref =
+			    extension.function(context, extension_name, database_name, extension.data.get());
+			if (create_database_function_ref) {
+				auto bound_create_database_func = Bind(*create_database_function_ref);
+				result.plan = CreatePlan(*bound_create_database_func);
+				break;
+			}
+		}
+		throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet!");
 	}
 	default:
 		throw Exception("Unrecognized type!");

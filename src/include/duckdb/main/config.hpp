@@ -25,6 +25,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -163,6 +164,9 @@ public:
 
 	//! Replacement open handlers are callbacks that run pre and post database initialization
 	vector<ReplacementOpen> replacement_opens;
+
+	//! Callback to allow users to pass custom create database table functions
+	vector<CreateDatabaseExtension> create_database_extensions;
 
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
