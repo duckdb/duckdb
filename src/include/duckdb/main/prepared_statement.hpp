@@ -60,6 +60,8 @@ public:
 	DUCKDB_API const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
 	DUCKDB_API const vector<string> &GetNames();
+	//! Returns the map of parameter index to the expected type of parameter
+	DUCKDB_API vector<LogicalType> GetExpectedParameterTypes() const;
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
 	template <typename... Args>

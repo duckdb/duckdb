@@ -18,15 +18,14 @@
 
 namespace duckdb {
 
-//! Physically CREATE INDEX statement
+//! Physical CREATE (UNIQUE) INDEX statement
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
-	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info,
-	                    vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality)
+	                    unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
+	                    idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
-	      expressions(std::move(expressions)), info(std::move(info)),
-	      unbound_expressions(std::move(unbound_expressions)) {
+	      info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
 
 		// convert virtual column ids to storage column ids
 		for (auto &column_id : column_ids) {
@@ -38,21 +37,20 @@ public:
 	TableCatalogEntry &table;
 	//! The list of column IDs required for the index
 	vector<column_t> storage_ids;
-	//! Set of expressions to index by
-	vector<unique_ptr<Expression>> expressions;
 	//! Info for index creation
 	unique_ptr<CreateIndexInfo> info;
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
-	// Source interface
+	//! Source interface, NOP for this operator
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
 public:
-	// Sink interface
+	//! Sink interface, thread-local sink states
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	//! Sink interface, global sink state
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,

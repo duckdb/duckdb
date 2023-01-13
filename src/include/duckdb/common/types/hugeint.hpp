@@ -26,9 +26,9 @@ public:
 
 	template <class T>
 	static T Cast(hugeint_t input) {
-		T value;
-		TryCast(input, value);
-		return value;
+		T result = 0;
+		TryCast(input, result);
+		return result;
 	}
 
 	template <class T>

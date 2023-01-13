@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -102,33 +103,48 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
                                                      unique_ptr<Expression> &replacement,
                                                      vector<unique_ptr<Expression>> &captures,
-                                                     LogicalType &list_child_type, string &alias) {
+                                                     LogicalType &list_child_type) {
 
 	// check if the original expression is a lambda parameter
-	bool is_lambda_parameter = false;
-	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// determine if this is the lambda parameter
-		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
-		if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
-			is_lambda_parameter = true;
-		}
-	}
+		auto &bound_lambda_ref = (BoundLambdaRefExpression &)*original;
+		auto alias = bound_lambda_ref.alias;
 
-	if (is_lambda_parameter) {
-		// this is a lambda parameter, so the replacement refers to the first argument, which is the list
-		replacement = make_unique<BoundReferenceExpression>(alias, list_child_type, 0);
+		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {
+
+			D_ASSERT(bound_lambda_ref.lambda_index < lambda_bindings->size());
+			auto &lambda_binding = (*lambda_bindings)[bound_lambda_ref.lambda_index];
+
+			D_ASSERT(lambda_binding.names.size() == 1);
+			D_ASSERT(lambda_binding.types.size() == 1);
+			// refers to a lambda parameter outside of the current lambda function
+			replacement =
+			    make_unique<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
+			                                          lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
+
+		} else {
+			// refers to current lambda parameter
+			replacement = make_unique<BoundReferenceExpression>(alias, list_child_type, 0);
+		}
 
 	} else {
+		// always at least the current lambda parameter
+		idx_t index_offset = 1;
+		if (lambda_bindings) {
+			index_offset += lambda_bindings->size();
+		}
+
 		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
-		replacement =
-		    make_unique<BoundReferenceExpression>(original->alias, original->return_type, captures.size() + 1);
+		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type,
+		                                                    captures.size() + index_offset + 1);
 		captures.push_back(std::move(original));
 	}
 }
 
 void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-                                            unique_ptr<Expression> &expr, string &alias) {
+                                            unique_ptr<Expression> &expr) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
@@ -137,22 +153,22 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	// these expression classes do not have children, transform them
 	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
 	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
-	    expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
+	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// move the expr because we are going to replace it
 		auto original = std::move(expr);
 		unique_ptr<Expression> replacement;
 
-		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type, alias);
+		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type);
 
 		// replace the expression
 		expr = std::move(replacement);
 
 	} else {
 		// recursively enumerate the children of the expression
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			CaptureLambdaColumns(captures, list_child_type, child, alias);
-		});
+		ExpressionIterator::EnumerateChildren(
+		    *expr, [&](unique_ptr<Expression> &child) { CaptureLambdaColumns(captures, list_child_type, child); });
 	}
 }
 
