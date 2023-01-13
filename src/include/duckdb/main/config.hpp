@@ -36,7 +36,6 @@ class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
 class BufferManager;
-class BufferManager;
 
 struct CompressionFunctionSet;
 struct DBConfig;

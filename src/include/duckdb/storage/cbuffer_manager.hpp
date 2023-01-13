@@ -35,7 +35,6 @@ struct CBufferManagerConfig {
 struct CBufferAllocatorData : public PrivateAllocatorData {
 	CBufferAllocatorData(CBufferManager &manager) : manager(manager) {
 	}
-	//! User-provided data, provided to the 'allocate_func'
 	CBufferManager &manager;
 };
 
