@@ -15,6 +15,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 // Scalar function stuff
@@ -240,6 +242,10 @@ public:
 		auto data = WriteVal(val, len);
 		error_string = StringUtil::Format(error_string, string(data.get(), len));
 		throw InvalidInputException(error_string);
+	}
+	static inline void RestoreParsedString(const char *line_start, const idx_t remaining) {
+		// YYJSON replaces some double-quotes with '\0' when parsing with YYJSON_INSITU
+		std::replace((char *)line_start, (char *)line_start + remaining, '\0', '"');
 	}
 
 public:

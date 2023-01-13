@@ -58,7 +58,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 
 		    // We use YYJSON_INSITU to speed up the cast, then we restore the input string
 		    auto doc = JSONCommon::ReadDocumentFromFileStop(data, length, &error);
-		    JSONScan::RestoreParsedString(data, length);
+		    JSONCommon::RestoreParsedString(data, length);
 
 		    if (doc.IsNull()) {
 			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),

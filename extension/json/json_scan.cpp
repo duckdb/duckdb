@@ -344,12 +344,12 @@ static inline DocPointer<yyjson_doc> ParseLine(char *line_start, idx_t line_size
 	yyjson_read_err error;
 	auto result = JSONCommon::ReadDocumentFromFileNoStop(line_start, line_size, &error);
 	if (error.code != YYJSON_READ_SUCCESS) {
-		JSONScan::RestoreParsedString(line_start, line_size);
+		JSONCommon::RestoreParsedString(line_start, line_size);
 		JSONCommon::ThrowParseError(line_start, line_size, error);
 	}
 
 	if (options.return_json_strings) {
-		JSONScan::RestoreParsedString(line_start, line_size);
+		JSONCommon::RestoreParsedString(line_start, line_size);
 	}
 
 	return result;
@@ -422,7 +422,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			idx_t line_size = read_doc.ReadSize();
 
 			if (options.return_json_strings) {
-				JSONScan::RestoreParsedString(line_start, line_size);
+				JSONCommon::RestoreParsedString(line_start, line_size);
 			}
 
 			lines[count].pointer = line_start;
@@ -433,12 +433,12 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END) {
 			if (remaining > options.maximum_object_size) {
-				JSONScan::RestoreParsedString(line_start, remaining);
+				JSONCommon::RestoreParsedString(line_start, remaining);
 				JSONCommon::ThrowParseError(line_start, remaining, error,
 				                            "Have you tried increasing maximum_object_size?");
 			}
 
-			JSONScan::RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
+			JSONCommon::RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
 			objects.pop_back();
 
 			if (!is_last) {
@@ -451,7 +451,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			buffer_offset = buffer_size;
 			break;
 		} else {
-			JSONScan::RestoreParsedString(line_start, remaining);
+			JSONCommon::RestoreParsedString(line_start, remaining);
 			JSONCommon::ThrowParseError(line_start, remaining, error);
 		}
 	}
