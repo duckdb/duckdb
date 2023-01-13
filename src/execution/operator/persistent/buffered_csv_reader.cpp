@@ -25,7 +25,7 @@ namespace duckdb {
 
 BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
                                      BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(fs_p, allocator, opener_p, move(options_p), requested_types), buffer_size(0), position(0),
+    : BaseCSVReader(fs_p, allocator, opener_p, std::move(options_p), requested_types), buffer_size(0), position(0),
       start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
@@ -34,7 +34,17 @@ BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, Fil
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        move(options_p), requested_types) {
+                        std::move(options_p), requested_types) {
+}
+
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
+                                     const vector<LogicalType> &requested_types)
+    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
+                    move(options_p), requested_types),
+      buffer_size(0), position(0), start(0) {
+	options.file_path = move(filename);
+	file_handle = OpenCSV(options);
+	Initialize(requested_types);
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -236,20 +246,20 @@ static string NormalizeColumnName(const string &col_name) {
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	PrepareComplexParser();
 	if (options.auto_detect) {
-		sql_types = SniffCSV(requested_types);
-		if (sql_types.empty()) {
+		return_types = SniffCSV(requested_types);
+		if (return_types.empty()) {
 			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
 		if (cached_chunks.empty()) {
 			JumpToBeginning(options.skip_rows, options.header);
 		}
 	} else {
-		sql_types = requested_types;
+		return_types = requested_types;
 		ResetBuffer();
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
-	InitParseChunk(sql_types.size());
-	InitInsertChunkIdx(sql_types.size());
+	InitParseChunk(return_types.size());
+	InitInsertChunkIdx(return_types.size());
 	// we only need reset support during the automatic CSV type detection
 	// since reset support might require caching (in the case of streams), we disable it for the remainder
 	file_handle->DisableReset();
@@ -297,7 +307,7 @@ void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header)
 
 	if (skip_header) {
 		// ignore the first line as a header line
-		InitParseChunk(sql_types.size());
+		InitParseChunk(return_types.size());
 		ParseCSV(ParserMode::PARSING_HEADER);
 	}
 }
@@ -520,14 +530,14 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			format_candidates[t.first].clear();
 		}
 
-		// set all sql_types to VARCHAR so we can do datatype detection based on VARCHAR values
-		sql_types.clear();
-		sql_types.assign(options.num_cols, LogicalType::VARCHAR);
+		// set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
+		return_types.clear();
+		return_types.assign(options.num_cols, LogicalType::VARCHAR);
 
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
-		header_row.Initialize(allocator, sql_types);
+		header_row.Initialize(allocator, return_types);
 		parse_chunk.Copy(header_row);
 
 		if (header_row.size() == 0) {
@@ -535,7 +545,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		}
 
 		// init parse chunk and read csv with info candidate
-		InitParseChunk(sql_types.size());
+		InitParseChunk(return_types.size());
 		if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
 			continue;
 		}
@@ -713,7 +723,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
 
-			col_names.push_back(col_name);
+			names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
 
@@ -721,7 +731,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 		options.header = false;
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			string column_name = GenerateColumnName(options.num_cols, col);
-			col_names.push_back(column_name);
+			names.push_back(column_name);
 		}
 	}
 }
@@ -731,8 +741,8 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
                                                            vector<vector<LogicalType>> &best_sql_types_candidates,
                                                            map<LogicalTypeId, vector<string>> &best_format_candidates) {
 	// for the type refine we set the SQL types to VARCHAR for all columns
-	sql_types.clear();
-	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
+	return_types.clear();
+	return_types.assign(options.num_cols, LogicalType::VARCHAR);
 
 	vector<LogicalType> detected_types;
 
@@ -747,11 +757,11 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 		}
 	} else if (options.all_varchar) {
 		// return all types varchar
-		detected_types = sql_types;
+		detected_types = return_types;
 	} else {
 		// jump through the rest of the file and continue to refine the sql type guess
 		while (JumpToNextSample()) {
-			InitParseChunk(sql_types.size());
+			InitParseChunk(return_types.size());
 			// if jump ends up a bad line, we just skip this chunk
 			if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
 				continue;
@@ -800,7 +810,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 					auto chunk = make_unique<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
 					chunk->Move(parse_chunk);
-					cached_chunks.push(move(chunk));
+					cached_chunks.push(std::move(chunk));
 				} else {
 					while (!cached_chunks.empty()) {
 						cached_chunks.pop();
@@ -878,11 +888,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	options.num_cols = best_num_cols;
 	DetectHeader(best_sql_types_candidates, best_header_row);
 	auto sql_types_per_column = options.sql_types_per_column;
-	for (idx_t i = 0; i < col_names.size(); i++) {
-		auto it = sql_types_per_column.find(col_names[i]);
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {
 			best_sql_types_candidates[i] = {it->second};
-			sql_types_per_column.erase(col_names[i]);
+			sql_types_per_column.erase(names[i]);
 		}
 	}
 	if (!sql_types_per_column.empty()) {
@@ -1333,7 +1343,7 @@ final_state:
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
-	auto old_buffer = move(buffer);
+	auto old_buffer = std::move(buffer);
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
@@ -1363,7 +1373,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';
 	if (old_buffer) {
-		cached_buffers.push_back(move(old_buffer));
+		cached_buffers.push_back(std::move(old_buffer));
 	}
 	start = 0;
 	position = remaining;

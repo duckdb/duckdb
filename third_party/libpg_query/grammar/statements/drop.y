@@ -102,6 +102,7 @@ drop_type_any_name:
 			| FOREIGN TABLE							{ $$ = PG_OBJECT_FOREIGN_TABLE; }
 			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }
 			| CONVERSION_P							{ $$ = PG_OBJECT_CONVERSION; }
+			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| STATISTICS							{ $$ = PG_OBJECT_STATISTIC_EXT; }
 			| TEXT_P SEARCH PARSER					{ $$ = PG_OBJECT_TSPARSER; }
 			| TEXT_P SEARCH DICTIONARY				{ $$ = PG_OBJECT_TSDICTIONARY; }
@@ -116,7 +117,6 @@ drop_type_name:
 			| EXTENSION								{ $$ = PG_OBJECT_EXTENSION; }
 			| FOREIGN DATA_P WRAPPER				{ $$ = PG_OBJECT_FDW; }
 			| PUBLICATION							{ $$ = PG_OBJECT_PUBLICATION; }
-			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| SERVER								{ $$ = PG_OBJECT_FOREIGN_SERVER; }
 		;
 

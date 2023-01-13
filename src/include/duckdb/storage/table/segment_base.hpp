@@ -19,9 +19,12 @@ public:
 	}
 	virtual ~SegmentBase() {
 	}
-
 	SegmentBase *Next() {
+#ifndef DUCKDB_R_BUILD
 		return next.load();
+#else
+		return next;
+#endif
 	}
 
 	//! The start row id of this chunk
@@ -29,7 +32,12 @@ public:
 	//! The amount of entries in this storage chunk
 	atomic<idx_t> count;
 	//! The next segment after this one
+
+#ifndef DUCKDB_R_BUILD
 	atomic<SegmentBase *> next;
+#else
+	SegmentBase *next;
+#endif
 };
 
 } // namespace duckdb

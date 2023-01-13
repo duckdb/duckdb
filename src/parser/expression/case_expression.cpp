@@ -37,10 +37,10 @@ unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 		CaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();
 		new_check.then_expr = check.then_expr->Copy();
-		copy->case_checks.push_back(move(new_check));
+		copy->case_checks.push_back(std::move(new_check));
 	}
 	copy->else_expr = else_expr->Copy();
-	return move(copy);
+	return std::move(copy);
 }
 
 void CaseExpression::Serialize(FieldWriter &writer) const {
@@ -63,10 +63,10 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, Fi
 		CaseCheck new_check;
 		new_check.when_expr = ParsedExpression::Deserialize(source);
 		new_check.then_expr = ParsedExpression::Deserialize(source);
-		result->case_checks.push_back(move(new_check));
+		result->case_checks.push_back(std::move(new_check));
 	}
 	result->else_expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

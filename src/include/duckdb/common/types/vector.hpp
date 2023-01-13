@@ -203,7 +203,7 @@ protected:
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(move(vector)) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
 	}
 
 public:

@@ -358,8 +358,8 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 				strings.reset();
 			}
 		} else {
-			gstate.rows = move(rows);
-			gstate.strings = move(strings);
+			gstate.rows = std::move(rows);
+			gstate.strings = std::move(strings);
 		}
 		return;
 	}
@@ -374,7 +374,7 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list_p,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list_p)) {
+    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list_p)) {
 	is_order_dependent = false;
 	for (auto &expr : select_list) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
@@ -1309,13 +1309,13 @@ public:
 	using GroupDataPtr = unique_ptr<ColumnDataCollection>;
 
 	explicit WindowGlobalMergeState(WindowGlobalSinkState &sink, GroupDataPtr group_data)
-	    : sink(sink), group_data(move(group_data)), stage(WindowSortStage::INIT), total_tasks(0), tasks_assigned(0),
-	      tasks_completed(0) {
+	    : sink(sink), group_data(std::move(group_data)), stage(WindowSortStage::INIT), total_tasks(0),
+	      tasks_assigned(0), tasks_completed(0) {
 
 		const auto group_idx = sink.hash_groups.size();
 		auto new_group = make_unique<WindowGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
 		                                                    sink.payload_types, sink.external);
-		sink.hash_groups.emplace_back(move(new_group));
+		sink.hash_groups.emplace_back(std::move(new_group));
 
 		hash_group = sink.hash_groups[group_idx].get();
 		global_sort = sink.hash_groups[group_idx]->global_sort.get();
@@ -1445,8 +1445,8 @@ public:
 		for (auto &group_data : sink.grouping_data->GetPartitions()) {
 			// Prepare for merge sort phase
 			if (group_data->Count()) {
-				auto state = make_unique<WindowGlobalMergeState>(sink, move(group_data));
-				states.emplace_back(move(state));
+				auto state = make_unique<WindowGlobalMergeState>(sink, std::move(group_data));
+				states.emplace_back(std::move(state));
 			}
 		}
 	}
@@ -1457,7 +1457,7 @@ public:
 class WindowMergeTask : public ExecutorTask {
 public:
 	WindowMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, WindowGlobalMergeStates &hash_groups_p)
-	    : ExecutorTask(context_p), event(move(event_p)), hash_groups(hash_groups_p) {
+	    : ExecutorTask(context_p), event(std::move(event_p)), hash_groups(hash_groups_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -1546,7 +1546,7 @@ public:
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, merge_states));
 		}
-		SetTasks(move(merge_tasks));
+		SetTasks(std::move(merge_tasks));
 	}
 };
 
@@ -1574,7 +1574,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 
 	// Schedule all the sorts for maximum thread utilisation
 	auto new_event = make_shared<WindowMergeEvent>(state, pipeline);
-	event.InsertEvent(move(new_event));
+	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;
 }
@@ -1684,7 +1684,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
 	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
-	rows->blocks = move(sd.data_blocks);
+	rows->blocks = std::move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 
@@ -1692,7 +1692,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
 		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
-		heap->blocks = move(sd.heap_blocks);
+		heap->blocks = std::move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
 		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
@@ -1728,7 +1728,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
 		auto wexec = make_unique<WindowExecutor>(wexpr, context, count);
-		window_execs.emplace_back(move(wexec));
+		window_execs.emplace_back(std::move(wexec));
 	}
 
 	//	Initialise masks to false
@@ -1754,7 +1754,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		external = true;
 	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
 		// Overwrite the collections with the sorted data
-		hash_group = move(gstate.hash_groups[hash_bin]);
+		hash_group = std::move(gstate.hash_groups[hash_bin]);
 		hash_group->ComputeMasks(partition_mask, order_mask);
 		MaterializeSortedData();
 	} else {

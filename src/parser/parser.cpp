@@ -159,10 +159,10 @@ void Parser::ParseQuery(const string &query) {
 				D_ASSERT(ext.parse_function);
 				auto result = ext.parse_function(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-					auto statement = make_unique<ExtensionStatement>(ext, move(result.parse_data));
+					auto statement = make_unique<ExtensionStatement>(ext, std::move(result.parse_data));
 					statement->stmt_length = query.size();
 					statement->stmt_location = 0;
-					statements.push_back(move(statement));
+					statements.push_back(std::move(statement));
 					return;
 				}
 				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
@@ -266,7 +266,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = (SelectNode &)*select.node;
-	return move(select_node.select_list);
+	return std::move(select_node.select_list);
 }
 
 vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOptions options) {
@@ -289,7 +289,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 		throw ParserException("Expected a single ORDER clause");
 	}
 	auto &order = (OrderModifier &)*select_node.modifiers[0];
-	return move(order.orders);
+	return std::move(order.orders);
 }
 
 void Parser::ParseUpdateList(const string &update_list, vector<string> &update_columns,
@@ -304,8 +304,8 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = (UpdateStatement &)*parser.statements[0];
-	update_columns = move(update.columns);
-	expressions = move(update.expressions);
+	update_columns = std::move(update.columns);
+	expressions = std::move(update.expressions);
 }
 
 vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list, ParserOptions options) {
@@ -327,7 +327,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 		throw ParserException("Expected a single VALUES statement");
 	}
 	auto &values_list = (ExpressionListRef &)*select_node.from_table;
-	return move(values_list.values);
+	return std::move(values_list.values);
 }
 
 ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions options) {
@@ -342,7 +342,7 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 		throw InternalException("Expected a single CREATE TABLE statement");
 	}
 	auto &info = ((CreateTableInfo &)*create.info);
-	return move(info.columns);
+	return std::move(info.columns);
 }
 
 } // namespace duckdb

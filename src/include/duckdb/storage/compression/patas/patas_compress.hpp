@@ -52,7 +52,7 @@ public:
 				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
 			}
 
-			state_wrapper->WriteValue(*(EXACT_TYPE *)(&value));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
 		}
 	};
 
@@ -130,7 +130,7 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
@@ -203,7 +203,7 @@ public:
 		// Store the offset to the metadata
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
-		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {

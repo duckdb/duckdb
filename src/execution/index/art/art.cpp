@@ -15,16 +15,20 @@ namespace duckdb {
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
          AttachedDatabase &db, idx_t block_id, idx_t block_offset)
+
     : Index(IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type), db(db),
       estimated_art_size(0), estimated_key_size(16) {
+
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
+
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
 		tree = nullptr;
 	}
+
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
@@ -75,7 +79,7 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
@@ -86,7 +90,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -272,11 +276,17 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 		auto num_row_ids = key_section.end - key_section.start + 1;
 
 		// check for possible constraint violation
-		if (has_constraint && num_row_ids != 1) {
+		auto single_row_id = num_row_ids == 1;
+		if (has_constraint && !single_row_id) {
 			throw ConstraintException("New data contains duplicates on indexed column(s)");
 		}
 
+		if (single_row_id) {
+			node = Leaf::New(start_key, prefix_start, row_ids[key_section.start]);
+			return;
+		}
 		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+
 	} else { // create a new node and recurse
 
 		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
@@ -298,61 +308,15 @@ void Construct(vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_s
 	}
 }
 
-void ART::ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) {
+void ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
 
-	auto payload_types = logical_types;
-	payload_types.emplace_back(LogicalType::ROW_TYPE);
+	// prepare the row_identifiers
+	row_identifiers.Flatten(count);
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
-	vector<Key> keys(STANDARD_VECTOR_SIZE);
-
-	auto temp_art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
-	                                 this->constraint_type, this->db);
-
-	for (;;) {
-		DataChunk ordered_chunk;
-		ordered_chunk.Initialize(allocator, payload_types);
-		ordered_chunk.SetCardinality(0);
-		scanner.Scan(ordered_chunk);
-		if (ordered_chunk.size() == 0) {
-			break;
-		}
-
-		// get the key chunk and the row_identifiers vector
-		DataChunk row_id_chunk;
-		ordered_chunk.Split(row_id_chunk, ordered_chunk.ColumnCount() - 1);
-		auto &row_identifiers = row_id_chunk.data[0];
-
-		D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
-		D_ASSERT(logical_types[0] == ordered_chunk.data[0].GetType());
-
-		// generate the keys for the given input
-		arena_allocator.Reset();
-		GenerateKeys(arena_allocator, ordered_chunk, keys);
-
-		// prepare the row_identifiers
-		row_identifiers.Flatten(ordered_chunk.size());
-		auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-
-		// construct the ART of this chunk
-		auto art = make_unique<ART>(this->column_ids, this->table_io_manager, this->unbound_expressions,
-		                            this->constraint_type, this->db);
-		auto key_section = KeySection(0, ordered_chunk.size() - 1, 0, 0);
-		auto has_constraint = IsUnique();
-		Construct(keys, row_ids, art->tree, key_section, has_constraint);
-
-		// merge art into temp_art
-		if (!temp_art->MergeIndexes(lock, art.get())) {
-			throw ConstraintException("Data contains duplicates on indexed column(s)");
-		}
-	}
-
-	// NOTE: currently this code is only used for index creation, so we can assume that there are no
-	// duplicate violations between the existing index and the new data,
-	// so we do not need to revert any changes
-	if (!this->MergeIndexes(lock, temp_art.get())) {
-		throw ConstraintException("Data contains duplicates on indexed column(s)");
-	}
+	auto key_section = KeySection(0, count - 1, 0, 0);
+	auto has_constraint = IsUnique();
+	Construct(keys, row_ids, this->tree, key_section, has_constraint);
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {

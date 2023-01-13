@@ -10,7 +10,7 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 	for (idx_t i = 0; i < result.types.size(); i++) {
 		result.names.push_back(StringUtil::Format("col%d", i));
 	}
-	result.plan = move(stmt.plan);
+	result.plan = std::move(stmt.plan);
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT; // TODO could also be something else
 

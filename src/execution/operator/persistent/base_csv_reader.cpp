@@ -30,13 +30,13 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 
 BaseCSVReader::BaseCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
                              BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)) {
+    : fs(fs_p), allocator(allocator), opener(opener_p), options(std::move(options_p)) {
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
     : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    move(options_p), requested_types) {
+                    std::move(options_p), requested_types) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -45,7 +45,7 @@ BaseCSVReader::~BaseCSVReader() {
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
 	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 	                               options_p.compression, this->opener);
-	return make_unique<CSVFileHandle>(move(file_handle));
+	return make_unique<CSVFileHandle>(std::move(file_handle));
 }
 
 void BaseCSVReader::InitParseChunk(idx_t num_cols) {
@@ -160,7 +160,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	} else {
 		row_empty = false;
 	}
-	if (!sql_types.empty() && column == sql_types.size() && length == 0) {
+	if (!return_types.empty() && column == return_types.size() && length == 0) {
 		// skip a single trailing delimiter in last column
 		return;
 	}
@@ -168,14 +168,14 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		column++;
 		return;
 	}
-	if (column >= sql_types.size()) {
+	if (column >= return_types.size()) {
 		if (options.ignore_errors) {
 			error_column_overflow = true;
 			return;
 		} else {
 			throw InvalidInputException(
 			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), options.ToString());
+			    GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), options.ToString());
 		}
 	}
 
@@ -183,7 +183,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	idx_t row_entry = parse_chunk.size();
 
 	// test against null string, but only if the value was not quoted
-	if ((!has_quotes || sql_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
+	if ((!has_quotes || return_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
 	    Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
@@ -221,7 +221,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 
 	if (row_empty) {
 		row_empty = false;
-		if (sql_types.size() != 1) {
+		if (return_types.size() != 1) {
 			if (mode == ParserMode::PARSING) {
 				FlatVector::SetNull(parse_chunk.data[0], parse_chunk.size(), false);
 			}
@@ -238,7 +238,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 		return false;
 	}
 
-	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
+	if (column < return_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
 		if (options.ignore_errors) {
 			column = 0;
 			return false;
@@ -249,7 +249,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 			} else {
 				throw InvalidInputException(
 				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), column,
 				    options.ToString());
 			}
 		}
@@ -282,13 +282,6 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	return false;
 }
 
-void BaseCSVReader::SetNullUnionCols(DataChunk &insert_chunk) {
-	for (idx_t col = 0; col < insert_nulls_idx.size(); ++col) {
-		insert_chunk.data[insert_nulls_idx[col]].SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(insert_chunk.data[insert_nulls_idx[col]], true);
-	}
-}
-
 void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset) {
 	D_ASSERT(col_idx < chunk.data.size());
 	D_ASSERT(row_idx < chunk.size());
@@ -302,8 +295,8 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, i
 	auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
 	if (utf_type == UnicodeType::INVALID) {
 		string col_name = to_string(col_idx);
-		if (col_idx < col_names.size()) {
-			col_name = "\"" + col_names[col_idx] + "\"";
+		if (col_idx < names.size()) {
+			col_name = "\"" + names[col_idx] + "\"";
 		}
 		int64_t error_line = linenr - (chunk.size() - row_idx) + 1 + offset;
 		D_ASSERT(error_line >= 0);
@@ -330,9 +323,9 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
-	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
 		auto insert_idx = insert_cols_idx[col_idx];
-		auto &type = sql_types[col_idx];
+		auto &type = return_types[col_idx];
 		if (type.id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
@@ -345,7 +338,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				// use the date format to cast the chunk
 				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
 				                            parse_chunk.size(), error_message);
-			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
+			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+			           return_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
 				                                 parse_chunk.size(), error_message);
@@ -365,8 +359,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				continue;
 			}
 			string col_name = to_string(col_idx);
-			if (col_idx < col_names.size()) {
-				col_name = "\"" + col_names[col_idx] + "\"";
+			if (col_idx < names.size()) {
+				col_name = "\"" + names[col_idx] + "\"";
 			}
 
 			// figure out the exact line number
@@ -401,7 +395,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			bool failed = false;
-			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
+			for (idx_t column_idx = 0; column_idx < return_types.size(); column_idx++) {
 
 				auto &inserted_column = insert_chunk.data[column_idx];
 				auto &parsed_column = parse_chunk.data[column_idx];

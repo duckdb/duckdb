@@ -370,7 +370,7 @@ struct ExecTask : public Task {
 			}
 
 			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
-				auto res = connection.connection->Query(move(statements[i]));
+				auto res = connection.connection->Query(std::move(statements[i]));
 				if (res->HasError()) {
 					success = false;
 					error = res->GetErrorObject();

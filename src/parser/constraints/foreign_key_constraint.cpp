@@ -7,8 +7,8 @@
 namespace duckdb {
 
 ForeignKeyConstraint::ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info)
-    : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(move(pk_columns)), fk_columns(move(fk_columns)),
-      info(move(info)) {
+    : Constraint(ConstraintType::FOREIGN_KEY), pk_columns(std::move(pk_columns)), fk_columns(std::move(fk_columns)),
+      info(std::move(info)) {
 }
 
 string ForeignKeyConstraint::ToString() const {
@@ -70,7 +70,7 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(FieldReader &source) {
 	read_info.fk_keys = source.ReadRequiredIndexList<PhysicalIndex>();
 
 	// column list parsed constraint
-	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(read_info));
+	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(read_info));
 }
 
 } // namespace duckdb

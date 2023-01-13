@@ -30,7 +30,8 @@ for line in sys.stdin:
 test_count = len(test_cases)
 return_code = 0
 for test_number in range(test_count):
-	print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_cases[test_number])
+	sys.stdout.write("[" + str(test_number) + "/" + str(test_count) + "]: " + test_cases[test_number])
+	sys.stdout.flush()
 	res = subprocess.run([unittest_program, test_cases[test_number]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	stdout = res.stdout.decode('utf8')
 	stderr = res.stderr.decode('utf8')
