@@ -72,13 +72,13 @@ jobs:
     needs: linux-python3-9
 
     steps:
-    - uses: ./.github/actions/centos_7_setup
-      with:
-        openssl: 1
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/centos_7_setup
+      with:
+        openssl: 1
 
     - name: Version Check
       shell: bash
