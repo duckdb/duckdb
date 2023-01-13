@@ -26,7 +26,7 @@ string SubqueryExpression::ToString() const {
 	}
 }
 
-bool SubqueryExpression::Equals(const SubqueryExpression *a, const SubqueryExpression *b) {
+bool SubqueryExpression::Equal(const SubqueryExpression *a, const SubqueryExpression *b) {
 	if (!a->subquery || !b->subquery) {
 		return false;
 	}

@@ -40,9 +40,9 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    move(options_p), requested_types),
+                    std::move(options_p), requested_types),
       buffer_size(0), position(0), start(0) {
-	options.file_path = move(filename);
+	options.file_path = std::move(filename);
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }

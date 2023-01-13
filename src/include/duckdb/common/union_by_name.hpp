@@ -51,7 +51,7 @@ public:
 					union_col_types.emplace_back(sql_types[col]);
 				}
 			}
-			union_readers.push_back(move(reader));
+			union_readers.push_back(std::move(reader));
 		}
 		return union_readers;
 	}
@@ -73,8 +73,8 @@ public:
 			}
 
 			reader->union_col_types = union_col_types;
-			reader->union_idx_map = move(union_idx_map);
-			reader->union_null_cols = move(union_null_cols);
+			reader->union_idx_map = std::move(union_idx_map);
+			reader->union_null_cols = std::move(union_null_cols);
 		}
 		return union_readers;
 	}

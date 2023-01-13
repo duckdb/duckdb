@@ -51,7 +51,7 @@ string StarExpression::ToString() const {
 	return result;
 }
 
-bool StarExpression::Equals(const StarExpression *a, const StarExpression *b) {
+bool StarExpression::Equal(const StarExpression *a, const StarExpression *b) {
 	if (a->relation_name != b->relation_name || a->exclude_list != b->exclude_list) {
 		return false;
 	}
