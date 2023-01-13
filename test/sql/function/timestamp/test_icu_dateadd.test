@@ -93,6 +93,22 @@ select '1999-12-31 16:00:00-08'::timestamptz + interval 2400 hours
 ----
 2000-04-09 17:00:00-07
 
+statement error
+select 'epoch'::timestamptz + '9223372036854775000 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
+----
+294247-01-09 20:00:54.774999-08
+
+statement error
+select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
+----
+290303-12-10 (BC) 16:07:02-07:52
+
 #  interval + timestamp
 query II
 SELECT iv, iv + '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ FROM intervals;
@@ -134,6 +150,22 @@ select interval 2400 hours + '1999-12-31 16:00:00-08'::timestamptz
 ----
 2000-04-09 17:00:00-07
 
+statement error
+select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
+
+query I
+select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
+----
+294247-01-09 20:00:54.774999-08
+
+statement error
+select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
+
+query I
+select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
+----
+290303-12-10 (BC) 16:07:02-07:52
+
 # timestamp - interval
 query II
 SELECT iv, '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ - iv FROM intervals;
@@ -174,6 +206,14 @@ query I
 select '2000-04-09 17:00:00-07'::timestamptz - interval 2400 hours
 ----
 1999-12-31 16:00:00-08
+
+statement error
+select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
+----
+290303-12-10 (BC) 16:07:02-07:52
 
 # Before the epoch
 query II
@@ -378,8 +418,8 @@ set timezone = 'Europe/London';
 
 statement ok
 CREATE TABLE london AS (
-	SELECT * 
-	FROM (VALUES 
+	SELECT *
+	FROM (VALUES
 		('2000-10-29 03:00:00+00'::TIMESTAMPTZ, '2000-03-26 03:00:00+01'::TIMESTAMPTZ, '2000-01-03 00:00:00+00'::TIMESTAMPTZ)
 		) tbl(dst2, dst1, origin)
 	);
