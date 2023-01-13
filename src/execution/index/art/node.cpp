@@ -278,7 +278,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	reader.offset = offset;
 	auto n = reader.Read<uint8_t>();
 	NodeType node_type(static_cast<NodeType>(n));
-	Node *deserialized_node;
+	Node *deserialized_node = nullptr;
 	switch (node_type) {
 	case NodeType::NLeaf:
 		return Leaf::Deserialize(reader);
