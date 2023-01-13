@@ -456,7 +456,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 				throw BinderException("Cannot group on a window clause");
 			}
 			if (result->unnests.size() > unnest_count) {
-				throw BinderException("Cannot group on an UNNEST clause");
+				throw BinderException("Cannot group on an UNNEST or UNLIST clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
