@@ -452,10 +452,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}
 			if (is_window) {
-				throw BinderException("Cannot group on a window clause");
-			}
-			if (!result->unnests.empty()) {
-				throw BinderException("Cannot have unnest in a window clause");
+				throw BinderException("Cannot group on a window statement");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
