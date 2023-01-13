@@ -170,7 +170,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(proj_index, std::move(projection_expressions));
 	proj->AddChild(move(root));
-	return proj;
+	return unique_ptr_cast<LogicalProjection, LogicalOperator>(move(proj));
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
