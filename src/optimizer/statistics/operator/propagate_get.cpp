@@ -37,13 +37,13 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	}
 	if (!get.function.statistics) {
 		// no column statistics to get
-		return move(node_stats);
+		return std::move(node_stats);
 	}
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);
-			statistics_map.insert(make_pair(binding, move(stats)));
+			statistics_map.insert(make_pair(binding, std::move(stats)));
 		}
 	}
 	// push table filters into the statistics
@@ -93,7 +93,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			break;
 		}
 	}
-	return move(node_stats);
+	return std::move(node_stats);
 }
 
 } // namespace duckdb

@@ -17,7 +17,7 @@ class LogicalShow : public LogicalOperator {
 
 public:
 	explicit LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
-		children.push_back(move(plan));
+		children.push_back(std::move(plan));
 	}
 
 	vector<LogicalType> types_select;

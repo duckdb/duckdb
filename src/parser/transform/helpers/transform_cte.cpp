@@ -55,7 +55,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, 
 			// can't have two CTEs with same name
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
-		cte_map.map[cte_name] = move(info);
+		cte_map.map[cte_name] = std::move(info);
 	}
 }
 

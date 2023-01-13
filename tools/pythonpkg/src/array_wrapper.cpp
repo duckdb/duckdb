@@ -757,12 +757,12 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {
-		return move(data->array);
+		return std::move(data->array);
 	}
 	mask->Resize(mask->count);
 	// construct numpy arrays from the data and the mask
-	auto values = move(data->array);
-	auto nullmask = move(mask->array);
+	auto values = std::move(data->array);
+	auto nullmask = std::move(mask->array);
 
 	// create masked array and return it
 	auto masked_array = py::module::import("numpy.ma").attr("masked_array")(values, nullmask);

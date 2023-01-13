@@ -20,7 +20,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		auto &data = binder.parameters->parameter_data[parameter_idx - 1];
 		auto constant = make_unique<BoundConstantExpression>(data.value);
 		constant->alias = expr.alias;
-		return BindResult(move(constant));
+		return BindResult(std::move(constant));
 	}
 	auto entry = binder.parameters->parameters.find(parameter_idx);
 	if (entry == binder.parameters->parameters.end()) {
@@ -29,14 +29,14 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		data->return_type = binder.parameters->GetReturnType(parameter_idx - 1);
 		bound_parameter->return_type = data->return_type;
 		bound_parameter->parameter_data = data;
-		binder.parameters->parameters[parameter_idx] = move(data);
+		binder.parameters->parameters[parameter_idx] = std::move(data);
 	} else {
 		// a prepared statement with this parameter index was already there: use it
 		auto &data = entry->second;
 		bound_parameter->parameter_data = data;
 		bound_parameter->return_type = binder.parameters->GetReturnType(parameter_idx - 1);
 	}
-	return BindResult(move(bound_parameter));
+	return BindResult(std::move(bound_parameter));
 }
 
 } // namespace duckdb

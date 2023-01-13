@@ -1,0 +1,97 @@
+# name: test/sql/settings/drop_set_schema.test
+# group: [settings]
+
+# 'db2' is an in-memory database, which no longer exists after restarting
+# So we have to exclude this test from Force Restart runs
+require skip_reload
+
+statement ok
+pragma enable_verification;
+
+# Create a new schema
+statement ok
+create schema my_schema;
+
+# Verify that 'main' is the default
+query I
+select current_schema();
+----
+main
+
+# Set it as the default schema
+statement ok
+SET schema='my_schema';
+
+# Verify that it changed
+query I
+select current_schema();
+----
+my_schema
+
+# Then drop it
+statement ok
+drop schema my_schema;
+
+# The 'current_schema' setting should be reset to the default ('main')
+query I
+select current_schema();
+----
+main
+
+# Create two new schemas
+
+statement ok
+create schema schema1;
+
+statement ok
+create schema schema2;
+
+# Set the current schema to 'schema1'
+statement ok
+set schema='schema1';
+
+query I
+select current_schema();
+----
+schema1
+
+# Then drop 'schema2'
+statement ok
+drop schema schema2;
+
+# The current schema should be unaffected
+query I
+select current_schema();
+----
+schema1
+
+# Create a new in memory db
+statement ok
+ATTACH ':memory:' as db2;
+
+# Create an identically named schema
+statement ok
+create schema db2.schema1;
+
+# USE would change the current_schema, so we can't use that
+#statement ok
+#USE db2;
+
+# Drop this schema
+statement ok
+drop schema db2.schema1;
+
+# The current schema should again be unaltered
+query I
+select current_schema();
+----
+schema1
+
+# Only when we drop the other 'schema1' should it be altered again
+statement ok
+drop schema schema1;
+
+query I
+select current_schema();
+----
+main

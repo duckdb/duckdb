@@ -18,7 +18,7 @@ class PhysicalPrepare : public PhysicalOperator {
 public:
 	PhysicalPrepare(string name, shared_ptr<PreparedStatementData> prepared, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality), name(name),
-	      prepared(move(prepared)) {
+	      prepared(std::move(prepared)) {
 	}
 
 	string name;

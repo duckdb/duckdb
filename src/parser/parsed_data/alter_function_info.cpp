@@ -9,7 +9,8 @@ namespace duckdb {
 // AlterFunctionInfo
 //===--------------------------------------------------------------------===//
 AlterFunctionInfo::AlterFunctionInfo(AlterFunctionType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_FUNCTION, move(data.catalog), move(data.schema), move(data.name), data.if_exists),
+    : AlterInfo(AlterType::ALTER_FUNCTION, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_exists),
       alter_function_type(type) {
 }
 AlterFunctionInfo::~AlterFunctionInfo() {
@@ -40,7 +41,8 @@ unique_ptr<AlterInfo> AlterFunctionInfo::Deserialize(FieldReader &reader) {
 // AddFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
 AddFunctionOverloadInfo::AddFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads_p)
-    : AlterFunctionInfo(AlterFunctionType::ADD_FUNCTION_OVERLOADS, move(data)), new_overloads(move(new_overloads_p)) {
+    : AlterFunctionInfo(AlterFunctionType::ADD_FUNCTION_OVERLOADS, std::move(data)),
+      new_overloads(std::move(new_overloads_p)) {
 	this->allow_internal = true;
 }
 AddFunctionOverloadInfo::~AddFunctionOverloadInfo() {

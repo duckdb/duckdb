@@ -1,6 +1,12 @@
-#include "duckdb_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb_node.hpp"
 #include "napi.h"
+
+#include <iostream>
+#include <thread>
 
 namespace node_duckdb {
 
@@ -13,7 +19,8 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	    env, "Database",
 	    {InstanceMethod("close_internal", &Database::Close), InstanceMethod("wait", &Database::Wait),
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
-	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt)});
+	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
+	     InstanceMethod("registerReplacementScan", &Database::RegisterReplacementScan)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -128,7 +135,7 @@ Database::~Database() {
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
-		task_queue.push(move(task));
+		task_queue.push(std::move(task));
 	}
 	Process(env);
 }
@@ -172,11 +179,11 @@ void Database::Process(Napi::Env env) {
 	}
 	task_inflight = true;
 
-	auto task = move(task_queue.front());
+	auto task = std::move(task_queue.front());
 	task_queue.pop();
 
 	auto holder = new TaskHolder();
-	holder->task = move(task);
+	holder->task = std::move(task);
 	holder->db = this;
 
 	napi_create_async_work(env, nullptr, Napi::String::New(env, "duckdb.Database.Task"), TaskExecuteCallback,
@@ -265,6 +272,109 @@ Napi::Value Database::Interrupt(const Napi::CallbackInfo &info) {
 
 Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
 	return Connection::constructor.New({Value()});
+}
+
+struct JSRSArgs {
+	std::string table = "";
+	std::string function = "";
+	std::vector<duckdb::Value> parameters;
+	bool done = false;
+	duckdb::PreservedError error;
+};
+
+struct NodeReplacementScanData : duckdb::ReplacementScanData {
+	NodeReplacementScanData(duckdb_node_rs_function_t rs) : rs(std::move(rs)) {};
+	duckdb_node_rs_function_t rs;
+};
+
+void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, JSRSArgs *jsargs) {
+	try {
+		Napi::EscapableHandleScope scope(env);
+		auto arg = Napi::String::New(env, jsargs->table);
+		auto result = jsrs({arg});
+		if (result && result.IsObject()) {
+			auto obj = result.As<Napi::Object>();
+			jsargs->function = obj.Get("function").ToString().Utf8Value();
+			auto parameters = obj.Get("parameters");
+			if (parameters.IsArray()) {
+				auto paramArray = parameters.As<Napi::Array>();
+				for (uint32_t i = 0; i < paramArray.Length(); i++) {
+					jsargs->parameters.push_back(Utils::BindParameter(paramArray.Get(i)));
+				}
+			} else {
+				throw duckdb::Exception("Expected parameter array");
+			}
+		} else if (!result.IsNull()) {
+			throw duckdb::Exception("Invalid scan replacement result");
+		}
+	} catch (const duckdb::Exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
+	} catch (const std::exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
+	}
+	jsargs->done = true;
+}
+
+static duckdb::unique_ptr<duckdb::TableFunctionRef>
+ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
+	JSRSArgs jsargs;
+	jsargs.table = table_name;
+	((NodeReplacementScanData *)data)->rs.BlockingCall(&jsargs);
+	while (!jsargs.done) {
+		std::this_thread::yield();
+	}
+	if (jsargs.error) {
+		jsargs.error.Throw();
+	}
+	if (jsargs.function != "") {
+		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
+		std::vector<std::unique_ptr<duckdb::ParsedExpression>> children;
+		for (auto &param : jsargs.parameters) {
+			children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(std::move(param)));
+		}
+		table_function->function =
+		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
+		return table_function;
+	}
+	return nullptr;
+}
+
+struct RegisterRsTask : public Task {
+	RegisterRsTask(Database &database, duckdb_node_rs_function_t rs, Napi::Promise::Deferred deferred)
+	    : Task(database), rs(std::move(rs)), deferred(deferred) {
+	}
+
+	void DoWork() override {
+		auto &database = Get<Database>();
+		if (database.database) {
+			database.database->instance->config.replacement_scans.emplace_back(
+			    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(rs));
+		}
+	}
+
+	void DoCallback() override {
+		deferred.Resolve(deferred.Env().Undefined());
+	}
+
+	duckdb_node_rs_function_t rs;
+	Napi::Promise::Deferred deferred;
+};
+
+Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+	auto deferred = Napi::Promise::Deferred::New(info.Env());
+	if (info.Length() < 1) {
+		Napi::TypeError::New(env, "Replacement scan callback expected").ThrowAsJavaScriptException();
+		return env.Null();
+	}
+	Napi::Function rs_callback = info[0].As<Napi::Function>();
+	auto rs = duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs_" + (replacement_scan_count++), 0, 1,
+	                                         nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
+	rs.Unref(env);
+
+	Schedule(info.Env(), duckdb::make_unique<RegisterRsTask>(*this, rs, deferred));
+
+	return deferred.Promise();
 }
 
 } // namespace node_duckdb
