@@ -101,7 +101,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	n->count--;
 
 	// shrink node to Node48
-	if (node->count <= Node48::GetSize() - 11) {
+	if (node->count <= NODE_256_SHRINK_THRESHOLD) {
 
 		auto new_node = Node48::New();
 		art.memory_size += new_node->MemorySize(art, false);
@@ -122,7 +122,7 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 	}
 }
 
-idx_t Node256::GetSize() {
+constexpr idx_t Node256::GetSize() {
 	return 256;
 }
 

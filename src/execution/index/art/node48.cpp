@@ -140,7 +140,7 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 	n->count--;
 
 	// shrink node to Node16
-	if (node->count < Node16::GetSize() - 3) {
+	if (node->count < NODE_48_SHRINK_THRESHOLD) {
 
 		auto new_node = Node16::New();
 		art.memory_size += new_node->MemorySize(art, false);
@@ -161,7 +161,7 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 	}
 }
 
-idx_t Node48::GetSize() {
+constexpr idx_t Node48::GetSize() {
 	return 48;
 }
 

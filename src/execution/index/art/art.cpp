@@ -28,9 +28,9 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	} else {
 		tree = nullptr;
 	}
+	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
 	// validate the types of the key columns
-	serialized_data_pointer = BlockPointer(block_id, block_offset);
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -48,19 +48,20 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		case PhysicalType::VARCHAR:
 			break;
 		default:
-			throw InvalidTypeException(logical_types[i], "Invalid type for index");
+			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
 	}
 }
 
 ART::~ART() {
-	if (tree) {
-		if (track_memory) {
-			buffer_manager.DecreaseUsedMemory(memory_size);
-		}
-		Node::Delete(tree);
-		tree = nullptr;
+	if (!tree) {
+		return;
 	}
+	if (track_memory) {
+		buffer_manager.DecreaseUsedMemory(memory_size);
+	}
+	Node::Delete(tree);
+	tree = nullptr;
 }
 
 //===--------------------------------------------------------------------===//

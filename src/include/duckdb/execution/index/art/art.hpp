@@ -58,8 +58,6 @@ public:
 
 	//! Root of the tree
 	Node *tree;
-	//	//! Attached database
-	//	AttachedDatabase &db;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids

@@ -165,7 +165,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 	}
 }
 
-idx_t Node4::GetSize() {
+constexpr idx_t Node4::GetSize() {
 	return 4;
 }
 

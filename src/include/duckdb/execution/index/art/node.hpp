@@ -59,6 +59,8 @@ struct ParentsOfNodes {
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
+	static const uint8_t NODE_48_SHRINK_THRESHOLD = 12;
+	static const uint8_t NODE_256_SHRINK_THRESHOLD = 36;
 
 public:
 	explicit Node(NodeType type);
