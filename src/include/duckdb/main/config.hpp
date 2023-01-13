@@ -165,9 +165,6 @@ public:
 	//! Replacement open handlers are callbacks that run pre and post database initialization
 	vector<ReplacementOpen> replacement_opens;
 
-	//! Callback to allow users to pass custom create database table functions
-	vector<CreateDatabaseExtension> create_database_extensions;
-
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
@@ -187,6 +184,8 @@ public:
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
+	//! Callback functions to allow users to pass custom create database table function
+	vector<CreateDatabaseExtension> create_database_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

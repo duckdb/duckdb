@@ -624,17 +624,16 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		string extension_name = base.extension_name;
 		string database_name = base.name;
 		auto &config = DBConfig::GetConfig(context);
-		if (!config.create_database_extensions.empty()) {
-			for (auto &extension : config.create_database_extensions) {
-				auto create_database_function_ref =
-				    extension.function(context, extension_name, database_name, extension.data.get());
-				if (create_database_function_ref) {
-					auto bound_create_database_func = Bind(*create_database_function_ref);
-					result.plan = CreatePlan(*bound_create_database_func);
-					break;
-				}
+		for (auto &extension : config.create_database_extensions) {
+			auto create_database_function_ref =
+			    extension.function(context, extension_name, database_name, extension.data.get());
+			if (create_database_function_ref) {
+				auto bound_create_database_func = Bind(*create_database_function_ref);
+				result.plan = CreatePlan(*bound_create_database_func);
+				break;
 			}
-		} else {
+		}
+		if (!result.plan) {
 			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet!");
 		}
 	}
