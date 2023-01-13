@@ -124,11 +124,10 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 		LoadExtensionInternal(db, ext, true);
 	}
 
-
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-    for (auto &ext : OOTE_EXTENSIONS) {
-        LoadExtensionInternal(db, ext, true);
-    }
+	for (auto &ext : OOTE_EXTENSIONS) {
+		LoadExtensionInternal(db, ext, true);
+	}
 #endif
 }
 
@@ -240,9 +239,9 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	} else {
 
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-        if (TryLoadLinkedExtension(db, extension)) {
-            return ExtensionLoadResult::LOADED_EXTENSION;
-        }
+		if (TryLoadLinkedExtension(db, extension)) {
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		}
 #endif
 		return ExtensionLoadResult::EXTENSION_UNKNOWN;
 	}

@@ -29,4 +29,3 @@ set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${PROJECT_BINARY_DIR})
 
 install(TARGETS shell RUNTIME DESTINATION "${PROJECT_BINARY_DIR}")
-

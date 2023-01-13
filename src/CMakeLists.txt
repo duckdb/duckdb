@@ -122,8 +122,9 @@ if(BUILD_PYTHON
     if(USER_SPACE)
       add_custom_target(
         duckdb_python ALL
-        COMMAND python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-                --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+        COMMAND
+          python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
+          --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
         DEPENDS duckdb
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
         COMMENT Build
