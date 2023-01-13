@@ -1,20 +1,20 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_pos_join.hpp
+// duckdb/planner/operator/logical_positional_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_unconditional_join.hpp"
 
 namespace duckdb {
 
 //! LogicalPositionalJoin represents a row-wise join between two relations
-class LogicalPositionalJoin : public LogicalOperator {
-	LogicalPositionalJoin() : LogicalOperator(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {};
+class LogicalPositionalJoin : public LogicalUnconditionalJoin {
+	LogicalPositionalJoin() : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {};
 
 public:
 	LogicalPositionalJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
@@ -22,12 +22,7 @@ public:
 public:
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 
-	vector<ColumnBinding> GetColumnBindings() override;
-
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-
-protected:
-	void ResolveTypes() override;
 };
 } // namespace duckdb
