@@ -12,11 +12,12 @@ class CBufferManager;
 typedef void *duckdb_buffer;
 
 // Callbacks used by the CBufferManager
+
 typedef duckdb_buffer (*duckdb_allocate_buffer_t)(void *data, idx_t size);
-typedef duckdb_buffer (*duckdb_reallocate_buffer_t)(duckdb_buffer buffer, idx_t old_size, idx_t new_size);
-typedef void (*duckdb_destroy_buffer_t)(duckdb_buffer buffer);
-typedef void *(*duckdb_pin_buffer_t)(duckdb_buffer buffer);
-typedef void (*duckdb_unpin_buffer_t)(duckdb_buffer buffer);
+typedef duckdb_buffer (*duckdb_reallocate_buffer_t)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_buffer_t)(void *data, duckdb_buffer buffer);
+typedef void *(*duckdb_pin_buffer_t)(void *data, duckdb_buffer buffer);
+typedef void (*duckdb_unpin_buffer_t)(void *data, duckdb_buffer buffer);
 typedef idx_t (*duckdb_max_memory_t)(void *data);
 typedef idx_t (*duckdb_used_memory_t)(void *data);
 

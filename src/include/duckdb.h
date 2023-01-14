@@ -421,10 +421,10 @@ Functions interacting with this buffer manager are provided as callbacks.
 typedef void *duckdb_buffer;
 
 typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size);
-typedef duckdb_buffer (*duckdb_reallocate_func)(duckdb_buffer buffer, idx_t old_size, idx_t new_size);
-typedef void (*duckdb_destroy_func)(duckdb_buffer buffer);
-typedef void *(*duckdb_pin_func)(duckdb_buffer buffer);
-typedef void (*duckdb_unpin_func)(duckdb_buffer buffer);
+typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer);
+typedef void *(*duckdb_pin_func)(void *data, duckdb_buffer buffer);
+typedef void (*duckdb_unpin_func)(void *data, duckdb_buffer buffer);
 typedef idx_t (*duckdb_max_memory_func)(void *data);
 typedef idx_t (*duckdb_used_memory_func)(void *data);
 

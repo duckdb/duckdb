@@ -27,6 +27,13 @@ const DUCKDB_PENDING_RESULT_NOT_READY = 1;
 const DUCKDB_PENDING_ERROR = 2;
 
 const duckdb_buffer = Ptr{Cvoid}
+const duckdb_cbuffermanager_allocate = Ptr{Cvoid}
+const duckdb_cbuffermanager_reallocate = Ptr{Cvoid}
+const duckdb_cbuffermanager_destroy = Ptr{Cvoid}
+const duckdb_cbuffermanager_pin = Ptr{Cvoid}
+const duckdb_cbuffermanager_unpin = Ptr{Cvoid}
+const duckdb_cbuffermanager_used_memory = Ptr{Cvoid}
+const duckdb_cbuffermanager_max_memory = Ptr{Cvoid}
 
 @enum DUCKDB_TYPE_::UInt32 begin
     DUCKDB_TYPE_INVALID = 0

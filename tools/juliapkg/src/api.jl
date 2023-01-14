@@ -2829,9 +2829,26 @@ end
 
 #=
 //===--------------------------------------------------------------------===//
-// Replacement scans
+// Custom BufferManager
 //===--------------------------------------------------------------------===//
 =#
+
+"""
+Report that an error has occurred while executing a custom buffer manager callback
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_custom_buffer_manager_set_error(info, error_message)
+    return ccall(
+        (:duckdb_custom_buffer_manager_set_error, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, Ptr{UInt8}),
+        info,
+        error_message
+    )
+end
+
 """
 Add a custom buffer manager to the specified config
 

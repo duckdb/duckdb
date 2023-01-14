@@ -64,7 +64,7 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
-	auto allocation = (data_ptr_t)(config.pin_func(buffer.ExternalBufferHandle()));
+	auto allocation = (data_ptr_t)(config.pin_func(config.data, buffer.ExternalBufferHandle()));
 	if (handle->readers == 0) {
 		// FIXME: this is not protecting anything really,
 		// if the number goes up, then goes down to 0 again, this will be called twice for a single buffer
@@ -77,7 +77,7 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
 	handle->readers--;
-	config.unpin_func(buffer.ExternalBufferHandle());
+	config.unpin_func(config.data, buffer.ExternalBufferHandle());
 }
 
 idx_t CBufferManager::GetUsedMemory() const {
@@ -113,14 +113,14 @@ data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *privat
 void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	config.destroy_func(pointer);
+	config.destroy_func(config.data, pointer);
 }
 
 data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
                                                    idx_t old_size, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	auto buffer = config.reallocate_func(pointer, old_size, size);
+	auto buffer = config.reallocate_func(config.data, pointer, old_size, size);
 	return (data_ptr_t)buffer;
 }
 
