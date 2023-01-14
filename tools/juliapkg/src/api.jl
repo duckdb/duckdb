@@ -2884,13 +2884,23 @@ function duckdb_add_custom_buffer_manager(
     destroy_func,
     pin_func,
     unpin_func,
-    used_memory_func,
-    max_memory_func
+    max_memory_func,
+    used_memory_func
 )
     return ccall(
         (:duckdb_add_custom_buffer_manager, libduckdb),
         duckdb_state,
-        (duckdb_config, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+        (
+			duckdb_config,
+			Ptr{Cvoid},
+			duckdb_cbuffermanager_allocate,
+			duckdb_cbuffermanager_reallocate,
+			duckdb_cbuffermanager_destroy,
+			duckdb_cbuffermanager_pin,
+			duckdb_cbuffermanager_unpin,
+			duckdb_cbuffermanager_max_memory,
+			duckdb_cbuffermanager_used_memory
+		),
         config,
         allocation_context,
         allocate_func,
@@ -2898,7 +2908,7 @@ function duckdb_add_custom_buffer_manager(
         destroy_func,
         pin_func,
         unpin_func,
-        used_memory_func,
-        max_memory_func
+        max_memory_func,
+        used_memory_func
     )
 end
