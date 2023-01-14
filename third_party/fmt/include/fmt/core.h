@@ -355,16 +355,14 @@ template <typename Char> class basic_string_view {
 using string_view = basic_string_view<char>;
 using wstring_view = basic_string_view<wchar_t>;
 
-#ifndef __cpp_char8_t
 // A UTF-8 code unit type.
-typedef unsigned char char8_t;
-#endif
+typedef unsigned char fmt_char8_t;
 
 /** Specifies if ``T`` is a character type. Can be specialized by users. */
 template <typename T> struct is_char : std::false_type {};
 template <> struct is_char<char> : std::true_type {};
 template <> struct is_char<wchar_t> : std::true_type {};
-template <> struct is_char<char8_t> : std::true_type {};
+template <> struct is_char<fmt_char8_t> : std::true_type {};
 template <> struct is_char<char16_t> : std::true_type {};
 template <> struct is_char<char32_t> : std::true_type {};
 
