@@ -111,8 +111,8 @@ public:
 
 	vector<string> ListSubSystems() override {
 		vector<string> names(sub_systems.size());
-		for (auto const &sub_system : sub_systems) {
-			names.push_back(sub_system->GetName());
+		for (idx_t i = 0; i < sub_systems.size(); i++) {
+			names[i] = sub_systems[i]->GetName();
 		}
 		return names;
 	}
