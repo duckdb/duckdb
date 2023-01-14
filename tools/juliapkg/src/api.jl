@@ -644,7 +644,21 @@ should be freed using `duckdb_free`.
 DUCKDB_API void *duckdb_malloc(size_t size);
 """
 function duckdb_malloc(size)
-    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Csize_t,), size)
+    return ccall((:duckdb_malloc, libduckdb), Ptr{Cvoid}, (Csize_t,), size)
+end
+
+"""
+duckdb_realloc(ptr, size)
+
+Reallocate `size` bytes of memory using the duckdb internal realloc function. Any memory allocated in this manner
+should be freed using `duckdb_free`.
+* ptr: The memory region to reallocate.
+* size: The number of bytes to allocate.
+* returns: A pointer to the allocated memory region.
+DUCKDB_API void *duckdb_malloc(size_t size);
+"""
+function duckdb_realloc(ptr, size)
+    return ccall((:duckdb_realloc, libduckdb), Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), ptr, size)
 end
 
 """
@@ -654,7 +668,7 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_va
 DUCKDB_API void duckdb_free(void *ptr);
 """
 function duckdb_free(ptr)
-    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
+    return ccall((:duckdb_free, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
 end
 
 """

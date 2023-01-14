@@ -1,3 +1,5 @@
+
+# TODO: make these function prototypes more strict
 mutable struct CBufferManagerData
     # User provided data
     extra_data::Any
@@ -17,37 +19,43 @@ end
 
 # TODO: these functions need exception handling, the C versions also don't provide a way to indicate an error
 
-function _allocate(wrapped_data, allocation_size::Int32)
+function _allocate(wrapped_data::Ptr{Cvoid}, allocation_size::Int32)
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
-    return data.allocate(data.extra_data, allocation_size)
+    buffer = data.allocate(data.extra_data, allocation_size)
+	return pointer_from_objref(buffer)
 end
 
-function _reallocate(wrapped_data, buffer::duckdb_buffer, old_size::Int32, new_size::Int32)
+function _reallocate(wrapped_data::Ptr{Cvoid}, buffer::Any, old_size::Int32, new_size::Int32)
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
-    return data.reallocate(data.extra_data, buffer, old_size, new_size)
+	julia_buffer::Any = unsafe_pointer_to_objref(buffer)
+    new_buffer = data.reallocate(data.extra_data, julia_buffer, old_size, new_size)
+	return pointer_from_objref(new_buffer)
 end
 
-function _destroy(wrapped_data, buffer::duckdb_buffer)
+function _destroy(wrapped_data::Ptr{Cvoid}, buffer::Any)
+	julia_buffer::Any = unsafe_pointer_to_objref(buffer)
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
-    return data.destroy(data.extra_data, buffer)
+    data.destroy(data.extra_data, julia_buffer)
 end
 
-function _pin(wrapped_data, buffer::duckdb_buffer)
+function _pin(wrapped_data::Ptr{Cvoid}, buffer::Any)
+	julia_buffer::Any = unsafe_pointer_to_objref(buffer)
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
-    return data.pin(data.extra_data, buffer)
+    return data.pin(data.extra_data, julia_buffer)
 end
 
-function _unpin(wrapped_data, buffer::duckdb_buffer)
+function _unpin(wrapped_data::Ptr{Cvoid}, buffer::Any)
+	julia_buffer::Any = unsafe_pointer_to_objref(buffer)
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
-    return data.unpin(data.extra_data, buffer)
+    data.unpin(data.extra_data, julia_buffer)
 end
 
-function _used_memory(wrapped_data)
+function _used_memory(wrapped_data::Ptr{Cvoid})
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
     return data.used_memory(data.extra_data)
 end
 
-function _max_memory(wrapped_data)
+function _max_memory(wrapped_data::Ptr{Cvoid})
     data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
     return data.max_memory(data.extra_data)
 end
@@ -84,10 +92,10 @@ function add_custom_buffer_manager!(
         config.handle,
         pointer_from_objref(wrapped_data),
         @cfunction(_allocate, duckdb_buffer, (Ptr{Cvoid}, Int32)),
-        @cfunction(_reallocate, duckdb_buffer, (duckdb_buffer, Int32, Int32)),
-        @cfunction(_destroy, Cvoid, (duckdb_buffer,)),
-        @cfunction(_pin, Cvoid, (duckdb_buffer,)),
-        @cfunction(_unpin, Cvoid, (duckdb_buffer,)),
+        @cfunction(_reallocate, duckdb_buffer, (Ptr{Cvoid}, duckdb_buffer, Int32, Int32)),
+        @cfunction(_destroy, Cvoid, (Ptr{Cvoid}, duckdb_buffer)),
+        @cfunction(_pin, Ptr{Cvoid}, (Ptr{Cvoid}, duckdb_buffer)),
+        @cfunction(_unpin, Cvoid, (Ptr{Cvoid}, duckdb_buffer)),
         @cfunction(_used_memory, Int32, (Ptr{Cvoid},)),
         @cfunction(_max_memory, Int32, (Ptr{Cvoid},))
     )

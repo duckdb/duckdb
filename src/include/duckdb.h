@@ -752,6 +752,16 @@ should be freed using `duckdb_free`.
 DUCKDB_API void *duckdb_malloc(size_t size);
 
 /*!
+Reallocate `size` bytes of memory using the duckdb internal realloc function. Any memory allocated in this manner
+should be freed using `duckdb_free`.
+
+* ptr: The memory region to reallocate.
+* size: The number of bytes to allocate.
+* returns: A pointer to the allocated memory region.
+*/
+DUCKDB_API void *duckdb_realloc(void *ptr, size_t size);
+
+/*!
 Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_value_blob`.
 
 * ptr: The memory region to de-allocate.
