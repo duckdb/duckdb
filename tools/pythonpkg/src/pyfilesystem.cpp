@@ -38,7 +38,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	PythonGILWrapper gil;
 
-	const auto &write = PythonFileHandle::GetHandle(handle)->attr("write");
+	const auto &write = PythonFileHandle::GetHandle(handle).attr("write");
 
 	auto data = py::bytes(std::string((const char *)buffer, nr_bytes));
 
@@ -53,7 +53,7 @@ void PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes,
 int64_t PythonFilesystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	PythonGILWrapper gil;
 
-	const auto &read = PythonFileHandle::GetHandle(handle)->attr("read");
+	const auto &read = PythonFileHandle::GetHandle(handle).attr("read");
 
 	string data = py::bytes(read(nr_bytes));
 
@@ -97,7 +97,7 @@ int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 	PythonGILWrapper gil;
 
-	auto seek = PythonFileHandle::GetHandle(handle)->attr("seek");
+	auto seek = PythonFileHandle::GetHandle(handle).attr("seek");
 	seek(location);
 }
 bool PythonFilesystem::CanHandleFile(const string &fpath) {
@@ -131,6 +131,6 @@ time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 void PythonFilesystem::FileSync(FileHandle &handle) {
 	PythonGILWrapper gil;
 
-	PythonFileHandle::GetHandle(handle)->attr("flush")();
+	PythonFileHandle::GetHandle(handle).attr("flush")();
 }
 } // namespace duckdb
