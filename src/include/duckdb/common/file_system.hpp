@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <functional>
 
@@ -186,7 +186,11 @@ public:
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
+
+	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
+
+	//! List registered sub-filesystems, including builtin ones
 	DUCKDB_API virtual vector<string> ListSubSystems();
 
 	//! Whether or not a sub-system can handle a specific file path
