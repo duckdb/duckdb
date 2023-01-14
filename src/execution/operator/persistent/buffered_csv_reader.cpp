@@ -887,23 +887,40 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	options.num_cols = best_num_cols;
 	DetectHeader(best_sql_types_candidates, best_header_row);
-	auto sql_types_per_column = options.sql_types_per_column;
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto it = sql_types_per_column.find(names[i]);
-		if (it != sql_types_per_column.end()) {
-			best_sql_types_candidates[i] = {it->second};
-			sql_types_per_column.erase(names[i]);
+	if (!options.sql_type_list.empty()) {
+		// user-defined types were supplied for certain columns
+		// override the types
+		if (!options.sql_types_per_column.empty()) {
+			// types supplied as name -> value map
+			auto sql_types_per_column = options.sql_types_per_column;
+			for (idx_t i = 0; i < names.size(); i++) {
+				auto it = sql_types_per_column.find(names[i]);
+				if (it != sql_types_per_column.end()) {
+					best_sql_types_candidates[i] = {options.sql_type_list[it->second]};
+					sql_types_per_column.erase(names[i]);
+				}
+			}
+			if (!sql_types_per_column.empty()) {
+				string exception = "COLUMN_TYPES error: Columns with names: ";
+				for (auto &col : sql_types_per_column) {
+					exception += "\"" + col.first + "\",";
+				}
+				exception.pop_back();
+				exception += " do not exist in the CSV File";
+				throw BinderException(exception);
+			}
+		} else {
+			// types supplied as list
+			if (names.size() < options.sql_type_list.size()) {
+				throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
+				                      options.sql_type_list.size(), names.size());
+			}
+			for (idx_t i = 0; i < options.sql_type_list.size(); i++) {
+				best_sql_types_candidates[i] = {options.sql_type_list[i]};
+			}
 		}
 	}
-	if (!sql_types_per_column.empty()) {
-		string exception = "COLUMN_TYPES error: Columns with names: ";
-		for (auto &col : sql_types_per_column) {
-			exception += "\"" + col.first + "\",";
-		}
-		exception.pop_back();
-		exception += " do not exist in the CSV File";
-		throw BinderException(exception);
-	}
+
 	// #######
 	// ### type detection (refining)
 	// #######
