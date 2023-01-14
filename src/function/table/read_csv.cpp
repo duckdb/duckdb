@@ -194,6 +194,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		const idx_t first_file_index = 0;
 		result->initial_reader = std::move(result->union_readers[first_file_index]);
 		D_ASSERT(names.size() == return_types.size());
+
+		if (!options.sql_types_per_column.empty()) {
+			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
+			if (!exception.empty()) {
+				throw BinderException(exception);
+			}
+		}
 	}
 
 	if (result->options.include_file_name) {

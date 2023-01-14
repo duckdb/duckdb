@@ -2,8 +2,8 @@
 # description: Read a CSV with dtypes flags
 # group: [csv]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 query II
 select typeof(Year), typeof(Quarter) from 'test/sql/copy/csv/data/real/ontime_sample.csv' LIMIT 1;

@@ -832,6 +832,27 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 	return detected_types;
 }
 
+string BufferedCSVReader::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column,
+                                           const vector<string> &names) {
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto it = sql_types_per_column.find(names[i]);
+		if (it != sql_types_per_column.end()) {
+			sql_types_per_column.erase(names[i]);
+			continue;
+		}
+	}
+	if (sql_types_per_column.empty()) {
+		return string();
+	}
+	string exception = "COLUMN_TYPES error: Columns with names: ";
+	for (auto &col : sql_types_per_column) {
+		exception += "\"" + col.first + "\",";
+	}
+	exception.pop_back();
+	exception += " do not exist in the CSV File";
+	return exception;
+}
+
 vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
 	for (auto &type : requested_types) {
 		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
@@ -892,21 +913,17 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		// override the types
 		if (!options.sql_types_per_column.empty()) {
 			// types supplied as name -> value map
-			auto sql_types_per_column = options.sql_types_per_column;
+			idx_t found = 0;
 			for (idx_t i = 0; i < names.size(); i++) {
-				auto it = sql_types_per_column.find(names[i]);
-				if (it != sql_types_per_column.end()) {
+				auto it = options.sql_types_per_column.find(names[i]);
+				if (it != options.sql_types_per_column.end()) {
 					best_sql_types_candidates[i] = {options.sql_type_list[it->second]};
-					sql_types_per_column.erase(names[i]);
+					found++;
+					continue;
 				}
 			}
-			if (!sql_types_per_column.empty()) {
-				string exception = "COLUMN_TYPES error: Columns with names: ";
-				for (auto &col : sql_types_per_column) {
-					exception += "\"" + col.first + "\",";
-				}
-				exception.pop_back();
-				exception += " do not exist in the CSV File";
+			if (!options.union_by_name && found < names.size()) {
+				string exception = ColumnTypesError(options.sql_types_per_column, names);
 				throw BinderException(exception);
 			}
 		} else {
