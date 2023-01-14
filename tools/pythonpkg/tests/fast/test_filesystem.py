@@ -1,10 +1,11 @@
 import logging
+import sys
 from pathlib import Path
 from shutil import copyfileobj
 from typing import Callable
 
 from duckdb import DuckDBPyConnection, InvalidInputException
-from pytest import raises, importorskip, fixture
+from pytest import raises, importorskip, fixture, MonkeyPatch
 
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
@@ -97,3 +98,9 @@ class TestPythonFilesystem:
         duckdb_cursor.execute(f'''COPY (SELECT 1) TO 'memory://{filename}' (FORMAT PARQUET);''')
 
         assert memory.open(filename).read().startswith(b'PAR1')
+
+    def test_when_fsspec_not_installed(self, duckdb_cursor: DuckDBPyConnection, monkeypatch: MonkeyPatch):
+        monkeypatch.setitem(sys.modules, 'fsspec', None)
+
+        with raises(ModuleNotFoundError):
+            duckdb_cursor.register_filesystem(None)
