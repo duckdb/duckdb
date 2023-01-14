@@ -29,8 +29,8 @@ public:
 		handle.attr("close")();
 	}
 
-	static const py::object *GetHandle(const FileHandle &handle) {
-		return &((PythonFileHandle &)handle).handle;
+	static const py::object &GetHandle(const FileHandle &handle) {
+		return ((PythonFileHandle &)handle).handle;
 	}
 
 private:
@@ -38,9 +38,9 @@ private:
 };
 class PythonFilesystem : public FileSystem {
 private:
-	const vector<string> protocols;
-	const string name;
-	const AbstractFileSystem filesystem;
+	const vector<string> &protocols;
+	const string &name;
+	const AbstractFileSystem &filesystem;
 	string stripPrefix(string input) {
 		for (const auto &protocol : protocols) {
 			auto prefix = protocol + "://";
@@ -52,7 +52,7 @@ private:
 	}
 
 public:
-	explicit PythonFilesystem(const vector<string> protocols, const AbstractFileSystem filesystem)
+	explicit PythonFilesystem(const vector<string> &protocols, const AbstractFileSystem &filesystem)
 	    : protocols(protocols), name(protocols[0]), filesystem(filesystem) {
 	}
 
