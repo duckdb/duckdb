@@ -712,9 +712,9 @@ void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root
 	unordered_map<idx_t, idx_t> reverse_union_idx;
 
 	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
-		auto child_reader = move(root_struct_reader.child_readers[col]);
-		auto cast_reader = make_unique<CastColumnReader>(move(child_reader), union_col_types[union_idx_map[col]]);
-		root_struct_reader.child_readers[col] = move(cast_reader);
+		auto child_reader = std::move(root_struct_reader.child_readers[col]);
+		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), union_col_types[union_idx_map[col]]);
+		root_struct_reader.child_readers[col] = std::move(cast_reader);
 		reverse_union_idx[union_idx_map[col]] = col;
 	}
 
@@ -726,7 +726,7 @@ void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root
 			column_id_nulls[col] = false;
 		}
 	}
-	union_null_cols = move(column_id_nulls);
+	union_null_cols = std::move(column_id_nulls);
 }
 void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {

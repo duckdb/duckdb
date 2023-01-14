@@ -32,7 +32,7 @@ string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
-bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression *b) {
+bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *b) {
 	// check if the child expressions are equivalent
 	if (b->children.size() != a->children.size()) {
 		return false;
@@ -48,7 +48,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (a->start != b->start || a->end != b->end) {
 		return false;
 	}
-	// check if the framing expressions are equivalent
+	// check if the framing expressions are equivalentbind_
 	if (!BaseExpression::Equals(a->start_expr.get(), b->start_expr.get()) ||
 	    !BaseExpression::Equals(a->end_expr.get(), b->end_expr.get()) ||
 	    !BaseExpression::Equals(a->offset_expr.get(), b->offset_expr.get()) ||
