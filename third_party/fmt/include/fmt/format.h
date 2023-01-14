@@ -457,8 +457,8 @@ inline size_t count_code_points(basic_string_view<Char> s) {
 }
 
 // Counts the number of code points in a UTF-8 string.
-inline size_t count_code_points(basic_string_view<char8_t> s) {
-  const char8_t* data = s.data();
+inline size_t count_code_points(basic_string_view<fmt_char8_t> s) {
+  const fmt_char8_t* data = s.data();
   size_t num_code_points = 0;
   for (size_t i = 0, size = s.size(); i != size; ++i) {
     if ((data[i] & 0xc0) != 0x80) ++num_code_points;
@@ -473,8 +473,8 @@ inline size_t code_point_index(basic_string_view<Char> s, size_t n) {
 }
 
 // Calculates the index of the nth code point in a UTF-8 string.
-inline size_t code_point_index(basic_string_view<char8_t> s, size_t n) {
-  const char8_t* data = s.data();
+inline size_t code_point_index(basic_string_view<fmt_char8_t> s, size_t n) {
+  const fmt_char8_t* data = s.data();
   size_t num_code_points = 0;
   for (size_t i = 0, size = s.size(); i != size; ++i) {
     if ((data[i] & 0xc0) != 0x80 && ++num_code_points > n) {
@@ -484,13 +484,13 @@ inline size_t code_point_index(basic_string_view<char8_t> s, size_t n) {
   return s.size();
 }
 
-inline char8_t to_char8_t(char c) { return static_cast<char8_t>(c); }
+inline fmt_char8_t to_fmt_char8_t(char c) { return static_cast<fmt_char8_t>(c); }
 
 template <typename InputIt, typename OutChar>
 using needs_conversion = bool_constant<
     std::is_same<typename std::iterator_traits<InputIt>::value_type,
                  char>::value &&
-    std::is_same<OutChar, char8_t>::value>;
+    std::is_same<OutChar, fmt_char8_t>::value>;
 
 template <typename OutChar, typename InputIt, typename OutputIt,
           FMT_ENABLE_IF(!needs_conversion<InputIt, OutChar>::value)>
@@ -501,7 +501,7 @@ OutputIt copy_str(InputIt begin, InputIt end, OutputIt it) {
 template <typename OutChar, typename InputIt, typename OutputIt,
           FMT_ENABLE_IF(needs_conversion<InputIt, OutChar>::value)>
 OutputIt copy_str(InputIt begin, InputIt end, OutputIt it) {
-  return std::transform(begin, end, it, to_char8_t);
+  return std::transform(begin, end, it, to_fmt_char8_t);
 }
 
 #ifndef FMT_USE_GRISU
@@ -535,12 +535,12 @@ class buffer_range : public internal::output_range<
 };
 
 // A UTF-8 string view.
-class u8string_view : public basic_string_view<char8_t> {
+class u8string_view : public basic_string_view<fmt_char8_t> {
  public:
   u8string_view(const char* s)
-      : basic_string_view<char8_t>(reinterpret_cast<const char8_t*>(s)) {}
+      : basic_string_view<fmt_char8_t>(reinterpret_cast<const fmt_char8_t*>(s)) {}
   u8string_view(const char* s, size_t count) FMT_NOEXCEPT
-      : basic_string_view<char8_t>(reinterpret_cast<const char8_t*>(s), count) {
+      : basic_string_view<fmt_char8_t>(reinterpret_cast<const fmt_char8_t*>(s), count) {
   }
 };
 
