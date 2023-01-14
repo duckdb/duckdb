@@ -70,6 +70,15 @@ class TestPythonFilesystem:
 
         assert memory.open('01.csv').read() == b'1\n'
 
+    def test_null_bytes(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        with memory.open('test.csv', 'wb') as fh:
+            fh.write(b'hello\n\0world\0')
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute('select * from "memory://test.csv"')
+
+        assert duckdb_cursor.fetchall() == [('hello',), ('\0world\0',)]
+
     def test_read_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         filename = 'binary_string.parquet'
         add_file(memory, filename)
