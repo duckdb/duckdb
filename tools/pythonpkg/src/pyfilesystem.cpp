@@ -1,4 +1,5 @@
 #include "duckdb_python/pyfilesystem.hpp"
+
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb_python/python_object_container.hpp"
@@ -39,7 +40,7 @@ int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_byt
 
 	const auto &write = PythonFileHandle::GetHandle(handle)->attr("write");
 
-	auto data = py::bytes(std::string(reinterpret_cast<char const *>(buffer), nr_bytes));
+	auto data = py::bytes(std::string((const char *)buffer, nr_bytes));
 
 	return py::int_(write(data));
 }
