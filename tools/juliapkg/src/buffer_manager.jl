@@ -1,115 +1,55 @@
-mutable struct AllocateResult
-	value::duckdb_buffer
-end
-mutable struct ReAllocateResult
-	value::duckdb_buffer
-end
-mutable struct PinResult
-	value::Ptr{Cvoid}
-end
-mutable struct UsedMemoryResult
-	value::Int64
-end
-mutable struct MaxMemoryResult
-	value::Int64
-end
+mutable struct CBufferManagerData
+    # User provided data
+    extra_data::Any
 
-# These functions are provided as function pointers to the c_api, and stored in the CBufferManager config
-# They act as wrappers around the user-provided functions
-# the function gets called and if any exception occurs the error is registered
+    # User provided callbacks
+    allocate::Function
+    reallocate::Function
+    destroy::Function
+    pin::Function
+    unpin::Function
+    used_memory::Function
+    max_memory::Function
 
-# They return a boolean indicating whether the execution was successful, and set the `result` variable if successful
-
-struct CBufferManagerData
-	# User provided data
-	extra_data::Ptr{Cvoid}
-
-	# User provided callbacks
-	allocate::duckdb_cbuffermanager_allocate
-	reallocate::duckdb_cbuffermanager_reallocate
-	destroy::duckdb_cbuffermanager_destroy
-	pin::duckdb_cbuffermanager_pin
-	unpin::duckdb_cbuffermanager_unpin
-	used_memory::duckdb_cbuffermanager_used_memory
-	max_memory::duckdb_cbuffermanager_max_memory
-
-	# Identify this object
-	uuid::UUID
+    # Identify this object
+    uuid::UUID
 end
 
-function _allocate(handle, buffer_manager::Ptr{Cvoid}, allocation_size::Int32, result::{Ptr{Cvoid}})
-	try
-		res::AllocateResult = unsafe_pointer_to_objref(result)
-		res.value = handle.allocate(buffer_manager, allocation_size)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+# TODO: these functions need exception handling, the C versions also don't provide a way to indicate an error
+
+function _allocate(wrapped_data, allocation_size::Int32)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.allocate(data.extra_data, allocation_size)
 end
 
-function _reallocate(handle, buffer::duckdb_buffer, old_size::Int32, new_size::Int32, result::{Ptr{Cvoid}})
-	try
-		res::ReAllocateResult = unsafe_pointer_to_objref(result)
-		res.value = handle.reallocate(buffer, old_size, new_size)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _reallocate(wrapped_data, buffer::duckdb_buffer, old_size::Int32, new_size::Int32)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.reallocate(data.extra_data, buffer, old_size, new_size)
 end
 
-function _destroy(handle, buffer::duckdb_buffer)
-	try
-		handle.destroy(buffer)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _destroy(wrapped_data, buffer::duckdb_buffer)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.destroy(data.extra_data, buffer)
 end
 
-function _pin(handle, buffer::duckdb_buffer, result::Ptr{Cvoid})
-	try
-		res::PinResult = unsafe_pointer_to_objref(result)
-		res.value = handle.pin(buffer)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _pin(wrapped_data, buffer::duckdb_buffer)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.pin(data.extra_data, buffer)
 end
 
-function _unpin(handle, buffer::duckdb_buffer)
-	try
-		handle.unpin(buffer)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _unpin(wrapped_data, buffer::duckdb_buffer)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.unpin(data.extra_data, buffer)
 end
 
-function _used_memory(handle, buffer_manager::Ptr{Cvoid}, result::Ptr{Cvoid})
-	try
-		res::UsedMemoryResult = unsafe_pointer_to_objref(result)
-		res.value = handle.used_memory(buffer_manager)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _used_memory(wrapped_data)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.used_memory(data.extra_data)
 end
 
-function _max_memory(handle, buffer_manager::Ptr{Cvoid}, result::Ptr{Cvoid})
-	try
-		res::MaxMemoryResult = unsafe_pointer_to_objref(result)
-		res.value = handle.max_memory(buffer_manager)
-	catch
-		duckdb_custom_buffer_manager_set_error(handle, get_exception_info())
-		return false
-	end
-	return true
+function _max_memory(wrapped_data)
+    data::CBufferManagerData = unsafe_pointer_to_objref(wrapped_data)
+    return data.max_memory(data.extra_data)
 end
 
 # Should we add defined Function types for each of these callbacks?
@@ -124,15 +64,25 @@ function add_custom_buffer_manager!(
     used_memory_func::Function,
     max_memory_func::Function
 )
-    # Do we want to add the 'extra_data' to the config, to secure it from GC?
-    #config.handle.registered_objects[func.uuid] = func
 
-	# TODO: wrap the 'extra_data' in another object bundled with the user-provided functions
-	# Then we can unwrap this in our functions
+    wrapped_data = CBufferManagerData(
+        extra_data,
+        allocate_func,
+        reallocate_func,
+        destroy_func,
+        pin_func,
+        unpin_func,
+        used_memory_func,
+        max_memory_func,
+        uuid4()
+    )
 
+    #FIXME: do we need a delete_callback like 'replacement_scan' has?
+
+    config.registered_objects[wrapped_data.uuid] = wrapped_data
     return duckdb_add_custom_buffer_manager(
         config.handle,
-        pointer_from_objref(extra_data),
+        pointer_from_objref(wrapped_data),
         @cfunction(_allocate, duckdb_buffer, (Ptr{Cvoid}, Int32)),
         @cfunction(_reallocate, duckdb_buffer, (duckdb_buffer, Int32, Int32)),
         @cfunction(_destroy, Cvoid, (duckdb_buffer,)),

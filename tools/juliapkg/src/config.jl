@@ -9,7 +9,7 @@ mutable struct Config
         handle = Ref{duckdb_connection}()
         duckdb_create_config(handle)
 
-        result = new(handle[])
+        result = new(handle[], Dict())
         finalizer(_destroy_config, result)
         return result
     end
