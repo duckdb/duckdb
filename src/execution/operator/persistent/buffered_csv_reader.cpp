@@ -922,9 +922,11 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					continue;
 				}
 			}
-			if (!options.union_by_name && found < names.size()) {
+			if (!options.union_by_name && found < options.sql_types_per_column.size()) {
 				string exception = ColumnTypesError(options.sql_types_per_column, names);
-				throw BinderException(exception);
+				if (!exception.empty()) {
+					throw BinderException(exception);
+				}
 			}
 		} else {
 			// types supplied as list
