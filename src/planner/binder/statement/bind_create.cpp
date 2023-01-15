@@ -636,8 +636,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 		}
 		if (!result.plan) {
-			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet!");
+			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
 		}
+		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");
