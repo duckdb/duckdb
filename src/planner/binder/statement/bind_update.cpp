@@ -88,9 +88,10 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
+	auto &storage = table.GetStorage();
 	if (update.return_chunk) {
 		physical_index_set_t all_columns;
-		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
+		for (idx_t i = 0; i < storage.column_definitions.size(); i++) {
 			all_columns.insert(PhysicalIndex(i));
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);
@@ -100,7 +101,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
 	// Therefore switch the update to a delete and insert.
 	update.update_is_del_and_insert = false;
-	table.storage->info->indexes.Scan([&](Index &index) {
+	storage.info->indexes.Scan([&](Index &index) {
 		if (index.IndexIsUpdated(update.columns)) {
 			update.update_is_del_and_insert = true;
 			return true;
@@ -121,7 +122,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
 		physical_index_set_t all_columns;
-		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
+		for (idx_t i = 0; i < storage.column_definitions.size(); i++) {
 			all_columns.insert(PhysicalIndex(i));
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);

@@ -525,7 +525,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				                              fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr->GetColumns(), create_info.columns, fk);
-				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
+				auto index = pk_table_entry_ptr->GetStorage().info->indexes.FindForeignKeyIndex(
 				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
 				if (!index) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");

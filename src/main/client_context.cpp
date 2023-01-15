@@ -999,7 +999,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry->storage->LocalAppend(*table_entry, *this, collection);
+		table_entry->GetStorage().LocalAppend(*table_entry, *this, collection);
 	});
 }
 

@@ -343,7 +343,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	auto table_catalog =
 	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
 	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
-	index_catalog->info = table_catalog->storage->info;
+	index_catalog->info = table_catalog->GetStorage().info;
 	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<block_id_t>();
 	auto root_offset = reader.Read<uint32_t>();
@@ -379,11 +379,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage),
-		                            std::move(unbound_expressions), info->constraint_type, table_catalog->storage->db,
-		                            root_block_id, root_offset);
+		auto &storage = table_catalog->GetStorage();
+		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                            info->constraint_type, storage.db, root_block_id, root_offset);
 		index_catalog->index = art.get();
-		table_catalog->storage->info->indexes.AddIndex(std::move(art));
+		storage.info->indexes.AddIndex(std::move(art));
 		break;
 	}
 	default:

@@ -42,7 +42,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) : row_count(0) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = (const TableScanBindData &)*bind_data_p;
-		max_threads = bind_data.table->storage->MaxThreads(context);
+		max_threads = bind_data.table->GetStorage().MaxThreads(context);
 	}
 
 	ParallelTableScanState state;
@@ -86,7 +86,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	D_ASSERT(input.bind_data);
 	auto &bind_data = (const TableScanBindData &)*input.bind_data;
 	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
-	bind_data.table->storage->InitializeParallelScan(context, result->state);
+	bind_data.table->GetStorage().InitializeParallelScan(context, result->state);
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
 		const auto &columns = bind_data.table->GetColumns();
@@ -105,7 +105,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
                                                       column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
-	if (local_storage.Find(bind_data.table->storage.get())) {
+	if (local_storage.Find(bind_data.table->GetStoragePtr())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
@@ -117,16 +117,17 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
 	auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
+	auto &storage = bind_data.table->GetStorage();
 	do {
 		if (bind_data.is_create_index) {
-			bind_data.table->storage->CreateIndexScan(
-			    state.scan_state, output, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			storage.CreateIndexScan(state.scan_state, output,
+			                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 		} else if (gstate.CanRemoveFilterColumns()) {
 			state.all_columns.Reset();
-			bind_data.table->storage->Scan(transaction, state.all_columns, state.scan_state);
+			storage.Scan(transaction, state.all_columns, state.scan_state);
 			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
 		} else {
-			bind_data.table->storage->Scan(transaction, output, state.scan_state);
+			storage.Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
 			gstate.row_count += output.size();
@@ -143,16 +144,18 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &parallel_state = (TableScanGlobalState &)*global_state;
 	auto &state = (TableScanLocalState &)*local_state;
+	auto &storage = bind_data.table->GetStorage();
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state);
+	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &gstate = (TableScanGlobalState &)*gstate_p;
-	idx_t total_rows = bind_data.table->storage->GetTotalRows();
+	auto &storage = bind_data.table->GetStorage();
+	idx_t total_rows = storage.GetTotalRows();
 	if (total_rows == 0) {
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
@@ -190,9 +193,9 @@ void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
-	idx_t estimated_cardinality =
-	    bind_data.table->storage->info->cardinality + local_storage.AddedRows(bind_data.table->storage.get());
-	return make_unique<NodeStatistics>(bind_data.table->storage->info->cardinality, estimated_cardinality);
+	auto &storage = bind_data.table->GetStorage();
+	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStoragePtr());
+	return make_unique<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -219,7 +222,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	local_storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state.local_state,
+	local_storage.InitializeScan(bind_data.table->GetStoragePtr(), result->local_storage_state.local_state,
 	                             input.filters);
 
 	result->finished = false;
@@ -233,8 +236,8 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	if (!state.finished) {
-		bind_data.table->storage->Fetch(transaction, output, state.column_ids, state.row_ids,
-		                                bind_data.result_ids.size(), state.fetch_state);
+		bind_data.table->GetStorage().Fetch(transaction, output, state.column_ids, state.row_ids,
+		                                    bind_data.result_ids.size(), state.fetch_state);
 		state.finished = true;
 	}
 	if (output.size() == 0) {
@@ -266,7 +269,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
                                     vector<unique_ptr<Expression>> &filters) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto table = bind_data.table;
-	auto &storage = *table->storage;
+	auto &storage = table->GetStorage();
 
 	auto &config = ClientConfig::GetConfig(context);
 	if (!config.enable_optimizer) {

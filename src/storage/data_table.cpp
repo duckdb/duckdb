@@ -352,7 +352,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		dst_chunk.data[(*dst_keys_ptr)[i].index].Reference(chunk.data[(*src_keys_ptr)[i].index]);
 	}
 	dst_chunk.SetCardinality(chunk.size());
-	auto data_table = table_entry_ptr->storage.get();
+	auto data_table = table_entry_ptr->GetStoragePtr();
 
 	idx_t count = dst_chunk.size();
 	if (count <= 0) {
@@ -524,18 +524,20 @@ void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collectio
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	LocalAppendState append_state;
-	table.storage->InitializeLocalAppend(append_state, context);
-	table.storage->LocalAppend(append_state, table, context, chunk);
-	table.storage->FinalizeLocalAppend(append_state);
+	auto &storage = table.GetStorage();
+	storage.InitializeLocalAppend(append_state, context);
+	storage.LocalAppend(append_state, table, context, chunk);
+	storage.FinalizeLocalAppend(append_state);
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection) {
 	LocalAppendState append_state;
-	table.storage->InitializeLocalAppend(append_state, context);
+	auto &storage = table.GetStorage();
+	storage.InitializeLocalAppend(append_state, context);
 	for (auto &chunk : collection.Chunks()) {
-		table.storage->LocalAppend(append_state, table, context, chunk);
+		storage.LocalAppend(append_state, table, context, chunk);
 	}
-	table.storage->FinalizeLocalAppend(append_state);
+	storage.FinalizeLocalAppend(append_state);
 }
 
 void DataTable::AppendLock(TableAppendState &state) {

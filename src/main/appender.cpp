@@ -357,7 +357,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
-	table.storage->LocalAppend(table, context, collection);
+	table.GetStorage().LocalAppend(table, context, collection);
 }
 
 void BaseAppender::Close() {

@@ -17,7 +17,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 
 	dependencies.AddDependency(op.table);
-	auto del = make_unique<PhysicalDelete>(op.types, *op.table, *op.table->storage, bound_ref.index,
+	auto del = make_unique<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
 	                                       op.estimated_cardinality, op.return_chunk);
 	del->children.push_back(std::move(plan));
 	return std::move(del);

@@ -128,14 +128,15 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	auto &lstate = (InsertLocalState &)lstate_p;
 
 	auto table = gstate.table;
+	auto &storage = table->GetStorage();
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!parallel) {
 		if (!gstate.initialized) {
-			table->storage->InitializeLocalAppend(gstate.append_state, context.client);
+			storage.InitializeLocalAppend(gstate.append_state, context.client);
 			gstate.initialized = true;
 		}
-		table->storage->LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk);
+		storage.LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk);
 
 		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
@@ -146,15 +147,15 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		// parallel append
 		if (!lstate.local_collection) {
 			lock_guard<mutex> l(gstate.lock);
-			auto &table_info = table->storage->info;
-			auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
+			auto &table_info = storage.info;
+			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
 			lstate.local_collection =
 			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
-			lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
+			lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
 		}
-		table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+		storage.VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
@@ -188,13 +189,14 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;
 		auto table = gstate.table;
-		table->storage->InitializeLocalAppend(gstate.append_state, context.client);
+		auto &storage = table->GetStorage();
+		storage.InitializeLocalAppend(gstate.append_state, context.client);
 		auto &transaction = Transaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-			table->storage->LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
+			storage.LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;
 		});
-		table->storage->FinalizeLocalAppend(gstate.append_state);
+		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have many rows - flush the row group collection to disk (if required) and merge into the transaction-local
 		// state
@@ -203,7 +205,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;
-		gstate.table->storage->LocalMerge(context.client, *lstate.local_collection);
+		gstate.table->GetStorage().LocalMerge(context.client, *lstate.local_collection);
 	}
 }
 
@@ -212,7 +214,8 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto &gstate = (InsertGlobalState &)state;
 	if (!parallel && gstate.initialized) {
 		auto table = gstate.table;
-		table->storage->FinalizeLocalAppend(gstate.append_state);
+		auto &storage = table->GetStorage();
+		storage.FinalizeLocalAppend(gstate.append_state);
 	}
 	return SinkFinalizeType::READY;
 }

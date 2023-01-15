@@ -250,8 +250,8 @@ public:
 	}
 
 	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
-		auto &table_info = table->storage->info;
-		auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
+		auto &table_info = table->GetStorage().info;
+		auto &block_manager = TableIOManager::Get(table->GetStorage()).GetBlockManagerForRowData();
 		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
@@ -290,7 +290,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-		lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
+		lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
@@ -301,7 +301,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
-	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+	table->GetStorage().VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);
@@ -338,7 +338,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	vector<unique_ptr<CollectionMerger>> mergers;
 	unique_ptr<CollectionMerger> current_merger;
 
-	auto &storage = *gstate.table->storage;
+	auto &storage = gstate.table->GetStorage();
 	for (auto &collection : gstate.collections) {
 		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			// this collection has very few rows: add it to the merge set

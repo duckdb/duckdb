@@ -27,7 +27,7 @@ static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData *bind_dat
 	auto table = bind_data->table;
 	auto &transaction = Transaction::Get(context, *table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
-	if (local_storage.Find(table->storage.get())) {
+	if (local_storage.Find(table->GetStoragePtr())) {
 		// transaction local appends: skip index join
 		return false;
 	}
@@ -134,7 +134,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 }
 
 static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **result_index) {
-	tbl->table->storage->info->indexes.Scan([&](Index &index) {
+	tbl->table->GetStorage().info->indexes.Scan([&](Index &index) {
 		if (index.unbound_expressions.size() != 1) {
 			return false;
 		}

@@ -15,7 +15,7 @@ TableDataWriter::~TableDataWriter() {
 
 void TableDataWriter::WriteTableData() {
 	// start scanning the table and append the data to the uncompressed segments
-	table.storage->Checkpoint(*this);
+	table.GetStorage().Checkpoint(*this);
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {

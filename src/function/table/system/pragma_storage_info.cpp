@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	// look up the table name in the catalog
 	auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
-	result->storage_info = table_entry->storage->GetStorageInfo();
+	result->storage_info = table_entry->GetStorage().GetStorageInfo();
 	return std::move(result);
 }
 

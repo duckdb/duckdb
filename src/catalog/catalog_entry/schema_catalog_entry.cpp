@@ -131,7 +131,8 @@ CatalogEntry *SchemaCatalogEntry::CreateType(CatalogTransaction transaction, Cre
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
-	table->storage->info->cardinality = table->storage->GetTotalRows();
+	auto &storage = table->GetStorage();
+	storage.info->cardinality = storage.GetTotalRows();
 
 	CatalogEntry *entry = AddEntry(transaction, std::move(table), info->Base().on_conflict, info->dependencies);
 	if (!entry) {

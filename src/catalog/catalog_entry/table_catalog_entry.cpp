@@ -875,6 +875,14 @@ ColumnList &TableCatalogEntry::GetColumnsMutable() {
 	return columns;
 }
 
+DataTable &TableCatalogEntry::GetStorage() {
+	return *storage;
+}
+
+DataTable *TableCatalogEntry::GetStoragePtr() {
+	return storage.get();
+}
+
 const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
 	return columns.GetColumn(idx);
 }

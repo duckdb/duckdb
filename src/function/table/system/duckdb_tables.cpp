@@ -137,11 +137,11 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// has_primary_key, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.storage->info->cardinality.load()));
+		output.SetValue(col++, count, Value::BIGINT(table.GetStorage().info->cardinality.load()));
 		// column_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.storage->info->indexes.Count()));
+		output.SetValue(col++, count, Value::BIGINT(table.GetStorage().info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR

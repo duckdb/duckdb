@@ -44,9 +44,6 @@ public:
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
 	                  std::shared_ptr<DataTable> inherited_storage = nullptr);
 
-	//! A reference to the underlying storage unit used for this table
-	std::shared_ptr<DataTable> storage;
-
 public:
 	bool HasGeneratedColumns() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
@@ -66,6 +63,9 @@ public:
 	const ColumnList &GetColumns() const;
 	//! Returns a mutable list of the columns of the table
 	ColumnList &GetColumnsMutable();
+	//! Returns the underlying storage of the table
+	DataTable &GetStorage();
+	DataTable *GetStoragePtr();
 
 	//! Returns a list of the constraints of the table
 	const vector<unique_ptr<Constraint>> &GetConstraints();
@@ -106,6 +106,8 @@ private:
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 
 private:
+	//! A reference to the underlying storage unit used for this table
+	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

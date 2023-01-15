@@ -104,7 +104,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 	auto &transaction = Transaction::Get(context.client, *bind_tbl.table->catalog);
 	auto &state = (IndexJoinOperatorState &)state_p;
 
-	auto tbl = bind_tbl.table->storage.get();
+	auto &tbl = bind_tbl.table->GetStorage();
 	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
 
@@ -130,7 +130,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 		state.rhs_chunk.Reset();
 		state.fetch_state = make_unique<ColumnFetchState>();
 		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
-		tbl->Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
+		tbl.Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}
 
 	//! Now we actually produce our result chunk
