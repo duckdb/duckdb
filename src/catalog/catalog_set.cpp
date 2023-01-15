@@ -557,7 +557,7 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
                                   bool remove) {
 	bool found = false;
 	if (column.Type().id() == LogicalTypeId::ENUM) {
-		for (auto &old_column : table->columns.Logical()) {
+		for (auto &old_column : table->GetColumns().Logical()) {
 			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;
@@ -568,7 +568,7 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		}
 	} else if (!(column.Type().GetAlias().empty())) {
 		auto alias = column.Type().GetAlias();
-		for (auto &old_column : table->columns.Logical()) {
+		for (auto &old_column : table->GetColumns().Logical()) {
 			auto old_alias = old_column.Type().GetAlias();
 			if (old_column.Name() == column.Name() && old_alias != alias) {
 				AdjustUserDependency(entry, column, remove);
@@ -587,12 +587,12 @@ void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
 		auto old_table = (TableCatalogEntry *)entry->parent;
 		auto new_table = (TableCatalogEntry *)entry;
 
-		for (idx_t i = 0; i < new_table->columns.LogicalColumnCount(); i++) {
-			auto &new_column = new_table->columns.GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < new_table->GetColumns().LogicalColumnCount(); i++) {
+			auto &new_column = new_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, old_table, new_column, false);
 		}
-		for (idx_t i = 0; i < old_table->columns.LogicalColumnCount(); i++) {
-			auto &old_column = old_table->columns.GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < old_table->GetColumns().LogicalColumnCount(); i++) {
+			auto &old_column = old_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, new_table, old_column, true);
 		}
 	}

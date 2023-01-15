@@ -5,8 +5,8 @@
 namespace duckdb {
 
 LogicalDelete::LogicalDelete(TableCatalogEntry *table, idx_t table_index)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
-	  return_chunk(false) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
+      return_chunk(false) {
 }
 
 void LogicalDelete::Serialize(FieldWriter &writer) const {

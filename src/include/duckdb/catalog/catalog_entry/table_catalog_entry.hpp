@@ -46,8 +46,6 @@ public:
 
 	//! A reference to the underlying storage unit used for this table
 	std::shared_ptr<DataTable> storage;
-	//! A list of columns that are part of this table
-	ColumnList columns;
 
 public:
 	bool HasGeneratedColumns() const;
@@ -58,9 +56,17 @@ public:
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	ColumnDefinition &GetColumn(const string &name);
+	const ColumnDefinition &GetColumn(const string &name);
+	//! Returns a reference to the column of the specified logical index. Throws an
+	//! exception if the column does not exist.
+	const ColumnDefinition &GetColumn(LogicalIndex idx);
 	//! Returns a list of types of the table, excluding generated columns
 	vector<LogicalType> GetTypes();
+	//! Returns a list of the columns of the table
+	const ColumnList &GetColumns() const;
+	//! Returns a mutable list of the columns of the table
+	ColumnList &GetColumnsMutable();
+
 	//! Returns a list of the constraints of the table
 	const vector<unique_ptr<Constraint>> &GetConstraints();
 	//! Returns a list of the bound constraints of the table
@@ -100,6 +106,8 @@ private:
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 
 private:
+	//! A list of columns that are part of this table
+	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table

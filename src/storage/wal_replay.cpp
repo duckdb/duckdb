@@ -443,7 +443,7 @@ void ReplayState::ReplayUpdate() {
 		throw InternalException("Corrupt WAL: update without table");
 	}
 
-	if (column_path[0] >= current_table->columns.PhysicalColumnCount()) {
+	if (column_path[0] >= current_table->GetColumns().PhysicalColumnCount()) {
 		throw InternalException("Corrupt WAL: column index for update out of bounds");
 	}
 

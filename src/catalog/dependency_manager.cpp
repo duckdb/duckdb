@@ -109,7 +109,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			auto user_type = (TypeCatalogEntry *)dependency;
 			auto table = (TableCatalogEntry *)new_obj;
 			bool deleted_dependency = true;
-			for (auto &column : table->columns.Logical()) {
+			for (auto &column : table->GetColumns().Logical()) {
 				if (column.Type() == user_type->user_type) {
 					deleted_dependency = false;
 					break;
@@ -131,7 +131,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	vector<CatalogEntry *> to_add;
 	if (new_obj->type == CatalogType::TABLE_ENTRY) {
 		auto table = (TableCatalogEntry *)new_obj;
-		for (auto &column : table->columns.Logical()) {
+		for (auto &column : table->GetColumns().Logical()) {
 			auto user_type_catalog = LogicalType::GetCatalog(column.Type());
 			if (user_type_catalog) {
 				to_add.push_back(user_type_catalog);

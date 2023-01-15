@@ -64,7 +64,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			D_ASSERT(stmt.info->columns.size() == get.column_ids.size());
 			for (idx_t i = 0; i < get.column_ids.size(); i++) {
 				stmt.info->column_id_map[i] =
-				    ref->table->columns.LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
+				    ref->table->GetColumns().LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
 			}
 
 			auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(select_list));

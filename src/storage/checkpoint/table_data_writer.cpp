@@ -19,7 +19,7 @@ void TableDataWriter::WriteTableData() {
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns.GetColumn(LogicalIndex(i)).CompressionType();
+	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {

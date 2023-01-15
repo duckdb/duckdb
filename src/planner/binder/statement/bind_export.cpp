@@ -160,7 +160,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->table = table->name;
 
 		// We can not export generated columns
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			info->select_list.push_back(col.GetName());
 		}
 

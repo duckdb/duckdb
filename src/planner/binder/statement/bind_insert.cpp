@@ -55,14 +55,14 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			auto &col = table->columns.GetColumn(column_index);
+			auto &col = table->GetColumn(column_index);
 			if (col.Generated()) {
 				throw BinderException("Cannot insert into a generated column");
 			}
 			insert->expected_types.push_back(col.Type());
 			named_column_map.push_back(column_index);
 		}
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			auto entry = column_name_map.find(col.Name());
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to DConstants::INVALID_INDEX
@@ -73,21 +73,21 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
 		}
 	}
 
 	// bind the default values
-	BindDefaultValues(table->columns, insert->bound_defaults);
+	BindDefaultValues(table->GetColumns(), insert->bound_defaults);
 	if (!stmt.select_statement) {
 		result.plan = std::move(insert);
 		return result;
 	}
 
 	// Exclude the generated columns from this amount
-	idx_t expected_columns = stmt.columns.empty() ? table->columns.PhysicalColumnCount() : stmt.columns.size();
+	idx_t expected_columns = stmt.columns.empty() ? table->GetColumns().PhysicalColumnCount() : stmt.columns.size();
 
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
@@ -105,7 +105,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			auto table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement
-			auto &column = table->columns.GetColumn(table_col_idx);
+			auto &column = table->GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
 			expr_list.expected_names[col_idx] = column.Name();
 

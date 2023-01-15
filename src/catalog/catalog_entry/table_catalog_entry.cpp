@@ -681,8 +681,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientConte
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
-	return columns.GetColumnMutable(name);
+const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
+	return columns.GetColumn(name);
 }
 
 vector<LogicalType> TableCatalogEntry::GetTypes() {
@@ -865,6 +865,18 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 
 void TableCatalogEntry::CommitDrop() {
 	storage->CommitDropTable();
+}
+
+const ColumnList &TableCatalogEntry::GetColumns() const {
+	return columns;
+}
+
+ColumnList &TableCatalogEntry::GetColumnsMutable() {
+	return columns;
+}
+
+const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
+	return columns.GetColumn(idx);
 }
 
 const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {

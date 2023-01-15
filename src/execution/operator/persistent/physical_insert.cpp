@@ -100,7 +100,7 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			auto storage_idx = col.StorageOid();
 			auto mapped_index = column_index_map[col.Physical()];
 			if (mapped_index == DConstants::INVALID_INDEX) {

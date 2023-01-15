@@ -9,14 +9,15 @@
 namespace duckdb {
 
 PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
-					unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-					idx_t estimated_cardinality)
-	: PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
-	  info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
+                                         unique_ptr<CreateIndexInfo> info,
+                                         vector<unique_ptr<Expression>> unbound_expressions,
+                                         idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
+      info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
 
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
-		storage_ids.push_back(table.columns.LogicalToPhysical(LogicalIndex(column_id)).index);
+		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
 	}
 }
 

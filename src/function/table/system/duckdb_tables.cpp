@@ -139,7 +139,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// estimated_size, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table.storage->info->cardinality.load()));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.columns.LogicalColumnCount()));
+		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table.storage->info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT

@@ -6,7 +6,7 @@
 namespace duckdb {
 
 LogicalUpdate::LogicalUpdate(TableCatalogEntry *table)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
 void LogicalUpdate::Serialize(FieldWriter &writer) const {

@@ -34,7 +34,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 	if (column_id == DConstants::INVALID_INDEX) {
 		return column_id;
 	}
-	auto &col = table.columns.GetColumn(LogicalIndex(column_id));
+	auto &col = table.GetColumn(LogicalIndex(column_id));
 	return col.StorageOid();
 }
 
@@ -89,7 +89,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bind_data.table->storage->InitializeParallelScan(context, result->state);
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
-		const auto &columns = bind_data.table->columns;
+		const auto &columns = bind_data.table->GetColumns();
 		for (const auto &col_idx : input.column_ids) {
 			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);

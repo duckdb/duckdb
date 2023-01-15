@@ -91,7 +91,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &bind_data = (PragmaStorageFunctionData &)*data_p.bind_data;
 	auto &data = (PragmaStorageOperatorData &)*data_p.global_state;
 	idx_t count = 0;
-	auto &columns = bind_data.table_entry->columns;
+	auto &columns = bind_data.table_entry->GetColumns();
 	while (data.offset < bind_data.storage_info.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.storage_info[data.offset++];
 		D_ASSERT(entry.size() + 1 == output.ColumnCount());

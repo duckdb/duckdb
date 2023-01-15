@@ -42,7 +42,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			auto &column = table.columns.GetColumn(check_column_id);
+			auto &column = table.GetColumns().GetColumn(check_column_id);
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
@@ -110,7 +110,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col_index : update.columns) {
-		auto &column = table.columns.GetColumn(col_index);
+		auto &column = table.GetColumns().GetColumn(col_index);
 		if (!TypeSupportsRegularUpdate(column.Type())) {
 			update.update_is_del_and_insert = true;
 			break;
@@ -166,7 +166,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->return_chunk = true;
 	}
 	// bind the default values
-	BindDefaultValues(table->columns, update->bound_defaults);
+	BindDefaultValues(table->GetColumns(), update->bound_defaults);
 
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {

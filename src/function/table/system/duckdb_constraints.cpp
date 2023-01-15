@@ -139,8 +139,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 		auto &table = (TableCatalogEntry &)*entry;
 		auto &constraints = table.GetConstraints();
 		auto &bound_constraints = table.GetBoundConstraints();
-		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE;
-		     data.constraint_offset++) {
+		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
 			auto &constraint = constraints[data.constraint_offset];
 			// return values:
 			// constraint_type, VARCHAR
@@ -206,7 +205,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				}
 				vector<LogicalIndex> index;
 				for (auto &key : info.pk_keys) {
-					index.push_back(table_entry->columns.PhysicalToLogical(key));
+					index.push_back(table_entry->GetColumns().PhysicalToLogical(key));
 				}
 				uk_info = {table_entry->schema->name, table_entry->name, index};
 				break;
@@ -245,7 +244,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::CHECK: {
 				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
 				for (auto &col_idx : bound_check.bound_columns) {
-					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
+					column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
 				}
 				break;
 			}
@@ -258,13 +257,13 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			case ConstraintType::NOT_NULL: {
 				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
-				column_index_list.push_back(table.columns.PhysicalToLogical(bound_not_null.index));
+				column_index_list.push_back(table.GetColumns().PhysicalToLogical(bound_not_null.index));
 				break;
 			}
 			case ConstraintType::FOREIGN_KEY: {
 				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
-					column_index_list.push_back(table.columns.PhysicalToLogical(col_idx));
+					column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
 				}
 				break;
 			}
@@ -276,7 +275,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
 				index_list.push_back(Value::BIGINT(column_index.index));
-				column_name_list.emplace_back(table.columns.GetColumn(column_index).Name());
+				column_name_list.emplace_back(table.GetColumn(column_index).Name());
 			}
 
 			// constraint_column_indexes, LIST

@@ -6,8 +6,8 @@
 namespace duckdb {
 
 LogicalInsert::LogicalInsert(TableCatalogEntry *table, idx_t table_index)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
-	  return_chunk(false) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
+      return_chunk(false) {
 }
 
 void LogicalInsert::Serialize(FieldWriter &writer) const {

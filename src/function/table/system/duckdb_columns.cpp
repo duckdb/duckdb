@@ -120,16 +120,16 @@ public:
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->columns.LogicalColumnCount();
+		return entry->GetColumns().LogicalColumnCount();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns.GetColumn(LogicalIndex(col)).Name();
+		return entry->GetColumn(LogicalIndex(col)).Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns.GetColumn(LogicalIndex(col)).Type();
+		return entry->GetColumn(LogicalIndex(col)).Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		auto &column = entry->columns.GetColumn(LogicalIndex(col));
+		auto &column = entry->GetColumn(LogicalIndex(col));
 		if (column.DefaultValue()) {
 			return Value(column.DefaultValue()->ToString());
 		}

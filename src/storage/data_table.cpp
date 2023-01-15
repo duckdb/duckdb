@@ -268,7 +268,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
 static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                              Expression &expr, column_t index) {
-	auto &col = table.columns.GetColumn(LogicalIndex(index));
+	auto &col = table.GetColumn(LogicalIndex(index));
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(context, expr);
 	Vector result(col.Type());
@@ -343,7 +343,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 
 	// make the data chunk to check
 	vector<LogicalType> types;
-	for (auto &col : table_entry_ptr->columns.Physical()) {
+	for (auto &col : table_entry_ptr->GetColumns().Physical()) {
 		types.emplace_back(col.Type());
 	}
 	DataChunk dst_chunk;
@@ -429,8 +429,8 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 	if (table.HasGeneratedColumns()) {
 		auto binder = Binder::CreateBinder(context);
 		physical_index_set_t bound_columns;
-		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
-		for (auto &col : table.columns.Logical()) {
+		CheckBinder generated_check_binder(*binder, context, table.name, table.GetColumns(), bound_columns);
+		for (auto &col : table.GetColumns().Logical()) {
 			if (!col.Generated()) {
 				continue;
 			}
@@ -450,7 +450,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
-			auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
+			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
 			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], chunk.size(), col.Name());
 			break;
 		}
@@ -494,7 +494,7 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	if (chunk.size() == 0) {
 		return;
 	}
-	D_ASSERT(chunk.ColumnCount() == table.columns.PhysicalColumnCount());
+	D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
@@ -851,7 +851,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
-					auto &col = table.columns.GetColumn(LogicalIndex(not_null.index));
+					auto &col = table.GetColumn(LogicalIndex(not_null.index));
 					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), col.Name());
 					break;
 				}
