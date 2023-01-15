@@ -21,6 +21,8 @@ class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
 
+class BoundConstraint;
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,

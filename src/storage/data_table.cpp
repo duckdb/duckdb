@@ -441,9 +441,11 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			VerifyGeneratedExpressionSuccess(context, table, chunk, *bound_expression, col.Oid());
 		}
 	}
-	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
-		auto &base_constraint = table.constraints[i];
-		auto &constraint = table.bound_constraints[i];
+	auto &constraints = table.GetConstraints();
+	auto &bound_constraints = table.GetBoundConstraints();
+	for (idx_t i = 0; i < bound_constraints.size(); i++) {
+		auto &base_constraint = constraints[i];
+		auto &constraint = bound_constraints[i];
 		switch (base_constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
@@ -733,7 +735,8 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 }
 
 void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	for (auto &constraint : table.bound_constraints) {
+	auto &bound_constraints = table.GetBoundConstraints();
+	for (auto &constraint : bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL:
 		case ConstraintType::CHECK:
@@ -835,9 +838,11 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 
 void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<PhysicalIndex> &column_ids) {
-	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
-		auto &base_constraint = table.constraints[i];
-		auto &constraint = table.bound_constraints[i];
+	auto &constraints = table.GetConstraints();
+	auto &bound_constraints = table.GetBoundConstraints();
+	for (idx_t i = 0; i < bound_constraints.size(); i++) {
+		auto &base_constraint = constraints[i];
+		auto &constraint = bound_constraints[i];
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());

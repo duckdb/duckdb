@@ -54,8 +54,9 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 	for (auto i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
 		bool move_to_ordered = true;
-		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
-			auto &cond = table_entry->constraints[j];
+		auto &constraints = table_entry->GetConstraints();
+		for (idx_t j = 0; j < constraints.size(); j++) {
+			auto &cond = constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
 				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||

@@ -108,7 +108,7 @@ public:
 class TableColumnHelper : public ColumnHelper {
 public:
 	explicit TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
-		for (auto &constraint : entry->constraints) {
+		for (auto &constraint : entry->GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
 				not_null_cols.insert(not_null.index.index);

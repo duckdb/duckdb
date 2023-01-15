@@ -48,11 +48,6 @@ public:
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	ColumnList columns;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<Constraint>> constraints;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	ColumnDependencyManager column_dependency_manager;
 
 public:
 	bool HasGeneratedColumns() const;
@@ -66,6 +61,10 @@ public:
 	ColumnDefinition &GetColumn(const string &name);
 	//! Returns a list of types of the table, excluding generated columns
 	vector<LogicalType> GetTypes();
+	//! Returns a list of the constraints of the table
+	const vector<unique_ptr<Constraint>> &GetConstraints();
+	//! Returns a list of the bound constraints of the table
+	const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 	string ToSQL() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
@@ -99,5 +98,13 @@ private:
 	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+
+private:
+	//! A list of constraints that are part of this table
+	vector<unique_ptr<Constraint>> constraints;
+	//! A list of constraints that are part of this table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	//! Manages dependencies of the individual columns of the table
+	ColumnDependencyManager column_dependency_manager;
 };
 } // namespace duckdb

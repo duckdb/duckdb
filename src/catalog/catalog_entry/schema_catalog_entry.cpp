@@ -48,8 +48,9 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 		return;
 	}
 	auto *table_entry = (TableCatalogEntry *)entry;
-	for (idx_t i = 0; i < table_entry->constraints.size(); i++) {
-		auto &cond = table_entry->constraints[i];
+	auto &constraints = table_entry->GetConstraints();
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto &cond = constraints[i];
 		if (cond->type != ConstraintType::FOREIGN_KEY) {
 			continue;
 		}

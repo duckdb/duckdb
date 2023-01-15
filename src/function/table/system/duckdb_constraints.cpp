@@ -137,9 +137,11 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 
 		auto &table = (TableCatalogEntry &)*entry;
-		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
+		auto &constraints = table.GetConstraints();
+		auto &bound_constraints = table.GetBoundConstraints();
+		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE;
 		     data.constraint_offset++) {
-			auto &constraint = table.constraints[data.constraint_offset];
+			auto &constraint = constraints[data.constraint_offset];
 			// return values:
 			// constraint_type, VARCHAR
 			// Processing this first due to shortcut (early continue)
@@ -157,8 +159,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				constraint_type = "NOT NULL";
 				break;
 			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_foreign_key =
-				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
+				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)*bound_constraints[data.constraint_offset];
 				if (bound_foreign_key.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
 					// Those are already covered by PRIMARY KEY and UNIQUE entries
 					continue;
@@ -185,7 +186,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::BIGINT(table.oid));
 
 			// constraint_index, BIGINT
-			auto &bound_constraint = (BoundConstraint &)*table.bound_constraints[data.constraint_offset];
+			auto &bound_constraint = (BoundConstraint &)*bound_constraints[data.constraint_offset];
 			UniqueKeyInfo uk_info;
 			switch (bound_constraint.type) {
 			case ConstraintType::UNIQUE: {
@@ -286,7 +287,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			count++;
 		}
-		if (data.constraint_offset >= table.constraints.size()) {
+		if (data.constraint_offset >= constraints.size()) {
 			data.constraint_offset = 0;
 			data.offset++;
 		}

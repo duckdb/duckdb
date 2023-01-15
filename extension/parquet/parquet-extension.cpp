@@ -33,6 +33,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #endif
 
 namespace duckdb {

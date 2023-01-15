@@ -16,8 +16,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include <functional>
@@ -30,6 +28,9 @@ class ClientContext;
 class DependencyList;
 struct MappingValue;
 struct EntryIndex;
+
+class TableCatalogEntry;
+class SequenceCatalogEntry;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 

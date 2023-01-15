@@ -521,7 +521,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				auto pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr->schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->constraints, fk);
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->GetConstraints(), fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->columns, fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr->columns, create_info.columns, fk);
 				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(

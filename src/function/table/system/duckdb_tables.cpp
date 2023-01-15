@@ -79,7 +79,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			auto &unique = (UniqueConstraint &)*constraint;
 			if (unique.is_primary_key) {
@@ -92,7 +92,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::CHECK) {
 			check_count++;
 		}

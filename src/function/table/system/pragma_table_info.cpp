@@ -68,7 +68,7 @@ static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &c
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for (auto &constraint : table->bound_constraints) {
+	for (auto &constraint : table->GetBoundConstraints()) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (BoundNotNullConstraint &)*constraint;

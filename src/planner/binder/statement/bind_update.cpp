@@ -81,7 +81,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	for (auto &constraint : table.bound_constraints) {
+	for (auto &constraint : table.GetBoundConstraints()) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
 			// check constraint! check if we need to add any extra columns to the UPDATE clause

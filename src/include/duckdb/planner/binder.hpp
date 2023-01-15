@@ -33,6 +33,10 @@ class TableCatalogEntry;
 class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 
+class ColumnList;
+class ExternalDependency;
+class TableFunction;
+
 struct CreateInfo;
 struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;

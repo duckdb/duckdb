@@ -867,4 +867,12 @@ void TableCatalogEntry::CommitDrop() {
 	storage->CommitDropTable();
 }
 
+const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
+	return constraints;
+}
+
+const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
+	return bound_constraints;
+}
+
 } // namespace duckdb
