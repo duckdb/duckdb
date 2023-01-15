@@ -30,7 +30,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equals(const LambdaExpression *a, const LambdaExpression *b);
+	static bool Equal(const LambdaExpression *a, const LambdaExpression *b);
 	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;

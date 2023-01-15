@@ -269,7 +269,7 @@ bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
 		auto current_star = (StarExpression *)&expr;
 		if (*star) {
 			// we can have multiple
-			if (!StarExpression::Equals(*star, current_star)) {
+			if (!StarExpression::Equal(*star, current_star)) {
 				throw BinderException(
 				    FormatError(expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
 			}
