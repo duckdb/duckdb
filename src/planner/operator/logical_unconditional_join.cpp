@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-LogicalUnconditionalJoin::LogicalUnconditionalJoin(LogicalOperatorType logical_type, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)
+LogicalUnconditionalJoin::LogicalUnconditionalJoin(LogicalOperatorType logical_type, unique_ptr<LogicalOperator> left,
+                                                   unique_ptr<LogicalOperator> right)
     : LogicalOperator(logical_type) {
 	D_ASSERT(left);
 	D_ASSERT(right);
