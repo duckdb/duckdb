@@ -15,7 +15,7 @@ string CollateExpression::ToString() const {
 	return child->ToString() + " COLLATE " + KeywordHelper::WriteOptionallyQuoted(collation);
 }
 
-bool CollateExpression::Equals(const CollateExpression *a, const CollateExpression *b) {
+bool CollateExpression::Equal(const CollateExpression *a, const CollateExpression *b) {
 	if (!a->child->Equals(b->child.get())) {
 		return false;
 	}
