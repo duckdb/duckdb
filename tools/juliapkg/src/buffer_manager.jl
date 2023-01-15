@@ -13,8 +13,31 @@ mutable struct CBufferManagerData
     max_memory::Function
     used_memory::Function
 
+    config::Config
     # Identify this object
     uuid::UUID
+
+    function CBufferManagerData(
+        extra_data::Any,
+        allocate::Function,
+        reallocate::Function,
+        destroy::Function,
+        pin::Function,
+        unpin::Function,
+        max_memory::Function,
+        used_memory::Function,
+        config::Config
+    )
+        buffer_manager_data =
+            new(extra_data, allocate, reallocate, destroy, pin, unpin, max_memory, used_memory, config, uuid4())
+        config.registered_objects[buffer_manager_data.uuid] = buffer_manager_data
+        return finalizer(_unregister_buffer_manager_data, buffer_manager_data)
+    end
+end
+
+function _unregister_buffer_manager_data(buffer_manager_data::CBufferManagerData)
+    config = buffer_manager_data.config
+    return pop!(config.registered_objects, buffer_manager_data.uuid)
 end
 
 # TODO: these functions need exception handling, the C versions also don't provide a way to indicate an error
@@ -119,7 +142,7 @@ function add_custom_buffer_manager!(
         unpin_func,
         max_memory_func,
         used_memory_func,
-        uuid4()
+        config
     )
 
     #FIXME: do we need a delete_callback like 'replacement_scan' has?
