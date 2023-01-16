@@ -86,9 +86,9 @@ idx_t JSONScanGlobalState::MaxThreads() const {
 	}
 }
 
-JSONScanLocalState::JSONScanLocalState(JSONScanGlobalState &gstate)
-    : batch_index(DConstants::INVALID_INDEX), current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0),
-      prev_buffer_remainder(0) {
+JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
+    : json_allocator(BufferAllocator::Get(context)), batch_index(DConstants::INVALID_INDEX),
+      current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.json_reader->options.maximum_object_size);
 	objects.reserve(STANDARD_VECTOR_SIZE);
 }
@@ -96,7 +96,7 @@ JSONScanLocalState::JSONScanLocalState(JSONScanGlobalState &gstate)
 unique_ptr<LocalTableFunctionState> JSONScanLocalState::Init(ExecutionContext &context, TableFunctionInitInput &input,
                                                              GlobalTableFunctionState *global_state) {
 	auto &gstate = (JSONScanGlobalState &)*global_state;
-	return make_unique<JSONScanLocalState>(gstate);
+	return make_unique<JSONScanLocalState>(context.client, gstate);
 }
 
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, idx_t &buffer_size) {
@@ -110,6 +110,7 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	const auto &options = gstate.json_reader->options;
 	objects.clear();
+	json_allocator.Reset();
 
 	idx_t count = 0;
 	if (buffer_offset == buffer_size) {
@@ -333,24 +334,15 @@ static inline void TrimWhitespace(JSONLine &line) {
 	}
 }
 
-static inline DocPointer<yyjson_doc> ParseLine(char *line_start, idx_t line_size, JSONLine &line,
-                                               const BufferedJSONReaderOptions &options) {
-	// Set the JSONLine and trim it
+DocPointer<yyjson_doc> JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line) {
+	// Parse to validate
+	auto result = JSONCommon::ReadDocument(line_start, line_size, JSONCommon::FILE_READ_FLAG,
+	                                       json_allocator.GetYYJSONAllocator());
+
+	// Set the JSONLine and trim
 	line.pointer = line_start;
 	line.size = line_size;
 	TrimWhitespace(line);
-
-	// Parse the line to validate
-	yyjson_read_err error;
-	auto result = JSONCommon::ReadDocumentFromFileNoStop(line_start, line_size, &error);
-	if (error.code != YYJSON_READ_SUCCESS) {
-		JSONCommon::RestoreParsedString(line_start, line_size);
-		JSONCommon::ThrowParseError(line_start, line_size, error);
-	}
-
-	if (options.return_json_strings) {
-		JSONCommon::RestoreParsedString(line_start, line_size);
-	}
 
 	return result;
 }
@@ -403,7 +395,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		buffer_map.erase(batch_index - 1);
 	}
 
-	objects.emplace_back(ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0], options));
+	objects.emplace_back(ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0]));
 }
 
 void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReaderOptions &options) {
@@ -416,15 +408,11 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 		}
 
 		// Read next JSON doc
-		objects.emplace_back(JSONCommon::ReadDocumentFromFileStop((char *)line_start, remaining, &error));
+		objects.emplace_back(JSONCommon::ReadDocumentUnsafe((char *)line_start, remaining, JSONCommon::FILE_READ_FLAG,
+		                                                    json_allocator.GetYYJSONAllocator(), &error));
 		auto &read_doc = objects.back();
 		if (error.code == YYJSON_READ_SUCCESS) {
 			idx_t line_size = read_doc.ReadSize();
-
-			if (options.return_json_strings) {
-				JSONCommon::RestoreParsedString(line_start, line_size);
-			}
-
 			lines[count].pointer = line_start;
 			lines[count].size = line_size;
 			TrimWhitespace(lines[count]);
@@ -433,12 +421,10 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END) {
 			if (remaining > options.maximum_object_size) {
-				JSONCommon::RestoreParsedString(line_start, remaining);
 				JSONCommon::ThrowParseError(line_start, remaining, error,
 				                            "Have you tried increasing maximum_object_size?");
 			}
 
-			JSONCommon::RestoreParsedString(line_start, remaining); // Always restore because we will re-parse
 			objects.pop_back();
 
 			if (!is_last) {
@@ -451,7 +437,6 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 			buffer_offset = buffer_size;
 			break;
 		} else {
-			JSONCommon::RestoreParsedString(line_start, remaining);
 			JSONCommon::ThrowParseError(line_start, remaining, error);
 		}
 	}
@@ -481,7 +466,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const BufferedJSONRe
 		}
 		idx_t line_size = line_end - line_start;
 
-		objects.emplace_back(ParseLine((char *)line_start, line_size, lines[count], options));
+		objects.emplace_back(ParseLine((char *)line_start, line_size, lines[count]));
 
 		buffer_offset += line_size;
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);

@@ -1,5 +1,6 @@
 #include "buffered_json_reader.hpp"
 
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/printer.hpp"
@@ -63,8 +64,8 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size) {
 	return actual_size;
 }
 
-BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options)
-    : options(move(options)), context(context), next_file_idx(0) {
+BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p)
+    : options(move(options_p)), context(context), next_file_idx(0) {
 	file_handles.reserve(options.file_paths.size());
 }
 

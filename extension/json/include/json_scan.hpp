@@ -9,6 +9,8 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
@@ -85,7 +87,7 @@ public:
 
 struct JSONScanLocalState : public LocalTableFunctionState {
 public:
-	explicit JSONScanLocalState(JSONScanGlobalState &gstate);
+	JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate);
 	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
 	                                                GlobalTableFunctionState *global_state);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
@@ -95,6 +97,12 @@ public:
 	vector<DocPointer<yyjson_doc>> objects;
 
 private:
+	DocPointer<yyjson_doc> ParseLine(char *line_start, idx_t line_size, JSONLine &line);
+
+private:
+	//! Allocator
+	JSONAllocator json_allocator;
+
 	//! Batch index assigned to this thread and associate buffer handle
 	idx_t batch_index;
 	JSONBufferHandle *current_buffer_handle;

@@ -26,14 +26,18 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 		if (!input_data.validity.RowIsValid(idx)) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] = yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx])->root);
+			objs[i] = yyjson_val_mut_copy(
+			    doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::BASE_READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
 
 //! Follows MySQL behaviour
 static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto doc = JSONCommon::CreateDocument();
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYJSONAllocator());
 	const auto count = args.size();
 
 	// Read the first json arg
@@ -65,7 +69,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (origs[i] == nullptr) {
 			result_validity.SetInvalid(i);
 		} else {
-			result_data[i] = JSONCommon::WriteVal(origs[i], result);
+			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
 		}
 	}
 
@@ -77,7 +81,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
 	// Needs at least two json inputs, but supports merging vararg json inputs
 	ScalarFunction fun("json_merge_patch", {JSONCommon::JSONType(), JSONCommon::JSONType()}, JSONCommon::JSONType(),
-	                   MergePatchFunction);
+	                   MergePatchFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = JSONCommon::JSONType();
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(std::move(fun));

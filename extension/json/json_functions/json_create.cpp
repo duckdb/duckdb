@@ -1,6 +1,6 @@
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
 
@@ -188,7 +188,7 @@ inline yyjson_mut_val *CreateJSONValue(yyjson_mut_doc *doc, const string_t &valu
 }
 
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
-	auto value_doc = JSONCommon::ReadDocument(value);
+	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::BASE_READ_FLAG, &doc->alc);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
 	return result;
 }
@@ -426,9 +426,12 @@ static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc
 static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
 	// Initialize objects
 	const idx_t count = args.size();
-	auto doc = JSONCommon::CreateDocument();
+	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *objs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
 		objs[i] = yyjson_mut_obj(*doc);
@@ -444,8 +447,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	// Write JSON objects to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		yyjson_mut_doc_set_root(*doc, objs[i]);
-		objects[i] = JSONCommon::WriteDoc(*doc, result);
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
 	}
 
 	if (args.AllConstant()) {
@@ -456,9 +458,12 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
 	// Initialize arrays
 	const idx_t count = args.size();
-	auto doc = JSONCommon::CreateDocument();
+	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *arrs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
 		arrs[i] = yyjson_mut_arr(*doc);
@@ -475,8 +480,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	// Write JSON arrays to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		yyjson_mut_doc_set_root(*doc, arrs[i]);
-		objects[i] = JSONCommon::WriteDoc(*doc, result);
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
 	}
 
 	if (args.AllConstant()) {
@@ -487,9 +491,12 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (JSONCreateFunctionData &)*func_expr.bind_info;
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
 	// Initialize array for values
 	const idx_t count = args.size();
-	auto doc = JSONCommon::CreateDocument();
+	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
 	CreateValues(info, *doc, vals, args.data[0], count);
 	// Write JSON values to string
@@ -500,8 +507,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
-			yyjson_mut_doc_set_root(*doc, vals[i]);
-			objects[i] = JSONCommon::WriteDoc(*doc, result);
+			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
 		} else {
 			result_validity.SetInvalid(i);
 		}

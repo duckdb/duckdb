@@ -1,5 +1,4 @@
-#include "json_common.hpp"
-#include "json_functions.hpp"
+#include "json_executors.hpp"
 
 namespace duckdb {
 
@@ -196,21 +195,21 @@ static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_d
 	}
 }
 
-static inline string_t Structure(yyjson_val *val, Vector &result) {
-	auto structure_doc = JSONCommon::CreateDocument();
+static inline string_t Structure(yyjson_val *val, yyjson_alc *alc, Vector &result) {
+	auto structure_doc = JSONCommon::CreateDocument(alc);
 	auto structure = ConvertStructure(BuildStructure(val, *structure_doc), *structure_doc);
 	D_ASSERT(structure);
-	yyjson_mut_doc_set_root(*structure_doc, structure);
-	return JSONCommon::WriteDoc(*structure_doc, result);
+	return JSONCommon::WriteVal<yyjson_mut_val>(structure, alc);
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::UnaryExecute<string_t>(args, state, result, Structure);
+	JSONExecutors::UnaryExecute<string_t>(args, state, result, Structure);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
-	return CreateScalarFunctionInfo(
-	    ScalarFunction("json_structure", {JSONCommon::JSONType()}, JSONCommon::JSONType(), StructureFunction));
+	return CreateScalarFunctionInfo(ScalarFunction("json_structure", {JSONCommon::JSONType()}, JSONCommon::JSONType(),
+	                                               StructureFunction, nullptr, nullptr, nullptr,
+	                                               JSONFunctionLocalState::Init));
 }
 
 } // namespace duckdb

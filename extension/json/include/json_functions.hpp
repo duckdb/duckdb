@@ -10,11 +10,53 @@
 
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "json_common.hpp"
 
 namespace duckdb {
 
 class CastFunctionSet;
 struct CastParameters;
+
+// Scalar function stuff
+struct JSONReadFunctionData : public FunctionData {
+public:
+	JSONReadFunctionData(bool constant, string path_p, idx_t len);
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+public:
+	const bool constant;
+	const string path;
+	const char *ptr;
+	const size_t len;
+};
+
+struct JSONReadManyFunctionData : public FunctionData {
+public:
+	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+public:
+	const vector<string> paths;
+	vector<const char *> ptrs;
+	const vector<size_t> lens;
+};
+
+struct JSONFunctionLocalState : public FunctionLocalState {
+public:
+	explicit JSONFunctionLocalState(ClientContext &context);
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                           FunctionData *bind_data);
+	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
+
+public:
+	JSONAllocator json_allocator;
+};
 
 class JSONFunctions {
 public:

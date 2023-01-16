@@ -32,6 +32,11 @@ public:
 	DUCKDB_API ~ArenaAllocator();
 
 	data_ptr_t Allocate(idx_t size);
+	data_ptr_t Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size);
+
+	data_ptr_t AllocateAligned(idx_t size);
+	data_ptr_t ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size);
+
 	//! Resets the current head and destroys all previous arena chunks
 	void Reset();
 	void Destroy();

@@ -1,5 +1,4 @@
-#include "json_common.hpp"
-#include "json_functions.hpp"
+#include "json_executors.hpp"
 
 namespace duckdb {
 
@@ -71,21 +70,27 @@ static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle) {
 
 static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+
 	auto &haystacks = args.data[0];
 	auto &needles = args.data[1];
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
-		auto needle_doc = JSONCommon::ReadDocument(needle_str);
+		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::BASE_READ_FLAG,
+		                                           lstate.json_allocator.GetYYJSONAllocator());
 		UnaryExecutor::Execute<string_t, bool>(haystacks, result, args.size(), [&](string_t haystack_str) {
-			auto haystack_doc = JSONCommon::ReadDocument(haystack_str);
+			auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::BASE_READ_FLAG,
+			                                             lstate.json_allocator.GetYYJSONAllocator());
 			return JSONContains(haystack_doc->root, needle_doc->root);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(
-		    haystacks, needles, result, args.size(), [](string_t haystack_str, string_t needle_str) {
-			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str);
-			    auto needle_doc = JSONCommon::ReadDocument(needle_str);
+		    haystacks, needles, result, args.size(), [&](string_t haystack_str, string_t needle_str) {
+			    auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::BASE_READ_FLAG,
+			                                               lstate.json_allocator.GetYYJSONAllocator());
+			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::BASE_READ_FLAG,
+			                                                 lstate.json_allocator.GetYYJSONAllocator());
 			    return JSONContains(haystack_doc->root, needle_doc->root);
 		    });
 	}
