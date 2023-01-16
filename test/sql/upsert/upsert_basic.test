@@ -160,7 +160,28 @@ select * from tbl;
 statement error
 insert into tbl VALUES (5,1,0), (3,5,20) ON CONFLICT DO UPDATE set k = excluded.k;
 ----
-Invalid Input Error: Empty conflict target is not supported for DO UPDATE
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints
+
+statement ok
+create or replace table single_constraint (
+	i integer PRIMARY KEY,
+	j integer,
+	k varchar,
+);
+
+statement ok
+insert into single_constraint values (5,1,'hello'), (1,10,'test');
+
+# This is however accepted if only a single constraint exists on the table
+statement ok
+insert into single_constraint values (1,5,'bye'), (3,10,'quack') on conflict do update set j = excluded.j, k = concat(k, excluded.k);
+
+query III
+select * from single_constraint
+----
+5	1	hello
+1	5	testbye
+3	10	quack
 
 #parallel
 endloop

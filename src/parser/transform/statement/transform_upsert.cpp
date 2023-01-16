@@ -63,12 +63,6 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 		} else {
 			throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 		}
-	} else if (result->action_type == OnConflictAction::UPDATE) {
-		// "It's because one insert row could violate multiple different unique constraints,
-		// with it being a different row for each of the constraints that's causing the violation,
-		// and the upsert is only intended to update a single row."
-		// https://sqlite.org/forum/info/45cf84d3e89d590d
-		throw InvalidInputException("Empty conflict target is not supported for DO UPDATE");
 	}
 
 	if (result->action_type == OnConflictAction::UPDATE) {

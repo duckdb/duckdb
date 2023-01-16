@@ -195,13 +195,11 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
 		}
 	} else {
-		// Omitting the conflict target for a DO UPDATE is not allowed
-		D_ASSERT(insert->action_type != OnConflictAction::UPDATE);
 		// When omitting the conflict target, the ON CONFLICT applies to every UNIQUE/PRIMARY KEY on the table
 
 		// We check if there are any constraints on the table, if there aren't we throw an error.
-		bool index_references_table = false;
 		auto &indexes = table->storage->info->indexes;
+		idx_t found_matching_indexes = 0;
 		indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
@@ -209,15 +207,20 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			auto &indexed_columns = index.column_id_set;
 			for (auto &column : table->columns.Physical()) {
 				if (indexed_columns.count(column.Physical().index)) {
-					index_references_table = true;
-					return true;
+					found_matching_indexes++;
 				}
 			}
 			return false;
 		});
-		if (!index_references_table) {
+		if (!found_matching_indexes) {
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
+		}
+		if (insert->action_type == OnConflictAction::UPDATE && found_matching_indexes != 1) {
+			// When no conflict target is provided, and the action type is UPDATE,
+			// we only allow the operation when only a single Index exists
+			throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
+			                      "multiple UNIQUE/PRIMARY KEY constraints");
 		}
 	}
 

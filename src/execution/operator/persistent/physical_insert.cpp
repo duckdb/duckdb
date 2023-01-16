@@ -275,8 +275,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 			// At least one of the conditions weren't met, just run the VerifyAppend again, expecting it to
 			// throw
 			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
-			// This should throw, we should not get here
-			D_ASSERT(false);
+			throw InternalException("The previous operation was expected to throw but didn't");
 		}
 	}
 
