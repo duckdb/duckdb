@@ -61,7 +61,7 @@ string ColumnRefExpression::ToString() const {
 	return result;
 }
 
-bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefExpression *b) {
+bool ColumnRefExpression::Equal(const ColumnRefExpression *a, const ColumnRefExpression *b) {
 	if (a->column_names.size() != b->column_names.size()) {
 		return false;
 	}
