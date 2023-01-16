@@ -1,5 +1,5 @@
 # name: test/issues/general/test_5703.test
-# description: Issue 5703: Can't select by blob field
+# description: Issue 5703: Can't have a window aggregate and unnest.
 # group: [general]
 
 
@@ -14,5 +14,6 @@ SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0
 ----
 Binder Error
 
+# check database is not invalidated
 statement ok
 select 1;
