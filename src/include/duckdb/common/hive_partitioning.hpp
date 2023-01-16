@@ -77,14 +77,14 @@ public:
 	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
 	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
 	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
-	      global_state(std::move(global_state)),group_by_columns(partition_by_cols) {
+	      global_state(std::move(global_state)), group_by_columns(partition_by_cols) {
 	}
 	HivePartitionedColumnData(const HivePartitionedColumnData &other);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 	//! Reverse lookup map to reconstruct keys from a partition id
 	// TODO can be solved by using datachunk from partition CDC instead
-	std::map<idx_t, const HivePartitionKey*> GetReverseMap();
+	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
 protected:
 	//! Create allocators for all currently registered partitions (requires lock!)

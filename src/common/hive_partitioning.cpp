@@ -128,7 +128,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	files = std::move(pruned_files);
 }
 
-HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other) : PartitionedColumnData(other) {
+HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
+    : PartitionedColumnData(other) {
 	// Synchronize to ensure consistency of shared partition map
 	if (other.global_state) {
 		global_state = other.global_state;
@@ -151,7 +152,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 		auto lookup = local_partition_map.find(key);
 		const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 		if (lookup == local_partition_map.end()) {
-			idx_t new_partition_id = RegisterNewPartition(key,state);
+			idx_t new_partition_id = RegisterNewPartition(key, state);
 			partition_indices[i] = new_partition_id;
 		} else {
 			partition_indices[i] = lookup->second;
@@ -159,9 +160,9 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 }
 
-std::map<idx_t, const HivePartitionKey*> HivePartitionedColumnData::GetReverseMap() {
-	std::map<idx_t, const HivePartitionKey*> ret;
-	for (const auto& pair : local_partition_map) {
+std::map<idx_t, const HivePartitionKey *> HivePartitionedColumnData::GetReverseMap() {
+	std::map<idx_t, const HivePartitionKey *> ret;
+	for (const auto &pair : local_partition_map) {
 		ret[pair.second] = &(pair.first);
 	}
 	return ret;
@@ -187,7 +188,6 @@ void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState
 		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
-
 }
 
 void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState &state) {
@@ -205,7 +205,8 @@ void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState 
 
 void HivePartitionedColumnData::SynchronizeLocalMap() {
 	// Synchronise global map into local, may contain changes from other threads too
-	for (auto it = global_state->partitions.begin() + local_partition_map.size(); it < global_state->partitions.end(); it++) {
+	for (auto it = global_state->partitions.begin() + local_partition_map.size(); it < global_state->partitions.end();
+	     it++) {
 		local_partition_map[(*it)->first] = (*it)->second;
 	}
 }
@@ -217,7 +218,8 @@ idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, Part
 		unique_lock<mutex> lck_alloc(allocators->lock);
 
 		// Insert into global map, or return partition if already present
-		auto res = global_state->partition_map.emplace(std::make_pair(std::move(key), global_state->partition_map.size()));
+		auto res =
+		    global_state->partition_map.emplace(std::make_pair(std::move(key), global_state->partition_map.size()));
 		auto it = res.first;
 		idx_t partition_id = it->second;
 

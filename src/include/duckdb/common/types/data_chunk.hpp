@@ -145,7 +145,7 @@ public:
 	//! Hashes the DataChunk to the target vector
 	DUCKDB_API void Hash(Vector &result);
 	//! Hashes specific vectors of the DataChunk to the target vector
-	DUCKDB_API void Hash(vector<idx_t>& column_ids, Vector &result);
+	DUCKDB_API void Hash(vector<idx_t> &column_ids, Vector &result);
 
 	//! Returns a list of types of the vectors of this data chunk
 	DUCKDB_API vector<LogicalType> GetTypes();

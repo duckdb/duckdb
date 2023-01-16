@@ -80,9 +80,9 @@ static vector<bool> ParseColumnList(const Value &value, vector<string> &names, c
 	return ParseColumnList(children, names, loption);
 }
 
-static vector<idx_t> ColumnListToIndices(const vector<bool>& vec) {
+static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
 	vector<idx_t> ret;
-	for (idx_t i = 0; i < vec.size(); i++){
+	for (idx_t i = 0; i < vec.size(); i++) {
 		if (vec[i]) {
 			ret.push_back(i);
 		}

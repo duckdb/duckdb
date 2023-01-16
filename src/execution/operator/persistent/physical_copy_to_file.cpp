@@ -23,7 +23,8 @@ public:
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(std::move(local_state)), writer_offset(0) {
+	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state)
+	    : local_state(std::move(local_state)), writer_offset(0) {
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -72,18 +73,19 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static void CreateDir(ClientContext& context, const string& dir_path) {
+static void CreateDir(ClientContext &context, const string &dir_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	if (!fs.DirectoryExists(dir_path)) {
 		fs.CreateDirectory(dir_path);
 	}
 }
 
-static string CreateDirRecursive(ClientContext& context, const vector<idx_t>& cols, const vector<string>& names, const vector<Value>& values, const string& path) {
+static string CreateDirRecursive(ClientContext &context, const vector<idx_t> &cols, const vector<string> &names,
+                                 const vector<Value> &values, const string &path) {
 	CreateDir(context, path);
 	string partition_path = path + "/";
 
-	for(idx_t i = 0; i < cols.size(); i++) {
+	for (idx_t i = 0; i < cols.size(); i++) {
 		auto partition_col_name = names[cols[i]];
 		auto partition_value = values[i];
 		string p_dir = partition_col_name + "=" + partition_value.ToString() + "/";
@@ -100,17 +102,19 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 
 	if (partition_output) {
 		l.part_buffer->FlushAppendState(*l.part_buffer_append_state);
-		auto& partitions = l.part_buffer->GetPartitions();
+		auto &partitions = l.part_buffer->GetPartitions();
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
-		for(idx_t i = 0; i < partitions.size(); i++) {
-			string hive_path = CreateDirRecursive(context.client, partition_columns, names, partition_key_map[i]->values, file_path);
+		for (idx_t i = 0; i < partitions.size(); i++) {
+			string hive_path =
+			    CreateDirRecursive(context.client, partition_columns, names, partition_key_map[i]->values, file_path);
 
 			// Create a writer for the current file
-			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, hive_path + "/data_" + to_string(l.writer_offset) + ".parquet");
+			auto fun_data_global = function.copy_to_initialize_global(
+			    context.client, *bind_data, hive_path + "/data_" + to_string(l.writer_offset) + ".parquet");
 			auto fun_data_local = function.copy_to_initialize_local(context, *bind_data);
 
-			for(auto &chunk : partitions[i]->Chunks()) {
+			for (auto &chunk : partitions[i]->Chunks()) {
 				function.copy_to_sink(context, *bind_data, *fun_data_global, *fun_data_local, chunk);
 			}
 
@@ -159,7 +163,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			lock_guard<mutex> glock(g.lock);
 			state->writer_offset = g.last_file_offset++;
 
-			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types, partition_columns, g.partition_state);
+			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types,
+			                                                            partition_columns, g.partition_state);
 			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
 			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
 		}
