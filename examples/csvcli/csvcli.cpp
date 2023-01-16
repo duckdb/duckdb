@@ -33,12 +33,12 @@ int main(int argc, const char **argv) {
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	BufferedCSVReader reader(*fs, std::move(options));
 
-	if (reader.sql_types.empty()) {
+	if (reader.return_types.empty()) {
 		throw std::runtime_error("Failed to auto-detect types for CSV file");
 	}
 
 	DataChunk result;
-	result.Initialize(reader.sql_types);
+	result.Initialize(reader.return_types);
 
 	while (true) {
 		result.Reset();

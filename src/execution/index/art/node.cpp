@@ -298,7 +298,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	auto n = reader.Read<uint8_t>();
 	NodeType node_type((NodeType)(n));
 
-	Node *deserialized_node;
+	Node *deserialized_node = nullptr;
 	auto old_memory_size = art.memory_size;
 	switch (node_type) {
 	case NodeType::NLeaf: {

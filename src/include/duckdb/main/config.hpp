@@ -25,6 +25,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -183,6 +184,8 @@ public:
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
+	//! Extensions made to binder to implement the create_database functionality
+	vector<CreateDatabaseExtension> create_database_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
