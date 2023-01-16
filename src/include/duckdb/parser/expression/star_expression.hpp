@@ -32,7 +32,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equals(const StarExpression *a, const StarExpression *b);
+	static bool Equal(const StarExpression *a, const StarExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
