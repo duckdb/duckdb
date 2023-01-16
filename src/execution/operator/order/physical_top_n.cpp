@@ -12,7 +12,7 @@ namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
                            idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
+    : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)),
       limit(limit), offset(offset) {
 }
 
@@ -132,8 +132,8 @@ void TopNSortState::Sink(DataChunk &input) {
 }
 
 void TopNSortState::Move(TopNSortState &other) {
-	local_state = move(other.local_state);
-	global_state = move(other.global_state);
+	local_state = std::move(other.local_state);
+	global_state = std::move(other.global_state);
 	count = other.count;
 	is_sorted = other.is_sorted;
 }

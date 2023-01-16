@@ -1,0 +1,26 @@
+# name: test/sql/subquery/lateral/lateral_values.test
+# description: Test LATERAL with values clause
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+query II
+SELECT * FROM integers, LATERAL (VALUES (integers.i + 1)) t(k) ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	4
+
+# we do not (yet) support referencing columns multiple levels down
+statement error
+SELECT * FROM integers a, integers b JOIN LATERAL (VALUES (a.i)) ss(x) ON (true) ORDER BY a.i, b.i;
+----
+Nested lateral joins

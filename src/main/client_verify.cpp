@@ -33,7 +33,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
 	}
 
-	auto original = make_unique<StatementVerifier>(move(statement));
+	auto original = make_unique<StatementVerifier>(std::move(statement));
 	for (auto &verifier : statement_verifiers) {
 		original->CheckExpressions(*verifier);
 	}
@@ -54,7 +54,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 
 	// Execute the original statement
 	bool any_failed = original->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-		return RunStatementInternal(lock, q, move(s), false, false);
+		return RunStatementInternal(lock, q, std::move(s), false, false);
 	});
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -63,7 +63,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-			return RunStatementInternal(lock, q, move(s), false, false);
+			return RunStatementInternal(lock, q, std::move(s), false, false);
 		});
 		any_failed = any_failed || failed;
 	}
@@ -71,11 +71,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	if (!any_failed && prepared_statement_verifier) {
 		// If none failed, we execute the prepared statement verifier
 		bool failed = prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
-			return RunStatementInternal(lock, q, move(s), false, false);
+			return RunStatementInternal(lock, q, std::move(s), false, false);
 		});
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
-			statement_verifiers.push_back(move(prepared_statement_verifier));
+			statement_verifiers.push_back(std::move(prepared_statement_verifier));
 		}
 	} else {
 		if (ValidChecker::IsInvalidated(*db)) {
@@ -90,9 +90,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// Check explain, only if q does not already contain EXPLAIN
 	if (original->materialized_result->success) {
 		auto explain_q = "EXPLAIN " + query;
-		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
+		auto explain_stmt = make_unique<ExplainStatement>(std::move(statement_copy_for_explain));
 		try {
-			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
+			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
 			interrupted = false;
 			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");

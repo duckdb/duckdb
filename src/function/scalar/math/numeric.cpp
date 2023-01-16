@@ -123,17 +123,17 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 			max_val = MaxValue(AbsValue(current_min), current_max);
 		} else {
 			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
-			*input.expr_ptr = move(input.expr.children[0]);
-			return move(child_stats[0]);
+			*input.expr_ptr = std::move(input.expr.children[0]);
+			return std::move(child_stats[0]);
 		}
 		new_min = Value::Numeric(expr.return_type, min_val);
 		new_max = Value::Numeric(expr.return_type, max_val);
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
-	auto stats =
-	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
+	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
+	                                            StatisticsType::LOCAL_STATS);
 	stats->validity_stats = lstats.validity_stats->Copy();
-	return move(stats);
+	return std::move(stats);
 }
 
 template <class OP>
@@ -843,6 +843,25 @@ void IsNanFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
+// signbit
+//===--------------------------------------------------------------------===//
+struct SignBitOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::signbit(input);
+	}
+};
+
+void SignBitFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("signbit");
+	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<float, bool, SignBitOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<double, bool, SignBitOperator>));
 	set.AddFunction(funcs);
 }
 

@@ -21,7 +21,7 @@ namespace duckdb {
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
 	              idx_t estimated_linenr)
-	    : buffer(move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
+	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
 	      estimated_linenr(estimated_linenr) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
@@ -76,7 +76,7 @@ struct CSVBufferRead {
 			for (; cur_pos < length; cur_pos++) {
 				intersection[cur_pos] = next_buffer_ptr[nxt_buffer_pos++];
 			}
-			intersections.emplace_back(move(intersection));
+			intersections.emplace_back(std::move(intersection));
 			return string_t(intersections.back().get(), length);
 		}
 	}

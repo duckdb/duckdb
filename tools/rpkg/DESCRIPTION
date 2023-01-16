@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.6.0
+Version: 0.6.2
 Authors@R:
     c(person(given = "Hannes",
              family = "Mühleisen",
@@ -62,5 +62,5 @@ Suggests:
     withr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.2.3
 SystemRequirements: C++11, GCC on Solaris

@@ -17,13 +17,15 @@ namespace duckdb {
 class LogicalCopyToFile : public LogicalOperator {
 public:
 	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(function), bind_data(move(bind_data)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(function),
+	      bind_data(std::move(bind_data)) {
 	}
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
 	bool is_file_and_exists;
+	bool per_thread_output;
 
 public:
 	void Serialize(FieldWriter &writer) const override;

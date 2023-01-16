@@ -1,0 +1,27 @@
+# name: test/sql/attach/attach_database_size.test
+# description: Test ATTACH mixed with database size
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/attach_database_size.db' AS db1
+
+query I
+SELECT database_name FROM pragma_database_size() ORDER BY 1
+----
+db1
+memory
+
+statement ok
+ATTACH ':memory:' AS db2
+
+query I
+SELECT database_name FROM pragma_database_size() ORDER BY 1
+----
+db1
+db2
+memory

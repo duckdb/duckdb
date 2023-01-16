@@ -7,8 +7,8 @@ namespace duckdb {
 
 ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
                                        vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
-    : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(move(parsed_expressions)),
-      child(move(child_p)) {
+    : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(std::move(parsed_expressions)),
+      child(std::move(child_p)) {
 	if (!aliases.empty()) {
 		if (aliases.size() != expressions.size()) {
 			throw ParserException("Aliases list length must match expression list length!");
@@ -34,7 +34,7 @@ unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
 		// child node is not a join: create a new select node and push the child as a table reference
 		auto select = make_unique<SelectNode>();
 		select->from_table = child->GetTableRef();
-		result = move(select);
+		result = std::move(select);
 	}
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode &)*result;

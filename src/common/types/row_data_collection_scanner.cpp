@@ -56,7 +56,7 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 				auto heap_offset = heap_ptr - heap_handle.Ptr();
 				RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count, heap_offset);
 			} else {
-				swizzled_string_heap.pinned_blocks.emplace_back(move(heap_handle));
+				swizzled_string_heap.pinned_blocks.emplace_back(std::move(heap_handle));
 			}
 
 			// Update counter
@@ -103,7 +103,7 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			if (swizzled_string_heap.keep_pinned) {
 				// Since the heap blocks are pinned, we can unswizzle the data again.
-				swizzled_string_heap.pinned_blocks.emplace_back(move(new_heap_handle));
+				swizzled_string_heap.pinned_blocks.emplace_back(std::move(new_heap_handle));
 				RowOperations::UnswizzlePointers(layout, base_row_ptr, new_heap_ptr, data_block->count);
 				RowOperations::UnswizzleHeapPointer(layout, base_row_ptr, new_heap_ptr, data_block->count);
 			}

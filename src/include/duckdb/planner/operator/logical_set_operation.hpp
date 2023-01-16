@@ -23,8 +23,8 @@ public:
 	    : LogicalOperator(type), table_index(table_index), column_count(column_count) {
 		D_ASSERT(type == LogicalOperatorType::LOGICAL_UNION || type == LogicalOperatorType::LOGICAL_EXCEPT ||
 		         type == LogicalOperatorType::LOGICAL_INTERSECT);
-		children.push_back(move(top));
-		children.push_back(move(bottom));
+		children.push_back(std::move(top));
+		children.push_back(std::move(bottom));
 	}
 
 	idx_t table_index;
@@ -37,6 +37,7 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override {

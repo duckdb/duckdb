@@ -13,6 +13,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
@@ -27,7 +28,7 @@ public:
 	explicit PhysicalPlanGenerator(ClientContext &context);
 	~PhysicalPlanGenerator();
 
-	unordered_set<CatalogEntry *> dependencies;
+	DependencyList dependencies;
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
 	unordered_map<idx_t, std::shared_ptr<ColumnDataCollection>> recursive_cte_tables;
@@ -79,6 +80,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPragma &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSample &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSet &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalReset &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalShow &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);

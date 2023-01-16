@@ -269,7 +269,7 @@ function convert_vector_struct(
     return size
 end
 
-function convert_vector_map(
+function convert_vector_union(
     column_data::ColumnConversionData,
     vector::Vec,
     size::UInt64,
@@ -281,18 +281,73 @@ function convert_vector_map(
     ::Type{DST}
 ) where {SRC, DST}
     child_arrays = convert_struct_children(column_data, vector, size)
+
+    if !all_valid
+        validity = get_validity(vector)
+    end
+    for row in 1:size
+        # For every row/record
+        if all_valid || isvalid(validity, row)
+            # Get the tag of this row
+            tag::UInt64 = child_arrays[1][row]
+            type::DataType = duckdb_type_to_julia_type(get_union_member_type(column_data.logical_type, tag + 1))
+            # Get the value from the child array indicated by the tag
+            # Offset by 1 because of julia
+            # Offset by another 1 because of the tag vector
+            value = child_arrays[tag + 2][row]
+            result[position] = isequal(value, missing) ? missing : type(value)
+        end
+        position += 1
+    end
+    return size
+end
+
+function convert_vector_map(
+    column_data::ColumnConversionData,
+    vector::Vec,
+    size::UInt64,
+    convert_func::Function,
+    result,
+    position,
+    all_valid,
+    ::Type{SRC},
+    ::Type{DST}
+) where {SRC, DST}
+    child_vector = list_child(vector)
+    lsize = list_size(vector)
+
+    # convert the child vector
+    ldata = column_data.conversion_data
+
+    child_column_data =
+        ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
+    child_array = Array{Union{Missing, ldata.target_type}}(missing, lsize)
+    ldata.conversion_loop_func(
+        child_column_data,
+        child_vector,
+        lsize,
+        ldata.conversion_func,
+        child_array,
+        1,
+        false,
+        ldata.internal_type,
+        ldata.target_type
+    )
+    child_arrays = convert_struct_children(child_column_data, child_vector, lsize)
     keys = child_arrays[1]
     values = child_arrays[2]
 
+    array = get_array(vector, SRC)
     if !all_valid
         validity = get_validity(vector)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
             result_dict = Dict()
-            key_count = length(keys[i])
-            for key_idx in 1:key_count
-                result_dict[keys[i][key_idx]] = values[i][key_idx]
+            start_offset::UInt64 = array[i].offset + 1
+            end_offset::UInt64 = array[i].offset + array[i].length
+            for key_idx in start_offset:end_offset
+                result_dict[keys[key_idx]] = values[key_idx]
             end
             result[position] = result_dict
         end
@@ -379,16 +434,26 @@ function init_conversion_loop(logical_type::LogicalType)
         return duckdb_type_to_julia_type(logical_type)
     elseif type == DUCKDB_TYPE_ENUM
         return get_enum_dictionary(logical_type)
-    elseif type == DUCKDB_TYPE_LIST
+    elseif type == DUCKDB_TYPE_LIST || type == DUCKDB_TYPE_MAP
         child_type = get_list_child_type(logical_type)
         return create_child_conversion_data(child_type)
-    elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP
-        child_count = get_struct_child_count(logical_type)
+    elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_UNION
+        child_count_fun::Function = get_struct_child_count
+        child_type_fun::Function = get_struct_child_type
+        child_name_fun::Function = get_struct_child_name
+
+        #if type == DUCKDB_TYPE_UNION
+        #	child_count_fun = get_union_member_count
+        #	child_type_fun = get_union_member_type
+        #	child_name_fun = get_union_member_name
+        #end
+
+        child_count = child_count_fun(logical_type)
         child_symbols::Vector{Symbol} = Vector()
         child_data::Vector{ListConversionData} = Vector()
         for i in 1:child_count
-            child_symbol = Symbol(get_struct_child_name(logical_type, i))
-            child_type = get_struct_child_type(logical_type, i)
+            child_symbol = Symbol(child_name_fun(logical_type, i))
+            child_type = child_type_fun(logical_type, i)
             child_conv_data = create_child_conversion_data(child_type)
             push!(child_symbols, child_symbol)
             push!(child_data, child_conv_data)
@@ -447,6 +512,8 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
         return convert_vector_struct
     elseif type == DUCKDB_TYPE_MAP
         return convert_vector_map
+    elseif type == DUCKDB_TYPE_UNION
+        return convert_vector_union
     else
         return convert_vector
     end

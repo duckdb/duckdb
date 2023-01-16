@@ -36,6 +36,10 @@ struct DropNotNullInfo;
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
+	static constexpr const CatalogType Type = CatalogType::TABLE_ENTRY;
+	static constexpr const char *Name = "table";
+
+public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
 	                  std::shared_ptr<DataTable> inherited_storage = nullptr);
@@ -53,6 +57,8 @@ public:
 public:
 	bool HasGeneratedColumns() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	void UndoAlter(ClientContext &context, AlterInfo *info) override;
+
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an

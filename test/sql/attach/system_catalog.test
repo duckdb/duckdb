@@ -1,0 +1,46 @@
+# name: test/sql/attach/system_catalog.test
+# description: Test interactions with the SYSTEM catalog
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# cannot detach system/temp catalogs
+statement error
+DETACH DATABASE system
+
+statement error
+DETACH DATABASE temp
+
+# cannot create entries in the system catalog
+statement error
+CREATE SCHEMA system.eek
+----
+system catalog
+
+statement error
+CREATE TABLE system.main.integers(i INTEGER)
+----
+system catalog
+
+statement error
+CREATE VIEW system.main.integers AS SELECT 42
+----
+system catalog
+
+statement error
+CREATE SEQUENCE system.main.seq
+----
+system catalog
+
+statement error
+CREATE MACRO system.main.my_macro(a,b) AS a+b
+----
+system catalog
+
+statement error
+CREATE TYPE system.main.rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+----
+system catalog

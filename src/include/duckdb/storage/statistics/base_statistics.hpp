@@ -46,8 +46,8 @@ public:
 public:
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type, StatisticsType stats_type);
 
-	bool CanHaveNull() const;
-	bool CanHaveNoNull() const;
+	DUCKDB_API bool CanHaveNull() const;
+	DUCKDB_API bool CanHaveNoNull() const;
 
 	void UpdateDistinctStatistics(Vector &v, idx_t count);
 

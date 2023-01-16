@@ -73,6 +73,7 @@ struct ParquetOptions {
 	bool filename = false;
 	bool file_row_number = false;
 	bool hive_partitioning = false;
+	bool union_by_name = false;
 
 public:
 	void Serialize(FieldWriter &writer) const;
@@ -84,19 +85,19 @@ public:
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
 	              const vector<LogicalType> &expected_types_p, const string &initial_filename_p = string());
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p)
-	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
+	    : ParquetReader(allocator, std::move(file_handle_p), vector<LogicalType>(), string()) {
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<string> &names,
 	              const vector<LogicalType> &expected_types_p, const vector<column_t> &column_ids,
 	              ParquetOptions parquet_options, const string &initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options)
-	    : ParquetReader(context, move(file_name), vector<string>(), vector<LogicalType>(), vector<column_t>(),
+	    : ParquetReader(context, std::move(file_name), vector<string>(), vector<LogicalType>(), vector<column_t>(),
 	                    parquet_options, string()) {
 	}
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
 	              ParquetOptions parquet_options)
-	    : ParquetReader(context, move(file_name), vector<string>(), expected_types_p, vector<column_t>(),
+	    : ParquetReader(context, std::move(file_name), vector<string>(), expected_types_p, vector<column_t>(),
 	                    parquet_options, string()) {
 	}
 	~ParquetReader();
@@ -108,6 +109,17 @@ public:
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
+
+	//! when reading multiple parquet files (with union by name option)
+	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
+	//! cols, those files might have cols at different positions and with different logical type.
+	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
+	vector<idx_t> union_idx_map;
+	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
+	//! some parquet files may not have all union cols.
+	vector<bool> union_null_cols;
+	//! All union cols will cast to same type.
+	vector<LogicalType> union_col_types;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
@@ -139,6 +151,7 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
+	void RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

@@ -12,4 +12,8 @@ unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(LogicalDeserialization
 	return make_unique<LogicalDummyScan>(table_index);
 }
 
+vector<idx_t> LogicalDummyScan::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

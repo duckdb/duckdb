@@ -1,0 +1,21 @@
+# name: test/fuzzer/pedro/correlated_in_segv.test
+# description: Correlated IN segfault
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (SELECT 1 WHERE 1 IN (c0) GROUP BY ()) FROM (SELECT 1) t0(c0);
+----
+1
+
+query I
+SELECT ((SELECT 1) EXCEPT (SELECT c0 LIMIT 0)) FROM VALUES (0), t0(c0);
+----
+1
+
+query I
+SELECT 1 + count() FILTER (WHERE EXISTS (SELECT EXISTS (SELECT 1)));
+----
+2

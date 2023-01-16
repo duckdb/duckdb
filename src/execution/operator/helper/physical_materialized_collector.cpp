@@ -42,7 +42,7 @@ void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSin
 
 	lock_guard<mutex> l(gstate.glock);
 	if (!gstate.collection) {
-		gstate.collection = move(lstate.collection);
+		gstate.collection = std::move(lstate.collection);
 	} else {
 		gstate.collection->Combine(*lstate.collection);
 	}
@@ -51,14 +51,14 @@ void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSin
 unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_unique<MaterializedCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	return move(state);
+	return std::move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_unique<MaterializedCollectorLocalState>();
 	state->collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	state->collection->InitializeAppend(state->append_state);
-	return move(state);
+	return std::move(state);
 }
 
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
@@ -66,9 +66,9 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 	if (!gstate.collection) {
 		gstate.collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(gstate.collection),
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
 	                                                   gstate.context->GetClientProperties());
-	return move(result);
+	return std::move(result);
 }
 
 bool PhysicalMaterializedCollector::ParallelSink() const {

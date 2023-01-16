@@ -26,9 +26,9 @@ namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      unique_ptr<CSVBufferRead> buffer_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, move(options_p), requested_types) {
+    : BaseCSVReader(context, std::move(options_p), requested_types) {
 	Initialize(requested_types);
-	SetBufferRead(move(buffer_p));
+	SetBufferRead(std::move(buffer_p));
 	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
 		throw InternalException("Parallel CSV reader cannot handle CSVs with multi-byte delimiters/escapes/quotes");
 	}
@@ -38,9 +38,9 @@ ParallelCSVReader::~ParallelCSVReader() {
 }
 
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	sql_types = requested_types;
-	InitParseChunk(sql_types.size());
-	InitInsertChunkIdx(sql_types.size());
+	return_types = requested_types;
+	InitParseChunk(return_types.size());
+	InitInsertChunkIdx(return_types.size());
 }
 
 bool NewLineDelimiter(NewLineIdentifier newline_delimiter, bool carry, bool carry_followed_by_nl) {
@@ -136,7 +136,7 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 		buffer_size = buffer_read_p->buffer->GetBufferSize();
 	}
 	linenr = buffer_read_p->estimated_linenr;
-	buffer = move(buffer_read_p);
+	buffer = std::move(buffer_read_p);
 
 	linenr_estimated = true;
 	reached_remainder_state = false;
@@ -252,14 +252,14 @@ add_row : {
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
-			AddRow(insert_chunk, column);
+			AddRow(insert_chunk, column, error_message);
 			success = Flush(insert_chunk);
 		}
 		reached_remainder_state = false;
 		parse_chunk.Reset();
 		return success;
 	} else {
-		finished_chunk = AddRow(insert_chunk, column);
+		finished_chunk = AddRow(insert_chunk, column, error_message);
 	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -404,16 +404,16 @@ final_state : {
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
 			AddValue(str_value, column, escape_positions, has_quotes);
 			if (try_add_line) {
-				bool success = column == sql_types.size();
+				bool success = column == return_types.size();
 				if (success) {
-					AddRow(insert_chunk, column);
+					AddRow(insert_chunk, column, error_message);
 					success = Flush(insert_chunk);
 				}
 				parse_chunk.Reset();
 				reached_remainder_state = false;
 				return success;
 			} else {
-				AddRow(insert_chunk, column);
+				AddRow(insert_chunk, column, error_message);
 				verification_positions.end_of_last_line = position_buffer;
 			}
 		}

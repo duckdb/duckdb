@@ -16,6 +16,9 @@ set ignore_error_messages
 statement ok
 SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000';SET s3_use_ssl=false;
 
+statement ok
+SET enable_http_metadata_cache=true;
+
 # Copy files to S3 before beginning tests
 statement ok
 CALL DBGEN(sf=0.01);

@@ -16,6 +16,6 @@ unique_ptr<LogicalOperator> LogicalShow::Deserialize(LogicalDeserializationState
 	auto result = unique_ptr<LogicalShow>(new LogicalShow());
 	result->types_select = types_select;
 	result->aliases = aliases;
-	return move(result);
+	return std::move(result);
 }
 } // namespace duckdb

@@ -24,13 +24,16 @@ struct LinkedList {
 // forward declarations
 struct WriteDataToSegment;
 struct ReadDataFromSegment;
+struct CopyDataFromSegment;
 typedef ListSegment *(*create_segment_t)(WriteDataToSegment &write_data_to_segment, Allocator &allocator,
-                                         vector<AllocatedData> &owning_vector, uint16_t &capacity);
+                                         vector<AllocatedData> &owning_vector, const uint16_t &capacity);
 typedef void (*write_data_to_segment_t)(WriteDataToSegment &write_data_to_segment, Allocator &allocator,
                                         vector<AllocatedData> &owning_vector, ListSegment *segment, Vector &input,
                                         idx_t &entry_idx, idx_t &count);
-typedef void (*read_data_from_segment_t)(ReadDataFromSegment &read_data_from_segment, ListSegment *segment,
+typedef void (*read_data_from_segment_t)(ReadDataFromSegment &read_data_from_segment, const ListSegment *segment,
                                          Vector &result, idx_t &total_count);
+typedef ListSegment *(*copy_data_from_segment_t)(CopyDataFromSegment &copy_data_from_segment, const ListSegment *source,
+                                                 Allocator &allocator, vector<AllocatedData> &owning_vector);
 
 struct WriteDataToSegment {
 	create_segment_t create_segment;
@@ -41,6 +44,10 @@ struct ReadDataFromSegment {
 	read_data_from_segment_t segment_function;
 	vector<ReadDataFromSegment> child_functions;
 };
+struct CopyDataFromSegment {
+	copy_data_from_segment_t segment_function;
+	vector<CopyDataFromSegment> child_functions;
+};
 
 // forward declarations
 static void AppendRow(WriteDataToSegment &write_data_to_segment, Allocator &allocator,
@@ -48,24 +55,27 @@ static void AppendRow(WriteDataToSegment &write_data_to_segment, Allocator &allo
                       idx_t &count);
 static void BuildListVector(ReadDataFromSegment &read_data_from_segment, LinkedList *linked_list, Vector &result,
                             idx_t &initial_total_count);
+static void CopyLinkedList(CopyDataFromSegment &copy_data_from_segment, const LinkedList *source_list,
+                           LinkedList &target_list, Allocator &allocator, vector<AllocatedData> &owning_vector);
 
 template <class T>
 static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                        uint16_t &capacity) {
+                                        const uint16_t &capacity) {
 
 	owning_vector.emplace_back(allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))));
 	return owning_vector.back().get();
 }
 
-static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity) {
+static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector,
+                                   const uint16_t &capacity) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList)));
 	return owning_vector.back().get();
 }
 
-static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
-                                     idx_t child_count) {
+static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector,
+                                     const uint16_t &capacity, const idx_t &child_count) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *)));
@@ -73,28 +83,28 @@ static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData>
 }
 
 template <class T>
-static T *GetPrimitiveData(ListSegment *segment) {
+static T *GetPrimitiveData(const ListSegment *segment) {
 	return (T *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-static uint64_t *GetListLengthData(ListSegment *segment) {
+static uint64_t *GetListLengthData(const ListSegment *segment) {
 	return (uint64_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-static LinkedList *GetListChildData(ListSegment *segment) {
+static LinkedList *GetListChildData(const ListSegment *segment) {
 	return (LinkedList *)(((char *)segment) + sizeof(ListSegment) +
 	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
-static ListSegment **GetStructData(ListSegment *segment) {
+static ListSegment **GetStructData(const ListSegment *segment) {
 	return (ListSegment **)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-static bool *GetNullMask(ListSegment *segment) {
+static bool *GetNullMask(const ListSegment *segment) {
 	return (bool *)(((char *)segment) + sizeof(ListSegment));
 }
 
-static uint16_t GetCapacityForNewSegment(LinkedList *linked_list) {
+static uint16_t GetCapacityForNewSegment(const LinkedList *linked_list) {
 
 	// consecutive segments grow by the power of two
 	uint16_t capacity = 4;
@@ -107,7 +117,7 @@ static uint16_t GetCapacityForNewSegment(LinkedList *linked_list) {
 
 template <class T>
 static ListSegment *CreatePrimitiveSegment(WriteDataToSegment &, Allocator &allocator,
-                                           vector<AllocatedData> &owning_vector, uint16_t &capacity) {
+                                           vector<AllocatedData> &owning_vector, const uint16_t &capacity) {
 
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, owning_vector, capacity);
@@ -118,7 +128,7 @@ static ListSegment *CreatePrimitiveSegment(WriteDataToSegment &, Allocator &allo
 }
 
 static ListSegment *CreateListSegment(WriteDataToSegment &, Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                      uint16_t &capacity) {
+                                      const uint16_t &capacity) {
 
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocateListData(allocator, owning_vector, capacity);
@@ -135,7 +145,7 @@ static ListSegment *CreateListSegment(WriteDataToSegment &, Allocator &allocator
 }
 
 static ListSegment *CreateStructSegment(WriteDataToSegment &write_data_to_segment, Allocator &allocator,
-                                        vector<AllocatedData> &owning_vector, uint16_t &capacity) {
+                                        vector<AllocatedData> &owning_vector, const uint16_t &capacity) {
 
 	// allocate data and set header
 	auto segment = (ListSegment *)AllocateStructData(allocator, owning_vector, capacity,
@@ -329,7 +339,7 @@ static void AppendRow(WriteDataToSegment &write_data_to_segment, Allocator &allo
 }
 
 template <class T>
-static void ReadDataFromPrimitiveSegment(ReadDataFromSegment &, ListSegment *segment, Vector &result,
+static void ReadDataFromPrimitiveSegment(ReadDataFromSegment &, const ListSegment *segment, Vector &result,
                                          idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -353,7 +363,7 @@ static void ReadDataFromPrimitiveSegment(ReadDataFromSegment &, ListSegment *seg
 	}
 }
 
-static void ReadDataFromVarcharSegment(ReadDataFromSegment &, ListSegment *segment, Vector &result,
+static void ReadDataFromVarcharSegment(ReadDataFromSegment &, const ListSegment *segment, Vector &result,
                                        idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -394,8 +404,8 @@ static void ReadDataFromVarcharSegment(ReadDataFromSegment &, ListSegment *segme
 	}
 }
 
-static void ReadDataFromListSegment(ReadDataFromSegment &read_data_from_segment, ListSegment *segment, Vector &result,
-                                    idx_t &total_count) {
+static void ReadDataFromListSegment(ReadDataFromSegment &read_data_from_segment, const ListSegment *segment,
+                                    Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -434,8 +444,8 @@ static void ReadDataFromListSegment(ReadDataFromSegment &read_data_from_segment,
 	BuildListVector(read_data_from_segment.child_functions[0], &linked_child_list, child_vector, starting_offset);
 }
 
-static void ReadDataFromStructSegment(ReadDataFromSegment &read_data_from_segment, ListSegment *segment, Vector &result,
-                                      idx_t &total_count) {
+static void ReadDataFromStructSegment(ReadDataFromSegment &read_data_from_segment, const ListSegment *segment,
+                                      Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -472,6 +482,86 @@ static void BuildListVector(ReadDataFromSegment &read_data_from_segment, LinkedL
 	}
 
 	linked_list->last_segment = nullptr;
+}
+
+template <class T>
+static ListSegment *CopyDataFromPrimitiveSegment(CopyDataFromSegment &, const ListSegment *source, Allocator &allocator,
+                                                 vector<AllocatedData> &owning_vector) {
+
+	auto target = (ListSegment *)AllocatePrimitiveData<T>(allocator, owning_vector, source->capacity);
+	memcpy(target, source, sizeof(ListSegment) + source->capacity * (sizeof(bool) + sizeof(T)));
+	target->next = nullptr;
+	return target;
+}
+
+static ListSegment *CopyDataFromListSegment(CopyDataFromSegment &copy_data_from_segment, const ListSegment *source,
+                                            Allocator &allocator, vector<AllocatedData> &owning_vector) {
+
+	// create an empty linked list for the child vector of target
+	auto source_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(source));
+
+	// create the segment
+	auto target = (ListSegment *)AllocateListData(allocator, owning_vector, source->capacity);
+	memcpy(target, source,
+	       sizeof(ListSegment) + source->capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList));
+	target->next = nullptr;
+
+	auto target_linked_list = GetListChildData(target);
+	LinkedList linked_list(source_linked_child_list.total_capacity, nullptr, nullptr);
+	Store<LinkedList>(linked_list, (data_ptr_t)target_linked_list);
+
+	// recurse to copy the linked child list
+	auto target_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(target));
+	D_ASSERT(copy_data_from_segment.child_functions.size() == 1);
+	CopyLinkedList(copy_data_from_segment.child_functions[0], &source_linked_child_list, target_linked_child_list,
+	               allocator, owning_vector);
+
+	// store the updated linked list
+	Store<LinkedList>(target_linked_child_list, (data_ptr_t)GetListChildData(target));
+	return target;
+}
+
+static ListSegment *CopyDataFromStructSegment(CopyDataFromSegment &copy_data_from_segment, const ListSegment *source,
+                                              Allocator &allocator, vector<AllocatedData> &owning_vector) {
+
+	auto source_child_count = copy_data_from_segment.child_functions.size();
+	auto target = (ListSegment *)AllocateStructData(allocator, owning_vector, source->capacity, source_child_count);
+	memcpy(target, source,
+	       sizeof(ListSegment) + source->capacity * sizeof(bool) + source_child_count * sizeof(ListSegment *));
+	target->next = nullptr;
+
+	// recurse and copy the children
+	auto source_child_segments = GetStructData(source);
+	auto target_child_segments = GetStructData(target);
+
+	for (idx_t i = 0; i < copy_data_from_segment.child_functions.size(); i++) {
+		auto child_function = copy_data_from_segment.child_functions[i];
+		auto source_child_segment = Load<ListSegment *>((data_ptr_t)(source_child_segments + i));
+		auto target_child_segment =
+		    child_function.segment_function(child_function, source_child_segment, allocator, owning_vector);
+		Store<ListSegment *>(target_child_segment, (data_ptr_t)(target_child_segments + i));
+	}
+	return target;
+}
+
+static void CopyLinkedList(CopyDataFromSegment &copy_data_from_segment, const LinkedList *source_list,
+                           LinkedList &target_list, Allocator &allocator, vector<AllocatedData> &owning_vector) {
+
+	auto source_segment = source_list->first_segment;
+
+	while (source_segment) {
+		auto target_segment =
+		    copy_data_from_segment.segment_function(copy_data_from_segment, source_segment, allocator, owning_vector);
+		source_segment = source_segment->next;
+
+		if (!target_list.first_segment) {
+			target_list.first_segment = target_segment;
+		}
+		if (target_list.last_segment) {
+			target_list.last_segment->next = target_segment;
+		}
+		target_list.last_segment = target_segment;
+	}
 }
 
 static void InitializeValidities(Vector &vector, idx_t &capacity) {
@@ -517,6 +607,7 @@ struct ListBindData : public FunctionData {
 	LogicalType stype;
 	WriteDataToSegment write_data_to_segment;
 	ReadDataFromSegment read_data_from_segment;
+	CopyDataFromSegment copy_data_from_segment;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<ListBindData>(stype);
@@ -529,7 +620,8 @@ struct ListBindData : public FunctionData {
 };
 
 static void GetSegmentDataFunctions(WriteDataToSegment &write_data_to_segment,
-                                    ReadDataFromSegment &read_data_from_segment, const LogicalType &type) {
+                                    ReadDataFromSegment &read_data_from_segment,
+                                    CopyDataFromSegment &copy_data_from_segment, const LogicalType &type) {
 
 	auto physical_type = type.InternalType();
 	switch (physical_type) {
@@ -538,113 +630,135 @@ static void GetSegmentDataFunctions(WriteDataToSegment &write_data_to_segment,
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<bool>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<bool>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<bool>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<bool>;
 		break;
 	}
 	case PhysicalType::INT8: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<int8_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<int8_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<int8_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<int8_t>;
 		break;
 	}
 	case PhysicalType::INT16: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<int16_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<int16_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<int16_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<int16_t>;
 		break;
 	}
 	case PhysicalType::INT32: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<int32_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<int32_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<int32_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<int32_t>;
 		break;
 	}
 	case PhysicalType::INT64: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<int64_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<int64_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<int64_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<int64_t>;
 		break;
 	}
 	case PhysicalType::UINT8: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<uint8_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<uint8_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<uint8_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<uint8_t>;
 		break;
 	}
 	case PhysicalType::UINT16: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<uint16_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<uint16_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<uint16_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<uint16_t>;
 		break;
 	}
 	case PhysicalType::UINT32: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<uint32_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<uint32_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<uint32_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<uint32_t>;
 		break;
 	}
 	case PhysicalType::UINT64: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<uint64_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<uint64_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<uint64_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<uint64_t>;
 		break;
 	}
 	case PhysicalType::FLOAT: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<float>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<float>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<float>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<float>;
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<double>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<double>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<double>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<double>;
 		break;
 	}
 	case PhysicalType::INT128: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<hugeint_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<hugeint_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<hugeint_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<hugeint_t>;
 		break;
 	}
 	case PhysicalType::INTERVAL: {
 		write_data_to_segment.create_segment = CreatePrimitiveSegment<interval_t>;
 		write_data_to_segment.segment_function = WriteDataToPrimitiveSegment<interval_t>;
 		read_data_from_segment.segment_function = ReadDataFromPrimitiveSegment<interval_t>;
+		copy_data_from_segment.segment_function = CopyDataFromPrimitiveSegment<interval_t>;
 		break;
 	}
 	case PhysicalType::VARCHAR: {
 		write_data_to_segment.create_segment = CreateListSegment;
 		write_data_to_segment.segment_function = WriteDataToVarcharSegment;
 		read_data_from_segment.segment_function = ReadDataFromVarcharSegment;
+		copy_data_from_segment.segment_function = CopyDataFromListSegment;
 
 		write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
 		write_data_to_segment.child_functions.back().create_segment = CreatePrimitiveSegment<char>;
+		copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
+		copy_data_from_segment.child_functions.back().segment_function = CopyDataFromPrimitiveSegment<char>;
 		break;
 	}
 	case PhysicalType::LIST: {
 		write_data_to_segment.create_segment = CreateListSegment;
 		write_data_to_segment.segment_function = WriteDataToListSegment;
 		read_data_from_segment.segment_function = ReadDataFromListSegment;
+		copy_data_from_segment.segment_function = CopyDataFromListSegment;
 
 		// recurse
 		write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
 		read_data_from_segment.child_functions.emplace_back(ReadDataFromSegment());
+		copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
 		GetSegmentDataFunctions(write_data_to_segment.child_functions.back(),
-		                        read_data_from_segment.child_functions.back(), ListType::GetChildType(type));
+		                        read_data_from_segment.child_functions.back(),
+		                        copy_data_from_segment.child_functions.back(), ListType::GetChildType(type));
 		break;
 	}
 	case PhysicalType::STRUCT: {
 		write_data_to_segment.create_segment = CreateStructSegment;
 		write_data_to_segment.segment_function = WriteDataToStructSegment;
 		read_data_from_segment.segment_function = ReadDataFromStructSegment;
+		copy_data_from_segment.segment_function = CopyDataFromStructSegment;
 
 		// recurse
 		auto child_types = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
 			read_data_from_segment.child_functions.emplace_back(ReadDataFromSegment());
+			copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
 			GetSegmentDataFunctions(write_data_to_segment.child_functions.back(),
-			                        read_data_from_segment.child_functions.back(), child_types[i].second);
+			                        read_data_from_segment.child_functions.back(),
+			                        copy_data_from_segment.child_functions.back(), child_types[i].second);
 		}
 		break;
 	}
@@ -657,7 +771,7 @@ ListBindData::ListBindData(const LogicalType &stype_p) : stype(stype_p) {
 
 	// always unnest once because the result vector is of type LIST
 	auto type = ListType::GetChildType(stype_p);
-	GetSegmentDataFunctions(write_data_to_segment, read_data_from_segment, type);
+	GetSegmentDataFunctions(write_data_to_segment, read_data_from_segment, copy_data_from_segment, type);
 }
 
 ListBindData::~ListBindData() {
@@ -725,10 +839,12 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	}
 }
 
-static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputData &, idx_t count) {
+static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	UnifiedVectorFormat sdata;
 	state.ToUnifiedFormat(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;
+
+	auto &list_bind_data = (ListBindData &)*aggr_input_data.bind_data;
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
@@ -739,32 +855,27 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 		}
 		D_ASSERT(state->type);
 		D_ASSERT(state->owning_vector);
+
 		if (!combined_ptr[i]->linked_list) {
-
-			// copy the linked list
 			combined_ptr[i]->linked_list = new LinkedList(0, nullptr, nullptr);
-			combined_ptr[i]->linked_list->first_segment = state->linked_list->first_segment;
-			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
-			combined_ptr[i]->linked_list->total_capacity = state->linked_list->total_capacity;
-
-			// copy the type
-			combined_ptr[i]->type = new LogicalType(*state->type);
-
-			// new owning_vector to hold the unique pointers
 			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
+			combined_ptr[i]->type = new LogicalType(*state->type);
+		}
+		auto owning_vector = combined_ptr[i]->owning_vector;
 
+		// copy the linked list of the state
+		auto copied_linked_list = LinkedList(state->linked_list->total_capacity, nullptr, nullptr);
+		CopyLinkedList(list_bind_data.copy_data_from_segment, state->linked_list, copied_linked_list,
+		               aggr_input_data.allocator, *owning_vector);
+
+		// append the copied linked list to the combined state
+		if (combined_ptr[i]->linked_list->last_segment) {
+			combined_ptr[i]->linked_list->last_segment->next = copied_linked_list.first_segment;
 		} else {
-			combined_ptr[i]->linked_list->last_segment->next = state->linked_list->first_segment;
-			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
-			combined_ptr[i]->linked_list->total_capacity += state->linked_list->total_capacity;
+			combined_ptr[i]->linked_list->first_segment = copied_linked_list.first_segment;
 		}
-
-		// copy the owning vector (and its unique pointers to the allocated data)
-		// FIXME: more efficient way of copying the unique pointers?
-		auto &owning_vector = *state->owning_vector;
-		for (idx_t j = 0; j < state->owning_vector->size(); j++) {
-			combined_ptr[i]->owning_vector->push_back(move(owning_vector[j]));
-		}
+		combined_ptr[i]->linked_list->last_segment = copied_linked_list.last_segment;
+		combined_ptr[i]->linked_list->total_capacity += copied_linked_list.total_capacity;
 	}
 }
 

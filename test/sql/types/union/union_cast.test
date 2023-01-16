@@ -124,3 +124,57 @@ f32		NULL	NULL	6.0
 i32		1		NULL	NULL
 str		NULL	two		NULL
 str		NULL	three	NULL
+
+# Allow explict casts
+statement ok
+CREATE TABLE tbl3 (u UNION(i INT));
+
+statement ok
+INSERT INTO tbl3 VALUES (1), (2), (3);
+
+query I
+SELECT u::UNION(i SMALLINT) FROM tbl3 ORDER BY ALL;;
+----
+1
+2
+3
+
+statement ok
+CREATE TABLE tbl4 (u UNION(i INT, b BLOB));
+
+statement ok
+INSERT INTO tbl4 VALUES (1), ('010203'::BLOB), (3), ('070809'::BLOB);
+
+# fails since b is missing
+statement error
+SELECT u::UNION(i SMALLINT, v VARCHAR) FROM tbl4;
+
+# succeeds since b is present
+query I
+SELECT u::UNION(i SMALLINT, b VARCHAR) FROM tbl4 ORDER BY ALL;;
+----
+1
+3
+010203
+070809
+
+# fails since b is not compatible
+statement error
+SELECT u::UNION(i SMALLINT, b INT) FROM tbl4;
+
+statement ok
+DELETE FROM tbl4 WHERE union_tag(u) == 'b';
+
+statement ok
+INSERT INTO tbl4 VALUES (union_value(b := NULL::BLOB)), (union_value(b := NULL)), (NULL), (NULL::BLOB);
+
+# succeeds since all members of b is null, therefore TryNullCast allows to cast blob -> int.
+query III
+SELECT union_tag(u), union_tag(u::UNION(i SMALLINT, b INT)), u::UNION(i SMALLINT, b INT) FROM tbl4 ORDER BY ALL;;
+----
+NULL	NULL	NULL
+NULL	NULL	NULL
+i		i		1
+i		i		3
+b		b		NULL
+b		b		NULL

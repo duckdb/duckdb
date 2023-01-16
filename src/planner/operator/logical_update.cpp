@@ -17,7 +17,7 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
-	return move(result);
+	return std::move(result);
 }
 
 idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {

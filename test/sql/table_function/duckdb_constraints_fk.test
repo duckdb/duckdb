@@ -2,8 +2,7 @@
 # description: Test duckdb_constraints function
 # group: [table_function]
 
-require skip_reload
-
+require noforcestorage
 
 statement ok
 CREATE TABLE tf_1 (
@@ -36,20 +35,20 @@ CREATE TABLE tf_4 (
   FOREIGN KEY (h) REFERENCES tf_3 (h),
 );
 
-query IIIIIIII
-SELECT * EXCLUDE (schema_oid, table_oid) FROM duckdb_constraints();
+query IIIIIIIII
+SELECT * EXCLUDE (schema_oid, table_oid, database_oid) FROM duckdb_constraints();
 ----
-main	tf_1	0	PRIMARY KEY	PRIMARY KEY(a)	NULL	[0]	[a]
-main	tf_1	1	UNIQUE	UNIQUE("b c")	NULL	[1]	[b c]
-main	tf_1	2	UNIQUE	UNIQUE("d e")	NULL	[2]	[d e]
-main	tf_1	3	NOT NULL	NOT NULL	NULL	[0]	[a]
-main	tf_2	4	PRIMARY KEY	PRIMARY KEY(c)	NULL	[0]	[c]
-main	tf_2	0	FOREIGN KEY	FOREIGN KEY (d) REFERENCES tf_1(a)	NULL	[1]	[d]
-main	tf_2	1	FOREIGN KEY	FOREIGN KEY (e) REFERENCES tf_1("b c")	NULL	[2]	[e]
-main	tf_2	2	FOREIGN KEY	FOREIGN KEY (f) REFERENCES tf_1("d e")	NULL	[3]	[f]
-main	tf_2	5	FOREIGN KEY	FOREIGN KEY (g) REFERENCES tf_3(g)	NULL	[4]	[g]
-main	tf_2	6	NOT NULL	NOT NULL	NULL	[0]	[c]
-main	tf_3	5	PRIMARY KEY	PRIMARY KEY(g)	NULL	[0]	[g]
-main	tf_3	7	UNIQUE	UNIQUE(h)	NULL	[1]	[h]
-main	tf_3	8	NOT NULL	NOT NULL	NULL	[0]	[g]
-main	tf_4	7	FOREIGN KEY	FOREIGN KEY (h) REFERENCES tf_3(h)	NULL	[0]	[h]
+memory	main	tf_1	0	PRIMARY KEY	PRIMARY KEY(a)	NULL	[0]	[a]
+memory	main	tf_1	1	UNIQUE	UNIQUE("b c")	NULL	[1]	[b c]
+memory	main	tf_1	2	UNIQUE	UNIQUE("d e")	NULL	[2]	[d e]
+memory	main	tf_1	3	NOT NULL	NOT NULL	NULL	[0]	[a]
+memory	main	tf_2	4	PRIMARY KEY	PRIMARY KEY(c)	NULL	[0]	[c]
+memory	main	tf_2	0	FOREIGN KEY	FOREIGN KEY (d) REFERENCES tf_1(a)	NULL	[1]	[d]
+memory	main	tf_2	1	FOREIGN KEY	FOREIGN KEY (e) REFERENCES tf_1("b c")	NULL	[2]	[e]
+memory	main	tf_2	2	FOREIGN KEY	FOREIGN KEY (f) REFERENCES tf_1("d e")	NULL	[3]	[f]
+memory	main	tf_2	5	FOREIGN KEY	FOREIGN KEY (g) REFERENCES tf_3(g)	NULL	[4]	[g]
+memory	main	tf_2	6	NOT NULL	NOT NULL	NULL	[0]	[c]
+memory	main	tf_3	5	PRIMARY KEY	PRIMARY KEY(g)	NULL	[0]	[g]
+memory	main	tf_3	7	UNIQUE	UNIQUE(h)	NULL	[1]	[h]
+memory	main	tf_3	8	NOT NULL	NOT NULL	NULL	[0]	[g]
+memory	main	tf_4	7	FOREIGN KEY	FOREIGN KEY (h) REFERENCES tf_3(h)	NULL	[0]	[h]

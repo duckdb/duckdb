@@ -18,4 +18,8 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationSta
 	return make_unique<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns);
 }
 
+vector<idx_t> LogicalCTERef::GetTableIndex() const {
+	return vector<idx_t> {table_index};
+}
+
 } // namespace duckdb

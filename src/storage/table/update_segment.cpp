@@ -20,7 +20,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data), stats(column_data.type) {
+UpdateSegment::UpdateSegment(ColumnData &column_data)
+    : column_data(column_data), stats(column_data.type), heap(BufferAllocator::Get(column_data.GetDatabase())) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -615,7 +616,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment *segment, string_t element) {
-	return element.IsInlined() ? element : segment->GetStringHeap().AddString(element);
+	return element.IsInlined() ? element : segment->GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -941,7 +942,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		for (idx_t i = 0; i < count; i++) {
 			((StringStatistics &)*stats.statistics).Update(update_data[i]);
 			if (!update_data[i].IsInlined()) {
-				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
 		sel.Initialize(nullptr);
@@ -954,7 +955,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 				sel.set_index(not_null_count++, i);
 				((StringStatistics &)*stats.statistics).Update(update_data[i]);
 				if (!update_data[i].IsInlined()) {
-					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 				}
 			}
 		}
@@ -1178,7 +1179,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		transaction_node->Verify();
 		result->info->Verify();
 
-		root->info[vector_index] = move(result);
+		root->info[vector_index] = std::move(result);
 	}
 }
 

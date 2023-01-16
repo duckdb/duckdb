@@ -17,12 +17,13 @@
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateTableInfo {
-	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base_p) : base(move(base_p)) {
+	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base_p) : base(std::move(base_p)) {
 		D_ASSERT(base);
 	}
 
@@ -39,7 +40,7 @@ struct BoundCreateTableInfo {
 	//! Bound default values
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! Dependents of the table (in e.g. default values)
-	unordered_set<CatalogEntry *> dependencies;
+	DependencyList dependencies;
 	//! The existing table data on disk (if any)
 	unique_ptr<PersistentTableData> data;
 	//! CREATE TABLE from QUERY

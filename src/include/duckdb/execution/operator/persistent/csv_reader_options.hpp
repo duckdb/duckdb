@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,13 @@ struct BufferedCSVReaderOptions {
 	//! The column names of the columns to read/write
 	vector<string> names;
 
+	//===--------------------------------------------------------------------===//
+	// CSVAutoOptions
+	//===--------------------------------------------------------------------===//
+	//! SQL Type list mapping of name to SQL type index in sql_type_list
+	case_insensitive_map_t<idx_t> sql_types_per_column;
+	//! User-defined SQL type list
+	vector<LogicalType> sql_type_list;
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//

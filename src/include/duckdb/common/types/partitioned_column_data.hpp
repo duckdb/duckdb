@@ -90,11 +90,7 @@ protected:
 		return make_unique<ColumnDataCollection>(allocators->allocators[partition_index], types);
 	}
 	//! Create a DataChunk used for buffering appends to the partition
-	unique_ptr<DataChunk> CreatePartitionBuffer() const {
-		auto result = make_unique<DataChunk>();
-		result->Initialize(Allocator::Get(context), types, BufferSize());
-		return result;
-	}
+	unique_ptr<DataChunk> CreatePartitionBuffer() const;
 
 protected:
 	PartitionedColumnDataType type;

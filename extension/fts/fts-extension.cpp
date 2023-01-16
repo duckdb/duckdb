@@ -68,7 +68,7 @@ void FTSExtension::Load(DuckDB &db) {
 
 	Connection conn(db);
 	conn.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*conn.context);
+	auto &catalog = Catalog::GetSystemCatalog(*conn.context);
 	catalog.CreateFunction(*conn.context, &stem_info);
 	catalog.CreatePragmaFunction(*conn.context, &create_fts_index_info);
 	catalog.CreatePragmaFunction(*conn.context, &drop_fts_index_info);

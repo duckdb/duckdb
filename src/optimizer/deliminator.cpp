@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -13,13 +14,15 @@ namespace duckdb {
 
 class DeliminatorPlanUpdater : LogicalOperatorVisitor {
 public:
-	DeliminatorPlanUpdater() {
+	explicit DeliminatorPlanUpdater(ClientContext &context) : context(context) {
 	}
 	//! Update the plan after a DelimGet has been removed
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 public:
+	ClientContext &context;
+
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	column_binding_map_t<Expression *> reverse_proj_or_agg_map;
@@ -94,6 +97,10 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 		// change type if there are no more duplicate-eliminated columns
 		if (decs->empty()) {
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			// sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
+			// the DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
+			JoinOrderOptimizer optimizer(context);
+			delim_join.children[1] = optimizer.Optimize(std::move(delim_join.children[1]));
 		}
 	}
 }
@@ -111,7 +118,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	FindCandidates(&op, candidates);
 
 	for (auto &candidate : candidates) {
-		DeliminatorPlanUpdater updater;
+		DeliminatorPlanUpdater updater(context);
 		if (RemoveCandidate(&op, candidate, updater)) {
 			updater.VisitOperator(*op);
 		}
@@ -233,6 +240,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 
 		// Create a vector of all exprs in the agg
 		vector<Expression *> all_agg_exprs;
+		all_agg_exprs.reserve(agg.groups.size() + agg.expressions.size());
 		for (auto &expr : agg.groups) {
 			all_agg_exprs.push_back(expr.get());
 		}
@@ -269,21 +277,21 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 				auto is_not_null_expr =
 				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				is_not_null_expr->children.push_back(expr->Copy());
-				filter_op->expressions.push_back(move(is_not_null_expr));
+				filter_op->expressions.push_back(std::move(is_not_null_expr));
 			}
 		}
 		if (filter != nullptr) {
 			for (auto &expr : filter->expressions) {
-				filter_op->expressions.push_back(move(expr));
+				filter_op->expressions.push_back(std::move(expr));
 			}
 		}
-		filter_op->children.push_back(move(join.children[1 - delim_idx]));
-		join.children[1 - delim_idx] = move(filter_op);
+		filter_op->children.push_back(std::move(join.children[1 - delim_idx]));
+		join.children[1 - delim_idx] = std::move(filter_op);
 	}
 	// temporarily save deleted operator so its expressions are still available
-	updater.temp_ptr = move(proj_or_agg.children[0]);
+	updater.temp_ptr = std::move(proj_or_agg.children[0]);
 	// replace the redundant join
-	proj_or_agg.children[0] = move(join.children[1 - delim_idx]);
+	proj_or_agg.children[0] = std::move(join.children[1 - delim_idx]);
 	return true;
 }
 
@@ -324,7 +332,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	GetDelimJoins(**plan, delim_joins);
 
 	LogicalOperator *parent = nullptr;
-	idx_t parent_delim_get_side;
+	idx_t parent_delim_get_side = 0;
 	for (auto dj : delim_joins) {
 		D_ASSERT(dj->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 		if (!HasChild(dj, &proj_or_agg, parent_delim_get_side)) {
@@ -415,7 +423,8 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			}
 			parent_expr =
 			    make_unique<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
-			parent_cond.comparison = child_cond.comparison;
+			parent_cond.comparison =
+			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisionExpression(child_cond.comparison);
 			break;
 		}
 	}

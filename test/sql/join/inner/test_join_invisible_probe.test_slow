@@ -2,6 +2,8 @@
 # description: Test joins that would generate a perfect hashtable
 # group: [inner]
 
+require 64bit
+
 statement ok
 PRAGMA enable_verification
 
