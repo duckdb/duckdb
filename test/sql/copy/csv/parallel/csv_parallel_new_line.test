@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/parallel/csv_parallel_new_line.test_slow
+# name: test/sql/copy/csv/parallel/csv_parallel_new_line.test
 # description: Test parallel read CSV function with different settings of new lines
 # group: [parallel]
 

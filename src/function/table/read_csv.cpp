@@ -38,9 +38,8 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	auto &config = DBConfig::GetConfig(context);
 	single_threaded = !config.options.experimental_parallel_csv_reader;
-	bool null_or_empty =
-	    options.delimiter.empty() || options.escape.empty() || options.quote.empty() || options.delimiter == "\0"
-			|| options.escape == "\0" || options.quote == "\0";
+	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
+	                     options.delimiter == "\0" || options.escape == "\0" || options.quote == "\0";
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
 	if (null_or_empty || complex_options || options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
@@ -282,8 +281,6 @@ public:
 	atomic<idx_t> bytes_read;
 	//! Size of current file
 	idx_t file_size;
-	//! The index of the next file to read (i.e. current file + 1)
-	idx_t file_index = 1;
 
 	double GetProgress(ReadCSVData &bind_data) const {
 		idx_t total_files = bind_data.files.size();

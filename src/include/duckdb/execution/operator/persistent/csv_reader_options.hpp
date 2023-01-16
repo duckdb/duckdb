@@ -18,9 +18,13 @@
 namespace duckdb {
 
 enum NewLineIdentifier {
-	SINGLE = 1,   // Only has either \n ,\r, \r\n or a mix of \r and \n
-	MIX = 2, // Hippie-land (i.e., mixes \n and \r\n, or \r and \r\n)
-	NOT_SET = 3
+	SINGLE = 1, // Only has either \n ,\r, \r\n or a mix of \r and \n
+	MIX = 2,    // Hippie-land (i.e., mixes \n and \r\n, or \r and \r\n)
+	NOT_SET = 3,
+	RN = 4,
+	N = 5,
+	R = 6,
+	INVALID = 7
 };
 
 struct BufferedCSVReaderOptions {
