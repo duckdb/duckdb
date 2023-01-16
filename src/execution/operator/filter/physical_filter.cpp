@@ -53,7 +53,10 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 }
 
 string PhysicalFilter::ParamsToString() const {
-	return expression->GetName();
+	auto result = expression->GetName();
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	return result;
 }
 
 } // namespace duckdb
