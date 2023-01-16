@@ -1,8 +1,7 @@
 #pragma once
 
-#include "duckdb/common/string_util.hpp"
-
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb_python/python_object_container.hpp"
 
@@ -38,8 +37,7 @@ private:
 };
 class PythonFilesystem : public FileSystem {
 private:
-	const vector<string> &protocols;
-	const string &name;
+	const vector<string> protocols;
 	const AbstractFileSystem &filesystem;
 	string stripPrefix(string input) {
 		for (const auto &protocol : protocols) {
@@ -52,13 +50,13 @@ private:
 	}
 
 public:
-	explicit PythonFilesystem(const vector<string> &protocols, const AbstractFileSystem &filesystem)
-	    : protocols(protocols), name(protocols[0]), filesystem(filesystem) {
+	explicit PythonFilesystem(const vector<string> protocols, const AbstractFileSystem &filesystem)
+	    : protocols(protocols), filesystem(filesystem) {
 	}
 
 protected:
 	string GetName() const override {
-		return name;
+		return protocols[0];
 	}
 
 public:

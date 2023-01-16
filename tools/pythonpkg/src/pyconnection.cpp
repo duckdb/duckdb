@@ -186,7 +186,7 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem
 		}
 	}
 
-	fs.RegisterSubSystem(make_unique<PythonFilesystem>(protocols, filesystem));
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(std::move(protocols), filesystem));
 }
 
 py::list DuckDBPyConnection::ListFilesystems() {
