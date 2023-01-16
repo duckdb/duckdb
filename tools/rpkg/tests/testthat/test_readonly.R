@@ -36,7 +36,6 @@ test_that("read_only flag and shutdown works as expected", {
   dbDisconnect(con, shutdown = FALSE)
   dbDisconnect(con2, shutdown = TRUE)
 
-
   # now we can get write access again
   # TODO shutdown
   callr::r(function(dbdir) {
