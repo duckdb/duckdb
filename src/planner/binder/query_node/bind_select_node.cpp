@@ -445,6 +445,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
+		bool is_window_aggregate = statement.select_list[i]->type == ExpressionType::WINDOW_AGGREGATE;
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
@@ -461,8 +462,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			result->groups.group_expressions.push_back(std::move(expr));
 			expr = std::move(group_ref);
 		}
-		if (!result->unnests.empty() && is_window) {
-			throw BinderException("Cannot have unnest in a window clause");
+		if (!result->unnests.empty() && is_window && is_window_aggregate) {
+			throw BinderException("Cannot have unnest in a window aggregate clause");
 		}
 		result->select_list.push_back(std::move(expr));
 		if (i < result->column_count) {

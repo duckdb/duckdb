@@ -8,5 +8,11 @@ select unnest([5,4,3]) as r, r as x, sum(r) OVER ();
 ----
 Binder Error
 
+
+statement error
+SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
+----
+Binder Error
+
 statement ok
 select 1;
