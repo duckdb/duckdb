@@ -159,7 +159,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			lock_guard<mutex> glock(g.lock);
 			state->writer_offset = g.last_file_offset++;
 
-			// TODO: types is incorrect: its what copy returns, instead of what goes in here
 			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types, partition_columns, g.partition_state);
 			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
 			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
