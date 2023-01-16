@@ -31,6 +31,26 @@ struct ICUCalendarAge : public ICUDateFunc {
 	}
 };
 
+static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hour, UErrorCode &status) {
+	if (interval_hour >= 0) {
+		while (interval_hour > 0) {
+			calendar->add(UCAL_HOUR,
+			              interval_hour > NumericLimits<int32_t>::Maximum() ? NumericLimits<int32_t>::Maximum()
+			                                                                : interval_hour,
+			              status);
+			interval_hour -= NumericLimits<int32_t>::Maximum();
+		}
+	} else {
+		while (interval_hour < 0) {
+			calendar->add(UCAL_HOUR,
+			              interval_hour < NumericLimits<int32_t>::Minimum() ? NumericLimits<int32_t>::Minimum()
+			                                                                : interval_hour,
+			              status);
+			interval_hour -= NumericLimits<int32_t>::Minimum();
+		}
+	}
+}
+
 template <>
 timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
 	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
@@ -74,7 +94,7 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		calendar->add(UCAL_MILLISECOND, interval_ms, status);
 		calendar->add(UCAL_SECOND, interval_s, status);
 		calendar->add(UCAL_MINUTE, interval_m, status);
-		calendar->add(UCAL_HOUR, interval_h, status);
+		CalendarAddHour(calendar, interval_h, status);
 
 		calendar->add(UCAL_DATE, interval.days, status);
 		calendar->add(UCAL_MONTH, interval.months, status);
@@ -83,7 +103,7 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		calendar->add(UCAL_MONTH, interval.months, status);
 		calendar->add(UCAL_DATE, interval.days, status);
 
-		calendar->add(UCAL_HOUR, interval_h, status);
+		CalendarAddHour(calendar, interval_h, status);
 		calendar->add(UCAL_MINUTE, interval_m, status);
 		calendar->add(UCAL_SECOND, interval_s, status);
 		calendar->add(UCAL_MILLISECOND, interval_ms, status);

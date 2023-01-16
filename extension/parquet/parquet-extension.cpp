@@ -20,6 +20,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/union_by_name.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -44,6 +45,10 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
+
+	// The union readers are created (when parquet union_by_name option is on) during binding
+	// Those readers can be re-used during ParquetParallelStateNext
+	vector<shared_ptr<ParquetReader>> union_readers;
 
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
@@ -127,6 +132,7 @@ void ParquetOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(filename);
 	writer.WriteField<bool>(file_row_number);
 	writer.WriteField<bool>(hive_partitioning);
+	writer.WriteField<bool>(union_by_name);
 }
 
 void ParquetOptions::Deserialize(FieldReader &reader) {
@@ -134,6 +140,7 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 	filename = reader.ReadRequired<bool>();
 	file_row_number = reader.ReadRequired<bool>();
 	hive_partitioning = reader.ReadRequired<bool>();
+	union_by_name = reader.ReadRequired<bool>();
 }
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
@@ -148,6 +155,7 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	bind_info.InsertOption("filename", Value::BOOLEAN(parquet_bind->parquet_options.filename));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind->parquet_options.file_row_number));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(parquet_bind->parquet_options.hive_partitioning));
+	bind_info.InsertOption("union_by_name", Value::BOOLEAN(parquet_bind->parquet_options.union_by_name));
 	return bind_info;
 }
 
@@ -164,6 +172,7 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -180,6 +189,7 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
 	}
@@ -201,22 +211,31 @@ public:
 				parquet_options.file_row_number = true;
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = true;
+			} else if (loption == "union_by_name") {
+				parquet_options.union_by_name = true;
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
 		}
-		auto result = make_unique<ParquetReadBindData>();
 
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		result->files = fs.Glob(info.file_path, context);
-		if (result->files.empty()) {
+		auto files = fs.Glob(info.file_path, context);
+		if (files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		result->SetInitialReader(
-		    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
-		result->names = result->initial_reader->names;
-		result->types = result->initial_reader->return_types;
-		return std::move(result);
+
+		// The most likely path (Parquet read without union by name option)
+		if (!parquet_options.union_by_name) {
+			auto result = make_unique<ParquetReadBindData>();
+			result->files = std::move(files);
+			result->SetInitialReader(
+			    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
+			result->names = result->initial_reader->names;
+			result->types = result->initial_reader->return_types;
+			return std::move(result);
+		} else {
+			return ParquetUnionNamesBind(context, files, expected_types, expected_names, parquet_options);
+		}
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -303,11 +322,40 @@ public:
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
+
+		// The most likely path (Parquet Scan without union by name option)
+		if (!parquet_options.union_by_name) {
+			result->files = std::move(files);
+			result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
+			return_types = result->types = result->initial_reader->return_types;
+			names = result->names = result->initial_reader->names;
+			return std::move(result);
+		} else {
+			return ParquetUnionNamesBind(context, files, return_types, names, parquet_options);
+		}
+	}
+
+	static unique_ptr<FunctionData> ParquetUnionNamesBind(ClientContext &context, vector<string> files,
+	                                                      vector<LogicalType> &return_types, vector<string> &names,
+	                                                      ParquetOptions parquet_options) {
+		auto result = make_unique<ParquetReadBindData>();
 		result->files = std::move(files);
 
-		result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
-		return_types = result->types = result->initial_reader->return_types;
-		names = result->names = result->initial_reader->names;
+		case_insensitive_map_t<idx_t> union_names_map;
+		vector<string> union_col_names;
+		vector<LogicalType> union_col_types;
+		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(
+		    context, result->files, union_col_types, union_col_names, union_names_map, parquet_options);
+
+		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(
+		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
+
+		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
+		names.assign(union_col_names.begin(), union_col_names.end());
+		return_types.assign(union_col_types.begin(), union_col_types.end());
+		result->SetInitialReader(result->union_readers[0]);
+		D_ASSERT(names.size() == return_types.size());
+
 		return std::move(result);
 	}
 
@@ -337,6 +385,8 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
+			} else if (loption == "union_by_name") {
+				parquet_options.union_by_name = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -370,6 +420,8 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			} else if (loption == "hive_partitioning") {
 				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
+			} else if (loption == "union_by_name") {
+				parquet_options.union_by_name = true;
 			}
 		}
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
@@ -417,20 +469,24 @@ public:
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
 		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
-		result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
-
-		if (bind_data.initial_reader) {
-			result->initial_reader = bind_data.initial_reader;
-			result->readers[0] = bind_data.initial_reader;
-		} else {
-			if (bind_data.files.empty()) {
-				result->initial_reader = nullptr;
+		if (!bind_data.parquet_options.union_by_name) {
+			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+			if (bind_data.initial_reader) {
+				result->initial_reader = bind_data.initial_reader;
+				result->readers[0] = bind_data.initial_reader;
 			} else {
-				result->initial_reader =
-				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types,
-				                               input.column_ids, bind_data.parquet_options, bind_data.files[0]);
-				result->readers[0] = result->initial_reader;
+				if (bind_data.files.empty()) {
+					result->initial_reader = nullptr;
+				} else {
+					result->initial_reader =
+					    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types,
+					                               input.column_ids, bind_data.parquet_options, bind_data.files[0]);
+					result->readers[0] = result->initial_reader;
+				}
 			}
+		} else {
+			result->readers = std::move(bind_data.union_readers);
+			result->initial_reader = result->readers[0];
 		}
 
 		result->row_group_index = 0;
@@ -497,6 +553,9 @@ public:
 
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
+				if (bind_data.parquet_options.union_by_name) {
+					UnionByName<ParquetReader, ParquetOptions>::SetNullUnionCols(output, data.reader->union_null_cols);
+				}
 				return;
 			}
 			if (!ParquetParallelStateNext(context, bind_data, data, gstate)) {
@@ -533,6 +592,12 @@ public:
 			D_ASSERT(parallel_state.initial_reader);
 
 			if (parallel_state.readers[parallel_state.file_index]) {
+				const auto &current_reader = parallel_state.readers[parallel_state.file_index];
+				if (current_reader->union_null_cols.empty()) {
+					current_reader->union_null_cols.resize(current_reader->return_types.size());
+					std::fill(current_reader->union_null_cols.begin(), current_reader->union_null_cols.end(), false);
+				}
+
 				if (parallel_state.row_group_index <
 				    parallel_state.readers[parallel_state.file_index]->NumRowGroups()) {
 					// The current reader has rowgroups left to be scanned
