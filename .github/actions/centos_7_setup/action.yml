@@ -15,7 +15,7 @@ runs:
         yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
         yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
         yum install -y git
-        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker
+        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker ninja-build
 
     - name: Install AWS CLI
       shell: bash
