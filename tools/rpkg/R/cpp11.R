@@ -116,6 +116,18 @@ rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
 }
 
+rapi_rel_set_intersect <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_intersect`, rel_a, rel_b)
+}
+
+rapi_rel_set_diff <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_diff`, rel_a, rel_b)
+}
+
+rapi_rel_set_symdiff <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_symdiff`, rel_a, rel_b)
+}
+
 rapi_rel_to_altrep <- function(rel) {
   .Call(`_duckdb_rapi_rel_to_altrep`, rel)
 }
