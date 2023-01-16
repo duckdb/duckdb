@@ -219,12 +219,12 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name"),
+	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
 	      py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquets,
 	      "Creates a relation object from the Parquet files in file_globs", py::arg("file_globs"),
 	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name"),
+	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
 	      py::arg("connection") = py::none());
 	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the DataFrame df", py::arg("df"),
 	      py::arg("connection") = py::none());

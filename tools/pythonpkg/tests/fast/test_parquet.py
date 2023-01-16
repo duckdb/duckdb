@@ -6,6 +6,12 @@ import pandas as pd
 
 filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','binary_string.parquet')
 
+@pytest.fixture(scope="session")
+def tmp_parquets(tmp_path_factory):
+    tmp_dir = tmp_path_factory.mktemp('parquets', numbered=True)
+    tmp_parquets = [str(tmp_dir / ('tmp'+str(i)+'.parquet')) for i in range(1, 4)]
+    return tmp_parquets
+
 class TestParquet(object):
 
     def test_scan_binary(self, duckdb_cursor):
@@ -112,20 +118,16 @@ class TestParquet(object):
         res = rel.execute().fetchall()
         assert res[0] == ('foo',)
 
-    def test_from_parquet_union_by_name(self, duckdb_cursor):
+    def test_from_parquet_union_by_name(self, tmp_parquets):
         conn = duckdb.connect()
-        temp_dir = tempfile.mkdtemp()
 
-        temp_file_name_1 = os.path.join(temp_dir, next(tempfile._get_candidate_names()))
-        conn.execute("copy (from (values (1::bigint), (2::bigint), (9223372036854775807::bigint)) t(a)) to '"+temp_file_name_1+"' (format 'parquet');")
+        conn.execute("copy (from (values (1::bigint), (2::bigint), (9223372036854775807::bigint)) t(a)) to '"+tmp_parquets[0]+"' (format 'parquet');")
 
-        temp_file_name_2 = os.path.join(temp_dir, next(tempfile._get_candidate_names()))
-        conn.execute("copy (from (values (3::integer, 4::integer), (5::integer, 6::integer)) t(a, b)) to '"+temp_file_name_2+"' (format 'parquet');")
+        conn.execute("copy (from (values (3::integer, 4::integer), (5::integer, 6::integer)) t(a, b)) to '"+tmp_parquets[1]+"' (format 'parquet');")
 
-        temp_file_name_3 = os.path.join(temp_dir, next(tempfile._get_candidate_names()))
-        conn.execute("copy (from (values (100::integer, 101::integer), (102::integer, 103::integer)) t(a, c)) to '"+temp_file_name_3+"' (format 'parquet');")
+        conn.execute("copy (from (values (100::integer, 101::integer), (102::integer, 103::integer)) t(a, c)) to '"+tmp_parquets[2]+"' (format 'parquet');")
 
-        rel = duckdb.from_parquet([temp_file_name_1, temp_file_name_2, temp_file_name_3], union_by_name = True).order('a')
+        rel = duckdb.from_parquet(tmp_parquets, union_by_name = True).order('a')
         assert rel.execute().fetchall() == [
                 (1, None, None,),
                 (2, None, None,),
