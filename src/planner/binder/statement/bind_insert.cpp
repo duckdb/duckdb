@@ -75,7 +75,8 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	    expr, [&](unique_ptr<Expression> &child) { ReplaceColumnBindings(*child, source, dest); });
 }
 
-void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &set_info, TableCatalogEntry *table) {
+void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
+                                        TableCatalogEntry *table) {
 	D_ASSERT(insert->children.size() == 1);
 	D_ASSERT(insert->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
@@ -107,7 +108,7 @@ void Binder::BindDoUpdateSetExpressions(LogicalInsert *insert, UpdateSetInfo &se
 		binder.target_type = column.Type();
 
 		// Avoid ambiguity issues
-		QualifyColumnReferences(*expr, table->name);
+		QualifyColumnReferences(*expr, table_alias);
 
 		auto bound_expr = binder.Bind(expr);
 		D_ASSERT(bound_expr);
@@ -149,6 +150,9 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
+
+	auto &table_ref = (BaseTableRef &)*stmt.table_ref;
+	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
 	insert->action_type = on_conflict.action_type;
@@ -235,7 +239,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 
 	if (on_conflict.condition) {
 		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(*on_conflict.condition, table->name);
+		QualifyColumnReferences(*on_conflict.condition, table_alias);
 		// Bind the ON CONFLICT ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(on_conflict.condition);
@@ -255,7 +259,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 
 	if (set_info.condition) {
 		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(*set_info.condition, table->name);
+		QualifyColumnReferences(*set_info.condition, table_alias);
 		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(set_info.condition);
@@ -267,13 +271,14 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 
 	// Instead of this, it should probably be a DummyTableRef
 	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
-	BindDoUpdateSetExpressions(insert.get(), set_info, table);
+	BindDoUpdateSetExpressions(table_alias, insert.get(), set_info, table);
 
 	auto projection_index = insert->children[0]->GetTableIndex()[0];
 
 	string unused;
-	auto original_binding = bind_context.GetBinding(table->name, unused);
+	auto original_binding = bind_context.GetBinding(table_alias, unused);
 	D_ASSERT(original_binding);
+
 	auto table_index = original_binding->index;
 	// Get the column_ids we need to fetch later on from the conflicting tuples
 	// of the original table, to execute the expressions

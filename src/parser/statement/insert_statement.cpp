@@ -63,6 +63,10 @@ string InsertStatement::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(table);
+	// Write the (optional) alias of the insert target
+	if (table_ref && !table_ref->alias.empty()) {
+		result += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(table_ref->alias));
+	}
 	if (!columns.empty()) {
 		result += " (";
 		for (idx_t i = 0; i < columns.size(); i++) {
