@@ -45,8 +45,9 @@ mutable struct MyBuffer
     end
 end
 
+# Clean up the memory allocated by the buffer
 function remove_buffer(buffer::MyBuffer)
-    return pop!(buffer.buffer_manager.active_buffers, buffer.uuid)
+    DuckDB.duckdb_free(buffer.allocation)
 end
 
 function reallocate_memory(buffer::MyBuffer, new_size)
@@ -69,8 +70,9 @@ function ReAllocate(buffer_manager::MyBufferManager, buffer::MyBuffer, old_size,
 end
 
 function Destroy(buffer_manager::MyBufferManager, buffer::MyBuffer)
-    DuckDB.duckdb_free(buffer.allocation)
     buffer_manager.allocated_memory -= buffer.size
+	# Remove the reference to the buffer so it can be cleaned up by the garbage collector
+	pop!(buffer_manager.active_buffers, buffer.uuid)
     return
 end
 
