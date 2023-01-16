@@ -73,6 +73,7 @@ struct ParquetOptions {
 	bool filename = false;
 	bool file_row_number = false;
 	bool hive_partitioning = false;
+	bool union_by_name = false;
 
 public:
 	void Serialize(FieldWriter &writer) const;
@@ -111,6 +112,17 @@ public:
 	//! maps hive partition names to string columns
 	unique_ptr<std::map<string, string>> hive_map;
 
+	//! when reading multiple parquet files (with union by name option)
+	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
+	//! cols, those files might have cols at different positions and with different logical type.
+	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
+	vector<idx_t> union_idx_map;
+	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
+	//! some parquet files may not have all union cols.
+	vector<bool> union_null_cols;
+	//! All union cols will cast to same type.
+	vector<LogicalType> union_col_types;
+
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
 	                    TableFilterSet *table_filters);
@@ -141,6 +153,7 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
+	void RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

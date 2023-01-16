@@ -9,6 +9,7 @@ CopyStmt
 CreateAsStmt
 CreateTypeStmt
 CreateFunctionStmt
+CreateDatabaseStmt
 CreateSchemaStmt
 CreateSeqStmt
 CreateStmt
