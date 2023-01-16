@@ -23,7 +23,11 @@ done
 mkdir -p testext
 cd testext
 
-CMAKE_ROOT=".."
+if [ "$2" = "oote" ]; then
+  CMAKE_ROOT="../duckdb"
+else
+  CMAKE_ROOT=".."
+fi
 
 cmake -G "Ninja" -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" -DDISABLE_BUILTIN_EXTENSIONS=TRUE ${CMAKE_ROOT}
 cmake --build . --config ${CMAKE_CONFIG}
