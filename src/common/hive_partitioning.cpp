@@ -177,7 +177,7 @@ void HivePartitionedColumnData::GrowAllocators() {
 		CreateAllocator();
 	}
 
-	D_ASSERT(allocators->allocators.size() == local_partition_map.map.size());
+	D_ASSERT(allocators->allocators.size() == local_partition_map.size());
 }
 
 void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState &state) {
@@ -200,7 +200,7 @@ void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState 
 		partitions.emplace_back(CreatePartitionCollection(i));
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 	}
-	D_ASSERT(partitions.size() == local_partition_map.map.size());
+	D_ASSERT(partitions.size() == local_partition_map.size());
 }
 
 void HivePartitionedColumnData::SynchronizeLocalMap() {
