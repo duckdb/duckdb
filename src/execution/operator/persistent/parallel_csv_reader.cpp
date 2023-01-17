@@ -43,16 +43,14 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	InitInsertChunkIdx(return_types.size());
 }
 
-bool NewLineDelimiter(NewLineIdentifier newline_delimiter, bool carry, bool carry_followed_by_nl) {
-	D_ASSERT(newline_delimiter != NewLineIdentifier::MIX);
-	if (newline_delimiter == NewLineIdentifier::R) {
-		return carry && !carry_followed_by_nl;
-	} else if (newline_delimiter == NewLineIdentifier::N) {
-		return !carry && !carry_followed_by_nl;
-	} else if (newline_delimiter == NewLineIdentifier::RN) {
-		return carry && carry_followed_by_nl;
+bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl) {
+	// Set the delimiter if not set yet.
+	SetNewLineDelimiter(carry, carry_followed_by_nl);
+	D_ASSERT(options.new_line == NewLineIdentifier::SINGLE || options.new_line == NewLineIdentifier::CARRY_ON);
+	if (options.new_line == NewLineIdentifier::SINGLE) {
+		return (!carry) || (carry && !carry_followed_by_nl);
 	}
-	return true;
+	return carry && carry_followed_by_nl;
 }
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
@@ -94,7 +92,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 						position_buffer++;
 					}
 				}
-				if (NewLineDelimiter(options.new_line, carriage_return, carriage_return_followed)) {
+				if (NewLineDelimiter(carriage_return, carriage_return_followed)) {
 					break;
 				}
 			}
@@ -142,7 +140,6 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	reached_remainder_state = false;
 	verification_positions.beginning_of_first_line = 0;
 	verification_positions.end_of_last_line = 0;
-	read_one_line = false;
 	D_ASSERT(end_buffer <= buffer_size);
 }
 

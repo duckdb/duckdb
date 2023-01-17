@@ -115,8 +115,6 @@ public:
 	//! If this flag is set, it means we are about to try to read our last row.
 	bool reached_remainder_state = false;
 
-	bool read_one_line = false;
-
 	unique_ptr<CSVBufferRead> buffer;
 	VerificationPositions GetVerificationPositions();
 
@@ -141,6 +139,8 @@ private:
 	//! when changing the buffer end the first time.
 	//! It returns FALSE if the parser should jump to the final state of parsing or not
 	bool BufferRemainder();
+
+	bool NewLineDelimiter(bool carry, bool carry_followed_by_nl);
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);

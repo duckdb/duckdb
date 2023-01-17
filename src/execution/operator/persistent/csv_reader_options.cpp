@@ -118,12 +118,10 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 }
 
 void BufferedCSVReaderOptions::SetNewline(const string &input) {
-	if (input == "\\n") {
-		this->new_line = NewLineIdentifier::N;
-	} else if (input == "\\r") {
-		this->new_line = NewLineIdentifier::R;
+	if (input == "\\n" || input == "\\r") {
+		this->new_line = NewLineIdentifier::SINGLE;
 	} else if (input == "\\r\\n") {
-		this->new_line = NewLineIdentifier::RN;
+		this->new_line = NewLineIdentifier::CARRY_ON;
 	} else {
 		throw InvalidInputException("This is not accepted as a newline: " + input);
 	}

@@ -277,6 +277,10 @@ public:
 
 	void UpdateVerification(VerificationPositions positions);
 
+	void IncrementThread();
+
+	void DecrementThread();
+
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
 	//! Size of current file
@@ -332,6 +336,7 @@ private:
 	//! positions where they started reading the first line.
 	vector<idx_t> tuple_end;
 	set<idx_t> tuple_start;
+	idx_t running_threads = 0;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -348,26 +353,39 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	return system_threads;
 }
 
+void ParallelCSVGlobalState::IncrementThread() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	running_threads++;
+}
+
+void ParallelCSVGlobalState::DecrementThread() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	D_ASSERT(running_threads > 0);
+	running_threads--;
+}
+
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
-	for (auto &last_pos : tuple_end) {
-		auto first_pos = tuple_start.find(last_pos);
-		if (first_pos == tuple_start.end()) {
-			// this might be necessary due to carriage returns outside buffer scopes.
-			first_pos = tuple_start.find(last_pos + 1);
-		}
-		if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
-			string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
-			               " does not have a match\n";
-			error += "End Lines: \n";
-			for (auto &end_line : tuple_end) {
-				error += to_string(end_line) + "\n";
+	if (running_threads == 0) {
+		for (auto &last_pos : tuple_end) {
+			auto first_pos = tuple_start.find(last_pos);
+			if (first_pos == tuple_start.end()) {
+				// this might be necessary due to carriage returns outside buffer scopes.
+				first_pos = tuple_start.find(last_pos + 1);
 			}
-			error += "Start Lines: \n";
-			for (auto &start_line : tuple_start) {
-				error += to_string(start_line) + "\n";
+			if (first_pos == tuple_start.end() && last_pos != max_tuple_end) {
+				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
+				               " does not have a match\n";
+				error += "End Lines: \n";
+				for (auto &end_line : tuple_end) {
+					error += to_string(end_line) + "\n";
+				}
+				error += "Start Lines: \n";
+				for (auto &start_line : tuple_start) {
+					error += to_string(start_line) + "\n";
+				}
+				DuckDBAssertInternal(false, error.c_str(), "src/function/table/read_csv.cpp", 324);
 			}
-			DuckDBAssertInternal(false, error.c_str(), "src/function/table/read_csv.cpp", 324);
 		}
 	}
 }
@@ -455,6 +473,7 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
+		global_state.IncrementThread();
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, std::move(next_local_buffer),
 		                                            csv_data.sql_types);
 	}
@@ -483,6 +502,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			csv_global_state.UpdateVerification(csv_local_state.csv_reader->GetVerificationPositions());
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
+				csv_global_state.DecrementThread();
 				break;
 			}
 			csv_local_state.csv_reader->SetBufferRead(std::move(next_chunk));

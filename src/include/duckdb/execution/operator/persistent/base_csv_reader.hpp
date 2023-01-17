@@ -97,6 +97,9 @@ protected:
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
 	static string GetLineNumberStr(idx_t linenr, bool linenr_estimated);
 
+	//! Sets the newline delimiter
+	void SetNewLineDelimiter(bool carry = false, bool carry_followed_by_nl = false);
+
 protected:
 	//! Whether or not the current row's columns have overflown return_types.size()
 	bool error_column_overflow = false;

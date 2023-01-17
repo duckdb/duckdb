@@ -1186,31 +1186,6 @@ final_state:
 	return true;
 }
 
-void BufferedCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
-	if (mode == ParserMode::SNIFFING_DIALECT) {
-		if (options.new_line == NewLineIdentifier::MIX) {
-			return;
-		}
-		NewLineIdentifier this_line_identifier;
-		if (carry) {
-			if (carry_followed_by_nl) {
-				this_line_identifier = NewLineIdentifier::RN;
-			} else {
-				this_line_identifier = NewLineIdentifier::R;
-			}
-		} else {
-			this_line_identifier = NewLineIdentifier::N;
-		}
-		if (options.new_line == NewLineIdentifier::INVALID) {
-			options.new_line = this_line_identifier;
-		} else {
-			if (options.new_line != this_line_identifier) {
-				options.new_line = NewLineIdentifier::MIX;
-			}
-		}
-	}
-}
-
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
