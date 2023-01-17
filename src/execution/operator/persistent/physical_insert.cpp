@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -48,7 +48,7 @@ public:
 	}
 
 	mutex lock;
-	TableCatalogEntry *table;
+	DTableCatalogEntry *table;
 	idx_t insert_count;
 	bool initialized;
 	LocalAppendState append_state;
@@ -77,10 +77,11 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
 		result->table =
-		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		    (DTableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
-		result->table = insert_table;
+		D_ASSERT(insert_table->IsDTable());
+		result->table = (DTableCatalogEntry *)insert_table;
 	}
 	return std::move(result);
 }

@@ -5,7 +5,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -341,8 +341,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	// Create index in the catalog
 	auto schema_catalog = catalog.GetSchema(context, info->schema);
-	auto table_catalog =
-	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
+	auto table_catalog = (DTableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema,
+	                                                            info->table->table_name);
 	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
 	index_catalog->info = table_catalog->GetStorage().info;
 	// Here we just gotta read the root node

@@ -1,7 +1,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -429,7 +429,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}
 
-	auto result = make_unique<TableScanBindData>((TableCatalogEntry *)catalog_entry);
+	auto result = make_unique<TableScanBindData>((DTableCatalogEntry *)catalog_entry);
 	result->is_index_scan = is_index_scan;
 	result->is_create_index = is_create_index;
 	result->result_ids = std::move(result_ids);

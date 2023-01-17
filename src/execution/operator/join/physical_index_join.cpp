@@ -11,7 +11,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 
 namespace duckdb {
 

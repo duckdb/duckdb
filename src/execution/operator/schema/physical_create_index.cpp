@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
 
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -8,13 +9,13 @@
 
 namespace duckdb {
 
-PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
+PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table_p, vector<column_t> column_ids,
                                          unique_ptr<CreateIndexInfo> info,
                                          vector<unique_ptr<Expression>> unbound_expressions,
                                          idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
-      info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
-
+    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
+      table((DTableCatalogEntry &)table_p), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
+	D_ASSERT(table_p.IsDTable());
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);

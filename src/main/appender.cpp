@@ -1,5 +1,6 @@
 #include "duckdb/main/appender.hpp"
 
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"

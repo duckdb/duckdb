@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -525,8 +526,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				                              fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr->GetColumns(), create_info.columns, fk);
-				auto index = pk_table_entry_ptr->GetStorage().info->indexes.FindForeignKeyIndex(
-				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
+				auto &storage = pk_table_entry_ptr->GetStorage();
+				auto index = storage.info->indexes.FindForeignKeyIndex(fk.info.pk_keys,
+				                                                       ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
 				if (!index) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "

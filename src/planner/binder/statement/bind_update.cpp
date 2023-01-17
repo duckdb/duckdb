@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>

@@ -1,4 +1,4 @@
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"

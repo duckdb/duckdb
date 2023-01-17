@@ -41,13 +41,10 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
-	                  std::shared_ptr<DataTable> inherited_storage = nullptr);
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info);
 
 public:
 	bool HasGeneratedColumns() const;
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
-	void UndoAlter(ClientContext &context, AlterInfo *info) override;
 
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
@@ -64,29 +61,22 @@ public:
 	//! Returns a mutable list of the columns of the table
 	ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
-	DataTable &GetStorage();
-	DataTable *GetStoragePtr();
+	virtual DataTable &GetStorage();
+	virtual DataTable *GetStoragePtr();
+	//! Returns a list of the bound constraints of the table
+	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
 	//! Returns a list of the constraints of the table
 	const vector<unique_ptr<Constraint>> &GetConstraints();
-	//! Returns a list of the bound constraints of the table
-	const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 	string ToSQL() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
-
-	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
-
-	void SetAsRoot() override;
-
-	void CommitAlter(AlterInfo &info);
-	void CommitDrop();
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
@@ -94,27 +84,14 @@ public:
 	//! If if_column_exists is false, throws an exception
 	LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
 
-private:
-	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
-	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
-	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
-	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
-	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
-	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
-	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
-	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
-	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	virtual bool IsDTable() {
+		return false;
+	}
 
-private:
-	//! A reference to the underlying storage unit used for this table
-	std::shared_ptr<DataTable> storage;
+protected:
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	//! Manages dependencies of the individual columns of the table
-	ColumnDependencyManager column_dependency_manager;
 };
 } // namespace duckdb

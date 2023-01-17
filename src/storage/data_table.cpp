@@ -340,7 +340,6 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	if (table_entry_ptr == nullptr) {
 		throw InternalException("Can't find table \"%s\" in foreign key constraint", bfk.info.table);
 	}
-
 	// make the data chunk to check
 	vector<LogicalType> types;
 	for (auto &col : table_entry_ptr->GetColumns().Physical()) {

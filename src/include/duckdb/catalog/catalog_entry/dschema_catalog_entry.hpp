@@ -38,17 +38,19 @@ private:
 	CatalogSet types;
 
 public:
-	CatalogEntry *AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, DependencyList dependencies) override;
+	CatalogEntry *AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+	                               OnCreateConflict on_conflict, DependencyList dependencies) override;
 	CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) override;
 	CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) override;
 	void Alter(ClientContext &context, AlterInfo *info) override;
-	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback)  override;
-	void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback)  override;
+	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
+	void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
 	void DropEntry(ClientContext &context, DropInfo *info) override;
 	CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 
 	void Verify(Catalog &catalog) override;
+
 private:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -98,7 +99,7 @@ public:
 	}
 
 	mutex lock;
-	TableCatalogEntry *table;
+	DTableCatalogEntry *table;
 	idx_t insert_count;
 	map<idx_t, unique_ptr<RowGroupCollection>> collections;
 
@@ -249,7 +250,7 @@ public:
 		writer->FlushToDisk(*current_collection, true);
 	}
 
-	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
+	void CreateNewCollection(DTableCatalogEntry *table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table->GetStorage().info;
 		auto &block_manager = TableIOManager::Get(table->GetStorage()).GetBlockManagerForRowData();
 		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
@@ -266,10 +267,11 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
 		result->table =
-		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		    (DTableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
-		result->table = insert_table;
+		D_ASSERT(insert_table->IsDTable());
+		result->table = (DTableCatalogEntry *)insert_table;
 	}
 	return std::move(result);
 }

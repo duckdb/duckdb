@@ -1,5 +1,6 @@
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/dcatalog.hpp"
@@ -40,7 +41,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	switch (parent->type) {
 	case CatalogType::TABLE_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto table_entry = (TableCatalogEntry *)entry;
+			auto table_entry = (DTableCatalogEntry *)entry;
+			D_ASSERT(table_entry->IsDTable());
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
@@ -92,7 +94,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::DELETED_ENTRY:
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY: {
-			auto table_entry = (TableCatalogEntry *)entry;
+			auto table_entry = (DTableCatalogEntry *)entry;
+			D_ASSERT(table_entry->IsDTable());
 			table_entry->CommitDrop();
 			log->WriteDropTable(table_entry);
 			break;

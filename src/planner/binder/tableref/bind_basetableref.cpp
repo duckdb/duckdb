@@ -108,9 +108,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto table = (TableCatalogEntry *)table_or_view;
+		D_ASSERT(table->IsDTable());
 
 		auto scan_function = TableScanFunction::GetFunction();
-		auto bind_data = make_unique<TableScanBindData>(table);
+		auto bind_data = make_unique<TableScanBindData>((DTableCatalogEntry *)table);
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;

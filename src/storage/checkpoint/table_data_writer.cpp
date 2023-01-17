@@ -1,5 +1,6 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -7,7 +8,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table) : table(table) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table((DTableCatalogEntry &)table_p) {
+	D_ASSERT(table_p.IsDTable());
 }
 
 TableDataWriter::~TableDataWriter() {

@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
@@ -44,15 +45,16 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 	}
 }
 
-DSchemaCatalogEntry::DSchemaCatalogEntry(Catalog *catalog, string name_p, bool is_internal) :
-		SchemaCatalogEntry(catalog, move(name_p), is_internal),
+DSchemaCatalogEntry::DSchemaCatalogEntry(Catalog *catalog, string name_p, bool is_internal)
+    : SchemaCatalogEntry(catalog, move(name_p), is_internal),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
       functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), types(*catalog, make_unique<DefaultTypeGenerator>(*catalog, this)) {}
+      collations(*catalog), types(*catalog, make_unique<DefaultTypeGenerator>(*catalog, this)) {
+}
 
 CatalogEntry *DSchemaCatalogEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-                                           OnCreateConflict on_conflict, DependencyList dependencies) {
+                                                    OnCreateConflict on_conflict, DependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -84,7 +86,7 @@ CatalogEntry *DSchemaCatalogEntry::AddEntryInternal(CatalogTransaction transacti
 }
 
 CatalogEntry *DSchemaCatalogEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
-	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
+	auto table = make_unique<DTableCatalogEntry>(catalog, this, info);
 	auto &storage = table->GetStorage();
 	storage.info->cardinality = storage.GetTotalRows();
 
@@ -165,7 +167,7 @@ void DSchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 void DSchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,
-                              const std::function<void(CatalogEntry *)> &callback) {
+                               const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(GetCatalogTransaction(context), callback);
 }
@@ -206,13 +208,12 @@ void DSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	}
 }
 
-
 CatalogEntry *DSchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
 	return GetCatalogSet(type).GetEntry(transaction, name);
 }
 
 SimilarCatalogEntry DSchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
-                                                        const string &name) {
+                                                         const string &name) {
 	return GetCatalogSet(type).SimilarEntry(transaction, name);
 }
 
@@ -259,4 +260,4 @@ void DSchemaCatalogEntry::Verify(Catalog &catalog) {
 	types.Verify(catalog);
 }
 
-}
+} // namespace duckdb
