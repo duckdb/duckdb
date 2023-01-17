@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_boolean_page.test
+# name: test/sql/copy/parquet/parquet_boolean_page.test_slow
 # description: Test that boolean values that cross column pages are correctly read
 # group: [parquet]
 
