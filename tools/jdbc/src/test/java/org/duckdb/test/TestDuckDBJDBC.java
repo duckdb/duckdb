@@ -2298,21 +2298,21 @@ public class TestDuckDBJDBC {
 		}
 
 		try (Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery("select {'key': 'value'}::JSON");
+			ResultSet rs = stmt.executeQuery("select {\"key\": \"value\"}::JSON");
 			rs.next();
 			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isObject());
-			assertEquals(jsonNode.toString(), "{'key': value}"); // this isn't valid json output, must load json extension for that
+			assertEquals(jsonNode.toString(), "{\"key\": \"value\"}"); // this isn't valid json output, must load json extension for that
 		}
 
 		try (Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery("select 'hello'::JSON");
+			ResultSet rs = stmt.executeQuery("select '\"hello\"'::JSON");
 			rs.next();
 			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isString());
-			assertEquals(jsonNode.toString(), "hello");
+			assertEquals(jsonNode.toString(), "\"hello\"");
 		}
 	}
 
