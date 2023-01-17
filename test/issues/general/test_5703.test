@@ -4,16 +4,26 @@
 
 
 statement error
-select unnest([5,4,3]) as r, r as x, sum(r) OVER ();
+select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
 Binder Error
 
+statement error
+select unnest([5,4,3]) as r, lead(r) OVER ();
+----
+Binder Error
+
+statement error
+select unnest([5,4,3]) as r, sum(r) OVER () + 42;
+----
+Binder Error
+
+statement error
+select unnest([5, 4, 3]), sum(41) over ();
+----
+Binder Error
 
 statement error
 SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
 ----
 Binder Error
-
-# check database is not invalidated
-statement ok
-select 1;
