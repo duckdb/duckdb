@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -39,8 +39,9 @@ private:
 	EntryIndex &entry_index;
 };
 
-CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
-    : catalog(catalog), defaults(std::move(defaults)) {
+CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
+    : catalog((DCatalog &)catalog_p), defaults(std::move(defaults)) {
+	D_ASSERT(catalog_p.IsDCatalog());
 }
 CatalogSet::~CatalogSet() {
 }
@@ -134,7 +135,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	value->set = this;
 
 	// now add the dependency set of this object to the dependency manager
-	catalog.dependency_manager->AddObject(transaction, value.get(), dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, value.get(), dependencies);
 
 	auto value_ptr = value.get();
 	EntryIndex entry_index(*this, index);
@@ -193,7 +194,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		return false;
 	}
 
-	catalog.dependency_manager->AddOwnership(transaction, owner_entry, entry);
+	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, entry);
 
 	return true;
 }
@@ -268,7 +269,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
 	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
 	// to the old entry.
-	catalog.dependency_manager->AlterObject(transaction, entry, new_entry);
+	catalog.GetDependencyManager().AlterObject(transaction, entry, new_entry);
 
 	return true;
 }
@@ -282,7 +283,8 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	entry_index.GetEntry()->deleted = true;
 
 	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(transaction, &entry, cascade);
+	D_ASSERT(entry.catalog->IsDCatalog());
+	((DCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, &entry, cascade);
 
 	// dropper destructor is called here
 	// the destructor makes sure to return the value to the previous state
@@ -331,7 +333,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
-Catalog &CatalogSet::GetCatalog() {
+DCatalog &CatalogSet::GetCatalog() {
 	return catalog;
 }
 
@@ -343,7 +345,8 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
-			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+			D_ASSERT(catalog_entry->catalog->IsDCatalog());
+			((DCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(catalog_entry);
 		}
 		auto parent = catalog_entry->parent;
 		parent->child = std::move(catalog_entry->child);
@@ -543,12 +546,13 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 void CatalogSet::AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
 	CatalogEntry *user_type_catalog = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
 	if (user_type_catalog) {
+		auto &dependency_manager = catalog.GetDependencyManager();
 		if (remove) {
-			catalog.dependency_manager->dependents_map[user_type_catalog].erase(entry->parent);
-			catalog.dependency_manager->dependencies_map[entry->parent].erase(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].erase(entry->parent);
+			dependency_manager.dependencies_map[entry->parent].erase(user_type_catalog);
 		} else {
-			catalog.dependency_manager->dependents_map[user_type_catalog].insert(entry);
-			catalog.dependency_manager->dependencies_map[entry].insert(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].insert(entry);
+			dependency_manager.dependencies_map[entry].insert(user_type_catalog);
 		}
 	}
 }
@@ -613,7 +617,8 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	if (!to_be_removed_node->deleted) {
 		// delete the entry from the dependency manager as well
-		catalog.dependency_manager->EraseObject(to_be_removed_node);
+		auto &dependency_manager = catalog.GetDependencyManager();
+		dependency_manager.EraseObject(to_be_removed_node);
 	}
 	if (entry->name != to_be_removed_node->name) {
 		// rename: clean up the new name when the rename is rolled back

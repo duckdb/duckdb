@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -37,31 +36,10 @@
 namespace duckdb {
 
 Catalog::Catalog(AttachedDatabase &db)
-    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
-      dependency_manager(make_unique<DependencyManager>(*this)), db(db) {
+    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))), db(db) {
 }
+
 Catalog::~Catalog() {
-}
-
-void Catalog::Initialize(bool load_builtin) {
-	// first initialize the base system catalogs
-	// these are never written to the WAL
-	// we start these at 1 because deleted entries default to 0
-	CatalogTransaction data(GetDatabase(), 1, 1);
-
-	// create the default schema
-	CreateSchemaInfo info;
-	info.schema = DEFAULT_SCHEMA;
-	info.internal = true;
-	CreateSchema(data, &info);
-
-	if (load_builtin) {
-		// initialize default functions
-		BuiltinFunctions builtin(data, *this);
-		builtin.Initialize();
-	}
-
-	Verify();
 }
 
 DatabaseInstance &Catalog::GetDatabase() {

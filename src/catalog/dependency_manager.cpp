@@ -1,6 +1,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
+DependencyManager::DependencyManager(DCatalog &catalog) : catalog(catalog) {
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *object, DependencyList &dependencies) {

@@ -57,12 +57,10 @@ struct SimilarCatalogEntry;
 class Catalog {
 public:
 	explicit Catalog(AttachedDatabase &db);
-	~Catalog();
+	virtual ~Catalog();
 
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
-	//! The DependencyManager manages dependencies between different catalog objects
-	unique_ptr<DependencyManager> dependency_manager;
 	//! Write lock for the catalog
 	mutex write_lock;
 
@@ -78,13 +76,11 @@ public:
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
-	DUCKDB_API DependencyManager &GetDependencyManager() {
-		return *dependency_manager;
-	}
 	DUCKDB_API AttachedDatabase &GetAttached();
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
-	void Initialize(bool load_builtin);
+	virtual bool IsDCatalog() = 0;
+	virtual void Initialize(bool load_builtin) = 0;
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
@@ -227,7 +223,7 @@ public:
 
 	DUCKDB_API void Verify();
 
-private:
+protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 

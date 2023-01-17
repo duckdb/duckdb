@@ -29,6 +29,7 @@ class DependencyList;
 struct MappingValue;
 struct EntryIndex;
 
+class DCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 
@@ -84,7 +85,7 @@ public:
 	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
 
-	DUCKDB_API Catalog &GetCatalog();
+	DUCKDB_API DCatalog &GetCatalog();
 
 	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo *info);
 
@@ -153,7 +154,7 @@ private:
 	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);
 
 private:
-	Catalog &catalog;
+	DCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
 	//! The set of catalog entries
