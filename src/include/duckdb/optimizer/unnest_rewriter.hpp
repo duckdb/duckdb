@@ -15,20 +15,31 @@ namespace duckdb {
 
 class Optimizer;
 
+struct ReplaceBinding {
+	ReplaceBinding() {};
+	ReplaceBinding(idx_t old_tbl_idx, idx_t new_tbl_idx) {
+		old_binding = ColumnBinding(old_tbl_idx, 0);
+		new_binding = ColumnBinding(new_tbl_idx, 0);
+	}
+	ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding)
+	    : old_binding(old_binding), new_binding(new_binding) {
+	}
+	ColumnBinding old_binding;
+	ColumnBinding new_binding;
+};
+
 //! The UnnestRewriterPlanUpdater updates column bindings after changing the operator plan
 class UnnestRewriterPlanUpdater : LogicalOperatorVisitor {
 public:
-	UnnestRewriterPlanUpdater(const idx_t &old_table_idx, const idx_t &new_table_idx)
-	    : old_table_idx(old_table_idx), new_table_idx(new_table_idx) {
+	UnnestRewriterPlanUpdater() {
 	}
 	//! Update each operator of the plan after moving an UNNEST into a projection
 	void VisitOperator(LogicalOperator &op) override;
 	//! Visit an expression and update its column bindings after moving and UNNEST into a projection
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
-public:
-	idx_t old_table_idx;
-	idx_t new_table_idx;
+	//! Contains all bindings that need to be updated
+	vector<ReplaceBinding> replace_bindings;
 };
 
 //! The UnnestRewriter optimizer traverses the logical operator tree and rewrites duplicate
@@ -36,7 +47,7 @@ public:
 //! the SELECT
 class UnnestRewriter {
 public:
-	UnnestRewriter() {
+	UnnestRewriter() : sequence_of_projections(false) {
 	}
 	//! Rewrite duplicate eliminated joins with UNNESTs
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
@@ -44,8 +55,31 @@ public:
 private:
 	//! Find delim joins that contain an UNNEST
 	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
-	//! Rewrite all delim joins that contain an UNNEST
-	pair<idx_t, idx_t> RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
+	//! Rewrite a delim join that contain an UNNEST
+	bool RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
+	//! Update the bindings of the sequence of LOGICAL_PROJECTION(s)
+	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
+	                       UnnestRewriterPlanUpdater &updater);
+	//! Update the binding of the BOUND_UNNEST expression of the LOGICAL_UNNEST
+	void UpdateBoundUnnestBinding(unique_ptr<LogicalOperator> *candidate);
+
+	//! Store all delim columns of the delim join
+	void GetDelimColumns(LogicalOperator &op);
+	//! Store all lhs expressions of the LOGICAL_PROJECTION as BOUND_COLUMN_REF
+	void GetLHSExpressions(LogicalOperator &op);
+
+	//! Keep track of these columns to find the correct UNNEST column
+	vector<ColumnBinding> delim_columns;
+	//! Store the expressions of the lhs LOGICAL_PROJECTION
+	vector<unique_ptr<Expression>> lhs_expressions;
+	//! LHS table index
+	idx_t lhs_tbl_idx;
+	//! Stores the table index of the overwritten LOGICAL_PROJECTION
+	idx_t overwritten_proj_tbl_idx;
+	//! Stores the unnest_idx
+	idx_t unnest_idx;
+	//! Indicates whether the rhs is a sequence of LOGICAL_PROJECTION(s)
+	bool sequence_of_projections;
 };
 
 } // namespace duckdb
