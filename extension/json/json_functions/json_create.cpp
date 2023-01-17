@@ -188,7 +188,7 @@ inline yyjson_mut_val *CreateJSONValue(yyjson_mut_doc *doc, const string_t &valu
 }
 
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
-	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::BASE_READ_FLAG, &doc->alc);
+	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::READ_FLAG, &doc->alc);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
 	return result;
 }
@@ -447,7 +447,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	// Write JSON objects to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
 	}
 
 	if (args.AllConstant()) {
@@ -480,7 +480,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	// Write JSON arrays to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
-		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
 	}
 
 	if (args.AllConstant()) {
@@ -507,7 +507,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
-			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(doc->root, alc);
+			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(vals[i], alc);
 		} else {
 			result_validity.SetInvalid(i);
 		}
@@ -519,33 +519,38 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {
-	auto fun = ScalarFunction("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind);
+	auto fun = ScalarFunction("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr,
+	                          nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
-	auto fun = ScalarFunction("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind);
+	auto fun = ScalarFunction("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
+	                          JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetToJSONFunction() {
-	auto fun = ScalarFunction("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind);
+	auto fun = ScalarFunction("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
+	                          JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayToJSONFunction() {
-	auto fun = ScalarFunction("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind);
+	auto fun = ScalarFunction("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr,
+	                          nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetRowToJSONFunction() {
-	auto fun = ScalarFunction("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind);
+	auto fun = ScalarFunction("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr,
+	                          nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }

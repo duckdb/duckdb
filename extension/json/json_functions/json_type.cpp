@@ -18,16 +18,20 @@ static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 	JSONExecutors::ExecuteMany<string_t>(args, state, result, GetType);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
-	ScalarFunctionSet set("json_type");
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, UnaryTypeFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               BinaryTypeFunction, JSONReadFunctionData::Bind, nullptr, nullptr,
+static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::VARCHAR, UnaryTypeFunction, nullptr, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::LIST(LogicalType::VARCHAR)},
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, BinaryTypeFunction,
+	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::VARCHAR), ManyTypeFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
+	ScalarFunctionSet set("json_type");
+	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
+	GetTypeFunctionsInternal(set, JSONCommon::JSONType());
 
 	return CreateScalarFunctionInfo(std::move(set));
 }

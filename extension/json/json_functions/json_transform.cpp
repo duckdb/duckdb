@@ -64,7 +64,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		yyjson_read_err err;
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::BASE_READ_FLAG, nullptr, &err);
+		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, nullptr, &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetDataUnsafe(), structure_string.GetSize(), err);
 		}
@@ -388,7 +388,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 			vals[i] = nullptr;
 			result_validity.SetInvalid(i);
 		} else {
-			docs.emplace_back(JSONCommon::ReadDocument(inputs[idx], JSONCommon::BASE_READ_FLAG, alc));
+			docs.emplace_back(JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc));
 			vals[i] = docs.back()->root;
 		}
 	}
@@ -400,15 +400,28 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
+static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<false>,
+	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+}
+
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {JSONCommon::JSONType(), JSONCommon::JSONType()},
-	                                               LogicalType::ANY, TransformFunction<false>, JSONTransformBind));
+	ScalarFunctionSet set("json_transform");
+	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
+	GetTransformFunctionInternal(set, JSONCommon::JSONType());
+	return CreateScalarFunctionInfo(set);
+}
+
+static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
+	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict",
-	                                               {JSONCommon::JSONType(), JSONCommon::JSONType()}, LogicalType::ANY,
-	                                               TransformFunction<true>, JSONTransformBind));
+	ScalarFunctionSet set("json_transform_strict");
+	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
+	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
+	return CreateScalarFunctionInfo(set);
 }
 
 } // namespace duckdb

@@ -168,7 +168,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    auto length = input.GetSize();
 		    yyjson_read_err error;
 
-		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::BASE_READ_FLAG, alc, &error);
+		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
 		    if (doc.IsNull()) {
 			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
@@ -183,13 +183,18 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 }
 
 void JSONFunctions::RegisterCastFunctions(CastFunctionSet &casts) {
-	// JSON to VARCHAR is free
-	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 0);
+	// JSON to VARCHAR is basically free
+	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
+	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
+	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
 	BoundCastInfo info(CastVarcharToJSON, nullptr, InitJSONCastLocalState);
-	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than VARCHAR to STRUCT
-	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalTypeId::VARCHAR, LogicalTypeId::STRUCT) + 1;
 	casts.RegisterCastFunction(LogicalType::VARCHAR, JSONCommon::JSONType(), std::move(info), varchar_to_json_cost);
+
+	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
+	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
+	casts.RegisterCastFunction(LogicalType::SQLNULL, JSONCommon::JSONType(), DefaultCasts::ReinterpretCast,
+	                           null_to_json_cost);
 }
 
 } // namespace duckdb

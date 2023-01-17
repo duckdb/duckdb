@@ -7,14 +7,21 @@ static void ValidFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto alc = lstate.json_allocator.GetYYJSONAllocator();
 	auto &inputs = args.data[0];
 	UnaryExecutor::Execute<string_t, bool>(inputs, result, args.size(), [&](string_t input) {
-		return !JSONCommon::ReadDocumentUnsafe(input, JSONCommon::BASE_READ_FLAG, alc).IsNull();
+		return !JSONCommon::ReadDocumentUnsafe(input, JSONCommon::READ_FLAG, alc).IsNull();
 	});
 }
 
+static void GetValidFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction("json_valid", {input_type}, LogicalType::BOOLEAN, ValidFunction, nullptr, nullptr,
+	                               nullptr, JSONFunctionLocalState::Init));
+}
+
 CreateScalarFunctionInfo JSONFunctions::GetValidFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_valid", {JSONCommon::JSONType()}, LogicalType::BOOLEAN,
-	                                               ValidFunction, nullptr, nullptr, nullptr,
-	                                               JSONFunctionLocalState::Init));
+	ScalarFunctionSet set("json_valid");
+	GetValidFunctionInternal(set, LogicalType::VARCHAR);
+	GetValidFunctionInternal(set, JSONCommon::JSONType());
+
+	return CreateScalarFunctionInfo(set);
 }
 
 } // namespace duckdb

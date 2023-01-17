@@ -336,8 +336,8 @@ static inline void TrimWhitespace(JSONLine &line) {
 
 DocPointer<yyjson_doc> JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line) {
 	// Parse to validate
-	auto result = JSONCommon::ReadDocument(line_start, line_size, JSONCommon::FILE_READ_FLAG,
-	                                       json_allocator.GetYYJSONAllocator());
+	auto result =
+	    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
 
 	// Set the JSONLine and trim
 	line.pointer = line_start;
@@ -408,7 +408,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count, const BufferedJSONReader
 		}
 
 		// Read next JSON doc
-		objects.emplace_back(JSONCommon::ReadDocumentUnsafe((char *)line_start, remaining, JSONCommon::FILE_READ_FLAG,
+		objects.emplace_back(JSONCommon::ReadDocumentUnsafe((char *)line_start, remaining, JSONCommon::STOP_READ_FLAG,
 		                                                    json_allocator.GetYYJSONAllocator(), &error));
 		auto &read_doc = objects.back();
 		if (error.code == YYJSON_READ_SUCCESS) {

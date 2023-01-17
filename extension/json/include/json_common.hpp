@@ -126,8 +126,8 @@ public:
 
 public:
 	//! Read/Write flags
-	static constexpr auto BASE_READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto FILE_READ_FLAG = BASE_READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
+	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 public:
@@ -213,7 +213,14 @@ public:
 	static inline char *WriteVal(YYJSON_VAL_T *val, yyjson_alc *alc, idx_t &len) {
 		throw InternalException("Unknown yyjson val type");
 	}
-
+	template <>
+	inline char *WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
+		return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	}
+	template <>
+	inline char *WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
+		return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	}
 	template <class YYJSON_VAL_T>
 	static inline string_t WriteVal(YYJSON_VAL_T *val, yyjson_alc *alc) {
 		idx_t len;
@@ -222,10 +229,11 @@ public:
 	}
 	//! Throw an error with the printed yyjson_val
 	static void ThrowValFormatError(string error_string, yyjson_val *val) {
-		//		idx_t len;
-		//		auto data = WriteVal(val, len);
-		//		error_string = StringUtil::Format(error_string, string(data.get(), len));
-		//		throw InvalidInputException(error_string);
+		JSONAllocator json_allocator(Allocator::DefaultAllocator());
+		idx_t len;
+		auto data = WriteVal<yyjson_val>(val, json_allocator.GetYYJSONAllocator(), len);
+		error_string = StringUtil::Format(error_string, string(data, len));
+		throw InvalidInputException(error_string);
 	}
 
 public:
@@ -422,16 +430,6 @@ private:
 		throw InternalException("Unknown yyjson value type");
 	}
 };
-
-template <>
-inline char *JSONCommon::WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
-}
-
-template <>
-inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
-}
 
 template <>
 inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {

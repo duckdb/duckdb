@@ -3,6 +3,24 @@
 
 namespace duckdb {
 
+static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.size() < 2) {
+		throw InvalidInputException("json_merge_patch requires at least two parameters");
+	}
+	bound_function.arguments.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		const auto &arg_type = arg->return_type;
+		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR ||
+		    JSONCommon::LogicalTypeIsJSON(arg_type)) {
+			bound_function.arguments.push_back(arg_type);
+		} else {
+			throw InvalidInputException("Arguments to json_merge_patch must be of type VARCHAR or JSON");
+		}
+	}
+	return nullptr;
+}
+
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
 	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
@@ -26,8 +44,8 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 		if (!input_data.validity.RowIsValid(idx)) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] = yyjson_val_mut_copy(
-			    doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::BASE_READ_FLAG, &doc->alc)->root);
+			objs[i] =
+			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
@@ -79,12 +97,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
-	// Needs at least two json inputs, but supports merging vararg json inputs
-	ScalarFunction fun("json_merge_patch", {JSONCommon::JSONType(), JSONCommon::JSONType()}, JSONCommon::JSONType(),
-	                   MergePatchFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.varargs = JSONCommon::JSONType();
+	ScalarFunction fun("json_merge_patch", {}, JSONCommon::JSONType(), MergePatchFunction, JSONMergePatchBind, nullptr,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return CreateScalarFunctionInfo(std::move(fun));
+
+	return CreateScalarFunctionInfo(fun);
 }
 
 } // namespace duckdb

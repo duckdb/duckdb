@@ -18,16 +18,20 @@ static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vec
 	JSONExecutors::ExecuteMany<uint64_t>(args, state, result, GetArrayLength);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
-	ScalarFunctionSet set("json_array_length");
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::UBIGINT, UnaryArrayLengthFunction, nullptr,
-	                               nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                               BinaryArrayLengthFunction, JSONReadFunctionData::Bind, nullptr, nullptr,
-	                               JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType(), LogicalType::LIST(LogicalType::VARCHAR)},
+static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::UBIGINT, UnaryArrayLengthFunction, nullptr, nullptr,
+	                               nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::UBIGINT, BinaryArrayLengthFunction,
+	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
+	ScalarFunctionSet set("json_array_length");
+	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
+	GetArrayLengthFunctionsInternal(set, JSONCommon::JSONType());
 
 	return CreateScalarFunctionInfo(std::move(set));
 }

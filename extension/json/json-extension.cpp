@@ -28,6 +28,7 @@ void JSONExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
+	// JSON type
 	auto json_type = JSONCommon::JSONType();
 	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);
 	type_info.temporary = true;
