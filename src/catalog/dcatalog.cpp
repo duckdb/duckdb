@@ -1,5 +1,6 @@
 #include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog_entry/dschema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -42,7 +43,7 @@ bool DCatalog::IsDCatalog() {
 CatalogEntry *DCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
 	D_ASSERT(!info->schema.empty());
 	DependencyList dependencies;
-	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
+	auto entry = make_unique<DSchemaCatalogEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info->schema, std::move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {

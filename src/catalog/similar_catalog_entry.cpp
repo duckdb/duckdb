@@ -21,4 +21,4 @@ string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_
 	return result;
 }
 
-}
+} // namespace duckdb
