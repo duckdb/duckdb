@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -19,66 +20,6 @@
 #include <algorithm>
 
 namespace duckdb {
-
-// TODO DEDUP
-static Value ConvertVectorToValue(vector<Value> set) {
-	if (set.empty()) {
-		return Value::EMPTYLIST(LogicalType::BOOLEAN);
-	}
-	return Value::LIST(move(set));
-}
-
-// TODO DEDUP
-static vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &loption) {
-	vector<bool> result;
-
-	if (set.empty()) {
-		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
-	}
-	// list of options: parse the list
-	unordered_map<string, bool> option_map;
-	for (idx_t i = 0; i < set.size(); i++) {
-		option_map[set[i].ToString()] = false;
-	}
-	result.resize(names.size(), false);
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto entry = option_map.find(names[i]);
-		if (entry != option_map.end()) {
-			result[i] = true;
-			entry->second = true;
-		}
-	}
-	for (auto &entry : option_map) {
-		if (!entry.second) {
-			throw BinderException("\"%s\" expected to find %s, but it was not found in the table", loption,
-			                      entry.first.c_str());
-		}
-	}
-	return result;
-}
-
-// TODO DEDUP
-static vector<bool> ParseColumnList(const Value &value, vector<string> &names, const string &loption) {
-	vector<bool> result;
-
-	// Only accept a list of arguments
-	if (value.type().id() != LogicalTypeId::LIST) {
-		// Support a single argument if it's '*'
-		if (value.type().id() == LogicalTypeId::VARCHAR && value.GetValue<string>() == "*") {
-			result.resize(names.size(), true);
-			return result;
-		}
-		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
-	}
-	auto &children = ListValue::GetChildren(value);
-	// accept '*' as single argument
-	if (children.size() == 1 && children[0].type().id() == LogicalTypeId::VARCHAR &&
-	    children[0].GetValue<string>() == "*") {
-		result.resize(names.size(), true);
-		return result;
-	}
-	return ParseColumnList(children, names, loption);
-}
 
 static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
 	vector<idx_t> ret;
@@ -137,6 +78,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
+	}
+	if (user_set_use_tmp_file && !partition_cols.empty()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+	}
+	if (per_thread_output && !partition_cols.empty()) {
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
 	}
 
 	auto function_data =

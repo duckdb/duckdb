@@ -38,12 +38,10 @@ public:
 	DUCKDB_API static const string REGEX_STRING;
 };
 
-// The idea is that for hive partitioning we need to calculate a lot of hashes, so we want to use the vectorized
-// methods for this.
 struct HivePartitionKey {
 	//! Columns by which we want to partition
 	vector<Value> values;
-	//! Hash of this key
+	//! Precomputed hash of values
 	hash_t hash;
 
 	struct Hash {
@@ -83,7 +81,6 @@ public:
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 	//! Reverse lookup map to reconstruct keys from a partition id
-	// TODO can be solved by using datachunk from partition CDC instead
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
 protected:

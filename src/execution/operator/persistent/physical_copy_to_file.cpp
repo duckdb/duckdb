@@ -106,12 +106,18 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
+
 			string hive_path =
 			    CreateDirRecursive(context.client, partition_columns, names, partition_key_map[i]->values, file_path);
 
+			auto &fs = FileSystem::GetFileSystem(context.client);
+			string full_path = fs.JoinPath(hive_path, "/data_" + to_string(l.writer_offset) + ".parquet");
+			if (fs.FileExists(full_path)) {
+				throw IOException("failed to create " + full_path + ", file exists!");
+			}
 			// Create a writer for the current file
 			auto fun_data_global = function.copy_to_initialize_global(
-			    context.client, *bind_data, hive_path + "/data_" + to_string(l.writer_offset) + ".parquet");
+			    context.client, *bind_data, full_path);
 			auto fun_data_local = function.copy_to_initialize_local(context, *bind_data);
 
 			for (auto &chunk : partitions[i]->Chunks()) {
@@ -149,6 +155,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 
 		if (use_tmp_file) {
 			D_ASSERT(!per_thread_output); // FIXME
+			D_ASSERT(!partition_output); // FIXME
 			MoveTmpFile(context, file_path);
 		}
 	}
