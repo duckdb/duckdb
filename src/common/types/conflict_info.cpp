@@ -4,7 +4,7 @@
 namespace duckdb {
 
 bool ConflictInfo::ConflictTargetMatches(Index &index) const {
-	if (!index.IsUnique()) {
+	if (only_check_unique && !index.IsUnique()) {
 		// We only support checking ON CONFLICT for Unique/Primary key constraints
 		return false;
 	}

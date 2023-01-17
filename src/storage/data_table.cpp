@@ -408,7 +408,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 
 	// Set up a way to record conflicts, rather than directly throw on them
 	unordered_set<column_t> empty_column_list = {};
-	ConflictInfo empty_conflict_info(empty_column_list);
+	ConflictInfo empty_conflict_info(empty_column_list, false);
 	ConflictManager regular_conflicts(verify_type, count, &empty_conflict_info);
 	ConflictManager transaction_conflicts(verify_type, count, &empty_conflict_info);
 
