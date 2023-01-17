@@ -462,9 +462,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			result->groups.group_expressions.push_back(std::move(expr));
 			expr = std::move(group_ref);
 		}
-		if (!result->unnests.empty() && is_window && is_window_aggregate) {
-			throw BinderException("Cannot have unnest in a window aggregate clause");
-		}
 		result->select_list.push_back(std::move(expr));
 		if (i < result->column_count) {
 			result->types.push_back(result_type);

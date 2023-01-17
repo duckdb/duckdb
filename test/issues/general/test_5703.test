@@ -2,19 +2,53 @@
 # description: Issue 5703: Can't have a window aggregate and unnest.
 # group: [general]
 
-
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, lead(r) OVER ();
+select unnest([5,4,3]) as r, sum(r) OVER () + 42;
+----
+Binder Error
+
+statement ok
+select tmp.r, sum(tmp.r) OVER () + 42 FROM (select unnest([5, 4, 3]) as r) tmp;
+
+# row numbers are ok
+statement ok
+select unnest([5,4,3]) as r, row_number() OVER (partition by (SELECT NULL));
+
+statement error
+select unnest([5,4,3]) as r, lead(5) OVER (partition by (SELECT NULL));
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, sum(r) OVER () + 42;
+select unnest([5,4,3]) as r, FIRST_VALUE(3) OVER ();
+----
+Binder Error
+
+statement error
+select unnest([5,4,3]) as r, LAST_VALUE(3) OVER ();
+----
+Binder Error
+
+statement error
+select unnest([5,4,3]) as r, LAG(1) OVER ();
+----
+Binder Error
+
+statement error
+select unnest([5,4,3]) as r, NTH_VALUE(2) OVER ();
+----
+Binder Error
+
+statement error
+select unnest([5,4,3]) as r, dense_rank(r) OVER ();
+
+statement error
+select unnest([5,4,3]) as r, NTILE(r) OVER (ORDER BY (SELECT NULL));
 ----
 Binder Error
 
