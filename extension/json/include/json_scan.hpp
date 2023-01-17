@@ -40,12 +40,13 @@ public:
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(idx_t file_index, idx_t readers, AllocatedData &&buffer);
+	JSONBufferHandle(idx_t file_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
 
 public:
 	idx_t file_index;
 	atomic<idx_t> readers;
 	AllocatedData buffer;
+	idx_t buffer_size;
 };
 
 struct JSONScanGlobalState : public GlobalTableFunctionState {
@@ -72,6 +73,11 @@ public:
 
 struct JSONLine {
 public:
+	JSONLine() {
+	}
+	JSONLine(const char *pointer_p, idx_t size_p) : pointer(pointer_p), size(size_p) {
+	}
+
 	const char *pointer;
 	idx_t size;
 
@@ -94,10 +100,10 @@ public:
 	idx_t GetBatchIndex() const;
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
-	vector<DocPointer<yyjson_doc>> objects;
+	yyjson_doc *objects[STANDARD_VECTOR_SIZE];
 
 private:
-	DocPointer<yyjson_doc> ParseLine(char *line_start, idx_t line_size, JSONLine &line);
+	yyjson_doc *ParseLine(char *line_start, idx_t line_size, JSONLine &line);
 
 private:
 	//! Allocator
@@ -118,12 +124,15 @@ private:
 	//! Buffer to reconstruct first object
 	AllocatedData reconstruct_buffer;
 
+	//! Copy of current buffer for YYJSON_INSITU
+	AllocatedData current_buffer_copy;
+	const char *buffer_copy_ptr;
+
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index, idx_t &next_batch_index,
-	                        idx_t &readers);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index, idx_t &next_batch_index,
-	                          idx_t &readers);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index, idx_t &next_batch_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &file_index,
+	                          idx_t &next_batch_index);
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 

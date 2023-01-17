@@ -60,12 +60,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// Read the first json arg
 	yyjson_mut_val *origs[STANDARD_VECTOR_SIZE];
-	ReadObjects(*doc, args.data[0], origs, count);
+	ReadObjects(doc, args.data[0], origs, count);
 
 	// Read the next json args one by one and merge them into the first json arg
 	yyjson_mut_val *patches[STANDARD_VECTOR_SIZE];
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		ReadObjects(*doc, args.data[arg_idx], patches, count);
+		ReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				// Next json arg is NULL, obj becomes NULL
@@ -75,7 +75,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 				origs[i] = patches[i];
 			} else {
 				// Neither is NULL, merge them
-				origs[i] = MergePatch(*doc, origs[i], patches[i]);
+				origs[i] = MergePatch(doc, origs[i], patches[i]);
 			}
 		}
 	}

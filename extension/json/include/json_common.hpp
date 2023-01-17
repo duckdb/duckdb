@@ -16,66 +16,6 @@
 
 namespace duckdb {
 
-// Wrapper around yyjson(_mut)_doc for easy cleanup
-template <class YYJSON_DOC_T>
-static inline void CleanupDoc(YYJSON_DOC_T *doc) {
-	throw InternalException("Unknown yyjson document type");
-}
-
-template <>
-inline void CleanupDoc(yyjson_doc *doc) {
-	yyjson_doc_free(doc);
-}
-
-template <>
-inline void CleanupDoc(yyjson_mut_doc *doc) {
-	yyjson_mut_doc_free(doc);
-}
-
-template <class YYJSON_DOC_T>
-class DocPointer {
-private:
-	YYJSON_DOC_T *doc;
-
-public:
-	explicit DocPointer(YYJSON_DOC_T *doc) : doc(doc) {
-	}
-
-	DocPointer(const DocPointer &obj) = delete;
-	DocPointer &operator=(const DocPointer &obj) = delete;
-
-	DocPointer(DocPointer &&other) noexcept {
-		this->doc = other.doc;
-		other.doc = nullptr;
-	}
-
-	void operator=(DocPointer &&other) noexcept {
-		CleanupDoc<YYJSON_DOC_T>(doc);
-		this->ptr = other.ptr;
-		other.ptr = nullptr;
-	}
-
-	inline YYJSON_DOC_T *operator*() const {
-		return doc;
-	}
-
-	inline YYJSON_DOC_T *operator->() const {
-		return doc;
-	}
-
-	inline bool IsNull() const {
-		return doc == nullptr;
-	}
-
-	inline idx_t ReadSize() const {
-		return yyjson_doc_get_read_size(doc);
-	}
-
-	~DocPointer() {
-		CleanupDoc<YYJSON_DOC_T>(doc);
-	}
-};
-
 class JSONAllocator {
 public:
 	explicit JSONAllocator(Allocator &allocator)
@@ -127,7 +67,7 @@ public:
 public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 public:
@@ -172,19 +112,20 @@ public:
 	}
 
 public:
-	static inline DocPointer<yyjson_mut_doc> CreateDocument(yyjson_alc *alc) {
-		return DocPointer<yyjson_mut_doc>(yyjson_mut_doc_new(alc));
+	static inline yyjson_mut_doc *CreateDocument(yyjson_alc *alc) {
+		D_ASSERT(alc);
+		return yyjson_mut_doc_new(alc);
 	}
-	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(char *data, idx_t size, const yyjson_read_flag flg,
-	                                                        yyjson_alc *alc, yyjson_read_err *err = nullptr) {
-		return DocPointer<yyjson_doc>(yyjson_read_opts(data, size, flg, alc, err));
+	static inline yyjson_doc *ReadDocumentUnsafe(char *data, idx_t size, const yyjson_read_flag flg, yyjson_alc *alc,
+	                                             yyjson_read_err *err = nullptr) {
+		D_ASSERT(alc);
+		return yyjson_read_opts(data, size, flg, alc, err);
 	}
-	static inline DocPointer<yyjson_doc> ReadDocumentUnsafe(const string_t &input, const yyjson_read_flag flg,
-	                                                        yyjson_alc *alc, yyjson_read_err *err = nullptr) {
+	static inline yyjson_doc *ReadDocumentUnsafe(const string_t &input, const yyjson_read_flag flg, yyjson_alc *alc,
+	                                             yyjson_read_err *err = nullptr) {
 		return ReadDocumentUnsafe(input.GetDataWriteable(), input.GetSize(), flg, alc, err);
 	}
-	static inline DocPointer<yyjson_doc> ReadDocument(char *data, idx_t size, const yyjson_read_flag flg,
-	                                                  yyjson_alc *alc) {
+	static inline yyjson_doc *ReadDocument(char *data, idx_t size, const yyjson_read_flag flg, yyjson_alc *alc) {
 		yyjson_read_err error;
 		auto result = ReadDocumentUnsafe(data, size, flg, alc, &error);
 		if (error.code != YYJSON_READ_SUCCESS) {
@@ -192,8 +133,7 @@ public:
 		}
 		return result;
 	}
-	static inline DocPointer<yyjson_doc> ReadDocument(const string_t &input, const yyjson_read_flag flg,
-	                                                  yyjson_alc *alc) {
+	static inline yyjson_doc *ReadDocument(const string_t &input, const yyjson_read_flag flg, yyjson_alc *alc) {
 		return ReadDocument(input.GetDataWriteable(), input.GetSize(), flg, alc);
 	}
 	static string FormatParseError(const char *data, idx_t length, yyjson_read_err &error, const string &extra = "") {
@@ -215,6 +155,7 @@ public:
 	}
 	template <class YYJSON_VAL_T>
 	static inline string_t WriteVal(YYJSON_VAL_T *val, yyjson_alc *alc) {
+		D_ASSERT(alc);
 		idx_t len;
 		auto data = WriteVal<YYJSON_VAL_T>(val, alc, len);
 		return string_t(data, len);

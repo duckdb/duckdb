@@ -197,7 +197,7 @@ static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_d
 
 static inline string_t Structure(yyjson_val *val, yyjson_alc *alc, Vector &result) {
 	auto structure_doc = JSONCommon::CreateDocument(alc);
-	auto structure = ConvertStructure(BuildStructure(val, *structure_doc), *structure_doc);
+	auto structure = ConvertStructure(BuildStructure(val, structure_doc), structure_doc);
 	D_ASSERT(structure);
 	return JSONCommon::WriteVal<yyjson_mut_val>(structure, alc);
 }

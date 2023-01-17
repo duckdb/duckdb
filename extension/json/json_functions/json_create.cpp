@@ -434,7 +434,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *objs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
-		objs[i] = yyjson_mut_obj(*doc);
+		objs[i] = yyjson_mut_obj(doc);
 	}
 	// Initialize a re-usable value array
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
@@ -442,7 +442,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t pair_idx = 0; pair_idx < args.data.size() / 2; pair_idx++) {
 		Vector &key_v = args.data[pair_idx * 2];
 		Vector &value_v = args.data[pair_idx * 2 + 1];
-		CreateKeyValuePairs(info, *doc, objs, vals, key_v, value_v, count);
+		CreateKeyValuePairs(info, doc, objs, vals, key_v, value_v, count);
 	}
 	// Write JSON objects to string
 	auto objects = FlatVector::GetData<string_t>(result);
@@ -466,13 +466,13 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *arrs[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < count; i++) {
-		arrs[i] = yyjson_mut_arr(*doc);
+		arrs[i] = yyjson_mut_arr(doc);
 	}
 	// Initialize a re-usable value array
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
 	// Loop through args
 	for (auto &v : args.data) {
-		CreateValues(info, *doc, vals, v, count);
+		CreateValues(info, doc, vals, v, count);
 		for (idx_t i = 0; i < count; i++) {
 			yyjson_mut_arr_append(arrs[i], vals[i]);
 		}
@@ -498,7 +498,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	const idx_t count = args.size();
 	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *vals[STANDARD_VECTOR_SIZE];
-	CreateValues(info, *doc, vals, args.data[0], count);
+	CreateValues(info, doc, vals, args.data[0], count);
 	// Write JSON values to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);

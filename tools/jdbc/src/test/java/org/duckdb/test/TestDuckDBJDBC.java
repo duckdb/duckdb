@@ -2298,7 +2298,7 @@ public class TestDuckDBJDBC {
 		}
 
 		try (Statement stmt = conn.createStatement()) {
-			ResultSet rs = stmt.executeQuery("select {\"key\": \"value\"}::JSON");
+			ResultSet rs = stmt.executeQuery("select '{\"key\": \"value\"}'::JSON");
 			rs.next();
 			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);

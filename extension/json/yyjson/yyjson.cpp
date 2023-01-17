@@ -3060,7 +3060,7 @@ static_noinline bool read_number_raw(u8 **ptr,
     if (*cur == '.') {
         cur++;
         if (!digi_is_digit(*cur++)) {
-            return_err(cur - 1, "no digit after decimal point");
+            return_err(cur, "no digit after decimal point");
         }
         while (digi_is_digit(*cur)) cur++;
     }
@@ -3488,7 +3488,7 @@ static_inline bool read_number(u8 **ptr,
         if (likely(*cur == '.')) {
             dot_pos = cur++;
             if (unlikely(!digi_is_digit(*cur))) {
-                return_err(cur - 1, "no digit after decimal point");
+                return_err(cur, "no digit after decimal point");
             }
             while (unlikely(*cur == '0')) cur++;
             if (likely(digi_is_digit(*cur))) {
@@ -3638,7 +3638,7 @@ digi_frac_more:
     /* fraction part end */
 digi_frac_end:
     if (unlikely(dot_pos + 1 == cur)) {
-        return_err(cur - 1, "no digit after decimal point");
+        return_err(cur, "no digit after decimal point");
     }
     sig_end = cur;
     exp_sig = -(i64)((u64)(cur - dot_pos) - 1);

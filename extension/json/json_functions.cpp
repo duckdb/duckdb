@@ -170,7 +170,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
-		    if (doc.IsNull()) {
+		    if (!doc) {
 			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
 			                                 parameters.error_message);
 			    mask.SetInvalid(idx);

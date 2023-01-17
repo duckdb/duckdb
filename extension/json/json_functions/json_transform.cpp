@@ -377,19 +377,18 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 	input.ToUnifiedFormat(count, input_data);
 	auto inputs = (string_t *)input_data.data;
 	// Read documents
-	vector<DocPointer<yyjson_doc>> docs;
-	docs.reserve(count);
+	yyjson_doc *docs[STANDARD_VECTOR_SIZE];
 	yyjson_val *vals[STANDARD_VECTOR_SIZE];
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
-			docs.emplace_back(nullptr);
+			docs[i] = nullptr;
 			vals[i] = nullptr;
 			result_validity.SetInvalid(i);
 		} else {
-			docs.emplace_back(JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc));
-			vals[i] = docs.back()->root;
+			docs[i] = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, alc);
+			vals[i] = docs[i]->root;
 		}
 	}
 	// Transform
