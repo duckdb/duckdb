@@ -85,51 +85,6 @@ Statement::~Statement() {
 	connection_ref = nullptr;
 }
 
-// A Napi InstanceOf for Javascript Objects "Date" and "RegExp"
-static bool OtherInstanceOf(Napi::Object source, const char *object_type) {
-	if (strcmp(object_type, "Date") == 0) {
-		return source.InstanceOf(source.Env().Global().Get(object_type).As<Napi::Function>());
-	} else if (strcmp(object_type, "RegExp") == 0) {
-		return source.InstanceOf(source.Env().Global().Get(object_type).As<Napi::Function>());
-	}
-
-	return false;
-}
-
-static duckdb::Value BindParameter(const Napi::Value source) {
-	if (source.IsString()) {
-		return duckdb::Value(source.As<Napi::String>().Utf8Value());
-	} else if (OtherInstanceOf(source.As<Napi::Object>(), "RegExp")) {
-		return duckdb::Value(source.ToString().Utf8Value());
-	} else if (source.IsNumber()) {
-		if (Utils::OtherIsInt(source.As<Napi::Number>())) {
-			return duckdb::Value::INTEGER(source.As<Napi::Number>().Int32Value());
-		} else {
-			return duckdb::Value::DOUBLE(source.As<Napi::Number>().DoubleValue());
-		}
-	} else if (source.IsBoolean()) {
-		return duckdb::Value::BOOLEAN(source.As<Napi::Boolean>().Value());
-	} else if (source.IsNull()) {
-		return duckdb::Value();
-	} else if (source.IsBuffer()) {
-		Napi::Buffer<char> buffer = source.As<Napi::Buffer<char>>();
-		return duckdb::Value::BLOB(std::string(buffer.Data(), buffer.Length()));
-#if (NAPI_VERSION > 4)
-	} else if (source.IsDate()) {
-		const auto micros = int64_t(source.As<Napi::Date>().ValueOf()) * duckdb::Interval::MICROS_PER_MSEC;
-		if (micros % duckdb::Interval::MICROS_PER_DAY) {
-			return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(micros));
-		} else {
-			const auto days = int32_t(micros / duckdb::Interval::MICROS_PER_DAY);
-			return duckdb::Value::DATE(duckdb::date_t(days));
-		}
-#endif
-	} else if (source.IsObject()) {
-		return duckdb::Value(source.ToString().Utf8Value());
-	}
-	return duckdb::Value();
-}
-
 static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::LogicalTypeId id) {
 	Napi::Value value;
 
@@ -472,7 +427,7 @@ duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInf
 		if (p.IsUndefined()) {
 			continue;
 		}
-		params->params.push_back(BindParameter(p));
+		params->params.push_back(Utils::BindParameter(p));
 	}
 	return params;
 }

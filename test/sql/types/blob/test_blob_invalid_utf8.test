@@ -1,0 +1,12 @@
+# name: test/sql/types/blob/test_blob_invalid_utf8.test
+# description: BLOB with invalid UTF-8
+# group: [blob]
+
+statement ok
+CREATE TABLE b(b blob);
+
+statement ok
+INSERT INTO b VALUES (NULL);
+
+statement ok
+UPDATE b SET b=blob'\x80abcdefghjijklmnopqrstuvwxyz';

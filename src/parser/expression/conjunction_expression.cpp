@@ -39,7 +39,7 @@ string ConjunctionExpression::ToString() const {
 	return ToString<ConjunctionExpression, ParsedExpression>(*this);
 }
 
-bool ConjunctionExpression::Equals(const ConjunctionExpression *a, const ConjunctionExpression *b) {
+bool ConjunctionExpression::Equal(const ConjunctionExpression *a, const ConjunctionExpression *b) {
 	return ExpressionUtil::SetEquals(a->children, b->children);
 }
 

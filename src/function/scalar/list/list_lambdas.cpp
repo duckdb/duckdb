@@ -112,15 +112,19 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 
 	// set the list child vector
 	Vector slice(child_vector, sel, elem_cnt);
+	Vector second_slice(child_vector, sel, elem_cnt);
 	slice.Flatten(elem_cnt);
+	second_slice.Flatten(elem_cnt);
+
 	input_chunk.data[0].Reference(slice);
+	input_chunk.data[1].Reference(second_slice);
 
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
 		slices[col_idx].Flatten(elem_cnt);
-		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
+		input_chunk.data[col_idx + 2].Reference(slices[col_idx]);
 	}
 
 	// execute the lambda expression
@@ -184,6 +188,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	vector<SelectionVector> sel_vectors;
 
 	vector<LogicalType> types;
+	types.push_back(child_vector.GetType());
 	types.push_back(child_vector.GetType());
 
 	// skip the list column

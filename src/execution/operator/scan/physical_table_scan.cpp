@@ -135,7 +135,8 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
-	result += "\nEC=" + to_string(estimated_cardinality) + "\n";
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
 	return result;
 }
 
