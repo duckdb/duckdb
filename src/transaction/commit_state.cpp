@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -220,9 +221,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 
 		auto &catalog = catalog_entry->catalog;
 		D_ASSERT(catalog);
+		D_ASSERT(catalog->IsDCatalog());
 
 		// Grab a write lock on the catalog
-		lock_guard<mutex> write_lock(catalog->write_lock);
+		auto &dcatalog = (DCatalog &)*catalog;
+		lock_guard<mutex> write_lock(dcatalog.GetWriteLock());
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);

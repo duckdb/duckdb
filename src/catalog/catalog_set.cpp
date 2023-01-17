@@ -86,7 +86,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		}
 	}
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
 	unique_lock<mutex> read_lock(catalog_lock);
 
@@ -201,7 +201,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo *alter_info) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
@@ -313,7 +313,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// we can only delete an entry that exists
 	EntryIndex entry_index;
 	CatalogEntry *entry;
@@ -341,7 +341,7 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 	// destroy the backed up entry: it is no longer required
 	D_ASSERT(catalog_entry->parent);
 	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
-		lock_guard<mutex> write_lock(catalog.write_lock);
+		lock_guard<mutex> write_lock(catalog.GetWriteLock());
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
@@ -603,8 +603,7 @@ void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
-	lock_guard<mutex> write_lock(catalog.write_lock);
-
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored

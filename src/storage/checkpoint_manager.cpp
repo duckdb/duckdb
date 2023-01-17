@@ -1,6 +1,6 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -73,7 +73,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the set of committed schemas
-	catalog.schemas->Scan([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	auto &catalog = (DCatalog &)Catalog::GetCatalog(db);
+	catalog.ScanSchemas([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());

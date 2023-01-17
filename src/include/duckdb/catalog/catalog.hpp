@@ -59,11 +59,6 @@ public:
 	explicit Catalog(AttachedDatabase &db);
 	virtual ~Catalog();
 
-	//! The catalog set holding the schemas
-	unique_ptr<CatalogSet> schemas;
-	//! Write lock for the catalog
-	mutex write_lock;
-
 public:
 	//! Get the SystemCatalog from the ClientContext
 	DUCKDB_API static Catalog &GetSystemCatalog(ClientContext &context);
@@ -97,7 +92,7 @@ public:
 	DUCKDB_API CatalogTransaction GetCatalogTransaction(ClientContext &context);
 
 	//! Creates a schema in the catalog.
-	DUCKDB_API CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info);
+	DUCKDB_API virtual CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) = 0;
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info);
@@ -164,14 +159,14 @@ public:
 	DUCKDB_API SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA,
 	                                         bool if_exists = false,
 	                                         QueryErrorContext error_context = QueryErrorContext());
-	DUCKDB_API SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
-	                                         bool if_exists = false,
-	                                         QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API virtual SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
+	                                                 bool if_exists = false,
+	                                                 QueryErrorContext error_context = QueryErrorContext()) = 0;
 	DUCKDB_API static SchemaCatalogEntry *GetSchema(ClientContext &context, const string &catalog_name,
 	                                                const string &schema_name, bool if_exists = false,
 	                                                QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
-	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);
+	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) = 0;
 	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not
 	//! exist, otherwise an exception is thrown
 	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -218,10 +213,11 @@ public:
 		return (T *)entry;
 	}
 
+	DUCKDB_API vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context);
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context, const string &catalog_name);
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
 
-	DUCKDB_API void Verify();
+	virtual void Verify();
 
 protected:
 	//! Reference to the database
@@ -246,7 +242,7 @@ private:
 	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
 	                                                 const unordered_set<SchemaCatalogEntry *> &schemas);
 
-	void DropSchema(ClientContext &context, DropInfo *info);
+	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
 };
 
 } // namespace duckdb
