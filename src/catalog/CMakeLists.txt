@@ -11,7 +11,8 @@ add_library_unity(
   catalog_transaction.cpp
   dcatalog.cpp
   dependency_list.cpp
-  dependency_manager.cpp)
+  dependency_manager.cpp
+  similar_catalog_entry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_catalog>
     PARENT_SCOPE)

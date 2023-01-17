@@ -18,6 +18,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/catalog/similar_catalog_entry.hpp"
 #include <functional>
 #include <memory>
 
@@ -97,7 +98,7 @@ public:
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
-	pair<string, idx_t> SimilarEntry(CatalogTransaction transaction, const string &name);
+	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry

@@ -41,8 +41,6 @@ struct DropInfo;
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
-	friend class Catalog;
-
 public:
 	static constexpr const CatalogType Type = CatalogType::SCHEMA_ENTRY;
 	static constexpr const char *Name = "schema";
@@ -88,7 +86,6 @@ public:
 
 	void Verify(Catalog &catalog) override;
 
-private:
 	//! Create a scalar or aggregate function within the given schema
 	CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info);
 	//! Creates a table with the given name in the schema
@@ -108,6 +105,10 @@ private:
 	//! Create a enum within the given schema
 	CatalogEntry *CreateType(CatalogTransaction transaction, CreateTypeInfo *info);
 
+	DUCKDB_API CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name);
+	DUCKDB_API SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
+	                                               const string &name);
+
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);
 
@@ -121,9 +122,10 @@ private:
 	CatalogEntry *AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
 	                       OnCreateConflict on_conflict, DependencyList dependencies);
 
+	CatalogTransaction GetCatalogTransaction(ClientContext &context);
+
+private:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
-
-	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 };
 } // namespace duckdb

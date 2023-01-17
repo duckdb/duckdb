@@ -31,6 +31,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/catalog/similar_catalog_entry.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -271,41 +272,6 @@ struct CatalogEntryLookup {
 	}
 };
 
-//! Return value of SimilarEntryInSchemas
-struct SimilarCatalogEntry {
-	//! The entry name. Empty if absent
-	string name;
-	//! The distance to the given name.
-	idx_t distance;
-	//! The schema of the entry.
-	SchemaCatalogEntry *schema;
-
-	DUCKDB_API bool Found() const {
-		return !name.empty();
-	}
-
-	DUCKDB_API string GetQualifiedName(bool qualify_catalog, bool qualify_schema) const;
-};
-
-string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_schema) const {
-	D_ASSERT(Found());
-	string result;
-	if (qualify_catalog) {
-		result += schema->catalog->GetName();
-	}
-	if (qualify_schema) {
-		if (!result.empty()) {
-			result += ".";
-		}
-		result += schema->name;
-	}
-	if (!result.empty()) {
-		result += ".";
-	}
-	result += name;
-	return result;
-}
-
 //===--------------------------------------------------------------------===//
 // Generic
 //===--------------------------------------------------------------------===//
@@ -335,22 +301,20 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 //===--------------------------------------------------------------------===//
 SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
                                                    const unordered_set<SchemaCatalogEntry *> &schemas) {
-
-	vector<CatalogSet *> sets;
-	std::transform(schemas.begin(), schemas.end(), std::back_inserter(sets),
-	               [type](SchemaCatalogEntry *s) -> CatalogSet * { return &s->GetCatalogSet(type); });
-	pair<string, idx_t> most_similar {"", (idx_t)-1};
-	SchemaCatalogEntry *schema_of_most_similar = nullptr;
+	SimilarCatalogEntry result;
 	for (auto schema : schemas) {
 		auto transaction = schema->catalog->GetCatalogTransaction(context);
-		auto entry = schema->GetCatalogSet(type).SimilarEntry(transaction, entry_name);
-		if (!entry.first.empty() && (most_similar.first.empty() || most_similar.second > entry.second)) {
-			most_similar = entry;
-			schema_of_most_similar = schema;
+		auto entry = schema->GetSimilarEntry(transaction, type, entry_name);
+		if (!entry.Found()) {
+			// no similar entry found
+			continue;
+		}
+		if (!result.Found() || result.distance > entry.distance) {
+			result = entry;
+			result.schema = schema;
 		}
 	}
-
-	return {most_similar.first, most_similar.second, schema_of_most_similar};
+	return result;
 }
 
 string FindExtension(const string &function_name) {
@@ -476,7 +440,7 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 	if (!schema_entry) {
 		return {nullptr, nullptr};
 	}
-	auto entry = schema_entry->GetCatalogSet(type).GetEntry(transaction, name);
+	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
 		return {schema_entry, nullptr};
 	}

@@ -449,23 +449,22 @@ CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
 	return current;
 }
 
-pair<string, idx_t> CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
+SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
-	string result;
-	idx_t current_score = (idx_t)-1;
+	SimilarCatalogEntry result;
 	for (auto &kv : mapping) {
 		auto mapping_value = GetMapping(transaction, kv.first);
 		if (mapping_value && !mapping_value->deleted) {
 			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
-			if (ldist < current_score) {
-				current_score = ldist;
-				result = kv.first;
+			if (ldist < result.distance) {
+				result.distance = ldist;
+				result.name = kv.first;
 			}
 		}
 	}
-	return {result, current_score};
+	return result;
 }
 
 CatalogEntry *CatalogSet::CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry) {

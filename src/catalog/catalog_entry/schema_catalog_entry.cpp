@@ -311,6 +311,15 @@ string SchemaCatalogEntry::ToSQL() {
 	return ss.str();
 }
 
+CatalogEntry *SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
+	return GetCatalogSet(type).GetEntry(transaction, name);
+}
+
+SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
+                                                        const string &name) {
+	return GetCatalogSet(type).SimilarEntry(transaction, name);
+}
+
 CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
 	case CatalogType::VIEW_ENTRY:
