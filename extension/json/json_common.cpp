@@ -2,6 +2,14 @@
 
 namespace duckdb {
 
+void JSONCommon::ThrowValFormatError(string error_string, yyjson_val *val) {
+	JSONAllocator json_allocator(Allocator::DefaultAllocator());
+	idx_t len;
+	auto data = JSONCommon::WriteVal<yyjson_val>(val, json_allocator.GetYYJSONAllocator(), len);
+	error_string = StringUtil::Format(error_string, string(data, len));
+	throw InvalidInputException(error_string);
+}
+
 string ThrowPathError(const char *ptr, const char *end) {
 	ptr--;
 	throw InvalidInputException("JSON path error near '%s'", string(ptr, end - ptr));

@@ -213,14 +213,6 @@ public:
 	static inline char *WriteVal(YYJSON_VAL_T *val, yyjson_alc *alc, idx_t &len) {
 		throw InternalException("Unknown yyjson val type");
 	}
-	template <>
-	inline char *WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
-		return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
-	}
-	template <>
-	inline char *WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
-		return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
-	}
 	template <class YYJSON_VAL_T>
 	static inline string_t WriteVal(YYJSON_VAL_T *val, yyjson_alc *alc) {
 		idx_t len;
@@ -228,13 +220,7 @@ public:
 		return string_t(data, len);
 	}
 	//! Throw an error with the printed yyjson_val
-	static void ThrowValFormatError(string error_string, yyjson_val *val) {
-		JSONAllocator json_allocator(Allocator::DefaultAllocator());
-		idx_t len;
-		auto data = WriteVal<yyjson_val>(val, json_allocator.GetYYJSONAllocator(), len);
-		error_string = StringUtil::Format(error_string, string(data, len));
-		throw InvalidInputException(error_string);
-	}
+	static void ThrowValFormatError(string error_string, yyjson_val *val);
 
 public:
 	//! Validate path with $ syntax
@@ -430,6 +416,15 @@ private:
 		throw InternalException("Unknown yyjson value type");
 	}
 };
+
+template <>
+inline char *JSONCommon::WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
+	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+}
+template <>
+inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
+	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+}
 
 template <>
 inline yyjson_val *JSONCommon::TemplatedGetPointer(yyjson_val *root, const char *ptr, const idx_t &len) {
