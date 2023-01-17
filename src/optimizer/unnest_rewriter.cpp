@@ -82,6 +82,15 @@ pair<idx_t, idx_t> UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> 
 	auto &delim_join = *(topmost_op.children[0]);
 	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 
+	// to get the correct column for the UNNEST later
+	vector<ColumnBinding> duplicate_elim_cols;
+	auto &delim_join_cast = (LogicalDelimJoin &)delim_join;
+	for (idx_t i = 0; i < delim_join_cast.duplicate_eliminated_columns.size(); i++) {
+		auto &expr = *delim_join_cast.duplicate_eliminated_columns[i];
+		auto &bound_colref_expr = (BoundColumnRefExpression &)expr;
+		duplicate_elim_cols.push_back(bound_colref_expr.binding);
+	}
+
 	// lhs of the LOGICAL_DELIM_JOIN is a LOGICAL_WINDOW that contains a LOGICAL_PROJECTION
 	// this lhs_proj later becomes the child of the UNNEST
 	auto &window = *delim_join.children[0];
@@ -107,7 +116,11 @@ pair<idx_t, idx_t> UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> 
 	auto &bound_column_ref_expr = (BoundColumnRefExpression &)*bound_unnest_expr.child;
 	auto &unnest_child_op = (LogicalProjection &)*unnest.children[0];
 	bound_column_ref_expr.binding.table_index = unnest_child_op.table_index;
-	bound_column_ref_expr.binding.column_index = 0;
+	for (idx_t i = 0; i < duplicate_elim_cols.size(); i++) {
+		if (duplicate_elim_cols[i].table_index == unnest_child_op.table_index) {
+			bound_column_ref_expr.binding.column_index = duplicate_elim_cols[i].column_index;
+		}
+	}
 
 	// save the table index of the LOGICAL_PROJECTION containing the LOGICAL_UNNEST
 	// because it will be overwritten later
