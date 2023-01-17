@@ -3,6 +3,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -31,11 +32,20 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	internal = true;
 }
 
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
+                                   string name_p, AttachInfo &info, AccessMode access_mode)
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, std::move(name_p)), db(db),
+      type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+                                                : AttachedDatabaseType::READ_WRITE_DATABASE) {
+	catalog = storage_extension.attach(*this, name, info, access_mode);
+	internal = true;
+}
+
 AttachedDatabase::~AttachedDatabase() {
 	if (Exception::UncaughtException()) {
 		return;
 	}
-	if (IsSystem()) {
+	if (!storage) {
 		return;
 	}
 
@@ -77,6 +87,8 @@ void AttachedDatabase::Initialize() {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
+	}
+	if (storage) {
 		storage->Initialize();
 	}
 }

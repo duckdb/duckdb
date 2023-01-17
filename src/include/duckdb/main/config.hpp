@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
@@ -35,11 +36,11 @@ class ClientContext;
 class ErrorManager;
 class CompressionFunction;
 class TableFunctionRef;
+class OperatorExtension;
+class StorageExtension;
 
 struct CompressionFunctionSet;
 struct DBConfig;
-
-enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
 enum class CheckpointAbort : uint8_t {
 	NO_ABORT = 0,
@@ -183,6 +184,8 @@ public:
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
+	//! Extensions made to storage
+	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
