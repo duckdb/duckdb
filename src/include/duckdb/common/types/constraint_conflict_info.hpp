@@ -118,10 +118,8 @@ public:
 
 class ConflictInfo {
 public:
-	ConflictInfo(idx_t count, const unordered_set<column_t> &column_ids)
-	    : constraint_conflicts(count), column_ids(column_ids) {
+	ConflictInfo(const unordered_set<column_t> &column_ids) : column_ids(column_ids) {
 	}
-	UniqueConstraintConflictInfo constraint_conflicts;
 	const unordered_set<column_t> &column_ids;
 
 public:

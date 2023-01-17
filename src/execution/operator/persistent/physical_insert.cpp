@@ -13,6 +13,8 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -237,13 +239,17 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	// If that's not the case - We throw the first error
 
 	// We either want to do nothing, or perform an update when conflicts arise
-	ConflictInfo conflict_info(lstate.insert_chunk.size(), on_conflict_filter);
-	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_info);
-	auto &conflicts = conflict_info.constraint_conflicts;
-	if (conflicts.matches.Count() == 0) {
+	ConflictInfo conflict_info(on_conflict_filter);
+	ConflictManager conflict_manager(VerifyExistenceType::APPEND, lstate.insert_chunk.size(), &conflict_info);
+	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_manager);
+	conflict_manager.Finalize();
+	if (conflict_manager.ConflictCount() == 0) {
 		// No conflicts found
 		return;
 	}
+	auto &conflicts = conflict_manager.Conflicts();
+	auto &row_ids = conflict_manager.RowIds();
+
 	DataChunk conflict_chunk; // contains only the conflicting values
 	DataChunk scan_chunk;     // contains the original values, that caused the conflict
 	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
@@ -252,8 +258,8 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	// Filter out everything but the conflicting rows
 	conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
 	conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
-	conflict_chunk.Slice(conflicts.matches.Selection(), conflicts.matches.Count());
-	conflict_chunk.SetCardinality(conflicts.matches.Count());
+	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
+	conflict_chunk.SetCardinality(conflicts.Count());
 
 	auto &data_table = table->storage;
 	if (!types_to_fetch.empty()) {
@@ -262,8 +268,8 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// then we scan the existing table for the conflicting tuples, using the rowids
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		auto fetch_state = make_unique<ColumnFetchState>();
-		data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, columns_to_fetch,
-		                  conflicts.row_ids, conflicts.matches.Count(), *fetch_state);
+		data_table->Fetch(Transaction::Get(context.client, *table->catalog), scan_chunk, columns_to_fetch, row_ids,
+		                  conflicts.Count(), *fetch_state);
 	}
 
 	// Splice the Input chunk and the fetched chunk together
@@ -302,7 +308,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 				combined_chunk.Slice(selection.Selection(), selection.Count());
 				combined_chunk.SetCardinality(selection.Count());
 				// Also apply this Slice to the to-update row_ids
-				conflicts.row_ids.Slice(selection.Selection(), selection.Count());
+				row_ids.Slice(selection.Selection(), selection.Count());
 			}
 		}
 
@@ -313,13 +319,13 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		update_chunk.SetCardinality(combined_chunk);
 
 		// Perform the update, using the results of the SET expressions
-		data_table->Update(*table, context.client, conflicts.row_ids, filtered_physical_ids, update_chunk);
+		data_table->Update(*table, context.client, row_ids, filtered_physical_ids, update_chunk);
 	}
 
 	// Remove the conflicting tuples from the insert chunk
 	SelectionVector sel_vec(lstate.insert_chunk.size());
-	idx_t new_size = SelectionVector::Inverted(conflicts.matches.Selection(), sel_vec, conflicts.matches.Count(),
-	                                           lstate.insert_chunk.size());
+	idx_t new_size =
+	    SelectionVector::Inverted(conflicts.Selection(), sel_vec, conflicts.Count(), lstate.insert_chunk.size());
 	lstate.insert_chunk.Slice(sel_vec, new_size);
 	lstate.insert_chunk.SetCardinality(new_size);
 }

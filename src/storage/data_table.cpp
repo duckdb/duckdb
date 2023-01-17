@@ -21,6 +21,8 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 
@@ -253,7 +255,7 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-                      Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+                      const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
@@ -331,7 +333,7 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
-idx_t LocateErrorIndex(bool is_append, ManagedSelection &matches) {
+idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	if (!is_append) {
 		// We expected to find nothing, so the first error is the first match
@@ -355,7 +357,7 @@ idx_t LocateErrorIndex(bool is_append, ManagedSelection &matches) {
 	throw ConstraintException(exception_msg);
 }
 
-bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, ManagedSelection &matches) {
+bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {
 	if (is_append) {
 		// We need to find a match for all of the values
 		return matches.Count() != input_count;
@@ -365,10 +367,16 @@ bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, ManagedSelec
 	}
 }
 
+static bool IsAppend(VerifyExistenceType verify_type) {
+	return verify_type == VerifyExistenceType::APPEND_FK;
+}
+
 void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
-                                           DataChunk &chunk, bool is_append) {
+                                           DataChunk &chunk, VerifyExistenceType verify_type) {
 	const vector<PhysicalIndex> *src_keys_ptr = &bfk.info.fk_keys;
 	const vector<PhysicalIndex> *dst_keys_ptr = &bfk.info.pk_keys;
+
+	bool is_append = IsAppend(verify_type);
 	if (!is_append) {
 		src_keys_ptr = &bfk.info.pk_keys;
 		dst_keys_ptr = &bfk.info.fk_keys;
@@ -398,11 +406,15 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		return;
 	}
 
-	// Contains all the indices that found a match with a foreign key
-	ManagedSelection regular_matches(count);
-	ManagedSelection transaction_matches(count);
+	// Set up a way to record conflicts, rather than directly throw on them
+	unordered_set<column_t> empty_column_list = {};
+	ConflictInfo empty_conflict_info(empty_column_list);
+	ConflictManager regular_conflicts(verify_type, count, &empty_conflict_info);
+	ConflictManager transaction_conflicts(verify_type, count, &empty_conflict_info);
 
-	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, &regular_matches);
+	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, dst_chunk, regular_conflicts);
+	regular_conflicts.Finalize();
+	auto &regular_matches = regular_conflicts.Conflicts();
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &local_storage = LocalStorage::Get(context, db);
 
@@ -412,7 +424,9 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
-		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, &transaction_matches);
+		transact_index.VerifyForeignKey(*dst_keys_ptr, dst_chunk, transaction_conflicts);
+		transaction_conflicts.Finalize();
+		auto &transaction_matches = transaction_conflicts.Conflicts();
 		transaction_error = IsForeignKeyConstraintError(is_append, count, transaction_matches);
 	}
 
@@ -444,6 +458,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	if (transaction_error && error && is_append) {
 		// When we want to do an append, we only throw if the foreign key does not exist in both transaction and local
 		// storage
+		auto &transaction_matches = transaction_conflicts.Conflicts();
 		idx_t failed_index = DConstants::INVALID_INDEX;
 		idx_t regular_idx = 0;
 		idx_t transaction_idx = 0;
@@ -467,6 +482,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		ThrowForeignKeyConstraintError(failed_index, true, index, dst_chunk);
 	}
 	if (!is_append && transaction_check) {
+		auto &transaction_matches = transaction_conflicts.Conflicts();
 		if (error) {
 			auto failed_index = LocateErrorIndex(false, regular_matches);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
@@ -483,12 +499,12 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 
 void DataTable::VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                                  DataChunk &chunk) {
-	VerifyForeignKeyConstraint(bfk, context, chunk, true);
+	VerifyForeignKeyConstraint(bfk, context, chunk, VerifyExistenceType::APPEND_FK);
 }
 
 void DataTable::VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                                  DataChunk &chunk) {
-	VerifyForeignKeyConstraint(bfk, context, chunk, false);
+	VerifyForeignKeyConstraint(bfk, context, chunk, VerifyExistenceType::DELETE_FK);
 }
 
 void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint) {
@@ -502,7 +518,7 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                                        ConflictInfo *conflict_info) {
+                                        ConflictManager *conflict_manager) {
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
@@ -537,20 +553,36 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		}
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
-			info->indexes.Scan([&](Index &index) {
-				if (conflict_info && conflict_info->ConflictTargetMatches(index)) {
-					UniqueConstraintConflictInfo temp(chunk.size());
-					index.VerifyAppend(chunk, temp);
-					if (temp.matches.Count() != 0) {
-						auto &conflicts = conflict_info->constraint_conflicts;
-						// Found actual conflicts, merge it into the conflict_info
-						conflicts.AddConflicts(temp);
+			if (conflict_manager) {
+				// This is only provided when a ON CONFLICT clause was provided
+				idx_t matching_indexes = 0;
+				auto &conflict_info = conflict_manager->GetConflictInfo();
+				// First we figure out how many indexes match our conflict target
+				// So we can optimize accordingly
+				info->indexes.Scan([&](Index &index) {
+					matching_indexes += conflict_info.ConflictTargetMatches(index);
+					return false;
+				});
+				conflict_manager->SetIndexCount(matching_indexes);
+				// Then we scan using our conflict manager, which prevents throwing on conflict
+				// And also records information about the encountered conflicts
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
 					}
-				} else {
+					index.VerifyAppend(chunk, *conflict_manager);
+					return false;
+				});
+			} else {
+				// Only need to verify that no unique constraints are violated
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
+					}
 					index.VerifyAppend(chunk);
-				}
-				return false;
-			});
+					return false;
+				});
+			}
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {

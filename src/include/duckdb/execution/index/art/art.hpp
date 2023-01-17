@@ -26,6 +26,8 @@
 
 namespace duckdb {
 
+class ConflictManager;
+
 struct ARTIndexScanState : public IndexScanState {
 	ARTIndexScanState() : checked(false), result_index(0) {
 	}
@@ -41,7 +43,7 @@ struct ARTIndexScanState : public IndexScanState {
 	idx_t result_index = 0;
 };
 
-enum VerifyExistenceType : uint8_t {
+enum class VerifyExistenceType : uint8_t {
 	APPEND = 0,    // for purpose to append into table
 	APPEND_FK = 1, // for purpose to append into table has foreign key
 	DELETE_FK = 2  // for purpose to delete from table related to foreign key
@@ -81,7 +83,7 @@ public:
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index
-	void VerifyAppend(DataChunk &chunk, UniqueConstraintConflictInfo &conflict_info) override;
+	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
 	//! Verify that data can be appended to the index for foreign key constraint
 	void VerifyAppendForeignKey(DataChunk &chunk) override;
 	//! Verify that data can be delete from the index for foreign key constraint
@@ -120,8 +122,7 @@ private:
 	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
 
 	//! Perform 'Lookup' for an entire chunk, marking which succeeded
-	void LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignore_nulls,
-	                  Vector *row_ids_p) final override;
+	void LookupValues(DataChunk &input, ConflictManager &conflict_manager) final override;
 
 	//! Find the node with a matching key, optimistic version
 	Leaf *Lookup(Node *node, Key &key, idx_t depth);

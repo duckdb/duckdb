@@ -50,7 +50,7 @@ struct SelectionVector {
 	}
 
 public:
-	static idx_t Inverted(SelectionVector &src, SelectionVector &dst, idx_t source_size, idx_t count) {
+	static idx_t Inverted(const SelectionVector &src, SelectionVector &dst, idx_t source_size, idx_t count) {
 		idx_t src_idx = 0;
 		idx_t dst_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -118,8 +118,11 @@ private:
 
 class OptionalSelection {
 public:
-	explicit inline OptionalSelection(SelectionVector *sel_p) : sel(sel_p) {
-
+	explicit inline OptionalSelection(SelectionVector *sel_p) {
+		Initialize(sel_p);
+	}
+	void Initialize(SelectionVector *sel_p) {
+		sel = sel_p;
 		if (sel) {
 			vec.Initialize(sel->data());
 			sel = &vec;
@@ -152,10 +155,26 @@ private:
 class ManagedSelection {
 public:
 	explicit inline ManagedSelection(idx_t size) : size(size), sel_vec(size), internal_opt_selvec(&sel_vec) {
+		initialized = true;
+		count = 0;
+	}
+	explicit inline ManagedSelection() : size(0), sel_vec(), internal_opt_selvec(nullptr) {
+		initialized = false;
 		count = 0;
 	}
 
 public:
+	bool Initialized() const {
+		return initialized;
+	}
+	void Initialize(idx_t size) {
+		D_ASSERT(!initialized);
+		this->size = size;
+		sel_vec.Initialize(size);
+		internal_opt_selvec.Initialize(&sel_vec);
+		initialized = true;
+	}
+
 	inline idx_t operator[](idx_t index) const {
 		D_ASSERT(index < size);
 		return sel_vec.get_index(index);
@@ -172,11 +191,15 @@ public:
 	inline idx_t Size() const {
 		return size;
 	}
+	inline const SelectionVector &Selection() const {
+		return sel_vec;
+	}
 	inline SelectionVector &Selection() {
 		return sel_vec;
 	}
 
 private:
+	bool initialized = false;
 	idx_t count;
 	idx_t size;
 	SelectionVector sel_vec;

@@ -5,6 +5,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -375,57 +376,26 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
-	ManagedSelection match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
-
-	LookupValues(chunk, &match_vec, true, &row_ids);
-	if (match_vec.Count() == 0) {
-		// Succesful verification
-		return;
-	}
-	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND, key_name);
-	throw ConstraintException(exception_msg);
+	ConflictManager conflict_manager(VerifyExistenceType::APPEND, chunk.size());
+	LookupValues(chunk, conflict_manager);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, UniqueConstraintConflictInfo &conflict_info) {
-	LookupValues(chunk, &conflict_info.matches, true, &conflict_info.row_ids);
+void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
+	D_ASSERT(conflict_manager.LookupType() == VerifyExistenceType::APPEND);
+	LookupValues(chunk, conflict_manager);
 }
 
 void ART::VerifyAppendForeignKey(DataChunk &chunk) {
-	ManagedSelection match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
-
-	LookupValues(chunk, &match_vec, false, &row_ids);
-
-	// All values need to be present in the referenced table
-	if (match_vec.Count() == chunk.size()) {
-		// Succesful verification
-		return;
-	}
-	idx_t first_missing_key = UniqueConstraintConflictInfo::FirstMissingMatch(match_vec);
-	D_ASSERT(first_missing_key != DConstants::INVALID_INDEX);
-	auto key_name = GenerateErrorKeyName(chunk, match_vec[first_missing_key]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::APPEND_FK, key_name);
-	throw ConstraintException(exception_msg);
+	ConflictManager conflict_manager(VerifyExistenceType::APPEND_FK, chunk.size());
+	LookupValues(chunk, conflict_manager);
 }
 
 void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
 	if (!IsUnique()) {
 		return;
 	}
-
-	ManagedSelection match_vec(chunk.size());
-	Vector row_ids(LogicalType::ROW_TYPE, chunk.size());
-
-	LookupValues(chunk, &match_vec, true, &row_ids);
-
-	if (match_vec.Count() == 0) {
-		return;
-	}
-	auto key_name = GenerateErrorKeyName(chunk, match_vec[0]);
-	auto exception_msg = GenerateConstraintErrorMessage(VerifyExistenceType::DELETE_FK, key_name);
-	throw ConstraintException(exception_msg);
+	ConflictManager conflict_manager(VerifyExistenceType::DELETE_FK, chunk.size());
+	LookupValues(chunk, conflict_manager);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -869,7 +839,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignore_nulls, Vector *row_ids_p) {
+void ART::LookupValues(DataChunk &input, ConflictManager &conflict_manager) {
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
@@ -884,43 +854,37 @@ void ART::LookupValues(DataChunk &input, ManagedSelection *matches_p, bool ignor
 	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
-	row_t *data = nullptr;
-	if (row_ids_p) {
-		// recording row_ids only make sense when accompanied by matches
-		D_ASSERT(matches_p);
-		auto &row_ids = *row_ids_p;
-		data = FlatVector::GetData<row_t>(row_ids);
-	}
-
-	for (idx_t i = 0; i < input.size(); i++) {
+	idx_t found_conflict = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < input.size(); i++) {
 		if (keys[i].Empty()) {
-			// Key is NULL, skip it
-			if (!ignore_nulls) {
-				if (row_ids_p) {
-					data[matches_p->Count()] = DConstants::INVALID_INDEX;
-				}
-				if (matches_p) {
-					matches_p->Append(i);
-				}
+			if (conflict_manager.AddNull(i, *this)) {
+				found_conflict = i;
 			}
 			continue;
 		}
 		Leaf *leaf_ptr = Lookup(tree, keys[i], 0);
 		if (leaf_ptr == nullptr) {
-			// No match found
+			if (conflict_manager.AddMiss(i, *this)) {
+				found_conflict = i;
+			}
 			continue;
 		}
 		// When we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
 		D_ASSERT(leaf_ptr->count == 1);
 		auto row_id = leaf_ptr->GetRowId(0);
-		if (data) {
-			data[matches_p->Count()] = row_id;
-		}
-		if (matches_p) {
-			matches_p->Append(i);
+		if (conflict_manager.AddHit(i, row_id, *this)) {
+			found_conflict = i;
 		}
 	}
+	conflict_manager.FinishLookup();
+	if (found_conflict == DConstants::INVALID_INDEX) {
+		// No conflicts detected
+		return;
+	}
+	auto key_name = GenerateErrorKeyName(input, found_conflict);
+	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
+	throw ConstraintException(exception_msg);
 }
 
 //===--------------------------------------------------------------------===//
