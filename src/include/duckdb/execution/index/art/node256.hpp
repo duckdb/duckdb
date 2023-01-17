@@ -45,7 +45,10 @@ public:
 	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase the child at pos and (if necessary) shrink to Node48
 	static void EraseChild(ART &art, Node *&node, idx_t pos);
+
 	//! Returns the size (maximum capacity) of the Node256
-	static constexpr idx_t GetSize();
+	static constexpr idx_t GetSize() {
+		return 256;
+	}
 };
 } // namespace duckdb

@@ -160,9 +160,4 @@ void Node48::EraseChild(ART &art, Node *&node, idx_t pos) {
 		node = new_node;
 	}
 }
-
-constexpr idx_t Node48::GetSize() {
-	return 48;
-}
-
 } // namespace duckdb

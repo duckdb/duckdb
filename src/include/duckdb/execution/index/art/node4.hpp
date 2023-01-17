@@ -47,7 +47,10 @@ public:
 	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase the child at pos and (if necessary) merge with last child
 	static void EraseChild(ART &art, Node *&node, idx_t pos);
+
 	//! Returns the size (maximum capacity) of the Node4
-	static constexpr idx_t GetSize();
+	static constexpr idx_t GetSize() {
+		return 4;
+	}
 };
 } // namespace duckdb

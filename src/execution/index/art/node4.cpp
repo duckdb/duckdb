@@ -164,9 +164,4 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 		node = child_ref;
 	}
 }
-
-constexpr idx_t Node4::GetSize() {
-	return 4;
-}
-
 } // namespace duckdb

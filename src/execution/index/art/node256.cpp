@@ -121,9 +121,4 @@ void Node256::EraseChild(ART &art, Node *&node, idx_t pos) {
 		node = new_node;
 	}
 }
-
-constexpr idx_t Node256::GetSize() {
-	return 256;
-}
-
 } // namespace duckdb
