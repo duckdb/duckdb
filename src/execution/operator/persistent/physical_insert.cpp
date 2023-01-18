@@ -247,6 +247,9 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// No conflicts found
 		return;
 	}
+	// TODO: check the conflict_map to figure out if there are conflicts that are not caused by indexes that are part of
+	// our conflict target if there are, we should still throw Only when these rows are also part of conflicts that are
+	// in the conflict target, we don't throw
 	auto &conflicts = conflict_manager.Conflicts();
 	auto &row_ids = conflict_manager.RowIds();
 
