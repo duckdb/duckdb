@@ -63,8 +63,10 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 			throw InvalidInputException("cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
+		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		yyjson_read_err err;
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, nullptr, &err);
+		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG,
+		                                          json_allocator.GetYYJSONAllocator(), &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetDataUnsafe(), structure_string.GetSize(), err);
 		}
