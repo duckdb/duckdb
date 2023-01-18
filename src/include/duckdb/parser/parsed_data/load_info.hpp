@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
