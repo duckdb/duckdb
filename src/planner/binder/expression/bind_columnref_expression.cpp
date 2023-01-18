@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -313,13 +314,18 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 
 	BindResult result;
 
-	auto lambda_binding_idx = GetMatchingLambdaBinding(colref);
-	if (lambda_binding_idx != DConstants::INVALID_INDEX) {
-		D_ASSERT(lambda_bindings);
-		D_ASSERT(lambda_bindings->size() > lambda_binding_idx);
-		auto &lambda_binding = (*lambda_bindings)[lambda_binding_idx];
-		result = lambda_binding.Bind(colref, depth);
-	} else {
+	auto found_lambda_binding = false;
+	if (lambda_bindings) {
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if (table_name == (*lambda_bindings)[i].alias) {
+				result = (*lambda_bindings)[i].Bind(colref, i, depth);
+				found_lambda_binding = true;
+				break;
+			}
+		}
+	}
+
+	if (!found_lambda_binding) {
 		if (binder.macro_binding && table_name == binder.macro_binding->alias) {
 			result = binder.macro_binding->Bind(colref, depth);
 		} else {

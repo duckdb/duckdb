@@ -4,17 +4,19 @@
 statement ok
 pragma enable_verification;
 
-#TODO: turn the 'list_count(...)' into another generated column?
 statement ok
 create table tbl (
 	i BIGINT,
 	j BIGINT[],
 	k as (
 		list_count(
-			list_filter(
-				j,
-				y -> y > i
-			)
+			m
+		)
+	),
+	m as (
+		list_filter(
+			j,
+			y -> y > i
 		)
 	)
 );
@@ -23,7 +25,7 @@ statement ok
 insert into tbl values (7, [4,8,6,1,2,4,5,8,5])
 
 query III
-select * from tbl;
+select i,j,k from tbl;
 ----
 7	[4, 8, 6, 1, 2, 4, 5, 8, 5]	2
 
