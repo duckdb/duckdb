@@ -63,9 +63,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
 	}
 	bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
-	bool is_pipe = config.file_system->IsPipe(stmt.info->file_path) || stmt.info->file_path == "/dev/stdout";
+	bool is_stdout = stmt.info->file_path == "/dev/stdout";
 	if (!user_set_use_tmp_file) {
-		use_tmp_file = is_file_and_exists && !per_thread_output && !is_pipe;
+		use_tmp_file = is_file_and_exists && !per_thread_output && !is_stdout;
 	}
 
 	auto function_data =
