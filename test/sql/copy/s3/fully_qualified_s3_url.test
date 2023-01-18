@@ -38,10 +38,10 @@ IO Error: Unable to connect to URL "s3://test-bucket/s3_query_params/test.csv": 
 
 #test with .csv file
 statement ok
-COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password' WITH (HEADER 1);
+COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}' WITH (HEADER 1);
 
 query I
-SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
 ----
 0
 1
@@ -49,10 +49,10 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=minio_
 
 #test with .parquet file
 statement ok
-COPY test TO 's3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password' (FORMAT 'parquet');
+COPY test TO 's3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}' (FORMAT 'parquet');
 
 query I
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
 ----
 0
 1
@@ -60,7 +60,7 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=mi
 
 #test GLOB with .parquet file
 query I
-SELECT i FROM "s3://test-bucket/s3_query_params/*.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/*.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
 ----
 0
 1
@@ -68,7 +68,7 @@ SELECT i FROM "s3://test-bucket/s3_query_params/*.parquet?s3_access_key_id=minio
 
 #test GLOB with .parquet file
 query I
-SELECT i FROM "s3://test-bucket/s3_query_params/????.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/????.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
 ----
 0
 1
@@ -101,7 +101,7 @@ SELECT j FROM "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=mini
 
 #test a joining of two tables with different credentials
 query II
-SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user&s3_secret_access_key=minio_duckdb_user_password" T1 
+SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" T1 
     INNER JOIN "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password" T2 
     ON T1.i+100=T2.j LIMIT 3;
 ----
@@ -117,7 +117,7 @@ statement ok
 SET s3_region='false_region';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}" LIMIT 3
 
 statement ok
 SET s3_region='${AWS_DEFAULT_REGION}';
@@ -137,7 +137,7 @@ statement ok
 SET s3_secret_access_key='false_acces_key';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_secret_access_key=minio_duckdb_user_password" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
 
 statement ok
 SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
@@ -147,7 +147,7 @@ statement ok
 SET s3_access_key_id='false_acces_key_id';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=minio_duckdb_user" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}" LIMIT 3
 
 statement ok
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
@@ -171,14 +171,14 @@ statement ok
 SET s3_access_key_id='false_id'; SET s3_region='false_region';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
 
 statement ok
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION}';
 
 # test faulty input
 statement error
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=incorrect_key_id" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
 
 statement error
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&bla=bla" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
