@@ -275,12 +275,13 @@ public:
 class HTTPException : public IOException {
 public:
 	int status_code;
+	string response; // we can keep a copy for the user
 
-	DUCKDB_API explicit HTTPException(const string& msg, int status_code) : IOException(msg), status_code(status_code) {
+	DUCKDB_API explicit HTTPException(int status_code, string response, const string& msg) : IOException(msg), status_code(status_code), response(move(response)) {
 	}
 
 	template<typename...Args>
-	explicit HTTPException(const string& msg, Args... params, int status_code) : HTTPException(ConstructMessage(msg, params...), status_code) {}
+	explicit HTTPException(int status_code, string response, const string& msg, Args... params) : HTTPException(status_code, move(response), ConstructMessage(msg, params...)) {}
 };
 
 class SerializationException : public Exception {

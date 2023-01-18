@@ -206,8 +206,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		if (exact_match) {
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
-		throw HTTPException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name, url_base,
-		                  url_local_part, message, res->status);
+		throw HTTPException(res->status, string(res->body), "Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name, url_base,
+		                  url_local_part, message);
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 	std::ofstream out(temp_path, std::ios::binary);

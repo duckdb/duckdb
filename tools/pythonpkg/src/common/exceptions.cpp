@@ -74,6 +74,7 @@ void RegisterExceptions(const py::module &m) {
 			auto e = py::handle(PYHTTPException.ptr())(httpe.what());
 
 			e.attr("status_code") = httpe.status_code;
+			e.attr("response") = py::str(httpe.response);
 
 			// "throw" exception object
 			PyErr_SetObject(PYHTTPException.ptr(), e.ptr());
