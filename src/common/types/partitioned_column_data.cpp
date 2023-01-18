@@ -144,12 +144,12 @@ void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &s
 void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
-	D_ASSERT(partitions.size() == other.partitions.size());
 
 	if (partitions.empty()) {
 		// This is the first merge, we just copy them over
 		partitions = std::move(other.partitions);
 	} else {
+		D_ASSERT(partitions.size() == other.partitions.size());
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {
 			partitions[i]->Combine(*other.partitions[i]);

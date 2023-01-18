@@ -14,43 +14,59 @@ statement ok
 CREATE TABLE bigdata AS FROM generate_series (9999);
 
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output.parquet' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output.parquet/*')
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output/*.parquet')
 ----
 10000
 
 query I
-SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output.parquet/*') ORDER BY f
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output/*.parquet') ORDER BY f
 ----
-out_0
-out_1
-out_2
-out_3
+out_0.parquet
+out_1.parquet
+out_2.parquet
+out_3.parquet
 
+# CSV also works
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output_csv' (FORMAT CSV, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/per_thread_output_csv/*.csv';
+----
+10000
+
+query I
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output_csv/*.csv') ORDER BY f
+----
+out_0.csv
+out_1.csv
+out_2.csv
+out_3.csv
 
 # with a trailing slash
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2.parquet/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
 ----
 10000
 
 
 # cant write to existing folders
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2.parquet/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
 # we have not added anything
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2.parquet/*')
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
 ----
 10000
 
 
 # this should not work
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3.parquet' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);

@@ -111,7 +111,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 			    CreateDirRecursive(context.client, partition_columns, names, partition_key_map[i]->values, file_path);
 
 			auto &fs = FileSystem::GetFileSystem(context.client);
-			string full_path = fs.JoinPath(hive_path, "/data_" + to_string(l.writer_offset) + ".parquet");
+			string full_path = fs.JoinPath(hive_path, "/data_" + to_string(l.writer_offset) + "." + function.extension);
 			if (fs.FileExists(full_path)) {
 				throw IOException("failed to create " + full_path + ", file exists!");
 			}
@@ -186,7 +186,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			this_file_offset = g.last_file_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset));
+		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
 		if (fs.FileExists(output_path)) {
 			throw IOException("%s exists", output_path);
 		}
@@ -196,11 +196,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	if (partition_output) {
-		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
-		state->partition_state = make_shared<GlobalHivePartitionState>();
-		return state;
-	} else if (per_thread_output) {
+
+	if (partition_output || per_thread_output) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
 		if (fs.FileExists(file_path)) {
@@ -216,18 +213,24 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			}
 		}
 
-		return make_unique<CopyToFunctionGlobalState>(nullptr);
-	} else {
-		auto &fs = FileSystem::GetFileSystem(context);
-		auto found = file_path.find_last_of('/');
-		auto dir = file_path.substr(0, found);
+		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
 
-		if (!fs.DirectoryExists(dir)) {
-			fs.CreateDirectory(dir);
+		if (partition_output) {
+			state->partition_state = make_shared<GlobalHivePartitionState>();
 		}
-		return make_unique<CopyToFunctionGlobalState>(
-		    function.copy_to_initialize_global(context, *bind_data, file_path));
+
+		return state;
 	}
+
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto found = file_path.find_last_of('/');
+	auto dir = file_path.substr(0, found);
+
+	if (!fs.DirectoryExists(dir)) {
+		fs.CreateDirectory(dir);
+	}
+	return make_unique<CopyToFunctionGlobalState>(
+		function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
