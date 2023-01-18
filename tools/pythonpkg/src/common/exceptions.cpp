@@ -62,8 +62,23 @@ void RegisterExceptions(const py::module &m) {
 	py::register_exception<ConnectionException>(m, "ConnectionException", operational_error);
 	// no object size error
 	// no null pointer errors
-	py::register_exception<IOException>(m, "IOException", operational_error);
+	auto PYIOException = py::register_exception<IOException>(m, "IOException", operational_error);
 	py::register_exception<SerializationException>(m, "SerializationException", operational_error);
+
+	static py::exception<HTTPException> PYHTTPException(m, "HTTPException", PYIOException);
+	py::register_exception_translator([](std::exception_ptr p) {
+		try {
+			if (p) std::rethrow_exception(p);
+		} catch (const HTTPException& httpe) {
+			// construct exception object
+			auto e = py::handle(PYHTTPException.ptr())(httpe.what());
+
+			e.attr("status_code") = httpe.status_code;
+
+			// "throw" exception object
+			PyErr_SetObject(PYHTTPException.ptr(), e.ptr());
+		}
+	});
 
 	// IntegrityError
 	auto integrity_error = py::register_exception<IntegrityError>(m, "IntegrityError", error).ptr();
