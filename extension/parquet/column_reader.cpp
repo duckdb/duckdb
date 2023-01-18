@@ -184,7 +184,6 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	dict_decoder.reset();
 	defined_decoder.reset();
 	block.reset();
-
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
 
@@ -204,6 +203,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	default:
 		break; // ignore INDEX page type and any other custom extensions
 	}
+	ResetPage();
+}
+
+void ColumnReader::ResetPage() {
 }
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
