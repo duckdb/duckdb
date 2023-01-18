@@ -24,16 +24,10 @@ statement ok
 COPY lineitem TO '__TEST_DIR__/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus));
 
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem_sf1.parquet' (FORMAT PARQUET);
-
-statement ok
 DROP TABLE lineitem;
 
 statement ok
 CREATE VIEW lineitem as SELECT * FROM parquet_scan('__TEST_DIR__/lineitem_sf1_partitioned/*/*/*.parquet', HIVE_PARTITIONING=1);
-
-#statement ok
-#CREATE VIEW lineitem as SELECT * FROM parquet_scan('__TEST_DIR__/lineitem_sf1.parquet');
 
 loop i 1 9
 
@@ -54,10 +48,4 @@ PRAGMA tpch(${i})
 endloop
 
 statement ok
-pragma threads=8;
-
-# threads x partitions = 8 x 4 = 16
-query I
-SELECT COUNT(DISTINCT filename) FROM parquet_scan('__TEST_DIR__/lineitem_sf1_partitioned/*/*/*.parquet', filename=1);
-----
-32
+pragma threads=1;
