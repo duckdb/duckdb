@@ -14,6 +14,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -718,6 +719,11 @@ DataTable *DTableCatalogEntry::GetStoragePtr() {
 
 const vector<unique_ptr<BoundConstraint>> &DTableCatalogEntry::GetBoundConstraints() {
 	return bound_constraints;
+}
+
+TableFunction DTableCatalogEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+	bind_data = make_unique<TableScanBindData>(this);
+	return TableScanFunction::GetFunction();
 }
 
 } // namespace duckdb

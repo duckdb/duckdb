@@ -33,6 +33,9 @@ struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 
+class TableFunction;
+struct FunctionData;
+
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
@@ -83,6 +86,9 @@ public:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
 	LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
+
+	//! Returns the scan function that can be used to scan the given table
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
 
 	virtual bool IsDTable() {
 		return false;

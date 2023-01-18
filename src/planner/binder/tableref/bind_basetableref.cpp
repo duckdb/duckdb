@@ -9,7 +9,6 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
@@ -108,10 +107,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto table = (TableCatalogEntry *)table_or_view;
-		D_ASSERT(table->IsDTable());
 
-		auto scan_function = TableScanFunction::GetFunction();
-		auto bind_data = make_unique<TableScanBindData>((DTableCatalogEntry *)table);
+		unique_ptr<FunctionData> bind_data;
+		auto scan_function = table->GetScanFunction(context, bind_data);
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;

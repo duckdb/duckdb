@@ -38,6 +38,8 @@ public:
 	void CommitAlter(AlterInfo &info);
 	void CommitDrop();
 
+	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+
 	bool IsDTable() override {
 		return true;
 	}

@@ -33,7 +33,7 @@ public:
 
 	//! Start a new transaction
 	virtual Transaction *StartTransaction(ClientContext &context) = 0;
-	//! Commit the given transaction
+	//! Commit the given transaction. Returns a non-empty error message on failure.
 	virtual string CommitTransaction(ClientContext &context, Transaction *transaction) = 0;
 	//! Rollback the given transaction
 	virtual void RollbackTransaction(Transaction *transaction) = 0;
