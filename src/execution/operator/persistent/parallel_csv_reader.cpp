@@ -43,14 +43,14 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	InitInsertChunkIdx(return_types.size());
 }
 
-bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl) {
+bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char) {
 	// Set the delimiter if not set yet.
 	SetNewLineDelimiter(carry, carry_followed_by_nl);
 	D_ASSERT(options.new_line == NewLineIdentifier::SINGLE || options.new_line == NewLineIdentifier::CARRY_ON);
 	if (options.new_line == NewLineIdentifier::SINGLE) {
 		return (!carry) || (carry && !carry_followed_by_nl);
 	}
-	return carry && carry_followed_by_nl;
+	return (carry && carry_followed_by_nl) || (!carry && first_char);
 }
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
@@ -80,10 +80,9 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	while (!successfully_read_first_line) {
 		DataChunk first_line_chunk;
 		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
-		bool carriage_return = false;
 		for (; position_buffer < end_buffer; position_buffer++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
-				carriage_return = (*buffer)[position_buffer] == '\r';
+				bool carriage_return = (*buffer)[position_buffer] == '\r';
 				bool carriage_return_followed = false;
 				position_buffer++;
 				if (position_buffer < end_buffer) {
@@ -92,13 +91,18 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 						position_buffer++;
 					}
 				}
-				if (NewLineDelimiter(carriage_return, carriage_return_followed)) {
+				if (NewLineDelimiter(carriage_return, carriage_return_followed, position_buffer - 1 == start_buffer)) {
 					break;
 				}
 			}
 		}
 
 		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+			break;
+		}
+
+		if (position_buffer > end_buffer && options.new_line == NewLineIdentifier::CARRY_ON &&
+		    (*buffer)[position_buffer - 1] == '\n') {
 			break;
 		}
 		idx_t position_set = position_buffer;
@@ -116,7 +120,10 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		}
 		position_buffer = position_set;
 	}
-	verification_positions.beginning_of_first_line = position_buffer;
+	if (verification_positions.beginning_of_first_line == 0) {
+		verification_positions.beginning_of_first_line = position_buffer;
+	}
+
 	verification_positions.end_of_last_line = position_buffer;
 	return successfully_read_first_line;
 }

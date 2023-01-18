@@ -10,6 +10,11 @@ statement ok
 PRAGMA verify_parallelism
 
 # Test read_csv with user defined variable
+loop thr 1 8
+
+statement ok
+pragma threads=${thr}
+
 loop i 25 100
 
 # Test read_csv auto with \n
@@ -85,4 +90,5 @@ select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix
 
 endloop
 
+endloop
 
