@@ -303,8 +303,9 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw IOException("Unable to connect  to URL " + res->http_url + " " + res->error + " (HTTP code " +
-			                  to_string(res->code) + ")");
+			throw HTTPException(res->code, res->error,
+			                  "Unable to connect  to URL " + res->http_url + " " + res->error + " (HTTP code " +
+			                      to_string(res->code) + ")");
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -438,7 +439,8 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization");
+		throw HTTPException(res->code, res->error,
+		                    "Unexpected response during S3 multipart upload finalization");
 	}
 	file_handle.upload_finalized = true;
 }
@@ -997,9 +999,9 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    std::cerr << response.reason << std::endl;
-			    throw IOException("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                      std::to_string(response.status) + ")");
+			    throw HTTPException(response.status, string(response.body),
+			                      "HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
+			                          std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
