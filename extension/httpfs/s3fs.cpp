@@ -142,8 +142,15 @@ string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
 void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
 	static char *evar;
 
-	if ((evar = std::getenv(env_var_name)) != NULL)
-		this->config.SetOption(key, Value(evar));
+	if ((evar = std::getenv(env_var_name)) != NULL) {
+		if (StringUtil::Lower(evar) == "false") {
+			this->config.SetOption(key, Value(false));
+		} else if (StringUtil::Lower(evar) == "true") {
+			this->config.SetOption(key, Value(true));
+		} else {
+			this->config.SetOption(key, Value(evar));
+		}
+	}
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
@@ -152,6 +159,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
 	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
 	this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
+	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {

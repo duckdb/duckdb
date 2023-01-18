@@ -18,6 +18,8 @@ require-env AWS_SECRET_ACCESS_KEY
 
 require-env DUCKDB_S3_ENDPOINT
 
+require-env DUCKDB_S3_USE_SSL
+
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
 
@@ -29,7 +31,7 @@ statement ok
 SET s3_secret_access_key='false_pw';SET s3_access_key_id='false_key';
 
 statement ok
-SET s3_use_ssl=false;SET s3_url_style='path';
+SET s3_url_style='path';
 
 statement error
 COPY test TO 's3://test-bucket/s3_query_params/test.csv';

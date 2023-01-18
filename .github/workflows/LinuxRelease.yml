@@ -620,6 +620,7 @@ jobs:
       AWS_ACCESS_KEY_ID: minio_duckdb_user
       AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
+      DUCKDB_S3_USE_SSL: false
 
       GEN: ninja
 
