@@ -107,7 +107,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// removes any redundant DelimGets/DelimJoins
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
-		Deliminator deliminator;
+		Deliminator deliminator(context);
 		plan = deliminator.Optimize(std::move(plan));
 	});
 

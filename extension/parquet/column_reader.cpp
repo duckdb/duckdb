@@ -184,7 +184,6 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	dict_decoder.reset();
 	defined_decoder.reset();
 	block.reset();
-
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
 
@@ -204,6 +203,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	default:
 		break; // ignore INDEX page type and any other custom extensions
 	}
+	ResetPage();
+}
+
+void ColumnReader::ResetPage() {
 }
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
@@ -1292,6 +1295,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_unique<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		switch (schema_p.type) {
 		case Type::INT96:
 			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
@@ -1328,6 +1332,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p,
 		                                                                            file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BLOB:

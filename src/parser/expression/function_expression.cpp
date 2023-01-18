@@ -34,7 +34,7 @@ string FunctionExpression::ToString() const {
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
-bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
+bool FunctionExpression::Equal(const FunctionExpression *a, const FunctionExpression *b) {
 	if (a->catalog != b->catalog || a->schema != b->schema || a->function_name != b->function_name ||
 	    b->distinct != a->distinct) {
 		return false;

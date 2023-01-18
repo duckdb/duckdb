@@ -15,7 +15,7 @@ string ConstantExpression::ToString() const {
 	return value.ToSQLString();
 }
 
-bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpression *b) {
+bool ConstantExpression::Equal(const ConstantExpression *a, const ConstantExpression *b) {
 	return a->value.type() == b->value.type() && !ValueOperations::DistinctFrom(a->value, b->value);
 }
 

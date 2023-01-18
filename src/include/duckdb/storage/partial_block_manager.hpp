@@ -68,10 +68,10 @@ public:
 	// 20% free / 80% utilization
 	static constexpr const idx_t DEFAULT_MAX_PARTIAL_BLOCK_SIZE = Storage::BLOCK_SIZE / 5 * 4;
 	// Max number of shared references to a block. No effective limit by default.
-	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1 << 20;
+	static constexpr const idx_t DEFAULT_MAX_USE_COUNT = 1u << 20;
 	// No point letting map size grow unbounded. We'll drop blocks with the
 	// least free space first.
-	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1 << 31;
+	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
 	PartialBlockManager(BlockManager &block_manager, uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
