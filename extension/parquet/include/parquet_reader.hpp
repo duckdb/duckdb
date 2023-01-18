@@ -109,6 +109,8 @@ public:
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
+	//! maps hive partition names to string columns
+	unique_ptr<std::map<string, string>> hive_map;
 
 	//! when reading multiple parquet files (with union by name option)
 	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
