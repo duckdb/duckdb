@@ -857,14 +857,14 @@ void ART::LookupValues(DataChunk &input, ConflictManager &conflict_manager) {
 	idx_t found_conflict = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < input.size(); i++) {
 		if (keys[i].Empty()) {
-			if (conflict_manager.AddNull(i, *this)) {
+			if (conflict_manager.AddNull(i)) {
 				found_conflict = i;
 			}
 			continue;
 		}
 		Leaf *leaf_ptr = Lookup(tree, keys[i], 0);
 		if (leaf_ptr == nullptr) {
-			if (conflict_manager.AddMiss(i, *this)) {
+			if (conflict_manager.AddMiss(i)) {
 				found_conflict = i;
 			}
 			continue;
@@ -873,7 +873,7 @@ void ART::LookupValues(DataChunk &input, ConflictManager &conflict_manager) {
 		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
 		D_ASSERT(leaf_ptr->count == 1);
 		auto row_id = leaf_ptr->GetRowId(0);
-		if (conflict_manager.AddHit(i, row_id, *this)) {
+		if (conflict_manager.AddHit(i, row_id)) {
 			found_conflict = i;
 		}
 	}

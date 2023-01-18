@@ -60,7 +60,7 @@ insert into tbl(i,k) values (3,10), (6,2) on conflict(i) do update set j = 10;
 query III
 select * from tbl;
 ----
-3	10	2
+3	NULL	2
 5	NULL	1
 4	NULL	4
 

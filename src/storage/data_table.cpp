@@ -563,9 +563,22 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 					matching_indexes += conflict_info.ConflictTargetMatches(index);
 					return false;
 				});
+				conflict_manager->SetMode(ConflictManagerMode::SCAN);
 				conflict_manager->SetIndexCount(matching_indexes);
-				// Then we scan using our conflict manager, which prevents throwing on conflict
-				// And also records information about the encountered conflicts
+				// First we verify only the indexes that match our conflict target
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
+					}
+					if (conflict_info.ConflictTargetMatches(index)) {
+						index.VerifyAppend(chunk, *conflict_manager);
+					}
+					return false;
+				});
+
+				conflict_manager->SetMode(ConflictManagerMode::THROW);
+				// Then we scan the other indexes, throwing if they cause conflicts on tuples that were not found during
+				// the scan
 				info->indexes.Scan([&](Index &index) {
 					if (!index.IsUnique()) {
 						return false;

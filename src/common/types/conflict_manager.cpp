@@ -6,7 +6,7 @@
 namespace duckdb {
 
 ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size, ConflictInfo *conflict_info)
-    : lookup_type(lookup_type), input_size(input_size), conflict_info(conflict_info) {
+    : lookup_type(lookup_type), input_size(input_size), conflict_info(conflict_info), mode(ConflictManagerMode::THROW) {
 }
 
 ManagedSelection &ConflictManager::InternalSelection() {
@@ -14,6 +14,11 @@ ManagedSelection &ConflictManager::InternalSelection() {
 		conflicts.Initialize(input_size);
 	}
 	return conflicts;
+}
+
+const unordered_set<idx_t> &ConflictManager::InternalConflictSet() const {
+	D_ASSERT(conflict_set);
+	return *conflict_set;
 }
 
 Vector &ConflictManager::InternalRowIds() {
@@ -36,7 +41,7 @@ const ConflictInfo &ConflictManager::GetConflictInfo() const {
 }
 
 void ConflictManager::FinishLookup() {
-	if (ShouldThrowOnConflict()) {
+	if (mode == ConflictManagerMode::THROW) {
 		return;
 	}
 	if (!SingleIndexTarget()) {
@@ -50,33 +55,26 @@ void ConflictManager::FinishLookup() {
 	}
 }
 
-void ConflictManager::AddOrUpdateConflict(row_t row_id, Index &index, bool matches_target) {
-	D_ASSERT(conflict_info);
-	if (!conflict_map) {
-		conflict_map = make_unique<unordered_map<row_t, bool>>();
-	}
-	auto &map = *conflict_map;
-	auto entry = map.find(row_id);
-	if (entry == map.end()) {
-		// No conflict on this row_id has been found yet
-		map[row_id] = matches_target;
-		return;
-	}
-	if (entry->second == true) {
-		// Conflict already part of the conflict target, no need to update anything
-		return;
-	}
-	entry->second = matches_target;
+void ConflictManager::SetMode(ConflictManagerMode mode) {
+	// Only allow SCAN when we have conflict info
+	D_ASSERT(mode != ConflictManagerMode::SCAN || conflict_info != nullptr);
+	this->mode = mode;
 }
 
-void ConflictManager::AddConflictInternal(idx_t chunk_index, row_t row_id, Index &index) {
-	// Only when we should not throw on conflict should we get here
-	D_ASSERT(!ShouldThrowOnConflict());
-	bool part_of_conflict_target = conflict_info->ConflictTargetMatches(index);
-	AddOrUpdateConflict(row_id, index, part_of_conflict_target);
-	if (!part_of_conflict_target) {
-		return;
+void ConflictManager::AddToConflictSet(idx_t chunk_index) {
+	if (!conflict_set) {
+		conflict_set = make_unique<unordered_set<idx_t>>();
 	}
+	auto &set = *conflict_set;
+	set.insert(chunk_index);
+}
+
+void ConflictManager::AddConflictInternal(idx_t chunk_index, row_t row_id) {
+	D_ASSERT(mode == ConflictManagerMode::SCAN);
+
+	// Only when we should not throw on conflict should we get here
+	D_ASSERT(!ShouldThrow(chunk_index));
+	AddToConflictSet(chunk_index);
 	if (SingleIndexTarget()) {
 		// If we have identical indexes, only the conflicts of the first index should be recorded
 		// as the other index(es) would produce the exact same conflicts anyways
@@ -102,29 +100,65 @@ void ConflictManager::AddConflictInternal(idx_t chunk_index, row_t row_id, Index
 	}
 }
 
-bool ConflictManager::AddHit(idx_t chunk_index, row_t row_id, Index &index) {
-	D_ASSERT(chunk_index < input_size);
-	if (ShouldThrowOnConflict()) {
+bool ConflictManager::IsConflict(LookupResultType type) {
+	switch (type) {
+	case LookupResultType::LOOKUP_NULL: {
+		if (ShouldIgnoreNulls()) {
+			return false;
+		}
+		// fall through to LOOKUP_HIT
+	}
+	case LookupResultType::LOOKUP_HIT: {
 		return true;
 	}
-	AddConflictInternal(chunk_index, row_id, index);
+	case LookupResultType::LOOKUP_MISS: {
+		// FIXME: If we record a miss as a conflict when the verify type is APPEND_FK, then we can simplify the checks
+		// in VerifyForeignKeyConstraint This also means we should not record a hit as a conflict when the verify type
+		// is APPEND_FK
+		return false;
+	}
+	default: {
+		throw NotImplementedException("Type not implemented for LookupResultType");
+	}
+	}
+}
+
+// FIXME: maybe refactor these into a LookupResult::MISS|HIT|NULL and pass this into ConflictManager::CheckForConflict
+// but then this enum has to be part of a struct, and be generic, or abstract, to hold any type of Index..
+bool ConflictManager::AddHit(idx_t chunk_index, row_t row_id) {
+	D_ASSERT(chunk_index < input_size);
+	// First check if this causes a conflict
+	if (!IsConflict(LookupResultType::LOOKUP_HIT)) {
+		return false;
+	}
+
+	// Then check if we should throw on a conflict
+	if (ShouldThrow(chunk_index)) {
+		return true;
+	}
+	if (mode == ConflictManagerMode::THROW) {
+		// When our mode is THROW, and the chunk index is part of the previously scanned conflicts
+		// then we ignore the conflict instead
+		D_ASSERT(!ShouldThrow(chunk_index));
+		return false;
+	}
+	D_ASSERT(conflict_info);
+	// Because we don't throw, we need to register the conflict
+	AddConflictInternal(chunk_index, row_id);
 	return false;
 }
 
-bool ConflictManager::AddMiss(idx_t chunk_index, Index &index) {
+bool ConflictManager::AddMiss(idx_t chunk_index) {
 	D_ASSERT(chunk_index < input_size);
 	return false;
-	// FIXME: If we record a miss as a conflict when the verify type is APPEND_FK, then we can simplify the checks in
-	// VerifyForeignKeyConstraint This also means we should not record a hit as a conflict when the verify type is
-	// APPEND_FK
 }
 
-bool ConflictManager::AddNull(idx_t chunk_index, Index &index) {
+bool ConflictManager::AddNull(idx_t chunk_index) {
 	D_ASSERT(chunk_index < input_size);
 	if (ShouldIgnoreNulls()) {
 		return false;
 	}
-	return AddHit(chunk_index, DConstants::INVALID_INDEX, index);
+	return AddHit(chunk_index, DConstants::INVALID_INDEX);
 }
 
 bool ConflictManager::SingleIndexTarget() const {
@@ -133,8 +167,21 @@ bool ConflictManager::SingleIndexTarget() const {
 	return !conflict_info->column_ids.empty();
 }
 
-bool ConflictManager::ShouldThrowOnConflict() const {
-	return conflict_info == nullptr;
+bool ConflictManager::ShouldThrow(idx_t chunk_index) const {
+	if (mode == ConflictManagerMode::SCAN) {
+		return false;
+	}
+	D_ASSERT(mode == ConflictManagerMode::THROW);
+	if (conflict_set == nullptr) {
+		// No conflicts were scanned, so this conflict is not in the set
+		return true;
+	}
+	auto &set = InternalConflictSet();
+	if (set.count(chunk_index)) {
+		return false;
+	}
+	// None of the scanned conflicts arose from this insert tuple
+	return true;
 }
 
 bool ConflictManager::ShouldIgnoreNulls() const {
