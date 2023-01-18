@@ -249,7 +249,28 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		insert->on_conflict_condition = std::move(condition);
 	}
 
+	auto projection_index = insert->children[0]->GetTableIndex()[0];
+
+	string unused;
+	auto original_binding = bind_context.GetBinding(table_alias, unused);
+	D_ASSERT(original_binding);
+
+	auto table_index = original_binding->index;
+
+	// Replace any column bindings to refer to the projection table_index, rather than the source table
+	if (insert->on_conflict_condition) {
+		ReplaceColumnBindings(*insert->on_conflict_condition, table_index, projection_index);
+	}
+
 	if (insert->action_type != OnConflictAction::UPDATE) {
+		if (!insert->on_conflict_condition) {
+			return;
+		}
+		// Get the column_ids we need to fetch later on from the conflicting tuples
+		// of the original table, to execute the expressions
+		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
+		auto table_binding = (TableBinding *)original_binding;
+		insert->columns_to_fetch = table_binding->GetBoundColumnIds();
 		return;
 	}
 	D_ASSERT(on_conflict.set_info);
@@ -273,13 +294,6 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
 	BindDoUpdateSetExpressions(table_alias, insert.get(), set_info, table);
 
-	auto projection_index = insert->children[0]->GetTableIndex()[0];
-
-	string unused;
-	auto original_binding = bind_context.GetBinding(table_alias, unused);
-	D_ASSERT(original_binding);
-
-	auto table_index = original_binding->index;
 	// Get the column_ids we need to fetch later on from the conflicting tuples
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
@@ -291,10 +305,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		// Change the non-excluded column references to refer to the projection index
 		ReplaceColumnBindings(*expr, table_index, projection_index);
 	}
-	// Do the same for the conditions
-	if (insert->on_conflict_condition) {
-		ReplaceColumnBindings(*insert->on_conflict_condition, table_index, projection_index);
-	}
+	// Do the same for the (optional) DO UPDATE condition
 	if (insert->do_update_condition) {
 		ReplaceColumnBindings(*insert->do_update_condition, table_index, projection_index);
 	}

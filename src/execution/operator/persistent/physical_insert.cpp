@@ -172,24 +172,22 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 	}
 }
 
-bool AllConflictsMeetCondition(ExecutionContext &context, DataChunk &conflicts,
-                               const unique_ptr<Expression> &condition) {
+bool AllConflictsMeetCondition(DataChunk &result) {
+	auto data = FlatVector::GetData<bool>(result.data[0]);
+	for (idx_t i = 0; i < result.size(); i++) {
+		if (!data[i]) {
+			return false;
+		}
+	}
+	return true;
+}
 
+void CheckOnConflictCondition(ExecutionContext &context, DataChunk &conflicts, const unique_ptr<Expression> &condition,
+                              DataChunk &result) {
 	ExpressionExecutor executor(context.client, *condition);
-	DataChunk result;
 	result.Initialize(context.client, {LogicalType::BOOLEAN});
 	executor.Execute(conflicts, result);
 	result.SetCardinality(conflicts.size());
-
-	auto data = FlatVector::GetData<bool>(result.data[0]);
-	bool condition_met = true;
-	for (idx_t i = 0; i < result.size(); i++) {
-		if (!data[i]) {
-			condition_met = false;
-			break;
-		}
-	}
-	return condition_met;
 }
 
 void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -279,11 +277,21 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
 
 	if (on_conflict_condition) {
-		bool conditions_met = AllConflictsMeetCondition(context, combined_chunk, on_conflict_condition);
+		DataChunk conflict_condition_result;
+		CheckOnConflictCondition(context, combined_chunk, on_conflict_condition, conflict_condition_result);
+		bool conditions_met = AllConflictsMeetCondition(conflict_condition_result);
 		if (!conditions_met) {
-			// At least one of the conditions weren't met, just run the VerifyAppend again, expecting it to
-			// throw
-			table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+			// Filter out the tuples that did pass the filter, then run the verify again
+			ManagedSelection sel(combined_chunk.size());
+			auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
+			for (idx_t i = 0; i < combined_chunk.size(); i++) {
+				if (!data[i]) {
+					// Only populate the selection vector with the tuples that did not meet the condition
+					sel.Append(i);
+				}
+			}
+			combined_chunk.Slice(sel.Selection(), sel.Count());
+			table->storage->VerifyAppendConstraints(*table, context.client, combined_chunk, nullptr);
 			throw InternalException("The previous operation was expected to throw but didn't");
 		}
 	}
