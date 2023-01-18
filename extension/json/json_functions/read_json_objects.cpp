@@ -36,6 +36,12 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 	                             JSONScanLocalState::Init);
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = move(function_info);
+
+	// TODO: add parameters like this
+	//	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+	// 	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
+	// 	table_function.named_parameters["detect_format"] = LogicalType::BOOLEAN;
+
 	return table_function;
 }
 

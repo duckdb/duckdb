@@ -179,7 +179,7 @@ static inline void TrimWhitespace(JSONLine &line) {
 }
 
 yyjson_doc *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line) {
-	// Parse to validate
+	// Parse to validate TODO: This is the only place we can parse INSITU (if not returning strings)
 	auto result =
 	    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
 
@@ -321,7 +321,7 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 
 		read_size = file_handle.GetPositionAndSize(read_position, request_size);
 		first_read = read_position == 0;
-		is_last = file_handle.Remaining() == 0; // TODO: this is_last thing seems problematic
+		is_last = file_handle.Remaining() == 0;
 
 		if (read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
@@ -347,7 +347,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 
 		first_read = file_handle.Remaining() == file_handle.FileSize();
 		read_size = file_handle.Read(buffer_ptr + prev_buffer_remainder, request_size);
-		is_last = read_size < request_size; // TODO: yeah, problematic
+		is_last = read_size < request_size;
 
 		if (read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
