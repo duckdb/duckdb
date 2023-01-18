@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
@@ -26,22 +28,32 @@ enum class JSONFormat : uint8_t {
 
 struct BufferedJSONReaderOptions {
 public:
-	//! The file paths of the JSON files to read
-	vector<string> file_paths;
+	//! The file path of the JSON file to read
+	string file_path;
 	//! The format of the JSON
 	JSONFormat format = JSONFormat::AUTO_DETECT;
-	//! Whether we return JSON strings (if not, we return YYJSON documents)
-	bool return_json_strings = true;
 	//! Whether file is compressed or not, and if so which compression type
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! Whether or not we should ignore malformed JSON (default to NULL)
-	bool ignore_errors = false;
-	//! Maximum JSON object size (defaults to 1MB)
-	idx_t maximum_object_size = 1048576;
 
 public:
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
+};
+
+struct JSONBufferHandle {
+public:
+	JSONBufferHandle(idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
+
+public:
+	//! Buffer index (within same file)
+	const idx_t buffer_index;
+
+	//! Number of readers for this buffer
+	atomic<idx_t> readers;
+	//! The buffer
+	AllocatedData buffer;
+	//! The size of the data in the buffer (can be less than buffer.GetSize())
+	const idx_t buffer_size;
 };
 
 struct JSONFileHandle {
@@ -50,6 +62,7 @@ public:
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
+
 	bool CanSeek() const;
 	bool PlainFileSource() const;
 
@@ -72,23 +85,39 @@ private:
 
 class BufferedJSONReader {
 public:
-	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options);
+	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, idx_t file_index, string file_path);
+
 	void OpenJSONFile();
-	JSONFileHandle &GetFileHandle(idx_t file_idx) const;
-	idx_t GetFileIndex();
+	bool IsOpen();
+
+	BufferedJSONReaderOptions &GetOptions();
+	JSONFileHandle &GetFileHandle() const;
+
+	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
+	JSONBufferHandle *GetBuffer(idx_t buffer_idx);
+	AllocatedData RemoveBuffer(idx_t buffer_idx);
+	idx_t GetBufferIndex();
+
 	double GetProgress() const;
-	idx_t MaxThreads(idx_t buffer_capacity) const;
 
 public:
-	BufferedJSONReaderOptions options;
+	mutex lock;
+
+	//! File index / path
+	const idx_t file_index;
+	const string file_path;
 
 private:
 	ClientContext &context;
+	BufferedJSONReaderOptions options;
 
-	//! Next file path index
-	idx_t next_file_idx;
-	//! The file currently being read
-	vector<unique_ptr<JSONFileHandle>> file_handles;
+	//! File handle
+	unique_ptr<JSONFileHandle> file_handle;
+
+	//! Next buffer index within the file
+	idx_t buffer_index;
+	//! Mapping from batch index to currently held buffers
+	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
 };
 
 } // namespace duckdb

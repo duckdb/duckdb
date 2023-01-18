@@ -8,21 +8,19 @@
 namespace duckdb {
 
 void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) {
-	writer.WriteList<string>(file_paths);
+	writer.WriteString(file_path);
 	writer.WriteField<JSONFormat>(format);
-	writer.WriteField<bool>(return_json_strings);
 	writer.WriteField<FileCompressionType>(compression);
-	writer.WriteField<bool>(ignore_errors);
-	writer.WriteField<idx_t>(maximum_object_size);
 }
 
 void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
-	file_paths = reader.ReadRequiredList<string>();
+	file_path = reader.ReadRequired<string>();
 	format = reader.ReadRequired<JSONFormat>();
-	return_json_strings = reader.ReadRequired<bool>();
 	compression = reader.ReadRequired<FileCompressionType>();
-	ignore_errors = reader.ReadRequired<bool>();
-	maximum_object_size = reader.ReadRequired<idx_t>();
+}
+
+JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
+    : buffer_index(buffer_index_p), readers(readers_p), buffer(move(buffer_p)), buffer_size(buffer_size_p) {
 }
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p)
@@ -48,6 +46,7 @@ bool JSONFileHandle::PlainFileSource() const {
 }
 
 idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
+	D_ASSERT(requested_size != 0);
 	position = read_position;
 	auto actual_size = MinValue<idx_t>(requested_size, Remaining());
 	read_position += actual_size;
@@ -55,52 +54,73 @@ idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) 
 }
 
 void JSONFileHandle::ReadAtPosition(const char *pointer, idx_t size, idx_t position) {
+	D_ASSERT(size != 0);
 	file_handle->Read((void *)pointer, size, position);
 }
 
 idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size) {
+	D_ASSERT(requested_size != 0);
 	auto actual_size = file_handle->Read((void *)pointer, requested_size);
 	read_position += actual_size;
 	return actual_size;
 }
 
-BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p)
-    : options(move(options_p)), context(context), next_file_idx(0) {
-	file_handles.reserve(options.file_paths.size());
+BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, idx_t file_index_p,
+                                       string file_path_p)
+    : file_index(file_index_p), file_path(move(file_path_p)), context(context), options(move(options_p)),
+      buffer_index(0) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {
+	lock_guard<mutex> guard(lock);
 	auto &file_system = FileSystem::GetFileSystem(context);
 	auto file_opener = FileOpener::Get(context);
-	auto &next_file_path = options.file_paths[next_file_idx++];
-	auto regular_file_handle = file_system.OpenFile(next_file_path.c_str(), FileFlags::FILE_FLAGS_READ,
+	auto regular_file_handle = file_system.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ,
 	                                                FileLockType::NO_LOCK, options.compression, file_opener);
-	file_handles.emplace_back(make_unique<JSONFileHandle>(move(regular_file_handle)));
+	file_handle = make_unique<JSONFileHandle>(move(regular_file_handle));
 }
 
-idx_t BufferedJSONReader::GetFileIndex() {
-	return next_file_idx - 1;
+bool BufferedJSONReader::IsOpen() {
+	return file_handle != nullptr;
 }
 
-JSONFileHandle &BufferedJSONReader::GetFileHandle(idx_t file_idx) const {
-	return *file_handles[file_idx].get();
+BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() {
+	return options;
+}
+
+JSONFileHandle &BufferedJSONReader::GetFileHandle() const {
+	return *file_handle;
+}
+
+void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer) {
+	lock_guard<mutex> guard(lock);
+	buffer_map.insert(make_pair(buffer_idx, move(buffer)));
+}
+
+JSONBufferHandle *BufferedJSONReader::GetBuffer(idx_t buffer_idx) {
+	lock_guard<mutex> guard(lock);
+	auto it = buffer_map.find(buffer_idx);
+	return it == buffer_map.end() ? nullptr : it->second.get();
+}
+
+AllocatedData BufferedJSONReader::RemoveBuffer(idx_t buffer_idx) {
+	lock_guard<mutex> guard(lock);
+	auto it = buffer_map.find(buffer_idx);
+	D_ASSERT(it != buffer_map.end());
+	auto result = std::move(it->second->buffer);
+	buffer_map.erase(it);
+	return result;
+}
+
+idx_t BufferedJSONReader::GetBufferIndex() {
+	return buffer_index++;
 }
 
 double BufferedJSONReader::GetProgress() const {
-	if (options.file_paths.size() == 1) {
-		auto &fh = *file_handles[0];
-		return 100.0 * double(fh.Remaining()) / double(fh.FileSize());
+	if (file_handle) {
+		return 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
 	} else {
-		return double(next_file_idx) / options.file_paths.size();
-	}
-}
-
-idx_t BufferedJSONReader::MaxThreads(idx_t buffer_capacity) const {
-	auto &fh = GetFileHandle(0);
-	if (fh.CanSeek()) {
-		return (fh.FileSize() + buffer_capacity - 1) / buffer_capacity;
-	} else {
-		return 1;
+		return 0;
 	}
 }
 
