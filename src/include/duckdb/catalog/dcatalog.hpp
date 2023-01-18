@@ -38,6 +38,11 @@ public:
 	                                         bool if_exists = false,
 	                                         QueryErrorContext error_context = QueryErrorContext()) override;
 
+	DUCKDB_API unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+	                                                          unique_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+	                                                   unique_ptr<PhysicalOperator> plan) override;
+
 private:
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
 

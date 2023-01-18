@@ -86,7 +86,7 @@ public:
 
 	DUCKDB_API virtual CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) = 0;
 	DUCKDB_API virtual SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
-	                                                       const string &name) = 0;
+	                                                       const string &name);
 
 	//! Drops an entry from the schema
 	virtual void DropEntry(ClientContext &context, DropInfo *info) = 0;
@@ -99,7 +99,7 @@ public:
 	                       OnCreateConflict on_conflict);
 	//! Add a catalog entry to this schema
 	virtual CatalogEntry *AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-	                                       OnCreateConflict on_conflict, DependencyList dependencies) = 0;
+	                                       OnCreateConflict on_conflict, DependencyList dependencies);
 
 	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 };

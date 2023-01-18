@@ -53,6 +53,10 @@ struct CatalogLookup;
 struct CatalogEntryLookup;
 struct SimilarCatalogEntry;
 
+class PhysicalOperator;
+class LogicalCreateTable;
+class LogicalInsert;
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -202,6 +206,11 @@ public:
 
 	//! Alter an existing entry in the catalog.
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo *info);
+
+	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+	                                                       unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
 
 public:
 	template <class T>

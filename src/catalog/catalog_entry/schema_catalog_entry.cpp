@@ -43,6 +43,11 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(CatalogTransaction transaction, uniqu
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
+CatalogEntry *SchemaCatalogEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+                                                   OnCreateConflict on_conflict, DependencyList dependencies) {
+	throw InternalException("AddEntryInternal called on non-DuckDB SchemaCatalogEntry");
+}
+
 CatalogEntry *SchemaCatalogEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
 	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
 	return AddEntry(transaction, std::move(sequence), info->on_conflict);
@@ -87,6 +92,19 @@ CatalogEntry *SchemaCatalogEntry::CreatePragmaFunction(CatalogTransaction transa
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
 	pragma_function->internal = info->internal;
 	return AddEntry(transaction, std::move(pragma_function), info->on_conflict);
+}
+
+SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
+                                                        const string &name) {
+	SimilarCatalogEntry result;
+	Scan(transaction.GetContext(), type, [&](CatalogEntry *entry) {
+		auto ldist = StringUtil::LevenshteinDistance(entry->name, name);
+		if (ldist < result.distance) {
+			result.distance = ldist;
+			result.name = entry->name;
+		}
+	});
+	return result;
 }
 
 void SchemaCatalogEntry::Serialize(Serializer &serializer) {
