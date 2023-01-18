@@ -64,4 +64,4 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 	return ParseColumnList(children, names, loption);
 }
 
-}
+} // namespace duckdb

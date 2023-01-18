@@ -116,8 +116,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 				throw IOException("failed to create " + full_path + ", file exists!");
 			}
 			// Create a writer for the current file
-			auto fun_data_global = function.copy_to_initialize_global(
-			    context.client, *bind_data, full_path);
+			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
 			auto fun_data_local = function.copy_to_initialize_local(context, *bind_data);
 
 			for (auto &chunk : partitions[i]->Chunks()) {
@@ -155,7 +154,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 
 		if (use_tmp_file) {
 			D_ASSERT(!per_thread_output); // FIXME
-			D_ASSERT(!partition_output); // FIXME
+			D_ASSERT(!partition_output);  // FIXME
 			MoveTmpFile(context, file_path);
 		}
 	}
@@ -186,7 +185,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			this_file_offset = g.last_file_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path = fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
+		string output_path =
+		    fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
 		if (fs.FileExists(output_path)) {
 			throw IOException("%s exists", output_path);
 		}
@@ -229,8 +229,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	if (!fs.DirectoryExists(dir)) {
 		fs.CreateDirectory(dir);
 	}
-	return make_unique<CopyToFunctionGlobalState>(
-		function.copy_to_initialize_global(context, *bind_data, file_path));
+	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
