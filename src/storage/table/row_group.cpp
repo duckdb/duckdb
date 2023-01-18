@@ -11,7 +11,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/dtransaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
 
@@ -460,7 +460,9 @@ void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataC
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = TransactionManager::Get(db);
+	auto &transaction_manager = (DTransactionManager &)TransactionManager::Get(db);
+	D_ASSERT(transaction_manager.IsDTransactionManager());
+
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();
 	TransactionData data(lowest_active_id, lowest_active_start);
