@@ -235,8 +235,10 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 			break; // No more files left
 		}
 	}
-	D_ASSERT(read_size != 0);
 	buffer_size = prev_buffer_remainder + read_size;
+	if (buffer_size == 0) {
+		return;
+	}
 
 	// Now read the file lock-free!
 	auto &file_handle = gstate.json_reader->GetFileHandle(file_index);
@@ -273,7 +275,6 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 			break; // No more files left
 		}
 	}
-	D_ASSERT(read_size != 0);
 	buffer_size = prev_buffer_remainder + read_size;
 }
 
