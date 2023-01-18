@@ -446,7 +446,8 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	bind_data.options.file_path = bind_data.files[0];
 	file_handle = ReadCSV::OpenCSV(bind_data.options, context);
-	idx_t rows_to_skip = bind_data.options.skip_rows + (bind_data.options.header ? 1 : 0);
+	idx_t rows_to_skip =
+	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
 	return make_unique<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
 	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
 	                                           rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism);
