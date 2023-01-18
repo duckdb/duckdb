@@ -84,7 +84,6 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	vector<string> column_names;
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
-	vector<PhysicalIndex> assigned_columns;
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
@@ -95,11 +94,13 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
-		if (std::find(assigned_columns.begin(), assigned_columns.end(), column.Physical()) != assigned_columns.end()) {
+		if (std::find(insert->set_columns.begin(), insert->set_columns.end(), column.Physical()) !=
+		    insert->set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		assigned_columns.push_back(column.Physical());
+		insert->set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
+		insert->set_types.push_back(column.Type());
 		column_names.push_back(colname);
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			expr = ExpandDefaultExpression(column);

@@ -24,7 +24,8 @@ public:
 	//! INSERT INTO
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
-	               idx_t estimated_cardinality, bool return_chunk, bool parallel, OnConflictAction action_type,
+	               vector<PhysicalIndex> set_columns, vector<LogicalType> set_types, idx_t estimated_cardinality,
+	               bool return_chunk, bool parallel, OnConflictAction action_type,
 	               unique_ptr<Expression> on_conflict_condition, unique_ptr<Expression> do_update_condition,
 	               unordered_set<column_t> on_conflict_filter, vector<column_t> columns_to_fetch);
 	//! CREATE TABLE AS
@@ -52,14 +53,12 @@ public:
 	OnConflictAction action_type;
 	// The DO UPDATE set expressions, if 'action_type' is UPDATE
 	vector<unique_ptr<Expression>> set_expressions;
+	// Which columns are targeted by the set expressions
+	vector<PhysicalIndex> set_columns;
+	// The types of the columns targeted by a SET expression
+	vector<LogicalType> set_types;
 	// Indices of the columns of the table
 	vector<column_t> column_indices;
-	// Types of the columns of the table that are not indexed on
-	vector<LogicalType> filtered_types;
-	// Indices of the columns of the table that are not indexed on
-	vector<column_t> filtered_ids;
-	// Physical indices of the columns of the table that are not indexed on
-	vector<PhysicalIndex> filtered_physical_ids;
 	// Column indices that are indexed on
 	unordered_set<column_t> indexed_on_columns;
 	// Condition for the ON CONFLICT clause

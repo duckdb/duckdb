@@ -47,8 +47,10 @@ public:
 	unique_ptr<Expression> on_conflict_condition;
 	// The WHERE clause of the DO UPDATE clause
 	unique_ptr<Expression> do_update_condition;
-	// The DO UPDATE SET expressions
-	vector<unique_ptr<Expression>> set_expressions;
+	// The columns targeted by the DO UPDATE SET expressions
+	vector<PhysicalIndex> set_columns;
+	// The types of the columns targeted by the DO UPDATE SET expressions
+	vector<LogicalType> set_types;
 	// The table_index referring to the column references qualified with 'excluded'
 	idx_t excluded_table_index;
 	// The columns to fetch from the 'destination' table

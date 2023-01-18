@@ -32,34 +32,30 @@ unordered_set<column_t> GetIndexedOnColumns(TableCatalogEntry *table) {
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *table,
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults,
-                               vector<unique_ptr<Expression>> set_expressions, idx_t estimated_cardinality,
-                               bool return_chunk, bool parallel, OnConflictAction action_type,
+                               vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
+                               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk,
+                               bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
                                unique_ptr<Expression> do_update_condition_p,
                                unordered_set<column_t> on_conflict_filter_p, vector<column_t> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel),
-      action_type(action_type), set_expressions(std::move(set_expressions)),
-      on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
-      on_conflict_filter(std::move(on_conflict_filter_p)), columns_to_fetch(std::move(columns_to_fetch_p)) {
+      action_type(action_type), set_expressions(std::move(set_expressions)), set_columns(move(set_columns)),
+      set_types(move(set_types)), on_conflict_condition(std::move(on_conflict_condition_p)),
+      do_update_condition(std::move(do_update_condition_p)), on_conflict_filter(std::move(on_conflict_filter_p)),
+      columns_to_fetch(std::move(columns_to_fetch_p)) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
 	}
 
-	indexed_on_columns = GetIndexedOnColumns(table);
-
 	// Figure out which columns are indexed on, and will be excluded from a DO UPDATE set expression
 	for (column_t i = 0; i < insert_types.size(); i++) {
 		column_indices.push_back(i);
-		if (indexed_on_columns.count(i)) {
-			continue;
-		}
-		filtered_types.push_back(insert_types[i]);
-		filtered_ids.push_back(i);
-		filtered_physical_ids.emplace_back(PhysicalIndex(i));
 	}
+
+	D_ASSERT(set_expressions.size() == set_columns.size());
 
 	// One or more columns are referenced from the existing table,
 	// we still need to figure out which types they have
@@ -324,13 +320,13 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		}
 
 		// Execute the SET expressions
-		update_chunk.Initialize(context.client, filtered_types);
+		update_chunk.Initialize(context.client, set_types);
 		ExpressionExecutor executor(context.client, set_expressions);
 		executor.Execute(combined_chunk, update_chunk);
 		update_chunk.SetCardinality(combined_chunk);
 
 		// Perform the update, using the results of the SET expressions
-		data_table->Update(*table, context.client, row_ids, filtered_physical_ids, update_chunk);
+		data_table->Update(*table, context.client, row_ids, set_columns, update_chunk);
 	}
 
 	// Remove the conflicting tuples from the insert chunk
