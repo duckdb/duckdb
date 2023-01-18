@@ -163,7 +163,7 @@ void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
 	fs.UnregisterSubSystem(name);
 }
 
-void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem) {
+void DuckDBPyConnection::RegisterFilesystem(AbstractFileSystem filesystem) {
 	PythonGILWrapper gil_wrapper;
 
 	if (!py::isinstance<AbstractFileSystem>(filesystem)) {
@@ -186,7 +186,7 @@ void DuckDBPyConnection::RegisterFilesystem(const AbstractFileSystem &filesystem
 		}
 	}
 
-	fs.RegisterSubSystem(make_unique<PythonFilesystem>(std::move(protocols), filesystem));
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(std::move(protocols), std::move(filesystem)));
 }
 
 py::list DuckDBPyConnection::ListFilesystems() {

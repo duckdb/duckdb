@@ -102,7 +102,7 @@ public:
 	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size,
 	                                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static void RegisterFilesystem(const AbstractFileSystem &file_system, shared_ptr<DuckDBPyConnection> conn);
+	static void RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn);
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);
 	static py::list ListFilesystems(shared_ptr<DuckDBPyConnection> conn);
 };

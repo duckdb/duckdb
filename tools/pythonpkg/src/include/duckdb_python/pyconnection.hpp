@@ -142,7 +142,7 @@ public:
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
-	void RegisterFilesystem(const AbstractFileSystem &filesystem);
+	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);
 	py::list ListFilesystems();
 

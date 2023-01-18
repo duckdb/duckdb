@@ -38,7 +38,7 @@ private:
 class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
-	const AbstractFileSystem &filesystem;
+	const AbstractFileSystem filesystem;
 	string stripPrefix(string input) {
 		for (const auto &protocol : protocols) {
 			auto prefix = protocol + "://";
@@ -50,8 +50,8 @@ private:
 	}
 
 public:
-	explicit PythonFilesystem(const vector<string> protocols, const AbstractFileSystem &filesystem)
-	    : protocols(protocols), filesystem(filesystem) {
+	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)
+	    : protocols(std::move(protocols)), filesystem(std::move(filesystem)) {
 	}
 
 protected:
