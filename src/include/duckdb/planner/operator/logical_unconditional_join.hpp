@@ -19,7 +19,8 @@ public:
 	explicit LogicalUnconditionalJoin(LogicalOperatorType logical_type) : LogicalOperator(logical_type) {};
 
 public:
-	LogicalUnconditionalJoin(LogicalOperatorType logical_type, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
+	LogicalUnconditionalJoin(LogicalOperatorType logical_type, unique_ptr<LogicalOperator> left,
+	                         unique_ptr<LogicalOperator> right);
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
