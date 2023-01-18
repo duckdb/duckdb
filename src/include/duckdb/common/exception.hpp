@@ -276,7 +276,7 @@ class HTTPException : public IOException {
 public:
 	int status_code;
 
-	DUCKDB_API explicit HTTPException(const string& msg, int status_code) : IOException(msg) {
+	DUCKDB_API explicit HTTPException(const string& msg, int status_code) : IOException(msg), status_code(status_code) {
 	}
 
 	template<typename...Args>
