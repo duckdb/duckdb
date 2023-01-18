@@ -272,6 +272,17 @@ public:
 	}
 };
 
+class HTTPException : public IOException {
+public:
+	int status_code;
+
+	DUCKDB_API explicit HTTPException(const string& msg, int status_code) : IOException(msg) {
+	}
+
+	template<typename...Args>
+	explicit HTTPException(const string& msg, Args... params, int status_code) : HTTPException(ConstructMessage(msg, params...), status_code) {}
+};
+
 class SerializationException : public Exception {
 public:
 	DUCKDB_API explicit SerializationException(const string &msg);
