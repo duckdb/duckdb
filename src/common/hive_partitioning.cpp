@@ -86,7 +86,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
                                               unordered_map<string, column_t> &column_map, idx_t table_index,
                                               bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
-	vector<bool> have_preserved_filter (filters.size(), false);
+	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	duckdb_re2::RE2 regex(REGEX_STRING);
 
@@ -101,8 +101,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 
 		FilterCombiner combiner(context);
 
-		for (idx_t j=0; j < filters.size(); j++) {
-			auto& filter = filters[j];
+		for (idx_t j = 0; j < filters.size(); j++) {
+			auto &filter = filters[j];
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
