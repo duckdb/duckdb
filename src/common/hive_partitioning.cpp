@@ -86,6 +86,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
                                               unordered_map<string, column_t> &column_map, idx_t table_index,
                                               bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
+	vector<bool> have_preserved_filter (filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	duckdb_re2::RE2 regex(REGEX_STRING);
 
@@ -99,15 +100,21 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 		auto known_values = GetKnownColumnValues(file, column_map, regex, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner(context);
-		for (auto &filter : filters) {
+
+		for (idx_t j=0; j < filters.size(); j++) {
+			auto& filter = filters[j];
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
+
 			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-				pruned_filters.emplace_back(filter->Copy());
+				if (!have_preserved_filter[j]) {
+					pruned_filters.emplace_back(filter->Copy());
+					have_preserved_filter[j] = true;
+				}
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
@@ -123,6 +130,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			pruned_files.push_back(file);
 		}
 	}
+
+	D_ASSERT(filters.size >= pruned_filters.size());
 
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);

@@ -77,7 +77,7 @@ statement ok
 COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 
 query III
-SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned4/part_col=0/*.parquet' ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partitioned4/*/*.parquet', HIVE_PARTITIONING=1) ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
