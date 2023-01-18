@@ -50,7 +50,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equals(const FunctionExpression *a, const FunctionExpression *b);
+	static bool Equal(const FunctionExpression *a, const FunctionExpression *b);
 	hash_t Hash() const override;
 
 	void Serialize(FieldWriter &writer) const override;
