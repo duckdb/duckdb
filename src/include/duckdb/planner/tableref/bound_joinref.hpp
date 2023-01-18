@@ -20,7 +20,7 @@ namespace duckdb {
 class BoundJoinRef : public BoundTableRef {
 public:
 	explicit BoundJoinRef(JoinRefType ref_type)
-	    : BoundTableRef(TableReferenceType::JOIN), ref_type(ref_type), lateral(false) {
+	    : BoundTableRef(TableReferenceType::JOIN), type(JoinType::INNER), ref_type(ref_type), lateral(false) {
 	}
 
 	//! The binder used to bind the LHS of the join
