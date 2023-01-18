@@ -16,7 +16,7 @@ require-env AWS_ACCESS_KEY_ID
 
 require-env AWS_SECRET_ACCESS_KEY
 
-#require-env AWS_SESSION_TOKEN
+require-env DUCKDB_S3_ENDPOINT
 
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
@@ -29,7 +29,7 @@ statement ok
 SET s3_secret_access_key='false_pw';SET s3_access_key_id='false_key';
 
 statement ok
-SET s3_endpoint='duckdb-minio.com:9000';SET s3_use_ssl=false;SET s3_url_style='path';
+SET s3_use_ssl=false;SET s3_url_style='path';
 
 statement error
 COPY test TO 's3://test-bucket/s3_query_params/test.csv';
@@ -127,10 +127,10 @@ statement ok
 SET s3_endpoint='false_endpoint';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
 
 statement ok
-SET s3_endpoint='duckdb-minio.com:9000';
+SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';
 
 #test secret_access_key
 statement ok
@@ -171,7 +171,7 @@ statement ok
 SET s3_access_key_id='false_id'; SET s3_region='false_region';
 
 statement ok
-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=duckdb-minio.com:9000" LIMIT 3
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=eu-west-1&s3_access_key_id=minio_duckdb_user&s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
 
 statement ok
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION}';

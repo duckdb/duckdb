@@ -15,7 +15,7 @@ require-env AWS_ACCESS_KEY_ID
 
 require-env AWS_SECRET_ACCESS_KEY
 
-#require-env AWS_SESSION_TOKEN
+require-env DUCKDB_S3_ENDPOINT
 
 # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
 set ignore_error_messages
@@ -32,7 +32,7 @@ statement ok
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
 
 statement ok
-SET s3_endpoint='duckdb-minio.com:9000';
+SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';
 
 statement ok
 SET s3_use_ssl=false;
@@ -58,7 +58,7 @@ COPY test TO 's3://test-bucket-public/root-dir/test_${url_style}_url_style.parqu
 
 # vhost style access
 query I
-SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
+SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
 ----
 0
 1
@@ -66,7 +66,7 @@ SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/test_${u
 
 # path style access
 query I
-SELECT i FROM "http://duckdb-minio.com:9000/test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
+SELECT i FROM "http://${DUCKDB_S3_ENDPOINT}/test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
 ----
 0
 1
@@ -87,13 +87,13 @@ endloop
 
 # empty url style is also allowed to select the default
 statement ok
-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';SET s3_region='${AWS_DEFAULT_REGION}'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;
+SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';SET s3_region='${AWS_DEFAULT_REGION}'; SET s3_endpoint='${DUCKDB_S3_ENDPOINT}'; SET s3_use_ssl=false;
 
 statement ok
 COPY test TO 's3://test-bucket-public/root-dir/test_default_url_style.parquet';
 
 query I
-SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/test_default_url_style.parquet" LIMIT 3
+SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/test_default_url_style.parquet" LIMIT 3
 ----
 0
 1
@@ -108,7 +108,7 @@ COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
 
 # 404
 statement error
-SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
+SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 
 # Connection error
 statement error
