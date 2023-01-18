@@ -76,6 +76,8 @@ public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
+	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
+
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);

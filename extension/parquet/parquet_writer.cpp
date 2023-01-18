@@ -150,6 +150,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
 		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIME = true;
 		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
