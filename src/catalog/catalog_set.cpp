@@ -3,7 +3,7 @@
 #include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/dtransaction.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -142,7 +142,8 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	PutEntry(std::move(entry_index), std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(value_ptr->child.get());
+		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 	return true;
 }
@@ -261,8 +262,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(),
-		                                          serialized_alter.size);
+		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
@@ -307,7 +308,8 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(value_ptr->child.get());
+		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 }
 

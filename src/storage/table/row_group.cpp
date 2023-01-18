@@ -460,8 +460,7 @@ void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataC
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = (DTransactionManager &)TransactionManager::Get(db);
-	D_ASSERT(transaction_manager.IsDTransactionManager());
+	auto &transaction_manager = DTransactionManager::Get(db);
 
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();

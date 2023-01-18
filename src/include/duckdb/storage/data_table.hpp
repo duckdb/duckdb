@@ -29,6 +29,7 @@ class ClientContext;
 class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
+class DTransaction;
 class OptimisticDataWriter;
 class RowGroup;
 class StorageManager;
@@ -68,7 +69,7 @@ public:
 
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
-	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
+	void InitializeScan(DTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
@@ -80,10 +81,10 @@ public:
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state);
+	void Scan(DTransaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(DTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
@@ -121,7 +122,7 @@ public:
 	//! Fetches an append lock
 	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
+	void InitializeAppend(DTransaction &transaction, TableAppendState &state, idx_t append_count);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
 	void Append(DataChunk &chunk, TableAppendState &state);
 	//! Commit the append

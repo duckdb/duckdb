@@ -17,7 +17,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/dtransaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 
@@ -189,7 +189,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
-void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
+void DataTable::InitializeScan(DTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
 	auto &local_storage = LocalStorage::Get(transaction);
@@ -232,7 +232,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	}
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state) {
+void DataTable::Scan(DTransaction &transaction, DataChunk &result, TableScanState &state) {
 	// scan the persistent segments
 	if (state.table_state.Scan(transaction, result)) {
 		D_ASSERT(result.size() > 0);
@@ -251,7 +251,7 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+void DataTable::Fetch(DTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
                       Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
@@ -548,7 +548,7 @@ void DataTable::AppendLock(TableAppendState &state) {
 	state.current_row = state.row_start;
 }
 
-void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
+void DataTable::InitializeAppend(DTransaction &transaction, TableAppendState &state, idx_t append_count) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
@@ -766,7 +766,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 		return 0;
 	}
 
-	auto &transaction = Transaction::Get(context, db);
+	auto &transaction = DTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	row_identifiers.Flatten(count);
@@ -904,7 +904,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	VerifyUpdateConstraints(context, table, updates, column_ids);
 
 	// now perform the actual update
-	auto &transaction = Transaction::Get(context, db);
+	auto &transaction = DTransaction::Get(context, db);
 
 	updates.Flatten();
 	row_ids.Flatten(count);
@@ -938,7 +938,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 	}
 
 	// now perform the actual update
-	auto &transaction = Transaction::Get(context, db);
+	auto &transaction = DTransaction::Get(context, db);
 
 	updates.Flatten();
 	row_ids.Flatten(updates.size());

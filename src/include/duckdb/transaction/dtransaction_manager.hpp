@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
+
 namespace duckdb {
+class DTransaction;
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
@@ -18,8 +20,11 @@ class DTransactionManager : public TransactionManager {
 
 public:
 	explicit DTransactionManager(AttachedDatabase &db);
+	~DTransactionManager();
 
 public:
+	static DTransactionManager &Get(AttachedDatabase &db);
+
 	//! Start a new transaction
 	Transaction *StartTransaction(ClientContext &context) override;
 	//! Commit the given transaction
@@ -37,13 +42,13 @@ public:
 	}
 
 	bool IsDTransactionManager() override {
-		return false;
+		return true;
 	}
 
 private:
-	bool CanCheckpoint(Transaction *current = nullptr);
+	bool CanCheckpoint(DTransaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(Transaction *transaction) noexcept;
+	void RemoveTransaction(DTransaction *transaction) noexcept;
 	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
 private:
@@ -56,11 +61,11 @@ private:
 	//! The lowest active transaction timestamp
 	atomic<transaction_t> lowest_active_start;
 	//! Set of currently running transactions
-	vector<unique_ptr<Transaction>> active_transactions;
+	vector<unique_ptr<DTransaction>> active_transactions;
 	//! Set of recently committed transactions
-	vector<unique_ptr<Transaction>> recently_committed_transactions;
+	vector<unique_ptr<DTransaction>> recently_committed_transactions;
 	//! Transactions awaiting GC
-	vector<unique_ptr<Transaction>> old_transactions;
+	vector<unique_ptr<DTransaction>> old_transactions;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
 

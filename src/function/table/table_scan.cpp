@@ -11,7 +11,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/dtransaction.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 
@@ -116,7 +116,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
 	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
-	auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
+	auto &transaction = DTransaction::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	do {
 		if (bind_data.is_create_index) {
@@ -232,7 +232,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
-	auto &transaction = Transaction::Get(context, *bind_data.table->catalog);
+	auto &transaction = DTransaction::Get(context, *bind_data.table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	if (!state.finished) {

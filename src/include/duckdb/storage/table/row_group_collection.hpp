@@ -51,9 +51,9 @@ public:
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	bool Scan(Transaction &transaction, const vector<column_t> &column_ids,
+	bool Scan(DTransaction &transaction, const vector<column_t> &column_ids,
 	          const std::function<bool(DataChunk &chunk)> &fun);
-	bool Scan(Transaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
+	bool Scan(DTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
 	           Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);

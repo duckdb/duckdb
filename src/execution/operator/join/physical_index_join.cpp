@@ -10,7 +10,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/dtransaction.hpp"
 #include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 
 namespace duckdb {
@@ -101,7 +101,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto &transaction = Transaction::Get(context.client, *bind_tbl.table->catalog);
+	auto &transaction = DTransaction::Get(context.client, *bind_tbl.table->catalog);
 	auto &state = (IndexJoinOperatorState &)state_p;
 
 	auto &tbl = bind_tbl.table->GetStorage();
