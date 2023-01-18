@@ -102,7 +102,15 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				return LogicalType::UUID;
 			}
 		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
+			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
+				return LogicalType::TIMESTAMP_TZ;
+			}
 			return LogicalType::TIMESTAMP;
+		} else if (s_ele.logicalType.__isset.TIME) {
+			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
+				return LogicalType::TIME_TZ;
+			}
+			return LogicalType::TIME;
 		}
 	}
 	if (s_ele.__isset.converted_type) {
