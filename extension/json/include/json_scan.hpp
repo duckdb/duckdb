@@ -107,7 +107,7 @@ public:
 	yyjson_doc *objects[STANDARD_VECTOR_SIZE];
 
 private:
-	yyjson_doc *ParseLine(char *line_start, idx_t line_size, JSONLine &line);
+	yyjson_doc *ParseLine(char *line_start, idx_t line_size, JSONLine &line, const bool &ignore_errors);
 
 private:
 	//! Thread-local allocator
@@ -139,7 +139,7 @@ private:
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
 	void ReadUnstructured(idx_t &count);
-	void ReadNewlineDelimited(idx_t &count);
+	void ReadNewlineDelimited(idx_t &count, const bool &ignore_errors);
 };
 
 struct JSONScan {
@@ -176,6 +176,8 @@ public:
 
 	static void TableFunctionDefaults(TableFunction &table_function) {
 		table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
+		table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["format"] = LogicalType::VARCHAR;
 
 		table_function.table_scan_progress = JSONScanProgress;
 		table_function.get_batch_index = JSONScanGetBatchIndex;

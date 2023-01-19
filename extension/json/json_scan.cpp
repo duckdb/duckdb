@@ -41,7 +41,22 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 			result->ignore_errors = BooleanValue::Get(kv.second);
 		} else if (loption == "maximum_object_size") {
 			result->maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), result->maximum_object_size);
+		} else if (loption == "format") {
+			auto format = StringUtil::Lower(StringValue::Get(kv.second));
+			if (format == "auto") {
+				options.format = JSONFormat::AUTO_DETECT;
+			} else if (format == "unstructured") {
+				options.format = JSONFormat::UNSTRUCTURED;
+			} else if (format == "newline_delimited") {
+				options.format = JSONFormat::NEWLINE_DELIMITED;
+			} else {
+				throw InvalidInputException("format must be one of ['auto', 'unstructured', 'newline_delimited']");
+			}
 		}
+	}
+
+	if (result->ignore_errors && options.format == JSONFormat::UNSTRUCTURED) {
+		throw InvalidInputException("Cannot ignore errors with unstructured format");
 	}
 
 	return std::move(result);
@@ -142,7 +157,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 		ReadUnstructured(count);
 		break;
 	case JSONFormat::NEWLINE_DELIMITED:
-		ReadNewlineDelimited(count);
+		ReadNewlineDelimited(count, gstate.bind_data.ignore_errors);
 		break;
 	default:
 		throw InternalException("Unknown JSON format");
@@ -178,14 +193,23 @@ static inline void TrimWhitespace(JSONLine &line) {
 	}
 }
 
-yyjson_doc *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line) {
-	// Parse to validate TODO: This is the only place we can parse INSITU (if not returning strings)
-	auto result =
-	    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
+yyjson_doc *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line,
+                                          const bool &ignore_errors) {
+	// Parse to validate TODO: This is the only place we can maybe parse INSITU (if not returning strings)
+	yyjson_doc *result;
+	if (ignore_errors) {
+		result = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
+		                                        json_allocator.GetYYJSONAllocator());
+	} else {
+		result =
+		    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
+	}
 
-	// Set the JSONLine and trim
-	line = JSONLine(line_start, line_size);
-	TrimWhitespace(line);
+	if (result) {
+		// Set the JSONLine and trim
+		line = JSONLine(line_start, line_size);
+		TrimWhitespace(line);
+	}
 
 	return result;
 }
@@ -323,7 +347,7 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 		first_read = read_position == 0;
 		is_last = file_handle.Remaining() == 0;
 
-		if (read_size == 0 && prev_buffer_remainder != 0) {
+		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
 		}
 	}
@@ -349,7 +373,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 		read_size = file_handle.Read(buffer_ptr + prev_buffer_remainder, request_size);
 		is_last = read_size < request_size;
 
-		if (read_size == 0 && prev_buffer_remainder != 0) {
+		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
 		}
 	}
@@ -377,7 +401,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	memcpy(reconstruct_ptr, part1_ptr, part1_size);
 	// Now find the newline in the current block
 	auto line_end = NextNewline(buffer_ptr, buffer_size);
-	if (line_end == nullptr) {
+	if (line_end == nullptr) { // TODO I don't think we can ignore this even with ignore_errors ...
 		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (>%llu bytes), is the JSON valid?",
 		                            gstate.bind_data.maximum_object_size, buffer_size - buffer_offset);
 	} else {
@@ -394,7 +418,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		current_reader->RemoveBuffer(current_buffer_handle->buffer_index - 1);
 	}
 
-	objects[0] = ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0]);
+	objects[0] = ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0], gstate.bind_data.ignore_errors);
 }
 
 void JSONScanLocalState::ReadUnstructured(idx_t &count) {
@@ -436,7 +460,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 	}
 }
 
-void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
+void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const bool &ignore_errors) {
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
@@ -458,7 +482,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 		}
 		idx_t line_size = line_end - line_start;
 
-		objects[count] = ParseLine((char *)line_start, line_size, lines[count]);
+		objects[count] = ParseLine((char *)line_start, line_size, lines[count], ignore_errors);
 
 		buffer_offset += line_size;
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);

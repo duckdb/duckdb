@@ -67,7 +67,7 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size) {
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, idx_t file_index_p,
                                        string file_path_p)
-    : file_index(file_index_p), file_path(move(file_path_p)), context(context), options(move(options_p)),
+    : file_index(file_index_p), file_path(std::move(file_path_p)), context(context), options(std::move(options_p)),
       buffer_index(0) {
 }
 
@@ -77,7 +77,7 @@ void BufferedJSONReader::OpenJSONFile() {
 	auto file_opener = FileOpener::Get(context);
 	auto regular_file_handle = file_system.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ,
 	                                                FileLockType::NO_LOCK, options.compression, file_opener);
-	file_handle = make_unique<JSONFileHandle>(move(regular_file_handle));
+	file_handle = make_unique<JSONFileHandle>(std::move(regular_file_handle));
 }
 
 bool BufferedJSONReader::IsOpen() {
@@ -94,7 +94,7 @@ JSONFileHandle &BufferedJSONReader::GetFileHandle() const {
 
 void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer) {
 	lock_guard<mutex> guard(lock);
-	buffer_map.insert(make_pair(buffer_idx, move(buffer)));
+	buffer_map.insert(make_pair(buffer_idx, std::move(buffer)));
 }
 
 JSONBufferHandle *BufferedJSONReader::GetBuffer(idx_t buffer_idx) {

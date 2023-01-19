@@ -20,11 +20,17 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
 	const auto lines = lstate.lines;
+	const auto objects = lstate.objects;
 
 	// Create the strings without copying them
 	auto strings = FlatVector::GetData<string_t>(output.data[0]);
+	auto &validity = FlatVector::Validity(output.data[0]);
 	for (idx_t i = 0; i < count; i++) {
-		strings[i] = string_t(lines[i].pointer, lines[i].size);
+		if (objects[i]) {
+			strings[i] = string_t(lines[i].pointer, lines[i].size);
+		} else {
+			validity.SetInvalid(i);
+		}
 	}
 
 	output.SetCardinality(count);
@@ -35,12 +41,7 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind, JSONScanGlobalState::Init,
 	                             JSONScanLocalState::Init);
 	JSONScan::TableFunctionDefaults(table_function);
-	table_function.function_info = move(function_info);
-
-	// TODO: add parameters like this
-	//	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	// 	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
-	// 	table_function.named_parameters["detect_format"] = LogicalType::BOOLEAN;
+	table_function.function_info = std::move(function_info);
 
 	return table_function;
 }
