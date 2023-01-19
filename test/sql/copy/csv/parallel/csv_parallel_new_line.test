@@ -9,6 +9,11 @@ SET experimental_parallel_csv=true;
 statement ok
 PRAGMA verify_parallelism
 
+loop thr 2 8
+
+statement ok
+pragma threads=${thr}
+
 statement error
 select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\r\n')
 
@@ -46,6 +51,7 @@ select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = 'not_valid')
 
+endloop
 
 loop thr 1 8
 
