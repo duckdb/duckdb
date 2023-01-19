@@ -83,9 +83,9 @@ SELECT MAIN.CURRENT_SETTING('search_path');
 test,test2
 
 query I
-SELECT MAIN.CURRENT_SETTING('schema');
+SELECT MAIN.CURRENT_SCHEMAS(false);
 ----
-test,test2
+[test, test2]
 
 statement ok
 SET SCHEMA = 'test';
@@ -96,7 +96,7 @@ SELECT MAIN.CURRENT_SETTING('search_path');
 test
 
 query I
-SELECT MAIN.CURRENT_SETTING('schema');
+SELECT MAIN.CURRENT_SCHEMA();
 ----
 test
 

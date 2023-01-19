@@ -4,6 +4,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/union_by_name.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -88,24 +89,45 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		} else if (loption == "column_types") {
+		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
 			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_csv_auto column_types requires a struct as input");
+			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
+				throw BinderException("read_csv_auto %s requires a struct or list as input", kv.first);
 			}
-			auto &struct_children = StructValue::GetChildren(kv.second);
-			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-			for (idx_t i = 0; i < struct_children.size(); i++) {
-				auto &name = StructType::GetChildName(child_type, i);
-				auto &val = struct_children[i];
-				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv_auto requires a type specification as string");
+			if (!options.sql_type_list.empty()) {
+				throw BinderException("read_csv_auto column_types/types/dtypes can only be supplied once");
+			}
+			vector<string> sql_type_names;
+			if (child_type.id() == LogicalTypeId::STRUCT) {
+				auto &struct_children = StructValue::GetChildren(kv.second);
+				D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+				for (idx_t i = 0; i < struct_children.size(); i++) {
+					auto &name = StructType::GetChildName(child_type, i);
+					auto &val = struct_children[i];
+					if (val.type().id() != LogicalTypeId::VARCHAR) {
+						throw BinderException("read_csv_auto %s requires a type specification as string", kv.first);
+					}
+					sql_type_names.push_back(StringValue::Get(val));
+					options.sql_types_per_column[name] = i;
 				}
-				auto def_type = TransformStringToLogicalType(StringValue::Get(val));
+			} else {
+				auto &list_child = ListType::GetChildType(child_type);
+				if (list_child.id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", kv.first);
+				}
+				auto &children = ListValue::GetChildren(kv.second);
+				for (auto &child : children) {
+					sql_type_names.push_back(StringValue::Get(child));
+				}
+			}
+			options.sql_type_list.reserve(sql_type_names.size());
+			for (auto &sql_type : sql_type_names) {
+				auto def_type = TransformStringToLogicalType(sql_type);
 				if (def_type.id() == LogicalTypeId::USER) {
-					throw BinderException("Unrecognized type for read_csv_auto column_types definition");
+					throw BinderException("Unrecognized type \"%s\" for read_csv_auto %s definition", sql_type,
+					                      kv.first);
 				}
-				options.sql_types_per_column[name] = def_type;
+				options.sql_type_list.push_back(move(def_type));
 			}
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
@@ -127,9 +149,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
-		return_types.assign(initial_reader->sql_types.begin(), initial_reader->sql_types.end());
+		return_types.assign(initial_reader->return_types.begin(), initial_reader->return_types.end());
 		if (names.empty()) {
-			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
+			names.assign(initial_reader->names.begin(), initial_reader->names.end());
 		} else {
 			if (explicitly_set_columns) {
 				// The user has influenced the names, can't assume they are valid anymore
@@ -143,7 +165,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
-		result->sql_types = initial_reader->sql_types;
+		result->sql_types = initial_reader->return_types;
 		result->initial_reader = std::move(initial_reader);
 	} else {
 		result->sql_types = return_types;
@@ -152,59 +174,33 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// union_col_names will exclude filename and hivepartition
 	if (options.union_by_name) {
-		idx_t union_names_index = 0;
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
 
-		for (idx_t file_idx = 0; file_idx < result->files.size(); ++file_idx) {
-			options.file_path = result->files[file_idx];
-			auto reader = make_unique<BufferedCSVReader>(context, options);
-			auto &col_names = reader->col_names;
-			auto &sql_types = reader->sql_types;
-			D_ASSERT(col_names.size() == sql_types.size());
+		auto dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::UnionCols(
+		    context, result->files, union_col_types, union_col_names, union_names_map, options);
 
-			for (idx_t col = 0; col < col_names.size(); ++col) {
-				auto union_find = union_names_map.find(col_names[col]);
+		dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::CreateUnionMap(
+		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
 
-				if (union_find != union_names_map.end()) {
-					// given same name , union_col's type must compatible with col's type
-					LogicalType compatible_type;
-					compatible_type = LogicalType::MaxLogicalType(union_col_types[union_find->second], sql_types[col]);
-					union_col_types[union_find->second] = compatible_type;
-				} else {
-					union_names_map[col_names[col]] = union_names_index;
-					union_names_index++;
-
-					union_col_names.emplace_back(col_names[col]);
-					union_col_types.emplace_back(sql_types[col]);
-				}
-			}
-			result->union_readers.push_back(std::move(reader));
-		}
-
+		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
 		for (auto &reader : result->union_readers) {
-			auto &col_names = reader->col_names;
-			vector<bool> is_null_cols(union_col_names.size(), true);
-
-			for (idx_t col = 0; col < col_names.size(); ++col) {
-				idx_t remap_col = union_names_map[col_names[col]];
-				reader->insert_cols_idx[col] = remap_col;
-				is_null_cols[remap_col] = false;
-			}
-			for (idx_t col = 0; col < union_col_names.size(); ++col) {
-				if (is_null_cols[col]) {
-					reader->insert_nulls_idx.push_back(col);
-				}
-			}
+			reader->insert_cols_idx = reader->union_idx_map;
 		}
-
-		const idx_t first_file_index = 0;
-		result->initial_reader = std::move(result->union_readers[first_file_index]);
 
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
+		const idx_t first_file_index = 0;
+		result->initial_reader = std::move(result->union_readers[first_file_index]);
 		D_ASSERT(names.size() == return_types.size());
+
+		if (!options.sql_types_per_column.empty()) {
+			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
+			if (!exception.empty()) {
+				throw BinderException(exception);
+			}
+		}
 	}
 
 	if (result->options.include_file_name) {
@@ -544,7 +540,7 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 	}
 	result->next_file = 1;
 	if (result->initial_reader) {
-		result->sql_types = result->initial_reader->sql_types;
+		result->sql_types = result->initial_reader->return_types;
 	}
 	return std::move(result);
 }
@@ -603,7 +599,8 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 	} while (true);
 
 	if (bind_data.options.union_by_name) {
-		lstate.csv_reader->SetNullUnionCols(output);
+		UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::SetNullUnionCols(output,
+		                                                                           lstate.csv_reader->union_null_cols);
 	}
 	if (bind_data.options.include_file_name) {
 		auto &col = output.data[bind_data.filename_col_idx];
@@ -861,6 +858,8 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
+	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
+	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
 	return read_csv_auto;
 }
 
