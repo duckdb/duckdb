@@ -7,7 +7,12 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/common.hpp"
+
 namespace duckdb {
+
+class Value;
 
 Value ConvertVectorToValue(vector<Value> set);
 vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &option_name);
