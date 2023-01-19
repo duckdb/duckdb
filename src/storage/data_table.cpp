@@ -411,6 +411,8 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	ConflictInfo empty_conflict_info(empty_column_list, false);
 	ConflictManager regular_conflicts(verify_type, count, &empty_conflict_info);
 	ConflictManager transaction_conflicts(verify_type, count, &empty_conflict_info);
+	regular_conflicts.SetMode(ConflictManagerMode::SCAN);
+	transaction_conflicts.SetMode(ConflictManagerMode::SCAN);
 
 	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, dst_chunk, regular_conflicts);
 	regular_conflicts.Finalize();

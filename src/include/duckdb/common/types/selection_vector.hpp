@@ -154,13 +154,14 @@ private:
 // Contains a selection vector, combined with a count
 class ManagedSelection {
 public:
-	explicit inline ManagedSelection(idx_t size) : size(size), sel_vec(size), internal_opt_selvec(&sel_vec) {
-		initialized = true;
+	explicit inline ManagedSelection(idx_t size, bool initialize = true)
+	    : initialized(initialize), size(size), internal_opt_selvec(nullptr) {
 		count = 0;
-	}
-	explicit inline ManagedSelection() : size(0), sel_vec(), internal_opt_selvec(nullptr) {
-		initialized = false;
-		count = 0;
+		if (!initialized) {
+			return;
+		}
+		sel_vec.Initialize(size);
+		internal_opt_selvec.Initialize(&sel_vec);
 	}
 
 public:
