@@ -55,8 +55,12 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
 		result->from_table = left->GetTableRef();
 		D_ASSERT(right->type == RelationType::PROJECTION_RELATION);
+		D_ASSERT(left_expr->type == RelationType::PROJECTION_RELATION);
 		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
 		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_expr);
+		if (right_projection->expressions.size() != left_projection->expressions.size()) {
+			throw Exception(JoinTypeToString(join_type) + " JOIN requires projections to have the same number of expressions");
+		}
 		auto where_child = make_unique<SubqueryExpression>();
 		auto select_statement = make_unique<SelectStatement>();
 		select_statement->node = right->GetQueryNode();
