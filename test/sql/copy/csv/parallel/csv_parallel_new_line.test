@@ -10,12 +10,13 @@ statement ok
 PRAGMA verify_parallelism
 
 # Test read_csv with user defined variable
+
 loop thr 1 8
+
+loop i 25 100
 
 statement ok
 pragma threads=${thr}
-
-loop i 25 100
 
 # Test read_csv auto with \n
 query IIII
@@ -74,9 +75,13 @@ select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.
 10000000	12845	370	p8
 100000000	15519	785	p9
 
+endloop
+
+endloop
+
 # Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix.csv', buffer_size=${i})
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix.csv')
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -87,8 +92,3 @@ select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix
 1000000	1904	658	p7
 10000000	12845	370	p8
 100000000	15519	785	p9
-
-endloop
-
-endloop
-

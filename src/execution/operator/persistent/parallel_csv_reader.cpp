@@ -291,7 +291,7 @@ add_row : {
 		if (!BufferRemainder()) {
 			goto final_state;
 		}
-		if (reached_remainder_state) {
+		if (reached_remainder_state || finished_chunk) {
 			goto final_state;
 		}
 		goto value_start;
