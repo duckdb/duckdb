@@ -417,7 +417,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 }
 
 void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
-	if (mode == ParserMode::SNIFFING_DIALECT || options.new_line == NewLineIdentifier::NOT_SET) {
+	if ((mode == ParserMode::SNIFFING_DIALECT && !options.has_newline) ||
+	    options.new_line == NewLineIdentifier::NOT_SET) {
 		if (options.new_line == NewLineIdentifier::MIX) {
 			return;
 		}

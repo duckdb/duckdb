@@ -239,6 +239,8 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	} else if (loption == "quote") {
 		quote = ParseString(value, loption);
 		has_quote = true;
+	} else if (loption == "new_line") {
+		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;

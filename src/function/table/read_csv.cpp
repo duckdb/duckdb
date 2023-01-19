@@ -258,15 +258,12 @@ public:
 		}
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
+		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
 	}
 
 	~ParallelCSVGlobalState() override {
-		if (Exception::UncaughtException()) {
-			return;
-		}
-		Verify();
 	}
 
 	idx_t MaxThreads() const override;
@@ -280,6 +277,8 @@ public:
 	void IncrementThread();
 
 	void DecrementThread();
+
+	bool Finished();
 
 	//! How many bytes were read up to this point
 	atomic<idx_t> bytes_read;
@@ -364,6 +363,11 @@ void ParallelCSVGlobalState::DecrementThread() {
 	running_threads--;
 }
 
+bool ParallelCSVGlobalState::Finished() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return running_threads == 0;
+}
+
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	if (running_threads == 0) {
@@ -384,7 +388,8 @@ void ParallelCSVGlobalState::Verify() {
 				for (auto &start_line : tuple_start) {
 					error += to_string(start_line) + "\n";
 				}
-				DuckDBAssertInternal(false, error.c_str(), "src/function/table/read_csv.cpp", 324);
+				throw InvalidInputException(
+				    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
 			}
 		}
 	}
@@ -474,9 +479,10 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 	auto next_local_buffer = global_state.Next(context.client, csv_data);
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
-		global_state.IncrementThread();
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, std::move(next_local_buffer),
 		                                            csv_data.sql_types);
+	} else {
+		global_state.DecrementThread();
 	}
 	return make_unique<ParallelCSVLocalState>(std::move(csv_reader));
 }
@@ -511,7 +517,9 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		csv_local_state.csv_reader->ParseCSV(output);
 
 	} while (true);
-
+	if (csv_global_state.Finished()) {
+		csv_global_state.Verify();
+	}
 	if (bind_data.options.union_by_name) {
 		throw InternalException("FIXME: union by name");
 	}
@@ -758,6 +766,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
+	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
 	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
 	table_function.named_parameters["columns"] = LogicalType::ANY;
