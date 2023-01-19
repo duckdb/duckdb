@@ -61,7 +61,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		parallel_streaming_insert = false;
 		use_batch_index = false;
 	}
-	if (op.action_type != OnConflictAction::NOTHING) {
+	if (op.action_type != OnConflictAction::THROW) {
 		// We don't support ON CONFLICT clause in batch insertion operation currently
 		use_batch_index = false;
 	}
