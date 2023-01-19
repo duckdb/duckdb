@@ -334,8 +334,8 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 
 	auto &l_blocks = l.sb->radix_sorting_data;
 	auto &r_blocks = r.sb->radix_sorting_data;
-	RowDataBlock *l_block;
-	RowDataBlock *r_block;
+	RowDataBlock *l_block = nullptr;
+	RowDataBlock *r_block = nullptr;
 
 	data_ptr_t l_ptr;
 	data_ptr_t r_ptr;

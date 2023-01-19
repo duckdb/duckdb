@@ -12,7 +12,7 @@ string CaseExpression::ToString() const {
 	return ToString<CaseExpression, ParsedExpression>(*this);
 }
 
-bool CaseExpression::Equals(const CaseExpression *a, const CaseExpression *b) {
+bool CaseExpression::Equal(const CaseExpression *a, const CaseExpression *b) {
 	if (a->case_checks.size() != b->case_checks.size()) {
 		return false;
 	}

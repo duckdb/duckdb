@@ -14,7 +14,7 @@ namespace duckdb {
 
 class GZipFileSystem : public CompressedFileSystem {
 	// 32 KB
-	static constexpr const idx_t BUFFER_SIZE = 1 << 15;
+	static constexpr const idx_t BUFFER_SIZE = 1u << 15;
 
 public:
 	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;

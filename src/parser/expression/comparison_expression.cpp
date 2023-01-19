@@ -15,7 +15,7 @@ string ComparisonExpression::ToString() const {
 	return ToString<ComparisonExpression, ParsedExpression>(*this);
 }
 
-bool ComparisonExpression::Equals(const ComparisonExpression *a, const ComparisonExpression *b) {
+bool ComparisonExpression::Equal(const ComparisonExpression *a, const ComparisonExpression *b) {
 	if (!a->left->Equals(b->left.get())) {
 		return false;
 	}

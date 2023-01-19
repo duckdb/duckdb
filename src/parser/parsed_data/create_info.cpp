@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
@@ -38,6 +39,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		return CreateSchemaInfo::Deserialize(deserializer);
 	case CatalogType::VIEW_ENTRY:
 		return CreateViewInfo::Deserialize(deserializer);
+	case CatalogType::DATABASE_ENTRY:
+		return CreateDatabaseInfo::Deserialize(deserializer);
 	default:
 		throw NotImplementedException("Cannot deserialize '%s'", CatalogTypeToString(type));
 	}

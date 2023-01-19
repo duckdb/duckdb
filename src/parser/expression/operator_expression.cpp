@@ -24,7 +24,7 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
-bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {
+bool OperatorExpression::Equal(const OperatorExpression *a, const OperatorExpression *b) {
 	if (a->children.size() != b->children.size()) {
 		return false;
 	}

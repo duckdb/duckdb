@@ -610,6 +610,15 @@ Database.prototype.unregister_udf = function () {
 }
 
 /**
+ * Register a table replace scan function
+ * @method
+ * @arg fun Replacement scan function
+ * @return {this}
+ */
+
+Database.prototype.registerReplacementScan;
+
+/**
  * Not implemented
  */
 Database.prototype.get = function () {

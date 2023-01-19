@@ -134,6 +134,8 @@ protected:
 
 	idx_t pending_skips = 0;
 
+	virtual void ResetPage();
+
 private:
 	void AllocateBlock(idx_t size);
 	void AllocateCompressed(idx_t size);

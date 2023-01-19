@@ -29,6 +29,8 @@ public:
 	idx_t GetMin() override;
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
+	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
+	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte) override;
 	//! Get Node48 child
 	Node *GetChild(ART &art, idx_t pos) override;
 	//! Replace child pointer
@@ -38,8 +40,6 @@ public:
 	static void InsertChild(Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase the child at pos and (if necessary) shrink to Node16
 	static void EraseChild(Node *&node, int pos, ART &art);
-	//! Merge Node48 into l_node
-	static bool Merge(MergeInfo &info, idx_t depth, Node *&l_parent, idx_t l_pos);
 	//! Returns the size (maximum capacity) of the Node48
 	static idx_t GetSize();
 };
