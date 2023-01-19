@@ -1,4 +1,4 @@
-# name: test/sql/upsert/test_big_insert.test
+# name: test/sql/upsert/test_big_insert_parallel.test
 # description: Test insert into statements
 # group: [upsert]
 
@@ -6,7 +6,7 @@ statement ok
 pragma enable_verification;
 
 statement ok
-SET preserve_insertion_order=false;
+SET preserve_insertion_order=true;
 
 # big insert
 statement ok
