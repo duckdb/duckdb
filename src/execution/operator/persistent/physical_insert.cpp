@@ -181,8 +181,8 @@ void CheckOnConflictCondition(ExecutionContext &context, DataChunk &conflicts, c
 	result.SetCardinality(conflicts.size());
 }
 
-void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
-                                                  ClientContext &client) const {
+void PhysicalInsert::CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
+                                                    ClientContext &client) const {
 	if (types_to_fetch.empty()) {
 		// We have not scanned the initial table, so we can just duplicate the initial chunk
 		result.Initialize(client, input_chunk.GetTypes());
@@ -190,6 +190,7 @@ void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &
 		result.SetCardinality(input_chunk);
 		return;
 	}
+	D_ASSERT(action_type != OnConflictAction::NOTHING);
 	vector<LogicalType> combined_types;
 	combined_types.reserve(insert_types.size() + types_to_fetch.size());
 	combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());
@@ -213,7 +214,11 @@ void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
 	}
-	// FIXME: this is not necessarily true, we could have more to-insert values than we have conflicts ?
+	// This is guaranteed by the requirement of a conflict target to have a condition or set expressions
+	// Only when we have any sort of condition or SET expression that references the existing table is this possible
+	// to not be true.
+	// We can have a SET expression without a conflict target ONLY if there is only 1 Index on the table
+	// In which case this also can't cause a discrepancy between existing tuple count and insert tuple count
 	D_ASSERT(input_chunk.size() == scan_chunk.size());
 	result.SetCardinality(input_chunk.size());
 }
@@ -305,7 +310,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	}
 
 	// Splice the Input chunk and the fetched chunk together
-	CreateChunkForSetExpressions(combined_chunk, scan_chunk, conflict_chunk, context.client);
+	CombineExistingAndInsertTuples(combined_chunk, scan_chunk, conflict_chunk, context.client);
 
 	if (on_conflict_condition) {
 		DataChunk conflict_condition_result;

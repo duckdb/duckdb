@@ -152,12 +152,12 @@ bool ConflictManager::AddHit(idx_t chunk_index, row_t row_id) {
 
 bool ConflictManager::AddMiss(idx_t chunk_index) {
 	D_ASSERT(chunk_index < input_size);
-	return false;
+	return IsConflict(LookupResultType::LOOKUP_MISS);
 }
 
 bool ConflictManager::AddNull(idx_t chunk_index) {
 	D_ASSERT(chunk_index < input_size);
-	if (ShouldIgnoreNulls()) {
+	if (!IsConflict(LookupResultType::LOOKUP_NULL)) {
 		return false;
 	}
 	return AddHit(chunk_index, DConstants::INVALID_INDEX);
