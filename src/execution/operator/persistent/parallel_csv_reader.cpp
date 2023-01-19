@@ -185,6 +185,10 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 		// First time reading this buffer piece
 		if (!SetPosition(insert_chunk)) {
 			// This means the buffer size does not contain a new line
+			if (position_buffer - start_buffer == options.buffer_size) {
+				error_message = "Line does not fit in one buffer. Increase the buffer size.";
+				return false;
+			}
 			return true;
 		}
 	}
@@ -222,7 +226,7 @@ normal : {
 			goto add_value;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
-			if (column > 0 || try_add_line) {
+			if (column > 0 || try_add_line || insert_chunk.data.size() == 1) {
 				goto add_row;
 			}
 		}
@@ -403,7 +407,7 @@ final_state : {
 	}
 	// If this is the last buffer, we have to read the last value
 	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer->IsCSVFileLastBuffer())) {
-		if (column > 0 || try_add_line) {
+		if (column > 0 || try_add_line || (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
 			AddValue(str_value, column, escape_positions, has_quotes);
