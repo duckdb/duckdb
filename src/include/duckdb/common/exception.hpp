@@ -76,7 +76,8 @@ enum class ExceptionType {
 	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
-	DEPENDENCY = 37              // dependency
+	DEPENDENCY = 37,             // dependency
+	HTTP = 38
 };
 
 class Exception : public std::exception {
@@ -91,7 +92,7 @@ public:
 	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
-	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
+	[[noreturn]] DUCKDB_API void ThrowAsTypeWithMessage(ExceptionType type, const string &message) const;
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -256,6 +257,8 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
+	DUCKDB_API explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
+	}
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
@@ -277,11 +280,14 @@ public:
 	int status_code;
 	string response; // we can keep a copy for the user
 
-	DUCKDB_API explicit HTTPException(int status_code, string response, const string& msg) : IOException(msg), status_code(status_code), response(move(response)) {
+	DUCKDB_API explicit HTTPException(int status_code, string response, const string &msg)
+	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(move(response)) {
 	}
 
-	template<typename...Args>
-	explicit HTTPException(int status_code, string response, const string& msg, Args... params) : HTTPException(status_code, move(response), ConstructMessage(msg, params...)) {}
+	template <typename... Args>
+	explicit HTTPException(int status_code, string response, const string &msg, Args... params)
+	    : HTTPException(status_code, move(response), ConstructMessage(msg, params...)) {
+	}
 };
 
 class SerializationException : public Exception {

@@ -11,7 +11,8 @@ PreservedError::PreservedError() : initialized(false) {
 }
 
 PreservedError::PreservedError(const Exception &exception)
-    : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())) {
+    : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())),
+      exception_instance(exception) {
 }
 
 PreservedError::PreservedError(const string &message)
@@ -33,9 +34,9 @@ void PreservedError::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		Exception::ThrowAsTypeWithMessage(type, new_message);
+		exception_instance.ThrowAsTypeWithMessage(type, new_message);
 	}
-	Exception::ThrowAsTypeWithMessage(type, raw_message);
+	exception_instance.ThrowAsTypeWithMessage(type, raw_message);
 }
 
 const ExceptionType &PreservedError::Type() const {

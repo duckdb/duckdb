@@ -48,6 +48,7 @@ private:
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
+	Exception exception_instance = Exception("invalid");
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);
