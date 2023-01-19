@@ -8,7 +8,6 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
-
 namespace duckdb {
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
