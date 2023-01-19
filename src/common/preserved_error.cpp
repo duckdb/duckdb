@@ -7,16 +7,17 @@
 
 namespace duckdb {
 
-PreservedError::PreservedError() : initialized(false) {
+PreservedError::PreservedError() : initialized(false), exception_instance(nullptr) {
 }
 
 PreservedError::PreservedError(const Exception &exception)
     : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())),
-      exception_instance(exception) {
+      exception_instance(exception.Copy()) {
 }
 
 PreservedError::PreservedError(const string &message)
-    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(message)) {
+    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(message)),
+      exception_instance(nullptr) {
 }
 
 const string &PreservedError::Message() {
@@ -34,9 +35,9 @@ void PreservedError::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		exception_instance.ThrowAsTypeWithMessage(type, new_message);
+		Exception::ThrowAsTypeWithMessage(type, new_message, exception_instance);
 	}
-	exception_instance.ThrowAsTypeWithMessage(type, raw_message);
+	Exception::ThrowAsTypeWithMessage(type, raw_message, exception_instance);
 }
 
 const ExceptionType &PreservedError::Type() const {

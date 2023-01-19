@@ -5,7 +5,10 @@ from pytest import raises, mark
 
 
 # We only run this test if this env var is set
-pytestmark = mark.skipif(os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False))
+pytestmark = mark.skipif(
+    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False),
+    reason='httpfs extension not available'
+)
 
 
 def test_httpfs(require):

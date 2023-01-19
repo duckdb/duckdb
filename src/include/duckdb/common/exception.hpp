@@ -92,7 +92,11 @@ public:
 	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
-	[[noreturn]] DUCKDB_API void ThrowAsTypeWithMessage(ExceptionType type, const string &message) const;
+	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,
+	                                                           std::shared_ptr<Exception> original);
+	virtual std::shared_ptr<Exception> Copy() const {
+		return make_shared<Exception>(type, raw_message_);
+	}
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -277,17 +281,29 @@ public:
 
 class HTTPException : public IOException {
 public:
-	int status_code;
-	string response; // we can keep a copy for the user
-
 	DUCKDB_API explicit HTTPException(int status_code, string response, const string &msg)
-	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(move(response)) {
+	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(std::move(response)) {
 	}
 
 	template <typename... Args>
 	explicit HTTPException(int status_code, string response, const string &msg, Args... params)
-	    : HTTPException(status_code, move(response), ConstructMessage(msg, params...)) {
+	    : HTTPException(status_code, std::move(response), ConstructMessage(msg, params...)) {
 	}
+
+	std::shared_ptr<Exception> Copy() const {
+		return make_shared<HTTPException>(status_code, response, RawMessage());
+	}
+
+	int GetStatusCode() const {
+		return status_code;
+	}
+	const string &GetResponse() const {
+		return response;
+	}
+
+private:
+	int status_code;
+	string response; // we can keep a copy for the user
 };
 
 class SerializationException : public Exception {

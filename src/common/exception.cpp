@@ -145,7 +145,7 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message) const {
+void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message, std::shared_ptr<Exception> original) {
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		throw OutOfRangeException(message);
@@ -194,9 +194,9 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	case ExceptionType::DEPENDENCY:
 		throw DependencyException(message);
 	case ExceptionType::HTTP: {
-		auto exc = (HTTPException *)this;
-		D_ASSERT(exc->status_code != 0);
-		throw HTTPException(exc->status_code, exc->response, message);
+		auto exc = static_cast<const HTTPException *>(&*original);
+		D_ASSERT(exc->GetStatusCode() != 0);
+		throw HTTPException(exc->GetStatusCode(), exc->GetResponse(), exc->what());
 	}
 	default:
 		throw Exception(type, message);
