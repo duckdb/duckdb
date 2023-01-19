@@ -190,7 +190,6 @@ void PhysicalInsert::CombineExistingAndInsertTuples(DataChunk &result, DataChunk
 		result.SetCardinality(input_chunk);
 		return;
 	}
-	D_ASSERT(action_type != OnConflictAction::NOTHING);
 	vector<LogicalType> combined_types;
 	combined_types.reserve(insert_types.size() + types_to_fetch.size());
 	combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());

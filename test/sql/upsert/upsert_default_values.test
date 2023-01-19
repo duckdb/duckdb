@@ -16,4 +16,4 @@ insert into tbl DEFAULT VALUES;
 Parser Error: DEFAULT VALUES clause is not supported!
 
 # We only bind the on conflict clause when there is a SelectStmt child, so when support is added for DEFAULT VALUES
-# This should also be changed.
+# This might also need to be changed

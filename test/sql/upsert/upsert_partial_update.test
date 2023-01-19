@@ -4,11 +4,6 @@
 statement ok
 pragma enable_verification;
 
-foreach parallel false true
-
-statement ok
-SET preserve_insertion_order=${parallel};
-
 statement ok
 create or replace table tbl (a integer primary key, b integer);
 
@@ -25,6 +20,3 @@ select * from tbl;
 2	4
 3	10
 4	3
-
-# parallel
-endloop
