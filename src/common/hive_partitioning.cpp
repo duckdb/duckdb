@@ -131,7 +131,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 		}
 	}
 
-	D_ASSERT(filters.size >= pruned_filters.size());
+	D_ASSERT(filters.size() >= pruned_filters.size());
 
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);

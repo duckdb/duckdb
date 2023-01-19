@@ -1,5 +1,5 @@
 # name: test/sql/copy/hive_filter_pushdown_bug.test
-# description: confirm that hive-specific filter pushdown does not mess up the
+# description: confirm that hive-specific filter pushdown does not mess up the filters
 # group: [copy]
 
 require parquet
