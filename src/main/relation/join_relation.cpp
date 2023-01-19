@@ -40,9 +40,9 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> lef
 	if (left->context.GetContext() != right->context.GetContext()) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	if (right->type != RelationType::PROJECTION_RELATION && right->type != RelationType::CREATE_VIEW_RELATION) {
+	if (right->type != RelationType::PROJECTION_RELATION) {
 		throw Exception(JoinTypeToString(join_type) +
-		                " requires a projection or view relation as right relation. Received " +
+		                " requires a projection for the right relation. Received " +
 		                RelationTypeToString(right->type));
 	}
 	condition = nullptr;
@@ -68,7 +68,7 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 		where_child->subquery_type = SubqueryType::ANY;
 		where_child->child = left_projection->expressions.at(0)->Copy();
 		where_child->comparison_type = ExpressionType::COMPARE_EQUAL;
-		// wrap anti joins in extra operator expression to compare a NOT.
+		// wrap anti joins in extra operator_not expression
 		if (join_type == JoinType::ANTI) {
 			auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
 			where_clause->children.push_back(move(where_child));
