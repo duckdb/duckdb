@@ -62,6 +62,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
 	}
+	bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
+	bool is_stdout = stmt.info->file_path == "/dev/stdout";
+	if (!user_set_use_tmp_file) {
+		use_tmp_file = is_file_and_exists && !per_thread_output && !is_stdout;
+	}
 
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
@@ -70,7 +75,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->per_thread_output = per_thread_output;
-	copy->is_file_and_exists = config.file_system->FileExists(copy->file_path);
 
 	copy->AddChild(std::move(select_node.plan));
 
