@@ -27,7 +27,8 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	D_ASSERT(stmt);
 
 	if (!stmt->selectStmt) {
-		// FIXME: default values is not supported, but in the binder we do BindDefaultValues ?
+		// TODO: This should be easy to add, we already support DEFAULT in the values list,
+		// this could probably just be transformed into (DEFAULT, DEFAULT, DEFAULT, ..)
 		throw ParserException("DEFAULT VALUES clause is not supported!");
 	}
 

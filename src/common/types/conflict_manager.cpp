@@ -125,8 +125,6 @@ bool ConflictManager::IsConflict(LookupResultType type) {
 	}
 }
 
-// FIXME: maybe refactor these into a LookupResult::MISS|HIT|NULL and pass this into ConflictManager::CheckForConflict
-// but then this enum has to be part of a struct, and be generic, or abstract, to hold any type of Index..
 bool ConflictManager::AddHit(idx_t chunk_index, row_t row_id) {
 	D_ASSERT(chunk_index < input_size);
 	// First check if this causes a conflict

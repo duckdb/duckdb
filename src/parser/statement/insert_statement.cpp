@@ -51,7 +51,6 @@ string InsertStatement::OnConflictActionToString(OnConflictAction action) {
 	}
 }
 
-// TODO: add ON CONFLICT ... to this
 string InsertStatement::ToString() const {
 	string result;
 	result = cte_map.ToString();

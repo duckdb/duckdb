@@ -267,8 +267,6 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 		return;
 	}
 
-	// TODO: Check conflicts
-
 	throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 }
 
