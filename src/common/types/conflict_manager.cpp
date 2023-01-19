@@ -106,7 +106,8 @@ bool ConflictManager::IsConflict(LookupResultType type) {
 		if (ShouldIgnoreNulls()) {
 			return false;
 		}
-		// fall through to LOOKUP_HIT
+		// If nulls are not ignored, treat this as a hit instead
+		return IsConflict(LookupResultType::LOOKUP_HIT);
 	}
 	case LookupResultType::LOOKUP_HIT: {
 		return true;
