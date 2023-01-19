@@ -18,16 +18,25 @@ def test_exception(command, input, stdout, stderr, errmsg):
      print(stderr)
      raise Exception(errmsg)
 
-def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
+def test(cmd, out=None, err=None, extra_commands=None, input_file=None, output_file=None):
      command = [sys.argv[1], '--batch', '-init', '/dev/null']
      if extra_commands:
           command += extra_commands
+
      if input_file:
           command += [cmd]
-          res = subprocess.run(command, input=open(input_file, 'rb').read(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          input_data = open(input_file, 'rb').read()
      else:
-          res = subprocess.run(command, input=bytearray(cmd, 'utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-     stdout = res.stdout.decode('utf8').strip()
+          input_data = bytearray(cmd, 'utf8')
+     output_pipe = subprocess.PIPE
+     if output_file:
+          output_pipe = open(output_file, 'w+')
+
+     res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE)
+     if output_file:
+          stdout = open(output_file, 'r').read()
+     else:
+          stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
      if out and out not in stdout:
@@ -999,3 +1008,5 @@ select * from mytable;
      select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)
      ''',
      out='''thisisalongstring''')
+
+     test("copy (select * from range(10000) tbl(i)) to '/dev/stdout' (format csv)", out='9999', output_file=tf())
