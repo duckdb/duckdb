@@ -13,9 +13,6 @@ create table insertconflicttest(
 	unique (key)
 );
 
-statement ok
-create unique index key_index on insertconflicttest(key);
-
 # Explain tests
 
 statement ok
@@ -34,7 +31,8 @@ insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do updat
 
 # Fails (no unique index inference specification, required for do update variant):
 
-statement error
+## -- We accept this because there is only 1 Index on the table -- ##
+statement ok
 insert into insertconflicttest values (1, 'Apple') on conflict do update set fruit = excluded.fruit;
 
 # inference succeeds:

@@ -1,0 +1,62 @@
+# name: test/sql/upsert/postgres/non_spurious_duplicate_violation.test
+# group: [postgres]
+
+statement ok
+pragma enable_verification;
+
+# insert...on conflict do unique index inference
+
+statement ok
+create table insertconflicttest(
+	key int4,
+	fruit text,
+	other int4,
+	unique (key),
+	unique (fruit)
+);
+
+statement ok
+insert into insertconflicttest values (25, 'Fig', 0) on conflict (fruit) do update set other = 1
+
+# Succeeds
+
+statement ok
+insert into insertconflicttest values (23, 'Blackberry', 0) on conflict (key) where fruit like '%berry' do update set other = 1
+
+## -- 't.fruit' != 'inconsequential' -- ##
+statement error
+insert into insertconflicttest as t values (23, 'Blackberry', 0) on conflict (key) where fruit like '%berry' and t.fruit = 'inconsequential' do nothing;
+----
+Constraint Error: Duplicate key "key: 23" violates unique constraint
+
+# Test that wholerow references to ON CONFLICT's EXCLUDED work
+
+# Succeeds, updates existing row:
+
+statement ok
+insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# No update this time, though:
+
+statement ok
+insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# Predicate changed to require match rather than non-match, so updates once more:
+
+statement ok
+insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# Assign:
+
+statement ok
+insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+# deparse whole row var in WHERE and SET clauses:
+
+statement ok
+insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+
+statement ok
+insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+
+
+# Cleanup
+
+statement ok
+drop table insertconflicttest;
