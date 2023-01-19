@@ -90,6 +90,9 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
+	using GroupingPartition = unique_ptr<PartitionedColumnData>;
+	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
+
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), context(context), buffer_manager(BufferManager::GetBufferManager(context)),
 	      allocator(Allocator::Get(context)), payload_types(op.children[0]->types), memory_per_thread(0), count(0),
@@ -121,24 +124,15 @@ public:
 
 		if (!orders.empty()) {
 			grouping_types = payload_types;
-			const auto hash_col_idx = grouping_types.size();
 			grouping_types.push_back(LogicalType::HASH);
 
-			hash_t bits = 10;
-			if (partition_cols) {
-				if (op.children[0]->estimated_cardinality) {
-					const auto groups = op.children[0]->estimated_cardinality / STANDARD_ROW_GROUPS_SIZE;
-					for (bits = 1; bits < 10 && (idx_t(1) << bits) < groups; ++bits) {
-						continue;
-					}
-				}
-			} else {
-				bits = 1;
-			}
-
-			grouping_data = make_unique<RadixPartitionedColumnData>(context, grouping_types, bits, hash_col_idx);
+			// TODO: The planner seems to ignore propagating cardinality for window...
+			ResizeGroupingData(op.children[0]->estimated_cardinality);
 		}
 	}
+
+	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 
 	void BuildSortState(ColumnDataCollection &group_data, WindowGlobalHashGroup &global_sort);
 
@@ -146,6 +140,7 @@ public:
 	ClientContext &context;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
+	mutex lock;
 
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedColumnData> grouping_data;
@@ -160,7 +155,6 @@ public:
 	bool external;
 
 	// OVER() (no sorting)
-	mutex lock;
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> strings;
 
@@ -168,7 +162,115 @@ public:
 	idx_t memory_per_thread;
 	atomic<idx_t> count;
 	WindowAggregationMode mode;
+
+private:
+	void ResizeGroupingData(idx_t cardinality);
+	void SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 };
+
+void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
+	//	Is the average partition size too large?
+	const auto partition_size = (idx_t(1) << 17);
+	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	auto new_bits = bits ? bits : 4;
+	while (new_bits < 10 && (cardinality / (idx_t(1) << new_bits)) > partition_size) {
+		++new_bits;
+	}
+
+	// Repartition the grouping data
+	if (new_bits != bits) {
+		const auto hash_col_idx = payload_types.size();
+		auto new_grouping_data =
+		    make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
+
+		// We have to append to a shared copy for some reason
+		if (grouping_data) {
+			auto new_shared = new_grouping_data->CreateShared();
+			PartitionedColumnDataAppendState shared_append;
+			new_shared->InitializeAppendState(shared_append);
+
+			auto &partitions = grouping_data->GetPartitions();
+			for (auto &partition : partitions) {
+				ColumnDataScanState scanner;
+				partition->InitializeScan(scanner);
+
+				DataChunk scan_chunk;
+				partition->InitializeScanChunk(scan_chunk);
+				for (scan_chunk.Reset(); partition->Scan(scanner, scan_chunk); scan_chunk.Reset()) {
+					new_shared->Append(shared_append, scan_chunk);
+				}
+			}
+			new_shared->FlushAppendState(shared_append);
+			new_grouping_data->Combine(*new_shared);
+		}
+
+		grouping_data = std::move(new_grouping_data);
+	}
+}
+
+void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
+	// We are done if the local_partition is right sized.
+	auto local_radix = (RadixPartitionedColumnData *)local_partition.get();
+	if (local_radix->GetRadixBits() == grouping_data->GetRadixBits()) {
+		return;
+	}
+
+	// If the local partition is now too small, flush it and reallocate
+	auto new_partition = grouping_data->CreateShared();
+	auto new_append = make_unique<PartitionedColumnDataAppendState>();
+	new_partition->InitializeAppendState(*new_append);
+
+	local_partition->FlushAppendState(*local_append);
+	auto &local_groups = local_partition->GetPartitions();
+	for (auto &local_group : local_groups) {
+		ColumnDataScanState scanner;
+		local_group->InitializeScan(scanner);
+
+		DataChunk scan_chunk;
+		local_group->InitializeScanChunk(scan_chunk);
+		for (scan_chunk.Reset(); local_group->Scan(scanner, scan_chunk); scan_chunk.Reset()) {
+			new_partition->Append(*new_append, scan_chunk);
+		}
+	}
+
+	// The append state has stale pointers to the old local partition, so nuke it from orbit.
+	new_partition->FlushAppendState(*new_append);
+
+	local_partition = std::move(new_partition);
+	local_append = make_unique<PartitionedColumnDataAppendState>();
+	local_partition->InitializeAppendState(*local_append);
+}
+
+void WindowGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
+	// Make sure grouping_data doesn't change under us.
+	lock_guard<mutex> guard(lock);
+
+	if (!local_partition) {
+		local_partition = grouping_data->CreateShared();
+		local_append = make_unique<PartitionedColumnDataAppendState>();
+		local_partition->InitializeAppendState(*local_append);
+		return;
+	}
+
+	// 	Grow the groups if they are too big
+	ResizeGroupingData(count);
+
+	//	Sync local partition to have the same bit count
+	SyncLocalPartition(local_partition, local_append);
+}
+
+void WindowGlobalSinkState::CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
+	if (!local_partition) {
+		return;
+	}
+	local_partition->FlushAppendState(*local_append);
+
+	// Make sure grouping_data doesn't change under us.
+	// Combine has an internal mutex, so this is single-threaded anyway.
+	lock_guard<mutex> guard(lock);
+	SyncLocalPartition(local_partition, local_append);
+	grouping_data->Combine(*local_partition);
+}
 
 void WindowGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, WindowGlobalHashGroup &hash_group) {
 	auto &global_sort = *hash_group.global_sort;
@@ -328,11 +430,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 	}
 
 	// OVER(...)
-	if (!local_partition) {
-		local_partition = gstate.grouping_data->CreateShared();
-		local_append = make_unique<PartitionedColumnDataAppendState>();
-		local_partition->InitializeAppendState(*local_append);
-	}
+	gstate.UpdateLocalPartition(local_partition, local_append);
 
 	payload_chunk.Reset();
 	auto &hash_vector = payload_chunk.data.back();
@@ -365,10 +463,7 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	}
 
 	// OVER(...)
-	if (local_partition) {
-		local_partition->FlushAppendState(*local_append);
-		gstate.grouping_data->Combine(*local_partition);
-	}
+	gstate.CombineLocalPartition(local_partition, local_append);
 }
 
 // this implements a sorted window functions variant
