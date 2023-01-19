@@ -10,7 +10,7 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
-select * from read_csv_auto('test/sql/copy/csv/auto/test_single_column.csv')
+select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column.csv')
 ----
 1
 2
@@ -19,11 +19,11 @@ select * from read_csv_auto('test/sql/copy/csv/auto/test_single_column.csv')
 5
 
 query II
-select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/auto/test_multiple_columns.csv') group by foo order by cnt desc
+select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_multiple_columns.csv') group by foo order by cnt desc
 ----
 1	102
 2	100
 3	98
 
 statement error
-select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/auto/test_multiple_columns.csv', buffer_size=24) group by foo order by cnt desc
+select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_multiple_columns.csv', buffer_size=24) group by foo order by cnt desc
