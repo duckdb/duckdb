@@ -106,6 +106,8 @@ protected:
 	void CreateChunkForSetExpressions(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                  ClientContext &client) const;
 	void OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context, InsertLocalState &lstate) const;
+	void PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry *table,
+	                             Vector &row_ids) const;
 };
 
 } // namespace duckdb

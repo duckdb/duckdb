@@ -218,6 +218,50 @@ void PhysicalInsert::CreateChunkForSetExpressions(DataChunk &result, DataChunk &
 	result.SetCardinality(input_chunk.size());
 }
 
+void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry *table,
+                                             Vector &row_ids) const {
+	if (action_type == OnConflictAction::NOTHING) {
+		return;
+	}
+
+	DataChunk update_chunk; // contains only the to-update columns
+
+	// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
+	if (do_update_condition) {
+		DataChunk do_update_filter_result;
+		do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
+		ExpressionExecutor where_executor(context.client, *do_update_condition);
+		where_executor.Execute(chunk, do_update_filter_result);
+		do_update_filter_result.SetCardinality(chunk.size());
+
+		ManagedSelection selection(chunk.size());
+
+		auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			if (where_data[i]) {
+				selection.Append(i);
+			}
+		}
+		if (selection.Count() != selection.Size()) {
+			// Not all conflicts met the condition, need to filter out the ones that don't
+			chunk.Slice(selection.Selection(), selection.Count());
+			chunk.SetCardinality(selection.Count());
+			// Also apply this Slice to the to-update row_ids
+			row_ids.Slice(selection.Selection(), selection.Count());
+		}
+	}
+
+	// Execute the SET expressions
+	update_chunk.Initialize(context.client, set_types);
+	ExpressionExecutor executor(context.client, set_expressions);
+	executor.Execute(chunk, update_chunk);
+	update_chunk.SetCardinality(chunk);
+
+	auto &data_table = table->storage;
+	// Perform the update, using the results of the SET expressions
+	data_table->Update(*table, context.client, row_ids, set_columns, update_chunk);
+}
+
 void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context,
                                         InsertLocalState &lstate) const {
 	if (action_type == OnConflictAction::THROW) {
@@ -236,16 +280,12 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// No conflicts found
 		return;
 	}
-	// TODO: check the conflict_map to figure out if there are conflicts that are not caused by indexes that are part of
-	// our conflict target if there are, we should still throw Only when these rows are also part of conflicts that are
-	// in the conflict target, we don't throw
 	auto &conflicts = conflict_manager.Conflicts();
 	auto &row_ids = conflict_manager.RowIds();
 
 	DataChunk conflict_chunk; // contains only the conflicting values
 	DataChunk scan_chunk;     // contains the original values, that caused the conflict
 	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
-	DataChunk update_chunk;   // contains only the to-update columns
 
 	// Filter out everything but the conflicting rows
 	conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
@@ -287,41 +327,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		}
 	}
 
-	if (action_type != OnConflictAction::NOTHING) {
-		// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
-		if (do_update_condition) {
-			DataChunk do_update_filter_result;
-			do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
-			ExpressionExecutor where_executor(context.client, *do_update_condition);
-			where_executor.Execute(combined_chunk, do_update_filter_result);
-			do_update_filter_result.SetCardinality(combined_chunk.size());
-
-			ManagedSelection selection(combined_chunk.size());
-
-			auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
-			for (idx_t i = 0; i < combined_chunk.size(); i++) {
-				if (where_data[i]) {
-					selection.Append(i);
-				}
-			}
-			if (selection.Count() != selection.Size()) {
-				// Not all conflicts met the condition, need to filter out the ones that don't
-				combined_chunk.Slice(selection.Selection(), selection.Count());
-				combined_chunk.SetCardinality(selection.Count());
-				// Also apply this Slice to the to-update row_ids
-				row_ids.Slice(selection.Selection(), selection.Count());
-			}
-		}
-
-		// Execute the SET expressions
-		update_chunk.Initialize(context.client, set_types);
-		ExpressionExecutor executor(context.client, set_expressions);
-		executor.Execute(combined_chunk, update_chunk);
-		update_chunk.SetCardinality(combined_chunk);
-
-		// Perform the update, using the results of the SET expressions
-		data_table->Update(*table, context.client, row_ids, set_columns, update_chunk);
-	}
+	PerformOnConflictAction(context, combined_chunk, table, row_ids);
 
 	// Remove the conflicting tuples from the insert chunk
 	SelectionVector sel_vec(lstate.insert_chunk.size());
