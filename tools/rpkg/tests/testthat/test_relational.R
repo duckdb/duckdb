@@ -188,7 +188,7 @@ test_that("anti join works", {
 test_that("anti join throws exception when projection lists are not the same size", {
     left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right), list(expr_reference("right_b", right))
+    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right), expr_reference("right_b", right)))
     left_projection <- duckdb:::rel_project(left, list(expr_reference("left_b", left)))
     expect_error(duckdb:::rel_join(left, right_projection, list(left_projection), "anti"))
 })
@@ -203,6 +203,14 @@ test_that("semi join works", {
     dim(rel_df)
     expected_result <- data.frame(left_a=c(4), left_b=c(1))
     expect_equal(rel_df, expected_result)
+})
+
+test_that("semi join throws exception when projection lists are not the same size", {
+    left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right), expr_reference("right_b", right)))
+    left_projection <- rel_project(left, list(expr_reference("left_b", left)))
+    expect_error(rel_join(left, right_projection, list(left_projection), "semi"))
 })
 
 test_that("Full join returns all outer relations", {
