@@ -79,7 +79,7 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		// attach an extension database
 		auto entry = config.storage_extensions.find(type);
 		if (entry == config.storage_extensions.end()) {
-			throw BinderException("Unrecognized storage type \"%s\"", entry->first);
+			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
 		new_db =
 		    make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(db), *entry->second, name, *info, access_mode);

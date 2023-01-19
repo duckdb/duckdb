@@ -176,21 +176,18 @@ void DSchemaCatalogEntry::Scan(CatalogType type, const std::function<void(Catalo
 	auto &set = GetCatalogSet(type);
 	set.Scan(callback);
 }
-void DSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
+
+DropErrorType DSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	auto &set = GetCatalogSet(info->type);
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
 	auto existing_entry = set.GetEntry(transaction, info->name);
 	if (!existing_entry) {
-		if (!info->if_exists) {
-			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type), info->name);
-		}
-		return;
+		return DropErrorType::ENTRY_DOES_NOT_EXIST;
 	}
 	if (existing_entry->type != info->type) {
-		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
-		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
+		return DropErrorType::ENTRY_TYPE_MISMATCH;
 	}
 
 	// if there is a foreign key constraint, get that information
@@ -206,6 +203,7 @@ void DSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		// alter primary key table
 		catalog->Alter(context, fk_arrays[i].get());
 	}
+	return DropErrorType::SUCCESS;
 }
 
 CatalogEntry *DSchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
