@@ -51,24 +51,21 @@ public:
 	bool parallel;
 	// Which action to perform on conflict
 	OnConflictAction action_type;
+
 	// The DO UPDATE set expressions, if 'action_type' is UPDATE
 	vector<unique_ptr<Expression>> set_expressions;
 	// Which columns are targeted by the set expressions
 	vector<PhysicalIndex> set_columns;
 	// The types of the columns targeted by a SET expression
 	vector<LogicalType> set_types;
-	// Indices of the columns of the table
-	vector<column_t> column_indices;
-	// Column indices that are indexed on
-	unordered_set<column_t> indexed_on_columns;
+
 	// Condition for the ON CONFLICT clause
 	unique_ptr<Expression> on_conflict_condition;
 	// Condition for the DO UPDATE clause
 	unique_ptr<Expression> do_update_condition;
 	// The column ids to apply the ON CONFLICT on
-	unordered_set<column_t> on_conflict_filter;
-	// The Index name to apply the ON CONFLICT on
-	string constraint_name;
+	unordered_set<column_t> conflict_target;
+
 	// Column ids from the original table to fetch
 	vector<column_t> columns_to_fetch;
 	// Matching types to the column ids to fetch

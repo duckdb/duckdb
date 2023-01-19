@@ -36,29 +36,24 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
                                vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk,
                                bool parallel, OnConflictAction action_type,
                                unique_ptr<Expression> on_conflict_condition_p,
-                               unique_ptr<Expression> do_update_condition_p,
-                               unordered_set<column_t> on_conflict_filter_p, vector<column_t> columns_to_fetch_p)
+                               unique_ptr<Expression> do_update_condition_p, unordered_set<column_t> conflict_target_p,
+                               vector<column_t> columns_to_fetch_p)
     : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
       bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk), parallel(parallel),
       action_type(action_type), set_expressions(std::move(set_expressions)), set_columns(move(set_columns)),
       set_types(move(set_types)), on_conflict_condition(std::move(on_conflict_condition_p)),
-      do_update_condition(std::move(do_update_condition_p)), on_conflict_filter(std::move(on_conflict_filter_p)),
+      do_update_condition(std::move(do_update_condition_p)), conflict_target(std::move(conflict_target_p)),
       columns_to_fetch(std::move(columns_to_fetch_p)) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
 	}
 
-	// Figure out which columns are indexed on, and will be excluded from a DO UPDATE set expression
-	for (column_t i = 0; i < insert_types.size(); i++) {
-		column_indices.push_back(i);
-	}
-
 	D_ASSERT(set_expressions.size() == set_columns.size());
 
 	// One or more columns are referenced from the existing table,
-	// we still need to figure out which types they have
+	// we use the 'insert_types' to figure out which types these columns have
 	types_to_fetch = vector<LogicalType>(columns_to_fetch.size(), LogicalType::SQLNULL);
 	for (idx_t i = 0; i < columns_to_fetch.size(); i++) {
 		auto &id = columns_to_fetch[i];
@@ -233,7 +228,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	// If that's not the case - We throw the first error
 
 	// We either want to do nothing, or perform an update when conflicts arise
-	ConflictInfo conflict_info(on_conflict_filter);
+	ConflictInfo conflict_info(conflict_target);
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, lstate.insert_chunk.size(), &conflict_info);
 	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_manager);
 	conflict_manager.Finalize();
@@ -254,7 +249,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 
 	// Filter out everything but the conflicting rows
 	conflict_chunk.Initialize(context.client, lstate.insert_chunk.GetTypes());
-	conflict_chunk.ReferenceColumns(lstate.insert_chunk, column_indices);
+	conflict_chunk.Reference(lstate.insert_chunk);
 	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
 	conflict_chunk.SetCardinality(conflicts.Count());
 
@@ -292,8 +287,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		}
 	}
 
-	if (action_type != OnConflictAction::NOTHING && indexed_on_columns.size() != lstate.insert_chunk.ColumnCount()) {
-
+	if (action_type != OnConflictAction::NOTHING) {
 		// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
 		if (do_update_condition) {
 			DataChunk do_update_filter_result;
