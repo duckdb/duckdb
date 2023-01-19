@@ -40,7 +40,7 @@ public:
 		load_info->filename = reader.ReadRequired<string>();
 		load_info->load_type = reader.ReadRequired<LoadType>();
 		reader.Finalize();
-		return load_info;
+		return std::move(load_info);
 	}
 };
 

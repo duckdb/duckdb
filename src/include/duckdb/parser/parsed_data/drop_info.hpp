@@ -70,7 +70,7 @@ public:
 		drop_info->cascade = reader.ReadRequired<bool>();
 		drop_info->allow_drop_internal = reader.ReadRequired<bool>();
 		reader.Finalize();
-		return drop_info;
+		return std::move(drop_info);
 	}
 };
 
