@@ -50,17 +50,18 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 	expr = ExpandDefaultExpression(column);
 }
 
-void QualifyColumnReferences(ParsedExpression &expr, const string &table_name) {
+void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)*expr;
 		if (column_ref.IsQualified()) {
 			return;
 		}
-		column_ref.SetTableName(table_name);
+		auto column_name = column_ref.GetColumnName();
+		expr = make_unique<ColumnRefExpression>(column_name, table_name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(*child, table_name); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name); });
 }
 
 // Replace binding.table_index with 'dest' if it's 'source'
@@ -109,7 +110,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		binder.target_type = column.Type();
 
 		// Avoid ambiguity issues
-		QualifyColumnReferences(*expr, table_alias);
+		QualifyColumnReferences(expr, table_alias);
 
 		auto bound_expr = binder.Bind(expr);
 		D_ASSERT(bound_expr);
@@ -240,7 +241,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 
 	if (on_conflict.condition) {
 		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(*on_conflict.condition, table_alias);
+		QualifyColumnReferences(on_conflict.condition, table_alias);
 		// Bind the ON CONFLICT ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(on_conflict.condition);
@@ -281,7 +282,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 
 	if (set_info.condition) {
 		// Avoid ambiguity between <table_name> binding and 'excluded'
-		QualifyColumnReferences(*set_info.condition, table_alias);
+		QualifyColumnReferences(set_info.condition, table_alias);
 		// Bind the SET ... WHERE clause
 		WhereBinder where_binder(*this, context);
 		auto condition = where_binder.Bind(set_info.condition);
