@@ -333,6 +333,21 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
+// Find the first index that is not null, and did not find a match
+static idx_t FirstMissingMatch(const ManagedSelection &matches) {
+	idx_t match_idx = 0;
+
+	for (idx_t i = 0; i < matches.Size(); i++) {
+		auto match = matches.IndexMapsToLocation(match_idx, i);
+		match_idx += match;
+		if (!match) {
+			// This index is missing in the matches vector
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	if (!is_append) {
@@ -340,7 +355,7 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 		failed_index = matches[0];
 	} else {
 		// We expected to find matches for all of them, so the first missing match is the first error
-		return UniqueConstraintConflictInfo::FirstMissingMatch(matches);
+		return FirstMissingMatch(matches);
 	}
 	return failed_index;
 }
