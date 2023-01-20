@@ -2,10 +2,18 @@
 # description: Issue 5703: Can't have a window aggregate and unnest.
 # group: [general]
 
+
+statement ok
+select unnest([5,4,3]) as r, sum(42) OVER ();
+
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
 Binder Error
+
+# row numbers are ok
+statement ok
+select unnest([5,4,3]) as r, row_number() OVER (partition by (SELECT NULL));
 
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER () + 42;
@@ -20,42 +28,44 @@ statement ok
 select unnest([5,4,3]) as r, row_number() OVER (partition by (SELECT NULL));
 
 statement error
-select unnest([5,4,3]) as r, lead(5) OVER (partition by (SELECT NULL));
+select unnest([5,4,3]) as r, lead(r, 1) OVER (partition by (SELECT NULL));
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, FIRST_VALUE(3) OVER ();
+select unnest([5,4,3]) as r, FIRST_VALUE(r) OVER ();
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, LAST_VALUE(3) OVER ();
+select unnest([5,4,3]) as r, LAST_VALUE(r) OVER ();
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, LAG(1) OVER ();
+select unnest([5,4,3]) as r, LAG(r, 1) OVER ();
 ----
 Binder Error
 
 statement error
-select unnest([5,4,3]) as r, NTH_VALUE(2) OVER ();
+select unnest([5,4,3]) as r, NTH_VALUE(r, 1) OVER ();
 ----
 Binder Error
 
 statement error
 select unnest([5,4,3]) as r, dense_rank(r) OVER ();
 
+# NTile is ok since it doesn't require a bound argument
+statement ok
+select unnest([5,4,3]) as r, NTILE(1) OVER (ORDER BY (SELECT NULL));
+
 statement error
-select unnest([5,4,3]) as r, NTILE(r) OVER (ORDER BY (SELECT NULL));
+select unnest([5,4,3]) as r, sum(r + 42) OVER ();
 ----
 Binder Error
 
-statement error
+statement ok
 select unnest([5, 4, 3]), sum(41) over ();
-----
-Binder Error
 
 statement error
 SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";

@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -97,10 +98,17 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		D_ASSERT(!unnest->expressions.empty());
 		if (root->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			for (auto &expression : root->expressions) {
-				if (expression->type != ExpressionType::WINDOW_ROW_NUMBER) {
-					throw BinderException(
-					    "Cannot have window expression over an unlist unless the window funciton is row_number()");
-				}
+//				if (expression->type != ExpressionType::WINDOW_ROW_NUMBER) {
+//					throw BinderException(
+//					    "Cannot have window expression over an unlist unless the window funciton is row_number()");
+//				}
+				ExpressionIterator::EnumerateChildren(*expression, [&](unique_ptr<Expression> &child) {
+					if (child->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+						if (child->alias == "r") {
+							throw BinderException("Cannot have window expression over unnested column");
+						}
+					}
+				});
 			}
 		}
 		unnest->AddChild(std::move(root));
