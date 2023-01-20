@@ -39,7 +39,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	single_threaded = !config.options.experimental_parallel_csv_reader;
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
-	                     options.delimiter == "\0" || options.escape == "\0" || options.quote == "\0";
+	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
 	if (null_or_empty || complex_options || options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
