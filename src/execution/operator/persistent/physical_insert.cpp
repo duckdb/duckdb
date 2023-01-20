@@ -109,6 +109,8 @@ public:
 	TableAppendState local_append_state;
 	unique_ptr<RowGroupCollection> local_collection;
 	OptimisticDataWriter *writer;
+	// Rows that have been updated by a DO UPDATE conflict
+	unordered_set<row_t> updated_rows;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -266,6 +268,20 @@ void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChun
 	data_table->Update(*table, context.client, row_ids, set_columns, update_chunk);
 }
 
+// TODO: should we use a hash table to keep track of this instead?
+void PhysicalInsert::RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) const {
+	// Insert all rows, if any of the rows has already been updated before, we throw an error
+	auto data = FlatVector::GetData<row_t>(row_ids);
+	for (idx_t i = 0; i < count; i++) {
+		auto result = lstate.updated_rows.insert(data[i]);
+		if (result.second == false) {
+			throw InvalidInputException(
+			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows "
+			    "proposed for insertion within the same command have duplicate constrained values");
+		}
+	}
+}
+
 void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context,
                                         InsertLocalState &lstate) const {
 	if (action_type == OnConflictAction::THROW) {
@@ -326,10 +342,13 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 				}
 			}
 			combined_chunk.Slice(sel.Selection(), sel.Count());
+			row_ids.Slice(sel.Selection(), sel.Count());
 			table->storage->VerifyAppendConstraints(*table, context.client, combined_chunk, nullptr);
 			throw InternalException("The previous operation was expected to throw but didn't");
 		}
 	}
+
+	RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
 
 	PerformOnConflictAction(context, combined_chunk, table, row_ids);
 

@@ -3,7 +3,6 @@
 # group: [upsert]
 
 # TODO: remove this, behavior should be consistent at all vector sizes
-require vector_size 2048
 
 statement ok
 pragma enable_verification;
@@ -41,25 +40,11 @@ SELECT COUNT(*) FILTER (WHERE j = 10) FROM integers
 ----
 5000
 
-# This test does not have result checking, because the behavior
-# for multiple insert tuples updating the same existing tuple is currently not well defined
-
-# All insert tuples cause a conflict, but all of them are on first existing rows
-statement ok
+# All insert tuples cause a conflict on the same row
+statement error
 INSERT INTO integers(i,j) select i%5,i from range(5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;
-
-# 'excluded.i' is the same value for every conflict, so this is consistent
-query I
-select k from integers limit 5;
 ----
-0
-1
-2
-3
-4
-
-# The results of the last upsert operation are inconsistent, this behavior has to be fixed
-# TODO: disable parallel execution of insert when DO UPDATE is provided
+Invalid Input Error: ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows proposed for insertion within the same command have duplicate constrained values
 
 statement ok
 INSERT INTO integers(i,j) select i%5,i from range(4995, 5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;
@@ -133,16 +118,3 @@ query I
 select COUNT(j) filter (where j != 0) from integers;
 ----
 1250
-
-# Every insert tuple conflicts with the same existing tuple (the first one)
-statement ok
-insert into integers(i,j) select 0,i from range(5000) tbl(i) on conflict do update set j = excluded.j;
-
-# Only the first value of the chunk got to update the value
-# 0 is the first index of the first chunk
-# 2048 is the first index of the second chunk
-# 4096 is the first index of the last chunk
-query I
-select j from integers limit 1;
-----
-4096

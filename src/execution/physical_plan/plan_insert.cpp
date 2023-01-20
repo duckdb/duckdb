@@ -65,6 +65,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		// We don't support ON CONFLICT clause in batch insertion operation currently
 		use_batch_index = false;
 	}
+	if (op.action_type == OnConflictAction::UPDATE) {
+		// When we potentially need to perform updates, we have to check that row is not updated twice
+		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
+		parallel_streaming_insert = false;
+	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
 		insert = make_unique<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),

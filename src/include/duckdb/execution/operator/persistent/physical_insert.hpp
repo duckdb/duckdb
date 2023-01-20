@@ -108,6 +108,7 @@ protected:
 	void OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context, InsertLocalState &lstate) const;
 	void PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry *table,
 	                             Vector &row_ids) const;
+	void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) const;
 };
 
 } // namespace duckdb
