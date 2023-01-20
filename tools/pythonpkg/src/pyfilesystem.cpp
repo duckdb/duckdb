@@ -83,8 +83,7 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	std::vector<string> results;
 	for (auto item : returner) {
 		string res = py::str(item);
-		// TODO: should this slash be replaced with AbstractFileSystem#root_marker
-		results.push_back(protocols[0] + "://" + "/" + res);
+		results.push_back(filesystem.attr("unstrip_protocol")(py::str(res)));
 	}
 	return results;
 }
