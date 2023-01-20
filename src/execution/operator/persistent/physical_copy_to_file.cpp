@@ -219,7 +219,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			state->partition_state = make_shared<GlobalHivePartitionState>();
 		}
 
-		return state;
+		return std::move(state);
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
