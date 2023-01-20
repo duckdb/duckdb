@@ -383,7 +383,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	D_ASSERT(current_buffer_handle->buffer_index != 0);
-	D_ASSERT(options.format == JSONFormat::NEWLINE_DELIMITED);
+	D_ASSERT(current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED);
 
 	// Spinlock until the previous batch index has also read its buffer
 	JSONBufferHandle *previous_buffer_handle = nullptr;
