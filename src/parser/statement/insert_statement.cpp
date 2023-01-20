@@ -35,16 +35,14 @@ InsertStatement::InsertStatement(const InsertStatement &other)
 
 string InsertStatement::OnConflictActionToString(OnConflictAction action) {
 	switch (action) {
-	case OnConflictAction::NOTHING: {
+	case OnConflictAction::NOTHING:
 		return "DO NOTHING";
-	}
-	case OnConflictAction::UPDATE: {
+	case OnConflictAction::REPLACE:
+	case OnConflictAction::UPDATE:
 		return "DO UPDATE";
-	}
-	case OnConflictAction::THROW: {
+	case OnConflictAction::THROW:
 		// Explicitly left empty, for ToString purposes
 		return "";
-	}
 	default: {
 		throw NotImplementedException("type not implemented for OnConflictActionType");
 	}
@@ -52,9 +50,16 @@ string InsertStatement::OnConflictActionToString(OnConflictAction action) {
 }
 
 string InsertStatement::ToString() const {
+	bool or_replace_shorthand_set = false;
 	string result;
+
 	result = cte_map.ToString();
-	result += "INSERT INTO ";
+	result += "INSERT";
+	if (on_conflict_info && on_conflict_info->action_type == OnConflictAction::REPLACE) {
+		or_replace_shorthand_set = true;
+		result += " OR REPLACE";
+	}
+	result += " INTO ";
 	if (!catalog.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 	}
@@ -84,7 +89,7 @@ string InsertStatement::ToString() const {
 	} else {
 		result += select_statement->ToString();
 	}
-	if (on_conflict_info) {
+	if (!or_replace_shorthand_set && on_conflict_info) {
 		auto &conflict_info = *on_conflict_info;
 		result += " ON CONFLICT ";
 		// (optional) conflict target

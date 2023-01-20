@@ -4,15 +4,17 @@
  *				INSERT STATEMENTS
  *
  *****************************************************************************/
+
 InsertStmt:
-			opt_with_clause INSERT INTO insert_target insert_rest
+			opt_with_clause INSERT opt_or_action INTO insert_target insert_rest
 			opt_on_conflict returning_clause
 				{
-					$5->relation = $4;
-					$5->onConflictClause = $6;
-					$5->returningList = $7;
-					$5->withClause = $1;
-					$$ = (PGNode *) $5;
+					$6->relation = $5;
+					$6->onConflictAlias = $3;
+					$6->onConflictClause = $7;
+					$6->returningList = $8;
+					$6->withClause = $1;
+					$$ = (PGNode *) $6;
 				}
 		;
 
@@ -138,6 +140,22 @@ set_clause:
 				}
 		;
 
+
+opt_or_action:
+			OR REPLACE
+				{
+					$$ = PG_ONCONFLICT_ALIAS_REPLACE;
+				}
+			|
+			OR IGNORE_P
+				{
+					$$ = PG_ONCONFLICT_ALIAS_IGNORE;
+				}
+			| /*EMPTY*/
+				{
+					$$ = PG_ONCONFLICT_ALIAS_NONE;
+				}
+			;
 
 opt_on_conflict:
 			ON CONFLICT opt_conf_expr DO UPDATE SET set_clause_list_opt_comma where_clause

@@ -137,3 +137,16 @@ query I
 select COUNT(j) filter (where j != 0) from integers;
 ----
 1250
+
+# Every insert tuple conflicts with the same existing tuple (the first one)
+statement ok
+insert into integers(i,j) select 0,i from range(5000) tbl(i) on conflict do update set j = excluded.j;
+
+# Only the first value of the chunk got to update the value
+# 0 is the first index of the first chunk
+# 2048 is the first index of the second chunk
+# 4096 is the first index of the last chunk
+query I
+select j from integers limit 1;
+----
+4096

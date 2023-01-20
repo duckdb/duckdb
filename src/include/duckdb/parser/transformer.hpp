@@ -131,6 +131,9 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGOnConflictClause node into a OnConflictInfo
 	unique_ptr<OnConflictInfo> TransformOnConflictClause(duckdb_libpgquery::PGOnConflictClause *node,
 	                                                     const string &relname);
+	//! Transform a ON CONFLICT shorthand into a OnConflictInfo
+	unique_ptr<OnConflictInfo> DummyOnConflictClause(duckdb_libpgquery::PGOnConflictActionAlias type,
+	                                                 const string &relname);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(duckdb_libpgquery::PGNode *node);
 	void TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList *options);

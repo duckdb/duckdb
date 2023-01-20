@@ -140,6 +140,49 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	}
 }
 
+unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry *table, InsertStatement &insert) {
+	auto set_info = make_unique<UpdateSetInfo>();
+
+	auto &columns = set_info->columns;
+	// Figure out which columns are indexed on
+
+	unordered_set<column_t> indexed_columns;
+	auto &indexes = table->storage->info->indexes.Indexes();
+	for (auto &index : indexes) {
+		for (auto &column_id : index->column_id_set) {
+			indexed_columns.insert(column_id);
+		}
+	}
+
+	auto &column_list = table->columns;
+	if (insert.columns.empty()) {
+		for (auto &column : column_list.Physical()) {
+			auto &name = column.Name();
+			// FIXME: can these column names be aliased somehow?
+			if (indexed_columns.count(column.Oid())) {
+				continue;
+			}
+			columns.push_back(name);
+		}
+	} else {
+		// a list of columns was explicitly supplied, only update those
+		for (auto &name : insert.columns) {
+			auto &column = column_list.GetColumn(name);
+			if (indexed_columns.count(column.Oid())) {
+				continue;
+			}
+			columns.push_back(name);
+		}
+	}
+
+	// Create 'excluded' qualified column references of these columns
+	for (auto &column : columns) {
+		set_info->expressions.push_back(make_unique<ColumnRefExpression>(column, "excluded"));
+	}
+
+	return set_info;
+}
+
 void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt) {
 	if (!stmt.on_conflict_info) {
 		insert->action_type = OnConflictAction::THROW;
@@ -157,6 +200,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
+	D_ASSERT(on_conflict.action_type != OnConflictAction::THROW);
 	insert->action_type = on_conflict.action_type;
 
 	if (!on_conflict.indexed_columns.empty()) {
@@ -222,7 +266,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
 		}
-		if (insert->action_type == OnConflictAction::UPDATE && found_matching_indexes != 1) {
+		if (insert->action_type != OnConflictAction::NOTHING && found_matching_indexes != 1) {
 			// When no conflict target is provided, and the action type is UPDATE,
 			// we only allow the operation when only a single Index exists
 			throw BinderException("Conflict target has to be provided for a DO UPDATE operation when the table has "
@@ -264,7 +308,7 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		ReplaceColumnBindings(*insert->on_conflict_condition, table_index, projection_index);
 	}
 
-	if (insert->action_type != OnConflictAction::UPDATE) {
+	if (insert->action_type == OnConflictAction::NOTHING) {
 		if (!insert->on_conflict_condition) {
 			return;
 		}
@@ -275,6 +319,12 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		insert->columns_to_fetch = table_binding->GetBoundColumnIds();
 		return;
 	}
+	if (insert->action_type == OnConflictAction::REPLACE) {
+		D_ASSERT(on_conflict.set_info == nullptr);
+		on_conflict.set_info = CreateSetInfoForReplace(table, stmt);
+		insert->action_type = OnConflictAction::UPDATE;
+	}
+
 	D_ASSERT(on_conflict.set_info);
 	auto &set_info = *on_conflict.set_info;
 	D_ASSERT(!set_info.columns.empty());
@@ -292,8 +342,6 @@ void Binder::BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalo
 		insert->do_update_condition = std::move(condition);
 	}
 
-	// Instead of this, it should probably be a DummyTableRef
-	// so we can resolve the Bind for 'excluded' and create proper BoundReferenceExpressions for it
 	BindDoUpdateSetExpressions(table_alias, insert.get(), set_info, table);
 
 	// Get the column_ids we need to fetch later on from the conflicting tuples

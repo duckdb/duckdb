@@ -17,7 +17,12 @@ namespace duckdb {
 class ExpressionListRef;
 class UpdateSetInfo;
 
-enum class OnConflictAction { THROW, NOTHING, UPDATE };
+enum class OnConflictAction : uint8_t {
+	THROW,
+	NOTHING,
+	UPDATE,
+	REPLACE // Only used in transform/bind step, changed to UPDATE later
+};
 
 class OnConflictInfo {
 public:

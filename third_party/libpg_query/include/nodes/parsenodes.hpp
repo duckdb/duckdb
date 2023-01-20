@@ -1128,6 +1128,7 @@ typedef struct PGInsertStmt {
 	PGRangeVar *relation;                 /* relation to insert into */
 	PGList *cols;                         /* optional: names of the target columns */
 	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
+	PGOnConflictActionAlias onConflictAlias; /* the (optional) shorthand provided for the onConflictClause */
 	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
 	PGList *returningList;                /* list of expressions to return */
 	PGWithClause *withClause;             /* WITH clause */

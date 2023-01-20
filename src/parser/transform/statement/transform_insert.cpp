@@ -56,7 +56,17 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	result->schema = qname.schema;
 
 	if (stmt->onConflictClause) {
+		if (stmt->onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
+			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
+			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
+			                      "the first if you want to have more granual control");
+		}
 		result->on_conflict_info = TransformOnConflictClause(stmt->onConflictClause, result->schema);
+		result->table_ref = TransformRangeVar(stmt->relation);
+	}
+	if (stmt->onConflictAlias != duckdb_libpgquery::PG_ONCONFLICT_ALIAS_NONE) {
+		D_ASSERT(!stmt->onConflictClause);
+		result->on_conflict_info = DummyOnConflictClause(stmt->onConflictAlias, result->schema);
 		result->table_ref = TransformRangeVar(stmt->relation);
 	}
 	result->catalog = qname.catalog;
