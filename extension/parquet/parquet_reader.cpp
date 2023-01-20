@@ -102,7 +102,15 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				return LogicalType::UUID;
 			}
 		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
+			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
+				return LogicalType::TIMESTAMP_TZ;
+			}
 			return LogicalType::TIMESTAMP;
+		} else if (s_ele.logicalType.__isset.TIME) {
+			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
+				return LogicalType::TIME_TZ;
+			}
+			return LogicalType::TIME;
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -336,6 +344,17 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			                                     std::move(element_reader));
 		}
 
+		// if this is a hive partition col, we should not read it at all but instead do a constant reader.
+		if (parquet_options.hive_partitioning && hive_map && depth == 1) {
+			auto lookup = hive_map->find(s_ele.name);
+			if (lookup != hive_map->end()) {
+				Value val = Value(lookup->second);
+				return make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(),
+				                                                  next_file_idx++, max_define, max_repeat, val);
+				;
+			}
+		}
+
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
@@ -373,9 +392,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 	}
 
 	if (parquet_options.hive_partitioning) {
-		auto res = HivePartitioning::Parse(file_name);
-
-		for (auto &partition : res) {
+		for (auto &partition : *hive_map) {
 			Value val = Value(partition.second);
 			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
 			    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
@@ -431,10 +448,16 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 
 	// Add generated constant column for filename
 	if (parquet_options.hive_partitioning) {
-		auto partitions = HivePartitioning::Parse(file_name);
-		for (auto &part : partitions) {
-			return_types.emplace_back(LogicalType::VARCHAR);
-			names.emplace_back(part.first);
+		for (auto &part : *hive_map) {
+			// We need to lookup the hive col in the cols of the file to avoid duplicating columns that are both
+			// in the file and the hive path
+			auto lookup =
+			    std::find_if(child_types.begin(), child_types.end(),
+			                 [&part](const std::pair<std::string, LogicalType> &x) { return x.first == part.first; });
+			if (lookup == child_types.end()) {
+				return_types.emplace_back(LogicalType::VARCHAR);
+				names.emplace_back(part.first);
+			}
 		}
 	}
 
@@ -533,6 +556,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
+
+	if (parquet_options.hive_partitioning) {
+		hive_map = make_unique<std::map<string, string>>(HivePartitioning::Parse(file_name));
+	}
+
 	InitializeSchema(expected_names, expected_types_p, column_ids, initial_filename_p);
 }
 
@@ -712,9 +740,9 @@ void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root
 	unordered_map<idx_t, idx_t> reverse_union_idx;
 
 	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
-		auto child_reader = move(root_struct_reader.child_readers[col]);
-		auto cast_reader = make_unique<CastColumnReader>(move(child_reader), union_col_types[union_idx_map[col]]);
-		root_struct_reader.child_readers[col] = move(cast_reader);
+		auto child_reader = std::move(root_struct_reader.child_readers[col]);
+		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), union_col_types[union_idx_map[col]]);
+		root_struct_reader.child_readers[col] = std::move(cast_reader);
 		reverse_union_idx[union_idx_map[col]] = col;
 	}
 
@@ -726,7 +754,7 @@ void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root
 			column_id_nulls[col] = false;
 		}
 	}
-	union_null_cols = move(column_id_nulls);
+	union_null_cols = std::move(column_id_nulls);
 }
 void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {

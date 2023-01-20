@@ -8,14 +8,14 @@ namespace duckdb {
 
 BoundLambdaRefExpression::BoundLambdaRefExpression(string alias_p, LogicalType type, ColumnBinding binding,
                                                    idx_t lambda_index, idx_t depth)
-    : Expression(ExpressionType::BOUND_LAMBDA_REF, ExpressionClass::BOUND_LAMBDA_REF, move(type)), binding(binding),
-      lambda_index(lambda_index), depth(depth) {
-	this->alias = move(alias_p);
+    : Expression(ExpressionType::BOUND_LAMBDA_REF, ExpressionClass::BOUND_LAMBDA_REF, std::move(type)),
+      binding(binding), lambda_index(lambda_index), depth(depth) {
+	this->alias = std::move(alias_p);
 }
 
 BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_index,
                                                    idx_t depth)
-    : BoundLambdaRefExpression(string(), move(type), binding, lambda_index, depth) {
+    : BoundLambdaRefExpression(string(), std::move(type), binding, lambda_index, depth) {
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::Copy() {

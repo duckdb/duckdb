@@ -13,7 +13,7 @@ string LambdaExpression::ToString() const {
 	return lhs->ToString() + " -> " + expr->ToString();
 }
 
-bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression *b) {
+bool LambdaExpression::Equal(const LambdaExpression *a, const LambdaExpression *b) {
 	return a->lhs->Equals(b->lhs.get()) && a->expr->Equals(b->expr.get());
 }
 
