@@ -291,6 +291,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 		auto line_end = NextNewline(buffer_ptr, buffer_size);
 		if (line_end == nullptr) {
 			options.format = JSONFormat::UNSTRUCTURED; // No newlines in buffer at all
+			gstate.file_index++;                       // UNSTRUCTURED necessitates single-threaded read
 			break;
 		}
 		idx_t line_size = line_end - buffer_ptr;
