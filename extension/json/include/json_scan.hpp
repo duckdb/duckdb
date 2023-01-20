@@ -156,7 +156,6 @@ public:
 
 	static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-		// TODO
 		auto &lstate = (JSONScanLocalState &)*local_state;
 		return lstate.GetBatchIndex();
 	}

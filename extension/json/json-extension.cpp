@@ -21,8 +21,6 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
-static DefaultMacro table_macros[] = {{nullptr, nullptr, {nullptr}, nullptr}};
-
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
@@ -51,12 +49,6 @@ void JSONExtension::Load(DuckDB &db) {
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
-		catalog.CreateFunction(*con.context, info.get());
-	}
-
-	// JSON table macro's
-	for (idx_t index = 0; table_macros[index].name != nullptr; index++) {
-		auto info = DefaultFunctionGenerator::CreateInternalTableMacroInfo(table_macros[index]);
 		catalog.CreateFunction(*con.context, info.get());
 	}
 

@@ -18,7 +18,7 @@ namespace duckdb {
 struct FileHandle;
 
 enum class JSONFormat : uint8_t {
-	//! Auto-detect during the bind (TODO)
+	//! Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)
 	AUTO_DETECT = 0,
 	//! One object after another, newlines can be anywhere
 	UNSTRUCTURED = 1,
