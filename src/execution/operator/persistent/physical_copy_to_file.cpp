@@ -134,9 +134,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		function.copy_to_combine(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state,
 		                         *l.local_state);
 
-		if (partition_output) {
-
-		} else if (per_thread_output) {
+		if (per_thread_output) {
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 		}
 	}
@@ -222,13 +220,6 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto found = file_path.find_last_of('/');
-	auto dir = file_path.substr(0, found);
-
-	if (!fs.DirectoryExists(dir)) {
-		fs.CreateDirectory(dir);
-	}
 	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
