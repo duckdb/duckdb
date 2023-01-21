@@ -59,20 +59,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
                                                            bool file_row_number, bool filename, bool hive_partitioning,
-                                                           shared_ptr<DuckDBPyConnection> conn) {
+                                                           bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning);
+	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning, union_by_name);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                             bool file_row_number, bool filename, bool hive_partitioning,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
+                                                            bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning);
+	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning,
+	                          union_by_name);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn) {
