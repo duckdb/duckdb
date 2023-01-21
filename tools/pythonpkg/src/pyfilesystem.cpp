@@ -83,7 +83,7 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	std::vector<string> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
 	for (auto item : returner) {
-		results.push_back(unstrip_protocol(py::str(item)));
+		results.push_back(py::str(unstrip_protocol(py::str(item))));
 	}
 	return results;
 }
