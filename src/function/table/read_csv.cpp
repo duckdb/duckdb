@@ -89,45 +89,24 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
+		} else if (loption == "column_types") {
 			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv_auto %s requires a struct or list as input", kv.first);
+			if (child_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("read_csv_auto column_types requires a struct as input");
 			}
-			if (!options.sql_type_list.empty()) {
-				throw BinderException("read_csv_auto column_types/types/dtypes can only be supplied once");
-			}
-			vector<string> sql_type_names;
-			if (child_type.id() == LogicalTypeId::STRUCT) {
-				auto &struct_children = StructValue::GetChildren(kv.second);
-				D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-				for (idx_t i = 0; i < struct_children.size(); i++) {
-					auto &name = StructType::GetChildName(child_type, i);
-					auto &val = struct_children[i];
-					if (val.type().id() != LogicalTypeId::VARCHAR) {
-						throw BinderException("read_csv_auto %s requires a type specification as string", kv.first);
-					}
-					sql_type_names.push_back(StringValue::Get(val));
-					options.sql_types_per_column[name] = i;
+			auto &struct_children = StructValue::GetChildren(kv.second);
+			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				auto &name = StructType::GetChildName(child_type, i);
+				auto &val = struct_children[i];
+				if (val.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("read_csv_auto requires a type specification as string");
 				}
-			} else {
-				auto &list_child = ListType::GetChildType(child_type);
-				if (list_child.id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", kv.first);
-				}
-				auto &children = ListValue::GetChildren(kv.second);
-				for (auto &child : children) {
-					sql_type_names.push_back(StringValue::Get(child));
-				}
-			}
-			options.sql_type_list.reserve(sql_type_names.size());
-			for (auto &sql_type : sql_type_names) {
-				auto def_type = TransformStringToLogicalType(sql_type);
+				auto def_type = TransformStringToLogicalType(StringValue::Get(val));
 				if (def_type.id() == LogicalTypeId::USER) {
-					throw BinderException("Unrecognized type \"%s\" for read_csv_auto %s definition", sql_type,
-					                      kv.first);
+					throw BinderException("Unrecognized type for read_csv_auto column_types definition");
 				}
-				options.sql_type_list.push_back(move(def_type));
+				options.sql_types_per_column[name] = def_type;
 			}
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);
@@ -194,13 +173,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		const idx_t first_file_index = 0;
 		result->initial_reader = std::move(result->union_readers[first_file_index]);
 		D_ASSERT(names.size() == return_types.size());
-
-		if (!options.sql_types_per_column.empty()) {
-			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
-			if (!exception.empty()) {
-				throw BinderException(exception);
-			}
-		}
 	}
 
 	if (result->options.include_file_name) {
@@ -698,6 +670,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
+	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -775,6 +748,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField<bool>(include_file_name);
 	writer.WriteField<bool>(include_parsed_hive_partitions);
+	writer.WriteString(decimal_separator);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
 }
@@ -807,6 +781,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_path = reader.ReadRequired<string>();
 	include_file_name = reader.ReadRequired<bool>();
 	include_parsed_hive_partitions = reader.ReadRequired<bool>();
+	decimal_separator = reader.ReadRequired<string>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
 }
@@ -858,8 +833,6 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.cardinality = CSVReaderCardinality;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
-	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
-	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
 	return read_csv_auto;
 }
 

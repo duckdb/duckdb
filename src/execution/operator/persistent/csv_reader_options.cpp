@@ -193,6 +193,9 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		if (buffer_size == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
+	} else if (loption == "decimal_separator") {
+		// TODO ?
+		decimal_separator = ParseString(value, loption)[0];
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

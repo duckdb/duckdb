@@ -1,0 +1,65 @@
+# name: test/sql/copy/csv/csv_decimal_separator.test
+# description: Support decimal separators
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators.csv', header=1, column_types={'commas': 'double'}, delim=';', decimal_separator=',')
+
+query II
+SELECT commas, periods FROM decimal_separators;
+----
+1.1	1.1
+0.25	0.25
+15300.0	1.53e4
+15300.0	+1.53e4
+-15300.0	-1.53e4
+
+query II
+SELECT typeof(commas), typeof(periods) FROM decimal_separators limit 1;
+----
+DOUBLE	VARCHAR
+
+statement error
+CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators.csv', header=1, column_types={'commas': 'decimal'}, delim=';', decimal_separator='.')
+
+statement ok
+CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators.csv', header=1, column_types={'commas': 'decimal'}, delim=';', decimal_separator=',')
+
+query II
+SELECT commas, periods FROM decimal_separators2;
+----
+1.100	1.1
+0.250	0.25
+15300.000	1.53e4
+15300.000	+1.53e4
+-15300.000	-1.53e4
+
+query II
+SELECT typeof(commas), typeof(periods) FROM decimal_separators2 limit 1;
+----
+DECIMAL(18,3)	VARCHAR
+
+
+statement ok
+CREATE TABLE decimal_separators3 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators.csv', header=1, column_types={'periods': 'decimal'}, delim=';')
+
+query II
+SELECT commas, periods FROM decimal_separators3;
+----
+1,1	1.100
+0,25	0.250
+1,53e4	15300.000
++1,53e4	+15300.000
+-1,53e4	-15300.000
+
+
+statement ok
+CREATE TABLE decimal_separators4 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators_csv.csv', header=1, column_types={'commas': 'double'}, quote='"',delim=',',decimal_separator=',')
+
+query II
+SELECT commas, periods FROM decimal_separators4;
+----
+1.2345	1.2345
