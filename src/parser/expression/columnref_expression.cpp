@@ -24,51 +24,26 @@ ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p)
 		D_ASSERT(!col_name.empty());
 	}
 #endif
-	VerifyQualification();
 }
 
-void ColumnRefExpression::VerifyQualification() const {
-	// This is the max amount of qualification possible
-	D_ASSERT(column_names.size() <= (idx_t)ColumnQualification::QUALIFICATION_ENUM_SIZE);
-}
-
-bool ColumnRefExpression::IsQualified(ColumnQualification qualifier) const {
-	VerifyQualification();
-	const auto max_qualification = (uint8_t)(column_names.size() - 1);
-	return max_qualification >= (uint8_t)qualifier;
+bool ColumnRefExpression::IsQualified() const {
+	return column_names.size() > 1;
 }
 
 const string &ColumnRefExpression::GetColumnName() const {
-	VerifyQualification();
+	D_ASSERT(column_names.size() <= 4);
 	return column_names.back();
 }
 
-const vector<string> &ColumnRefExpression::GetColumnNames() const {
-	return column_names;
-}
-
-idx_t ColumnRefExpression::GetIndexOfQualification(ColumnQualification qualifier) const {
-	VerifyQualification();
-
-	D_ASSERT(IsQualified(qualifier));
-
-	// qualifier = 0 (NAME) | size = 1 (name) -> return 0;
-	// qualifier = 0 (NAME) | size = 2 (tbl.name) -> return 1;
-	// qualifier = 1 (TABLE) | size = 2 (tbl.name) -> return 0;
-	// qualifier = 1 (TABLE) | size = 3 (schema.tbl.name) -> return 1;
-
-	const auto max_qualification = (uint8_t)(column_names.size() - 1);
-	return max_qualification - (uint8_t)qualifier;
-}
-
-const string &ColumnRefExpression::GetQualificationName(ColumnQualification qualifier) const {
-	auto index = GetIndexOfQualification(qualifier);
-	return column_names[index];
-}
-
 const string &ColumnRefExpression::GetTableName() const {
-	D_ASSERT(IsQualified());
-	return GetQualificationName(ColumnQualification::TABLE);
+	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
+	if (column_names.size() == 4) {
+		return column_names[2];
+	}
+	if (column_names.size() == 3) {
+		return column_names[1];
+	}
+	return column_names[0];
 }
 
 string ColumnRefExpression::GetName() const {
