@@ -14,6 +14,7 @@
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-makedate.hpp"
 #include "include/icu-strptime.hpp"
+#include "include/icu-timebucket.hpp"
 #include "include/icu-timezone.hpp"
 
 #include "duckdb/main/database.hpp"
@@ -266,6 +267,7 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
 	RegisterICUStrptimeFunctions(*con.context);
+	RegisterICUTimeBucketFunctions(*con.context);
 	RegisterICUTimeZoneFunctions(*con.context);
 
 	// Calendars
