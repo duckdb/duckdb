@@ -194,8 +194,10 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
 	} else if (loption == "decimal_separator") {
-		// TODO ?
-		decimal_separator = ParseString(value, loption)[0];
+		decimal_separator = ParseString(value, loption);
+		if (decimal_separator != "." && decimal_separator != ",") {
+			throw BinderException("Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','");
+		}
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
