@@ -388,10 +388,6 @@ template <>
 DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, string *error_message,
                                                           uint8_t width, uint8_t scale);
 
-
-
-
-
 struct StringCastFromDecimal {
 	template <class SRC>
 	static inline string_t Operation(SRC input, uint8_t width, uint8_t scale, Vector &result) {

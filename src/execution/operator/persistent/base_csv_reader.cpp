@@ -80,9 +80,8 @@ void BaseCSVReader::SetDateFormat(const string &format_specifier, const LogicalT
 }
 
 struct TryCastDecimalOperator {
-	template<class OP, class T>
-	static bool Operation(string_t input,
-	                      uint8_t width, uint8_t scale) {
+	template <class OP, class T>
+	static bool Operation(string_t input, uint8_t width, uint8_t scale) {
 		T result;
 		string error_message;
 		return OP::Operation(input, result, &error_message, width, scale);
@@ -90,7 +89,7 @@ struct TryCastDecimalOperator {
 };
 
 struct TryCastFloatingOperator {
-	template<class OP, class T>
+	template <class OP, class T>
 	static bool Operation(string_t input) {
 		T result;
 		string error_message;
@@ -113,31 +112,31 @@ bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type
 		string_t value_str = string_t(StringValue::Get(value));
 		auto width = DecimalType::GetWidth(sql_type);
 		auto scale = DecimalType::GetScale(sql_type);
-		switch(sql_type.InternalType()) {
-			case PhysicalType::INT8:
-				return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int8_t>(value_str, width, scale);
-			case PhysicalType::INT16:
-				return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int16_t>(value_str, width, scale);
-			case PhysicalType::INT32:
-				return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int32_t>(value_str, width, scale);
-			case PhysicalType::INT64:
-				return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int64_t>(value_str, width, scale);
-			case PhysicalType::INT128:
-				return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, hugeint_t>(value_str, width, scale);
-			default:
-				throw InternalException("Unimplemented physical type for decimal");
+		switch (sql_type.InternalType()) {
+		case PhysicalType::INT8:
+			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int8_t>(value_str, width, scale);
+		case PhysicalType::INT16:
+			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int16_t>(value_str, width, scale);
+		case PhysicalType::INT32:
+			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int32_t>(value_str, width, scale);
+		case PhysicalType::INT64:
+			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int64_t>(value_str, width, scale);
+		case PhysicalType::INT128:
+			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, hugeint_t>(value_str, width,
+			                                                                                    scale);
+		default:
+			throw InternalException("Unimplemented physical type for decimal");
 		}
-	} else if ((options.decimal_separator != "." && (
-				(sql_type.id() == LogicalTypeId::FLOAT) ||
-		        (sql_type.id() == LogicalTypeId::DOUBLE)))) {
+	} else if ((options.decimal_separator != "." &&
+	            ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE)))) {
 		string_t value_str = string_t(StringValue::Get(value));
-		switch(sql_type.InternalType()) {
-			case PhysicalType::DOUBLE:
-				return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value_str);
-			case PhysicalType::FLOAT:
-				return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, float>(value_str);
-			default:
-				throw InternalException("Unimplemented physical type for floating");
+		switch (sql_type.InternalType()) {
+		case PhysicalType::DOUBLE:
+			return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value_str);
+		case PhysicalType::FLOAT:
+			return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, float>(value_str);
+		default:
+			throw InternalException("Unimplemented physical type for floating");
 		}
 	} else {
 		Value new_value;
@@ -187,8 +186,8 @@ bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vec
 }
 
 template <class OP, class T>
-bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                           string &error_message) {
+bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+                                    idx_t count, string &error_message) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
@@ -202,8 +201,8 @@ bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &i
 }
 
 template <class OP, class T>
-bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                                   string &error_message, uint8_t width, uint8_t scale) {
+bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+                                   idx_t count, string &error_message, uint8_t width, uint8_t scale) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
@@ -218,13 +217,13 @@ bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &in
 
 template <class T>
 bool TryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                            string &error_message, string decimal_separator) {
+                           string &error_message, string decimal_separator) {
 	if (decimal_separator == ".") {
-		return TemplatedTryCastFloatingVector<TryCastErrorMessage, T>(options, input_vector, result_vector,
-	                                                               count, error_message);
+		return TemplatedTryCastFloatingVector<TryCastErrorMessage, T>(options, input_vector, result_vector, count,
+		                                                              error_message);
 	} else {
-		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, T>(options, input_vector, result_vector,
-	                                                                             count, error_message);
+		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, T>(
+		    options, input_vector, result_vector, count, error_message);
 	}
 }
 
@@ -232,14 +231,13 @@ template <class T>
 bool TryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                           string &error_message, uint8_t width, uint8_t scale, string decimal_separator) {
 	if (decimal_separator == ".") {
-		return TemplatedTryCastDecimalVector<TryCastToDecimal, T>(options, input_vector, result_vector,
-	                                                                            count, error_message, width, scale);
+		return TemplatedTryCastDecimalVector<TryCastToDecimal, T>(options, input_vector, result_vector, count,
+		                                                          error_message, width, scale);
 	} else {
 		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, T>(options, input_vector, result_vector,
-	                                                              count, error_message, width, scale);
+		                                                                        count, error_message, width, scale);
 	}
 }
-
 
 bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	// try vector-cast from string to sql_type
@@ -450,19 +448,19 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
 				                                 parse_chunk.size(), error_message);
 			} else if ((return_types[col_idx].id() == LogicalTypeId::FLOAT) ||
-						(return_types[col_idx].id() == LogicalTypeId::DOUBLE)) {
+			           (return_types[col_idx].id() == LogicalTypeId::DOUBLE)) {
 				auto type_id = return_types[col_idx].InternalType();
 
 				switch (type_id) {
 				case PhysicalType::DOUBLE:
-					success = 
-						TryCastFloatingVector<double>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-                                                      parse_chunk.size(), error_message, options.decimal_separator);
+					success =
+					    TryCastFloatingVector<double>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+					                                  parse_chunk.size(), error_message, options.decimal_separator);
 					break;
 				case PhysicalType::FLOAT:
-					success = 
-						TryCastFloatingVector<float>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-                                                     parse_chunk.size(), error_message, options.decimal_separator);
+					success =
+					    TryCastFloatingVector<float>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+					                                 parse_chunk.size(), error_message, options.decimal_separator);
 					break;
 				default:
 					throw InternalException("Unimplemented physical type for floating");
@@ -471,27 +469,27 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				auto type_id = return_types[col_idx].InternalType();
 				auto width = DecimalType::GetWidth(return_types[col_idx]);
 				auto scale = DecimalType::GetScale(return_types[col_idx]);
-				
+
 				switch (type_id) {
 				case PhysicalType::INT8:
-					success =
-					    TryCastDecimalVector<int8_t>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                 parse_chunk.size(), error_message, width, scale, options.decimal_separator);
+					success = TryCastDecimalVector<int8_t>(options, parse_chunk.data[col_idx],
+					                                       insert_chunk.data[insert_idx], parse_chunk.size(),
+					                                       error_message, width, scale, options.decimal_separator);
 					break;
 				case PhysicalType::INT16:
-					success =
-					    TryCastDecimalVector<int16_t>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                  parse_chunk.size(), error_message, width, scale, options.decimal_separator);
+					success = TryCastDecimalVector<int16_t>(options, parse_chunk.data[col_idx],
+					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
+					                                        error_message, width, scale, options.decimal_separator);
 					break;
 				case PhysicalType::INT32:
-					success =
-					    TryCastDecimalVector<int32_t>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                  parse_chunk.size(), error_message, width, scale, options.decimal_separator);
+					success = TryCastDecimalVector<int32_t>(options, parse_chunk.data[col_idx],
+					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
+					                                        error_message, width, scale, options.decimal_separator);
 					break;
 				case PhysicalType::INT64:
-					success =
-					    TryCastDecimalVector<int64_t>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                  parse_chunk.size(), error_message, width, scale, options.decimal_separator);
+					success = TryCastDecimalVector<int64_t>(options, parse_chunk.data[col_idx],
+					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
+					                                        error_message, width, scale, options.decimal_separator);
 					break;
 				case PhysicalType::INT128:
 					success = TryCastDecimalVector<hugeint_t>(options, parse_chunk.data[col_idx],

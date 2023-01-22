@@ -1241,7 +1241,7 @@ bool TryCastErrorMessage::Operation(string_t input, float &result, string *error
 template <>
 bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict) {
 	if (!TryCast::Operation<string_t, double>(input, result, strict)) {
-		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"",input.GetString()),
+		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;
 	}
@@ -1261,7 +1261,7 @@ bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result,
 template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message, bool strict) {
 	if (!TryCastCommaSeparated::Operation<string_t, double>(input, result, strict)) {
-		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"",input.GetString()),
+		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;
 	}
@@ -1892,7 +1892,7 @@ struct DecimalCastOperation {
 	}
 };
 
-template <class T, char decimal_separator='.'>
+template <class T, char decimal_separator = '.'>
 bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint8_t width, uint8_t scale) {
 	DecimalCastData<T> state;
 	state.result = 0;
@@ -1904,8 +1904,8 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.exponent_type = DecimalCastData<T>::ExponentType::NONE;
 	state.round_set = false;
 	state.should_round = false;
-	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(input.GetDataUnsafe(),
-	                                                                                 input.GetSize(), state, false)) {
+	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
+	        input.GetDataUnsafe(), input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),
 		                                  (int)width, (int)scale);
 		HandleCastError::AssignError(error, error_message);
@@ -1937,23 +1937,26 @@ bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *erro
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, string *error_message, uint8_t width, uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
 	return TryDecimalStringCast<int16_t, ','>(input, result, error_message, width, scale);
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, string *error_message, uint8_t width, uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
 	return TryDecimalStringCast<int32_t, ','>(input, result, error_message, width, scale);
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
 	return TryDecimalStringCast<int64_t, ','>(input, result, error_message, width, scale);
 }
 
 template <>
 bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width,
-                                 uint8_t scale) {
+                                               uint8_t scale) {
 	return TryDecimalStringCast<hugeint_t, ','>(input, result, error_message, width, scale);
 }
 

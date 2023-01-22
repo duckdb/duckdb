@@ -457,10 +457,11 @@ DUCKDB_API bool TryCastCommaSeparated::Operation(string_t input, float &result, 
 template <>
 DUCKDB_API bool TryCastCommaSeparated::Operation(string_t input, double &result, bool strict);
 template <>
-DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message,
+                                                             bool strict);
 template <>
-DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message, bool strict);
-
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message,
+                                                             bool strict);
 
 //===--------------------------------------------------------------------===//
 // Date Casts
