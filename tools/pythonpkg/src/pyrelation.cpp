@@ -393,12 +393,18 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
+unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
+	{
+		auto context = rel->context.GetContext();
+		py::gil_scoped_release release;
+		auto pending_query = context->PendingQuery(rel, false);
+		return DuckDBPyConnection::CompletePendingQuery(*pending_query);
+	}
+}
+
 void DuckDBPyRelation::ExecuteOrThrow() {
 	auto tmp_result = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		tmp_result->result = rel->Execute();
-	}
+	tmp_result->result = ExecuteInternal();
 	if (tmp_result->result->HasError()) {
 		tmp_result->result->ThrowError();
 	}
@@ -438,7 +444,7 @@ py::object DuckDBPyRelation::FetchAll() {
 	AssertResultOpen();
 	auto res = result->Fetchall();
 	result = nullptr;
-	return res;
+	return std::move(res);
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
@@ -645,8 +651,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 string DuckDBPyRelation::Print() {
 	if (rendered_result.empty()) {
 		BoxRenderer renderer;
-		py::gil_scoped_release release;
-		auto res = rel->Execute();
+		auto res = ExecuteInternal();
+
 		auto context = rel->context.GetContext();
 		BoxRendererConfig config;
 		rendered_result = res->ToBox(*context, config);

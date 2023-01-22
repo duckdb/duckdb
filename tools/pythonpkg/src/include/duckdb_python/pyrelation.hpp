@@ -246,6 +246,7 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void ExecuteOrThrow();
+	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
 	unique_ptr<DuckDBPyResult> result;

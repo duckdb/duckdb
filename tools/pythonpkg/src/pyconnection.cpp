@@ -810,19 +810,6 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 		return;
 	}
 
-	// Get the options we want to set/override
-	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
-	D_ASSERT(progress_bar_time_opt);
-	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
-	D_ASSERT(enable_progress_bar_opt);
-	auto progress_bar_print_opt = DBConfig::GetOptionByName("enable_progress_bar_print");
-	D_ASSERT(progress_bar_print_opt);
-
-	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
-	// FIXME: nasty hardcoded default value check
-	if (progress_bar_time_opt->get_setting(context) == 2000) {
-		progress_bar_time_opt->set_local(context, Value(0));
-	}
 	if (DuckDBPyConnection::IsJupyter()) {
 		// Set the function used to create the display for the progress bar
 		context.config.display_create_func = JupyterProgressBarDisplay::Create;
