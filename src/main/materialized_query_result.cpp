@@ -40,7 +40,7 @@ string MaterializedQueryResult::ToString() {
 	return result;
 }
 
-string MaterializedQueryResult::ToBox(ClientContext &context, BoxRendererConfig config) {
+string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
 	if (!success) {
 		return GetError() + "\n";
 	}
