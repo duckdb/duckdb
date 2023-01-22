@@ -279,8 +279,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	Vector result(col.Type());
 	try {
 		executor.ExecuteExpression(chunk, result);
+	} catch (InternalException &ex) {
+		throw;
 	} catch (std::exception &ex) {
-		// FIXME: should this be this lenient? assertions are also caught this way
 		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
 		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
