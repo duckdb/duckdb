@@ -685,4 +685,8 @@ py::list DuckDBPyRelation::ColumnTypes() {
 	return res;
 }
 
+bool DuckDBPyRelation::IsRelation(const py::object &object) {
+	return py::isinstance<DuckDBPyRelation>(object);
+}
+
 } // namespace duckdb

@@ -1,9 +1,8 @@
 import duckdb
 import os
-
+import pytest
 
 class TestReplacementScan(object):
-
 	def test_csv_replacement(self, duckdb_cursor):
 		filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','integers.csv')
 		res = duckdb_cursor.execute("select count(*) from '%s'"%(filename))
@@ -13,3 +12,23 @@ class TestReplacementScan(object):
 		filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','binary_string.parquet')
 		res = duckdb_cursor.execute("select count(*) from '%s'"%(filename))
 		assert res.fetchone()[0] == 3
+
+	def test_replacement_scan_relapi(self, duckdb_cursor):
+		pyrel1 = duckdb.query('from (values (42), (84), (120)) t(i)')
+		assert (type(pyrel1) == duckdb.DuckDBPyRelation)
+		assert (pyrel1.fetchall() == [(42,), (84,), (120,)])
+
+		pyrel2 = duckdb.query('from pyrel1 limit 2')
+		assert (type(pyrel2) == duckdb.DuckDBPyRelation)
+		assert (pyrel2.fetchall() == [(42,), (84,)])
+
+		pyrel3 = duckdb.query('select i + 100 from pyrel2')
+		assert (type(pyrel3) == duckdb.DuckDBPyRelation)
+		assert (pyrel3.fetchall() == [(142,), (184,)])
+
+	def test_replacement_scan_fail(self, duckdb_cursor):
+		random_object = "I love salmiak rondos"
+		con = duckdb.connect()
+		with pytest.raises(duckdb.InvalidInputException,
+						   match=r'Python Object "random_object" of type "str" found on line .* not suitable for replacement scans.'):
+			con.execute("select count(*) from random_object").fetchone()

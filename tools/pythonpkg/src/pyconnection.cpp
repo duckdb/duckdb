@@ -12,6 +12,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
@@ -697,8 +699,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
-static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
-                                                   py::object &current_frame) {
+static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                           py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -726,6 +728,14 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
 		table_function->external_dependency =
 		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+	} else if (DuckDBPyRelation::IsRelation(entry)) {
+		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
+		// create a subquery from the underlying relation object
+		auto select = make_unique<SelectStatement>();
+		select->node = pyrel->rel->GetQueryNode();
+
+		auto subquery = make_unique<SubqueryRef>(std::move(select));
+		return std::move(subquery);
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
@@ -735,15 +745,15 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, Dataset, "
+		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
 		    "RecordBatchReader, or Scanner",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
-	return table_function;
+	return std::move(table_function);
 }
 
-static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
-                                                    ReplacementScanData *data) {
+static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                            ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
