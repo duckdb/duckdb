@@ -249,6 +249,7 @@ private:
 
 private:
 	unique_ptr<DuckDBPyResult> result;
+	std::string rendered_result;
 };
 
 } // namespace duckdb

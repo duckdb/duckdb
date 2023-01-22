@@ -10,6 +10,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -642,14 +643,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 }
 
 string DuckDBPyRelation::Print() {
-	std::string rel_res_string;
-	{
+	if (rendered_result.empty()) {
+		BoxRenderer renderer;
 		py::gil_scoped_release release;
-		rel_res_string = rel->Limit(10)->Execute()->ToString();
+		auto res = rel->Execute();
+		auto context = rel->context.GetContext();
+		BoxRendererConfig config;
+		rendered_result = res->ToBox(*context, config);
 	}
-
-	return rel->ToString() + "\n---------------------\n-- Result Preview --\n---------------------\n" + rel_res_string +
-	       "\n";
+	return rendered_result;
 }
 
 string DuckDBPyRelation::Explain() {
