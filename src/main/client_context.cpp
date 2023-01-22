@@ -1074,6 +1074,9 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	auto lock = LockContext();
 	auto &expected_columns = relation->Columns();
 	auto pending = PendingQueryInternal(*lock, relation, false);
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
+	}
 
 	unique_ptr<QueryResult> result;
 	result = ExecutePendingQueryInternal(*lock, *pending);
