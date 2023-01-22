@@ -21,6 +21,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <random>
 
@@ -809,6 +810,9 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 		// Don't need to set any special default arguments
 		return;
 	}
+
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_progress_bar = true;
 
 	if (DuckDBPyConnection::IsJupyter()) {
 		// Set the function used to create the display for the progress bar
