@@ -129,7 +129,7 @@ unique_ptr<LocalTableFunctionState> JSONScanLocalState::Init(ExecutionContext &c
 
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, idx_t &buffer_size) {
 	for (; buffer_offset != buffer_size; buffer_offset++) {
-		if (!std::isspace(buffer_ptr[buffer_offset])) {
+		if (!StringUtil::CharacterIsSpace(buffer_ptr[buffer_offset])) {
 			break;
 		}
 	}
