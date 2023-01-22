@@ -879,3 +879,24 @@ TEST_CASE("Test TopK relation", "[relation_api]") {
 	                          ->Order("(#2-10)::UTINYINT ASC")
 	                          ->Limit(1));
 }
+
+TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
+	DuckDB db;
+	Connection con(db);
+
+	auto tbl = con.TableFunction("range", {Value(1000000)});
+	auto aggr = tbl->Aggregate("SUM(range)");
+	auto pending_query = con.context->PendingQuery(aggr, false);
+
+	REQUIRE(!pending_query->HasError());
+	auto result = pending_query->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
+
+	// cannot fetch twice from the same pending query
+	REQUIRE_THROWS(pending_query->Execute());
+	REQUIRE_THROWS(pending_query->Execute());
+
+	// query the connection as normal after
+	result = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
