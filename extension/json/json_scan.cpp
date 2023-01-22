@@ -184,11 +184,11 @@ static inline const char *PreviousNewline(const char *ptr) {
 }
 
 static inline void TrimWhitespace(JSONLine &line) {
-	while (line.size != 0 && std::isspace(line[0])) {
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[0])) {
 		line.pointer++;
 		line.size--;
 	}
-	while (line.size != 0 && std::isspace(line[line.size - 1])) {
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[line.size - 1])) {
 		line.size--;
 	}
 }
