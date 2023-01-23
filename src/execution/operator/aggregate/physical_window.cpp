@@ -5,6 +5,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_consumer.hpp"
 #include "duckdb/common/types/row_data_collection_scanner.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
@@ -173,7 +174,7 @@ void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	const auto partition_size = (idx_t(1) << 17);
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
-	while (new_bits < 10 && (cardinality / (idx_t(1) << new_bits)) > partition_size) {
+	while (new_bits < 10 && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
 		++new_bits;
 	}
 
@@ -290,31 +291,33 @@ void WindowGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, Win
 	LocalSortState local_sort;
 	local_sort.Initialize(global_sort, global_sort.buffer_manager);
 
-	ColumnDataScanState scanner;
-	group_data.InitializeScan(scanner);
-
-	DataChunk scan_chunk;
-	group_data.InitializeScanChunk(scan_chunk);
-
 	//	Strip hash column
-	auto payload_types = scan_chunk.GetTypes();
-	payload_types.pop_back();
 	DataChunk payload_chunk;
 	payload_chunk.Initialize(allocator, payload_types);
-	for (scan_chunk.Reset(); group_data.Scan(scanner, scan_chunk); scan_chunk.Reset()) {
-		sort_chunk.Reset();
-		executor.Execute(scan_chunk, sort_chunk);
 
-		payload_chunk.Reset();
-		for (idx_t col_idx = 0; col_idx < payload_types.size(); ++col_idx) {
-			payload_chunk.data[col_idx].Reference(scan_chunk.data[col_idx]);
+	vector<column_t> column_ids;
+	column_ids.reserve(payload_types.size());
+	for (column_t i = 0; i < payload_types.size(); ++i) {
+		column_ids.emplace_back(i);
+	}
+	ColumnDataConsumer scanner(group_data, column_ids);
+	ColumnDataConsumerScanState chunk_state;
+	chunk_state.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+	scanner.InitializeScan();
+	for (auto chunk_idx = scanner.ChunkCount(); chunk_idx-- > 0;) {
+		if (!scanner.AssignChunk(chunk_state)) {
+			break;
 		}
-		payload_chunk.SetCardinality(scan_chunk);
+		scanner.ScanChunk(chunk_state, payload_chunk);
+
+		sort_chunk.Reset();
+		executor.Execute(payload_chunk, sort_chunk);
 
 		local_sort.SinkChunk(sort_chunk, payload_chunk);
 		if (local_sort.SizeInBytes() > memory_per_thread) {
 			local_sort.Sort(global_sort, true);
 		}
+		scanner.FinishChunk(chunk_state);
 	}
 
 	global_sort.AddLocalState(local_sort);
@@ -1082,6 +1085,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 
 	// evaluate inner expressions of window functions, could be more complex
 	vector<Expression *> exprs;
+	exprs.reserve(wexpr->children.size());
 	for (auto &child : wexpr->children) {
 		exprs.push_back(child.get());
 	}
