@@ -1754,33 +1754,35 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 
 idx_t ListVector::GetConsecutiveChildList(Vector &list, idx_t offset, idx_t count, Vector &result) {
 
-	if (list.GetVectorType() != VectorType::FLAT_VECTOR) {
-		return DConstants::INVALID_INDEX;
-	}
+	UnifiedVectorFormat unified_list_data;
+	list.ToUnifiedFormat(offset + count, unified_list_data);
+	auto list_data = (list_entry_t *)unified_list_data.data;
 
-	auto list_data = FlatVector::GetData<list_entry_t>(list);
-	auto &validity = FlatVector::Validity(list);
 	bool consecutive_flat_list = true;
 	idx_t child_count = 0;
 
 	for (idx_t i = offset; i < offset + count; i++) {
-		if (!validity.RowIsValid(i)) {
+		auto idx = unified_list_data.sel->get_index(i);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		if (list_data[i].offset != child_count) {
+		if (list_data[idx].offset != child_count) {
 			consecutive_flat_list = false;
 		}
-		child_count += list_data[i].length;
+		child_count += list_data[idx].length;
 	}
+
 	if (!consecutive_flat_list) {
 		SelectionVector child_sel(child_count);
 		idx_t entry = 0;
+
 		for (idx_t i = offset; i < offset + count; i++) {
-			if (!validity.RowIsValid(i)) {
+			auto idx = unified_list_data.sel->get_index(i);
+			if (!unified_list_data.validity.RowIsValid(idx)) {
 				continue;
 			}
-			for (idx_t k = 0; k < list_data[i].length; k++) {
-				child_sel.set_index(entry++, list_data[i].offset + k);
+			for (idx_t k = 0; k < list_data[idx].length; k++) {
+				child_sel.set_index(entry++, list_data[idx].offset + k);
 			}
 		}
 
