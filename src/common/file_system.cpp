@@ -172,7 +172,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 	return result;
 }
 
-string FileSystem::ExtractBaseName(const string &path) {
+string FileSystem::ExtractName(const string &path) {
 	if (path.empty()) {
 		return string();
 	}
@@ -180,7 +180,14 @@ string FileSystem::ExtractBaseName(const string &path) {
 	auto sep = PathSeparator();
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
-	auto vec = StringUtil::Split(splits.back(), ".");
+	return splits.back();
+}
+
+string FileSystem::ExtractBaseName(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
 	D_ASSERT(!vec.empty());
 	return vec[0];
 }
@@ -237,6 +244,14 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
+}
+
+string FileSystem::GetFileExtension(FileHandle &handle) {
+	auto dot_location = handle.path.rfind('.');
+	if (dot_location != std::string::npos) {
+		return handle.path.substr(dot_location + 1, std::string::npos);
+	}
+	return string();
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {

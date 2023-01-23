@@ -1,6 +1,7 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -83,8 +84,10 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);
-
-		query += string(buffer.get(), fsize);
+		auto tmp_query = string(buffer.get(), fsize);
+		// Replace the placeholder with the path provided to IMPORT
+		tmp_query = StringUtil::Replace(tmp_query, RELATIVE_PATH_PLACEHOLDER, parameters.values[0].ToString());
+		query += tmp_query;
 	}
 	return query;
 }

@@ -128,6 +128,8 @@ public:
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
 
+	//! Returns the extension of the file, or empty string if no extension was found.
+	DUCKDB_API string GetFileExtension(FileHandle &handle);
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
@@ -176,8 +178,10 @@ public:
 	DUCKDB_API static string JoinPath(const string &a, const string &path);
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
 	DUCKDB_API static string ConvertSeparators(const string &path);
-	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is example)
+	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
 	DUCKDB_API static string ExtractBaseName(const string &path);
+	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
+	DUCKDB_API static string ExtractName(const string &path);
 
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);

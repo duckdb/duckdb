@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+static constexpr const char *RELATIVE_PATH_PLACEHOLDER = "DUCKDB_RELATIVE_PATH_PLACEHOLDER";
+
 class ExportStatement : public SQLStatement {
 public:
 	explicit ExportStatement(unique_ptr<CopyInfo> info);
