@@ -86,7 +86,11 @@ statement ok
 INSERT INTO t2 VALUES (4, 1), (2, 10), (6, 2), (2, 6);
 
 statement ok
-SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(a := t1_alias.a, c := t2_alias.c))
-
-statement ok
 SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(x := t1_alias.a, y := t2_alias.c))
+
+# no default parameters with incorrect names
+statement error
+SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(a := t1_alias.a, c := t2_alias.c))
+----
+Binder Error
+
