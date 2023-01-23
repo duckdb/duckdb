@@ -1,4 +1,5 @@
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 
@@ -9,6 +10,7 @@ DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLState
 }
 
 unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLStatement &statement) {
+	D_ASSERT(statement.type == StatementType::SELECT_STATEMENT);
 	auto &select_stmt = (SelectStatement &)statement;
 	BufferedSerializer serializer;
 	select_stmt.Serialize(serializer);

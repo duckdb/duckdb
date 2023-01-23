@@ -66,6 +66,7 @@ public:
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 	//! Generates an alter statement from the create statement - used for OnCreateConflict::ALTER_ON_CONFLICT
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
+	bool Equals(const CreateInfo *other) const;
 };
 
 } // namespace duckdb

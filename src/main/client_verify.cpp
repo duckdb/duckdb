@@ -9,7 +9,7 @@ namespace duckdb {
 
 PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
                                           unique_ptr<SQLStatement> statement) {
-	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
+	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT || statement->type == StatementType::COPY_STATEMENT);
 	// Aggressive query verification
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:

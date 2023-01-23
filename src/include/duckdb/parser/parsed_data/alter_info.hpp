@@ -58,6 +58,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	bool Equals(const AlterInfo *other) const;
 
 	AlterEntryData GetAlterEntryData() const;
 };

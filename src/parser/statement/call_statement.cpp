@@ -12,4 +12,18 @@ unique_ptr<SQLStatement> CallStatement::Copy() const {
 	return unique_ptr<CallStatement>(new CallStatement(*this));
 }
 
+bool CallStatement::Equals(const SQLStatement *other_p) const {
+	if (other->type != type) {
+		return false;
+	}
+	auto &other = (const CallStatement &)*other_p;
+	if (!function && !other.function) {
+		return true;
+	}
+	if (!function || !other.function) {
+		return false;
+	}
+	return function->Equals(*other.function);
+}
+
 } // namespace duckdb

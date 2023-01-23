@@ -10,7 +10,6 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -47,8 +46,8 @@ public:
 public:
 	const VerificationType type;
 	const string name;
-	unique_ptr<SelectStatement> statement;
-	const vector<unique_ptr<ParsedExpression>> &select_list;
+	unique_ptr<SQLStatement> statement;
+	const vector<unique_ptr<ParsedExpression>> *select_list;
 	unique_ptr<MaterializedQueryResult> materialized_result;
 
 	virtual bool RequireEquality() const {

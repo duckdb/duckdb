@@ -46,5 +46,9 @@ public:
 	}
 	//! Create a copy of this SelectStatement
 	virtual unique_ptr<SQLStatement> Copy() const = 0;
+	virtual bool Equals(const SQLStatement *other) const {
+		// FIXME: this should just be pure virtual
+		return type == other->type;
+	}
 };
 } // namespace duckdb

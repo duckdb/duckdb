@@ -49,6 +49,33 @@ public:
 		result->options = options;
 		return result;
 	}
+	bool Equals(const CopyInfo *other) const {
+		if (catalog != other->catalog) {
+			return false;
+		}
+		if (schema != other->schema) {
+			return false;
+		}
+		if (table != other->table) {
+			return false;
+		}
+		if (select_list != other->select_list) {
+			return false;
+		}
+		if (is_from != other->is_from) {
+			return false;
+		}
+		if (format != other->format) {
+			return false;
+		}
+		if (file_path != other->file_path) {
+			return false;
+		}
+		if (options != other->options) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

@@ -110,4 +110,23 @@ unique_ptr<SQLStatement> CopyStatement::Copy() const {
 	return unique_ptr<CopyStatement>(new CopyStatement(*this));
 }
 
+bool CopyStatement::Equals(const SQLStatement *other_p) const {
+	if (type != other_p->type) {
+		return false;
+	}
+	auto other = (const CopyStatement &)*other_p;
+
+	if (!other.info->Equals(info.get())) {
+		return false;
+	}
+
+	if (!other.select_statement && !select_statement) {
+		return true;
+	}
+	if (!other.select_statement || !select_statement) {
+		return false;
+	}
+	return select_statement->Equals(other.select_statement.get());
+}
+
 } // namespace duckdb

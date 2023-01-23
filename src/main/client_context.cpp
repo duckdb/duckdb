@@ -648,6 +648,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
 		switch (statement->type) {
+		case StatementType::COPY_STATEMENT:
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			PreservedError error;

@@ -64,4 +64,29 @@ unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
 }
 
+bool CreateInfo::Equals(const CreateInfo *other) const {
+	if (type != other->type) {
+		return false;
+	}
+	if (catalog != other->catalog) {
+		return false;
+	}
+	if (schema != other->schema) {
+		return false;
+	}
+	if (on_conflict != other->on_conflict) {
+		return false;
+	}
+	if (temporary != other->temporary) {
+		return false;
+	}
+	if (internal != other->internal) {
+		return false;
+	}
+	if (sql != other->sql) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb

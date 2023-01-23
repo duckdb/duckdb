@@ -34,6 +34,18 @@ public:
 		result->options = options;
 		return result;
 	}
+	bool Equals(const AttachInfo *other) const {
+		if (name != other->name) {
+			return false;
+		}
+		if (path != other->path) {
+			return false;
+		}
+		if (options != other->options) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb
