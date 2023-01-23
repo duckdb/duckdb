@@ -96,7 +96,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		for (auto &child : window_expr.children) {
 			callback(child);
-			EnumerateChildren(*child, callback);
 		}
 		if (window_expr.filter_expr) {
 			callback(window_expr.filter_expr);

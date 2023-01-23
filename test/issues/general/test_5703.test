@@ -55,9 +55,10 @@ Binder Error
 statement error
 select unnest([5,4,3]) as r, dense_rank(r) OVER ();
 
-# NTile is ok since it doesn't require a bound argument
-statement ok
+statement error
 select unnest([5,4,3]) as r, NTILE(1) OVER (ORDER BY (SELECT NULL));
+----
+Binder Error
 
 statement error
 select unnest([5,4,3]) as r, sum(r + 42) OVER ();
