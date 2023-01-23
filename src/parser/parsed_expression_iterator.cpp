@@ -195,12 +195,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
-	case TableReferenceType::CROSS_PRODUCT: {
-		auto &cp_ref = (CrossProductRef &)ref;
-		EnumerateTableRefChildren(*cp_ref.left, callback);
-		EnumerateTableRefChildren(*cp_ref.right, callback);
-		break;
-	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &el_ref = (ExpressionListRef &)ref;
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
@@ -233,7 +227,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	case TableReferenceType::EMPTY:
 		// these TableRefs do not need to be unfolded
 		break;
-	default:
+	case TableReferenceType::INVALID:
+	case TableReferenceType::CTE:
 		throw NotImplementedException("TableRef type not implemented for traversal");
 	}
 }
