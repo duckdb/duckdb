@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_cross_product.hpp
+// duckdb/planner/operator/logical_positional_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-//! LogicalCrossProduct represents a cross product between two relations
-class LogicalCrossProduct : public LogicalUnconditionalJoin {
-	LogicalCrossProduct() : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {};
+//! LogicalPositionalJoin represents a row-wise join between two relations
+class LogicalPositionalJoin : public LogicalUnconditionalJoin {
+	LogicalPositionalJoin() : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {};
 
 public:
-	LogicalCrossProduct(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
+	LogicalPositionalJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 
 public:
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);

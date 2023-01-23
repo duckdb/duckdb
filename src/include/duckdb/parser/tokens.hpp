@@ -88,7 +88,6 @@ class ForeignKeyConstraint;
 class TableRef;
 
 class BaseTableRef;
-class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;

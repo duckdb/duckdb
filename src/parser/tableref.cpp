@@ -63,9 +63,6 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	case TableReferenceType::BASE_TABLE:
 		result = BaseTableRef::Deserialize(reader);
 		break;
-	case TableReferenceType::CROSS_PRODUCT:
-		result = CrossProductRef::Deserialize(reader);
-		break;
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(reader);
 		break;
