@@ -62,7 +62,7 @@ DTransactionManager &DTransactionManager::Get(AttachedDatabase &db) {
 		throw InternalException("Calling DTransactionManager::Get on non-DuckDB transaction manager");
 	}
 	return (DTransactionManager &)transaction_manager;
-};
+}
 
 Transaction *DTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
