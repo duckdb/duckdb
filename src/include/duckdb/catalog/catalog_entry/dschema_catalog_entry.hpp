@@ -45,7 +45,7 @@ public:
 	void Alter(ClientContext &context, AlterInfo *info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
-	DropErrorType DropEntry(ClientContext &context, DropInfo *info) override;
+	void DropEntry(ClientContext &context, DropInfo *info) override;
 	CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 

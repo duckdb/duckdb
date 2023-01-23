@@ -11,7 +11,6 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/parser/query_error_context.hpp"
-#include "duckdb/common/enums/drop_error.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -90,7 +89,7 @@ public:
 	                                                       const string &name);
 
 	//! Drops an entry from the schema
-	virtual DropErrorType DropEntry(ClientContext &context, DropInfo *info) = 0;
+	virtual void DropEntry(ClientContext &context, DropInfo *info) = 0;
 
 	//! Alters a catalog entry
 	virtual void Alter(ClientContext &context, AlterInfo *info) = 0;
