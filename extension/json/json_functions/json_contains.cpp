@@ -2,57 +2,71 @@
 
 namespace duckdb {
 
-static inline bool JSONContainsRecursive(yyjson_val *haystack, yyjson_val *needle);
+static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle);
 
-static inline bool JSONArrayContains(yyjson_val *haystack, yyjson_val *needle) {
-	size_t idx, max;
-	yyjson_val *needle_child;
-	yyjson_arr_foreach(needle, idx, max, needle_child) {
-		if (!JSONContainsRecursive(haystack, needle_child)) {
+static inline bool JSONArrayContainsArray(yyjson_val *haystack, yyjson_val *needle) {
+	D_ASSERT(yyjson_get_tag(haystack) == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE) &&
+	         yyjson_get_tag(needle) == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE));
+	size_t needle_idx, needle_max, haystack_idx, haystack_max;
+	yyjson_val *needle_child, *haystack_child;
+	yyjson_arr_foreach(needle, needle_idx, needle_max, needle_child) {
+		bool found = false;
+		yyjson_arr_foreach(haystack, haystack_idx, haystack_max, haystack_child) {
+			if (JSONContains(haystack_child, needle_child)) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
 			return false;
 		}
 	}
 	return true;
 }
 
-static inline bool JSONObjectContains(yyjson_val *haystack, yyjson_val *needle) {
+static inline bool JSONObjectContainsObject(yyjson_val *haystack, yyjson_val *needle) {
+	D_ASSERT(yyjson_get_tag(haystack) == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE) &&
+	         yyjson_get_tag(needle) == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE));
 	size_t idx, max;
 	yyjson_val *key, *needle_child;
 	yyjson_obj_foreach(needle, idx, max, key, needle_child) {
-		if (!JSONContainsRecursive(haystack, needle_child)) {
+		auto haystack_child = yyjson_obj_get(haystack, yyjson_get_str(key));
+		if (!haystack_child || !JSONContains(haystack_child, needle_child)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-static inline bool JSONContainsRecursive(yyjson_val *haystack, yyjson_val *needle) {
+static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle) {
 	if (yyjson_equals(haystack, needle)) {
 		return true;
 	}
 
 	switch (yyjson_get_tag(haystack)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE: {
-		if (yyjson_get_tag(needle) == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE) && JSONArrayContains(haystack, needle)) {
+		if (yyjson_get_tag(needle) == (YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE) &&
+		    JSONArrayContainsArray(haystack, needle)) {
 			return true;
 		}
 		size_t idx, max;
 		yyjson_val *child_haystack;
 		yyjson_arr_foreach(haystack, idx, max, child_haystack) {
-			if (JSONContainsRecursive(child_haystack, needle)) {
+			if (JSONContains(child_haystack, needle)) {
 				return true;
 			}
 		}
 		break;
 	}
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE: {
-		if (yyjson_get_tag(needle) == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE) && JSONObjectContains(haystack, needle)) {
+		if (yyjson_get_tag(needle) == (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE) &&
+		    JSONObjectContainsObject(haystack, needle)) {
 			return true;
 		}
 		size_t idx, max;
 		yyjson_val *key, *child_haystack;
 		yyjson_obj_foreach(haystack, idx, max, key, child_haystack) {
-			if (JSONContainsRecursive(child_haystack, needle)) {
+			if (JSONContains(child_haystack, needle)) {
 				return true;
 			}
 		}
@@ -62,10 +76,6 @@ static inline bool JSONContainsRecursive(yyjson_val *haystack, yyjson_val *needl
 		break;
 	}
 	return false;
-}
-
-static inline bool JSONContains(yyjson_val *haystack, yyjson_val *needle) {
-	return JSONContainsRecursive(haystack, needle);
 }
 
 static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
