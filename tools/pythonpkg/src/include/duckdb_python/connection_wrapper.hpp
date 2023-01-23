@@ -50,11 +50,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
 	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                 bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);

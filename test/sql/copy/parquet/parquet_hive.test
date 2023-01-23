@@ -145,14 +145,14 @@ physical_plan	<REGEX>:.*(FILTER).*
 
 # Without hive partitioning we just read the files, note the mismatch here between the hive partition in the filename and the col in the file
 query III
-SELECT a, b, replace(filename, '\', '/') FROM parquet_scan('data/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', FILENAME=1) ORDER BY a;
+SELECT a, b, replace(filename, '\', '/') filename FROM parquet_scan('data/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', FILENAME=1) order by filename;
 ----
 1	2	data/parquet-testing/hive-partitioning/hive_col_also_in_file/a=5/test.parquet
 3	4	data/parquet-testing/hive-partitioning/hive_col_also_in_file/a=6/test.parquet
 
 # Hive col from path overrides col in file
 query III
-SELECT a, b, replace(filename, '\', '/') FROM parquet_scan('data/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) ORDER BY a;
+SELECT a, b, replace(filename, '\', '/') filename FROM parquet_scan('data/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by filename;
 ----
 5	2	data/parquet-testing/hive-partitioning/hive_col_also_in_file/a=5/test.parquet
 6	4	data/parquet-testing/hive-partitioning/hive_col_also_in_file/a=6/test.parquet

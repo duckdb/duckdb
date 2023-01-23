@@ -85,6 +85,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (per_thread_output && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
 	}
+	bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
+	bool is_stdout = stmt.info->file_path == "/dev/stdout";
+	if (!user_set_use_tmp_file) {
+		use_tmp_file = is_file_and_exists && !per_thread_output && !is_stdout;
+	}
 
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
@@ -93,11 +98,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->per_thread_output = per_thread_output;
+	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 	copy->names = select_node.names;
 	copy->expected_types = select_node.types;
-	copy->is_file_and_exists = config.file_system->FileExists(copy->file_path);
 
 	copy->AddChild(std::move(select_node.plan));
 
