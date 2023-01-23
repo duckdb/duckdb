@@ -21,7 +21,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
   linux-nodejs:
@@ -62,6 +61,7 @@ jobs:
         run: ./scripts/node_version.sh upload
         env:
           DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Validate Docs
         run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
@@ -146,6 +146,8 @@ jobs:
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       # these older versions of NodeJS don't have M1 support
 
@@ -240,6 +242,8 @@ jobs:
       - name: Node Version
         shell: bash
         run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
