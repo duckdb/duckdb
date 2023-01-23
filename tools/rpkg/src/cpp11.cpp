@@ -366,7 +366,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_from_altrep_df",     (DL_FUNC) &_duckdb_rapi_rel_from_altrep_df,     1},
     {"_duckdb_rapi_rel_from_df",            (DL_FUNC) &_duckdb_rapi_rel_from_df,            3},
     {"_duckdb_rapi_rel_join",               (DL_FUNC) &_duckdb_rapi_rel_join,               4},
-    {"_duckdb_rapi_rel_inner_join",         (DL_FUNC) &_duckdb_rapi_rel_inner_join,         3},
     {"_duckdb_rapi_rel_limit",              (DL_FUNC) &_duckdb_rapi_rel_limit,              2},
     {"_duckdb_rapi_rel_names",              (DL_FUNC) &_duckdb_rapi_rel_names,              1},
     {"_duckdb_rapi_rel_order",              (DL_FUNC) &_duckdb_rapi_rel_order,              2},
