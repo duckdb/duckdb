@@ -1752,6 +1752,44 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 	target_buffer.PushBack(insert);
 }
 
+idx_t ListVector::GetConsecutiveChildList(Vector &list, idx_t offset, idx_t count, Vector &result) {
+
+	if (list.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return DConstants::INVALID_INDEX;
+	}
+
+	auto list_data = FlatVector::GetData<list_entry_t>(list);
+	auto &validity = FlatVector::Validity(list);
+	bool consecutive_flat_list = true;
+	idx_t child_count = 0;
+
+	for (idx_t i = offset; i < offset + count; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
+		if (list_data[i].offset != child_count) {
+			consecutive_flat_list = false;
+		}
+		child_count += list_data[i].length;
+	}
+	if (!consecutive_flat_list) {
+		SelectionVector child_sel(child_count);
+		idx_t entry = 0;
+		for (idx_t i = offset; i < offset + count; i++) {
+			if (!validity.RowIsValid(i)) {
+				continue;
+			}
+			for (idx_t k = 0; k < list_data[i].length; k++) {
+				child_sel.set_index(entry++, list_data[i].offset + k);
+			}
+		}
+
+		result.Slice(child_sel, child_count);
+		result.Flatten(child_count);
+	}
+	return child_count;
+}
+
 // Union vector
 const Vector &UnionVector::GetMember(const Vector &vector, idx_t member_index) {
 	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
