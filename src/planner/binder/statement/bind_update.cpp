@@ -77,6 +77,9 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 
 static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
                                   LogicalUpdate &update) {
+	if (!table.IsDTable()) {
+		return;
+	}
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
