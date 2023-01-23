@@ -42,6 +42,10 @@ public:
 	                                                          unique_ptr<PhysicalOperator> plan) override;
 	DUCKDB_API unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
 	                                                   unique_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+	                                                   unique_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
+	                                                   unique_ptr<PhysicalOperator> plan) override;
 
 private:
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;

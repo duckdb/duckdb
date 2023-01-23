@@ -56,6 +56,8 @@ struct SimilarCatalogEntry;
 class PhysicalOperator;
 class LogicalCreateTable;
 class LogicalInsert;
+class LogicalDelete;
+class LogicalUpdate;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -210,6 +212,10 @@ public:
 	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
 	                                                       unique_ptr<PhysicalOperator> plan) = 0;
 	virtual unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
 
 public:

@@ -6,6 +6,17 @@
 
 namespace duckdb {
 
+unique_ptr<PhysicalOperator> DCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+                                                  unique_ptr<PhysicalOperator> plan) {
+	// get the index of the row_id column
+	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
+
+	auto del = make_unique<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
+	                                       op.estimated_cardinality, op.return_chunk);
+	del->children.push_back(std::move(plan));
+	return std::move(del);
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
 	D_ASSERT(op.expressions.size() == 1);
@@ -13,14 +24,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	// get the index of the row_id column
-	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
-
 	dependencies.AddDependency(op.table);
-	auto del = make_unique<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
-	                                       op.estimated_cardinality, op.return_chunk);
-	del->children.push_back(std::move(plan));
-	return std::move(del);
+	return op.table->catalog->PlanDelete(context, op, std::move(plan));
 }
 
 } // namespace duckdb
