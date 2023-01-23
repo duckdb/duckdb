@@ -90,7 +90,7 @@ def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_di
 
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
-if os.name != 'nt':
+if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
     import distutils.ccompiler
     distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
 
