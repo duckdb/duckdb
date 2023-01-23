@@ -344,6 +344,16 @@ struct StringValueCopy : public BaseValueCopy<string_t> {
 	}
 };
 
+struct FlatListValueCopy : public BaseValueCopy<list_entry_t> {
+	using TYPE = list_entry_t;
+
+	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
+		input.offset = meta_data.child_list_size;
+		meta_data.child_list_size += input.length;
+		return input;
+	}
+};
+
 struct ListValueCopy : public BaseValueCopy<list_entry_t> {
 	using TYPE = list_entry_t;
 
@@ -546,10 +556,13 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
                                   idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 
-	// first append the child entries of the list
 	auto &child_vector = ListVector::GetEntry(source);
-	idx_t child_list_size = ListVector::GetListSize(source);
 	auto &child_type = child_vector.GetType();
+	auto child_list_size = ListVector::GetConsecutiveChildList(source, 0, copy_count, child_vector);
+
+	if (child_list_size == DConstants::INVALID_INDEX) {
+		child_list_size = ListVector::GetListSize(source);
+	}
 
 	UnifiedVectorFormat child_vector_data;
 	child_vector.ToUnifiedFormat(child_list_size, child_vector_data);
@@ -560,6 +573,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
 	// figure out the current list size by traversing the set of child entries
 	idx_t current_list_size = 0;
 	auto current_child_index = child_index;
@@ -568,14 +582,18 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 		current_list_size += child_vdata.count;
 		current_child_index = child_vdata.next_data;
 	}
+
+	// set the child vector
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	// FIXME: appending the entire child list here is not required
-	// We can also scan the actual list entries required per the offset/copy_count
 	child_function.function(child_meta_data, child_vector_data, child_vector, 0, child_list_size);
 
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
-	TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	if (source.GetVectorType() == VectorType::FLAT_VECTOR) {
+		TemplatedColumnDataCopy<FlatListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	} else {
+		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	}
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
