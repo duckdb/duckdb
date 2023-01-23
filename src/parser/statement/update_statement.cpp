@@ -56,18 +56,9 @@ string UpdateStatement::ToString() const {
 unique_ptr<SQLStatement> UpdateStatement::Copy() const {
 	return unique_ptr<UpdateStatement>(new UpdateStatement(*this));
 }
-unique_ptr<ParsedExpression> condition;
-unique_ptr<TableRef> table;
-unique_ptr<TableRef> from_table;
-vector<string> columns;
-vector<unique_ptr<ParsedExpression>> expressions;
-//! keep track of optional returningList if statement contains a RETURNING keyword
-vector<unique_ptr<ParsedExpression>> returning_list;
-//! CTEs
-CommonTableExpressionMap cte_map;
 
 bool UpdateStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const UpdateStatement &)*other_p;
@@ -80,7 +71,7 @@ bool UpdateStatement::Equals(const SQLStatement *other_p) const {
 	}
 
 	D_ASSERT(table);
-	if (!table->Equals(other.table)) {
+	if (!table->Equals(other.table.get())) {
 		return false;
 	}
 
@@ -102,7 +93,7 @@ bool UpdateStatement::Equals(const SQLStatement *other_p) const {
 		auto &lhs = expressions[i];
 		auto &rhs = other.expressions[i];
 
-		if (!lhs->Equals(rhs)) {
+		if (!lhs->Equals(rhs.get())) {
 			return false;
 		}
 	}
@@ -114,7 +105,7 @@ bool UpdateStatement::Equals(const SQLStatement *other_p) const {
 		auto &lhs = returning_list[i];
 		auto &rhs = other.returning_list[i];
 
-		if (!lhs->Equals(rhs)) {
+		if (!lhs->Equals(rhs.get())) {
 			return false;
 		}
 	}

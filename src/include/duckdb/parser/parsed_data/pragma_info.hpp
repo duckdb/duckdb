@@ -34,7 +34,7 @@ public:
 		return result;
 	}
 
-	bool PragmaInfo::Equals(const PragmaInfo &other) const {
+	bool Equals(const PragmaInfo &other) const {
 		if (name != other.name) {
 			return false;
 		}

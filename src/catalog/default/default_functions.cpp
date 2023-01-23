@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 

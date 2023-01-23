@@ -11,7 +11,7 @@ unique_ptr<SQLStatement> SetStatement::Copy() const {
 }
 
 bool SetStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const SetStatement &)*other_p;

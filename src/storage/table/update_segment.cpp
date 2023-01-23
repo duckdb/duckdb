@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 

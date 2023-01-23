@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 }
 
 bool PrepareStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const PrepareStatement &)*other_p;

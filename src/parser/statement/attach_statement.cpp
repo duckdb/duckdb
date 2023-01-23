@@ -13,12 +13,12 @@ unique_ptr<SQLStatement> AttachStatement::Copy() const {
 }
 
 bool AttachStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const AttachStatement &)*other_p;
 	D_ASSERT(info);
-	return info->Equals(other.info);
+	return info->Equals(other.info.get());
 }
 
 } // namespace duckdb

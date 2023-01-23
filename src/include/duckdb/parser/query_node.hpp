@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 

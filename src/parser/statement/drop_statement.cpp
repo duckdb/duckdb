@@ -12,7 +12,7 @@ unique_ptr<SQLStatement> DropStatement::Copy() const {
 	return unique_ptr<DropStatement>(new DropStatement(*this));
 }
 
-bool DropStatement::Equals(const SQLStatement *other) const {
+bool DropStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
 	}

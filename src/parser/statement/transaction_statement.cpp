@@ -15,12 +15,12 @@ unique_ptr<SQLStatement> TransactionStatement::Copy() const {
 }
 
 bool TransactionStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const TransactionStatement &)*other_p;
 	D_ASSERT(info);
-	if (!info.equals(other.info.get())) {
+	if (!info->Equals(*other.info)) {
 		return false;
 	}
 	return true;

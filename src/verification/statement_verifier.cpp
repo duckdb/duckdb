@@ -3,6 +3,7 @@
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
 #include "duckdb/verification/external_statement_verifier.hpp"
@@ -16,7 +17,7 @@ StatementVerifier::StatementVerifier(VerificationType type, string name, unique_
     : type(type), name(std::move(name)), statement(std::move(statement_p)) {
 	if (statement->type == StatementType::SELECT_STATEMENT) {
 		auto &select_statement = (SelectStatement &)*statement;
-		select_list = select_statement.GetSelectList();
+		select_list = &select_statement.node->GetSelectList();
 	}
 }
 
@@ -51,6 +52,7 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 	if (!select_list) {
 		return;
 	}
+	auto &select_list = *this->select_list;
 	// Only the original statement should check other statements
 	D_ASSERT(type == VerificationType::ORIGINAL);
 
@@ -61,24 +63,25 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 
 #ifdef DEBUG
 	// Now perform checking on the expressions
-	D_ASSERT((*select_list).size() == other.(*select_list).size());
-	const auto expr_count = (*select_list).size();
+	auto &other_select_list = *other.select_list;
+	D_ASSERT(select_list.size() == other_select_list.size());
+	const auto expr_count = select_list.size();
 	if (other.RequireEquality()) {
 		for (idx_t i = 0; i < expr_count; i++) {
-			D_ASSERT(!(*select_list)[i]->Equals(nullptr));
+			D_ASSERT(!select_list[i]->Equals(nullptr));
 			// Run the ToString, to verify that it doesn't crash
-			(*select_list)[i]->ToString();
+			select_list[i]->ToString();
 
-			if ((*select_list)[i]->HasSubquery()) {
+			if (select_list[i]->HasSubquery()) {
 				continue;
 			}
 
 			// Check that the expressions are equivalent
-			D_ASSERT((*select_list)[i]->Equals(other.(*select_list)[i].get()));
+			D_ASSERT(select_list[i]->Equals(other_select_list[i].get()));
 			// Check that the hashes are equivalent too
-			D_ASSERT((*select_list)[i]->Hash() == other.(*select_list)[i]->Hash());
+			D_ASSERT(select_list[i]->Hash() == other_select_list[i]->Hash());
 
-			other.(*select_list)[i]->Verify();
+			other_select_list[i]->Verify();
 		}
 	}
 #endif
@@ -88,17 +91,19 @@ void StatementVerifier::CheckExpressions() const {
 	if (!select_list) {
 		return;
 	}
+	auto &select_list = *this->select_list;
+
 #ifdef DEBUG
 	D_ASSERT(type == VerificationType::ORIGINAL);
 	// Perform additional checking within the expressions
-	const auto expr_count = (*select_list).size();
+	const auto expr_count = select_list.size();
 	for (idx_t outer_idx = 0; outer_idx < expr_count; outer_idx++) {
-		auto hash = (*select_list)[outer_idx]->Hash();
+		auto hash = select_list[outer_idx]->Hash();
 		for (idx_t inner_idx = 0; inner_idx < expr_count; inner_idx++) {
-			auto hash2 = (*select_list)[inner_idx]->Hash();
+			auto hash2 = select_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent
-				D_ASSERT(!(*select_list)[outer_idx]->Equals((*select_list)[inner_idx].get()));
+				D_ASSERT(!select_list[outer_idx]->Equals(select_list[inner_idx].get()));
 			}
 		}
 	}

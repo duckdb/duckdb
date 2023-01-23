@@ -86,23 +86,6 @@ ExpressionListRef *InsertStatement::GetValuesList() const {
 	return (ExpressionListRef *)node.from_table.get();
 }
 
-unique_ptr<SelectStatement> select_statement;
-//! Column names to insert into
-vector<string> columns;
-
-//! Table name to insert to
-string table;
-//! Schema name to insert to
-string schema;
-//! The catalog name to insert to
-string catalog;
-
-//! keep track of optional returningList if statement contains a RETURNING keyword
-vector<unique_ptr<ParsedExpression>> returning_list;
-
-//! CTEs
-CommonTableExpressionMap cte_map;
-
 bool InsertStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
@@ -138,7 +121,7 @@ bool InsertStatement::Equals(const SQLStatement *other_p) const {
 		auto &lhs = returning_list[i];
 		auto &rhs = other.returning_list[i];
 
-		if (!lhs->Equals(*rhs)) {
+		if (!lhs->Equals(rhs.get())) {
 			return false;
 		}
 	}

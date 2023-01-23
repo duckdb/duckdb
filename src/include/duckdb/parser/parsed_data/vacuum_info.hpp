@@ -18,6 +18,12 @@ namespace duckdb {
 struct VacuumOptions {
 	bool vacuum;
 	bool analyze;
+	bool operator==(const VacuumOptions &other) const {
+		return other.vacuum == vacuum && other.analyze == analyze;
+	}
+	bool operator!=(const VacuumOptions &other) const {
+		return !(*this == other);
+	}
 };
 
 struct VacuumInfo : public ParseInfo {
@@ -39,6 +45,7 @@ public:
 		}
 		return result;
 	}
+
 	bool Equals(const VacuumInfo &other) const {
 		if (options != other.options) {
 			return false;
@@ -46,7 +53,7 @@ public:
 		if (has_table != other.has_table) {
 			return false;
 		}
-		if (!ref->Equals(other.ref)) {
+		if (!ref->Equals(other.ref.get())) {
 			return false;
 		}
 		if (table != other.table) {

@@ -14,12 +14,12 @@ unique_ptr<SQLStatement> VacuumStatement::Copy() const {
 }
 
 bool VacuumStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const VacuumStatement &)*other_p;
 	D_ASSERT(info);
-	if (!info.equals(other.info.get())) {
+	if (!info->Equals(*other.info)) {
 		return false;
 	}
 	return true;

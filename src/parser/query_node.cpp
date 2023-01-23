@@ -25,10 +25,10 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 }
 
 bool CommonTableExpressionMap::Equals(const CommonTableExpressionMap &other) const {
-	if (map.size() != other.size()) {
+	if (map.size() != other.map.size()) {
 		return false;
 	}
-	while (it != map.end(); it++;) {
+	for (auto it = map.begin(); it != map.end(); it++) {
 		auto &lhs_name = it->first;
 		auto &lhs_info = it->second;
 

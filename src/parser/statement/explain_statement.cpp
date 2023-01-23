@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> ExplainStatement::Copy() const {
 	return unique_ptr<ExplainStatement>(new ExplainStatement(*this));
 }
 
-bool ExplainStatement::Equals(const SQLStatement *other) const {
+bool ExplainStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
 	}

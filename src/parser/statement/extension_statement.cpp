@@ -16,6 +16,7 @@ bool ExtensionStatement::Equals(const SQLStatement *other_p) const {
 		return false;
 	}
 	auto other = (ExtensionStatement *)other_p;
+	(void)other;
 	// FIXME: compare the ParserExtensionParseData
 	// requires adding virtual method, which changes the API
 	return false;

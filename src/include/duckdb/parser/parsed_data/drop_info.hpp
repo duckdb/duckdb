@@ -73,7 +73,7 @@ public:
 		return std::move(drop_info);
 	}
 
-	bool DropInfo::Equals(const DropInfo &other) const {
+	bool Equals(const DropInfo &other) const {
 		if (other.type != type) {
 			return false;
 		}

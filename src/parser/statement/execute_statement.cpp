@@ -15,7 +15,7 @@ unique_ptr<SQLStatement> ExecuteStatement::Copy() const {
 	return unique_ptr<ExecuteStatement>(new ExecuteStatement(*this));
 }
 
-bool ExecuteStatement::Equals(const SQLStatement *other) const {
+bool ExecuteStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
 	}
@@ -23,7 +23,7 @@ bool ExecuteStatement::Equals(const SQLStatement *other) const {
 	if (other.name != name) {
 		return false;
 	}
-	if (values.size() = other.values.size()) {
+	if (values.size() != other.values.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < values.size(); i++) {

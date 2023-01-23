@@ -43,7 +43,7 @@ public:
 		return std::move(load_info);
 	}
 
-	bool LoadInfo::Equals(const LoadInfo &other) const {
+	bool Equals(const LoadInfo &other) const {
 		if (filename != other.filename) {
 			return false;
 		}

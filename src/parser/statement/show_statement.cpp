@@ -13,12 +13,12 @@ unique_ptr<SQLStatement> ShowStatement::Copy() const {
 }
 
 bool ShowStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const ShowStatement &)*other_p;
 	D_ASSERT(info);
-	if (!info.equals(other.info.get())) {
+	if (!info->Equals(*other.info)) {
 		return false;
 	}
 	return true;

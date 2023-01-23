@@ -35,7 +35,7 @@ struct ShowSelectInfo : public ParseInfo {
 		if (types != other.types) {
 			return false;
 		}
-		if (!query->Equals(other.query)) {
+		if (!query->Equals(other.query.get())) {
 			return false;
 		}
 		if (aliases != other.aliases) {

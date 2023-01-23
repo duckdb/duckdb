@@ -13,7 +13,7 @@ unique_ptr<SQLStatement> CallStatement::Copy() const {
 }
 
 bool CallStatement::Equals(const SQLStatement *other_p) const {
-	if (other->type != type) {
+	if (other_p->type != type) {
 		return false;
 	}
 	auto &other = (const CallStatement &)*other_p;
@@ -23,7 +23,7 @@ bool CallStatement::Equals(const SQLStatement *other_p) const {
 	if (!function || !other.function) {
 		return false;
 	}
-	return function->Equals(*other.function);
+	return function->Equals(other.function.get());
 }
 
 } // namespace duckdb
