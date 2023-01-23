@@ -168,10 +168,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
-		// Set a placeholder, this is replaced on IMPORT
 
-		auto file_name = fs.ExtractName(info->file_path);
-		exported_data.file_path = fs.JoinPath(RELATIVE_PATH_PLACEHOLDER, file_name);
+		exported_data.file_path = info->file_path;
 
 		ExportedTableInfo table_info;
 		table_info.entry = table;
