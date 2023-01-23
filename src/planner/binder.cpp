@@ -153,9 +153,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind((BaseTableRef &)ref);
 		break;
-	case TableReferenceType::CROSS_PRODUCT:
-		result = Bind((CrossProductRef &)ref);
-		break;
 	case TableReferenceType::JOIN:
 		result = Bind((JoinRef &)ref);
 		break;
@@ -171,7 +168,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
-	default:
+	case TableReferenceType::CTE:
+	case TableReferenceType::INVALID:
 		throw InternalException("Unknown table ref type");
 	}
 	result->sample = std::move(ref.sample);
@@ -190,9 +188,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::JOIN:
 		root = CreatePlan((BoundJoinRef &)ref);
 		break;
-	case TableReferenceType::CROSS_PRODUCT:
-		root = CreatePlan((BoundCrossProductRef &)ref);
-		break;
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan((BoundTableFunction &)ref);
 		break;
@@ -205,8 +200,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::CTE:
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
-	default:
-		throw InternalException("Unsupported bound table ref type type");
+	case TableReferenceType::INVALID:
+		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause
 	if (ref.sample) {

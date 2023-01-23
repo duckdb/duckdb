@@ -1,0 +1,134 @@
+# name: test/sql/join/positional/test_positional_join.test
+# description: Test positional joins
+# group: [positional]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE two (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO two VALUES (11, 1), (12, 2);
+
+statement ok
+CREATE TABLE three AS 
+	SELECT * FROM (VALUES
+		(11, 1),
+		(12, 2),
+		(13, 3)
+	) tbl(a, b);
+
+statement ok
+CREATE TABLE threek AS
+	SELECT * FROM generate_series(0, 3001) tbl(id);
+
+#
+# Positional Scan
+#
+
+# Basic test
+query IIII
+SELECT * 
+FROM two t1 POSITIONAL JOIN two t2 
+----
+11	1	11	1
+12	2	12	2
+
+# Multiple blocks
+query II
+SELECT *
+FROM threek t1 POSITIONAL JOIN threek t2
+WHERE t1.id <> t2.id
+----
+
+# Outer semantics
+query IIII
+SELECT * 
+FROM two t1 POSITIONAL JOIN three t2 
+----
+11	1	11	1
+12	2	12	2
+NULL	NULL	13	3
+
+query IIII
+SELECT * 
+FROM three t1 POSITIONAL JOIN two t2 
+----
+11	1	11	1
+12	2	12	2
+13	3	NULL	NULL
+
+query II
+SELECT COUNT(a), COUNT(id)
+FROM three POSITIONAL JOIN threek
+----
+3	3002
+
+query II
+SELECT COUNT(id), COUNT(a)
+FROM threek POSITIONAL JOIN three
+----
+3002	3
+
+#
+# Positional Join
+#
+
+# Basic test
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM two WHERE a % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM two WHERE a % 2 = 1) t2
+----
+12	2	11	1
+
+# Multiple blocks
+query II
+SELECT *
+FROM 
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 2 = 1) t2
+WHERE t1.id + 1 <> t2.id
+
+# Outer semantics
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM three WHERE a % 2 = 1) t1
+	POSITIONAL JOIN
+	(SELECT * FROM two WHERE a % 2 = 0) t2
+----
+11	1	12	2	
+13	3	NULL	NULL
+
+query IIII
+SELECT *
+FROM 
+	(SELECT * FROM two WHERE a % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM three WHERE a % 2 = 1) t2
+----
+12	2	11	1
+NULL	NULL	13	3
+
+query II
+SELECT COUNT(t1.id), COUNT(t2.id)
+FROM 
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 3 = 0) t2
+----
+1501	1001
+
+query II
+SELECT COUNT(t1.id), COUNT(t2.id)
+FROM 
+	(SELECT * FROM threek WHERE id % 3 = 0) t2
+	POSITIONAL JOIN
+	(SELECT * FROM threek WHERE id % 2 = 0) t1
+----
+1501	1001
