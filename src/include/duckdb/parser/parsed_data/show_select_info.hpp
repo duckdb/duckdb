@@ -31,6 +31,21 @@ struct ShowSelectInfo : public ParseInfo {
 		result->is_summary = is_summary;
 		return result;
 	}
+	bool Equals(const ShowSelectInfo &other) const {
+		if (types != other.types) {
+			return false;
+		}
+		if (!query->Equals(other.query)) {
+			return false;
+		}
+		if (aliases != other.aliases) {
+			return false;
+		}
+		if (is_summary != other.is_summary) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

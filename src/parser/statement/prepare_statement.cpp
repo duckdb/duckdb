@@ -13,4 +13,15 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 	return unique_ptr<PrepareStatement>(new PrepareStatement(*this));
 }
 
+bool PrepareStatement::Equals(const SQLStatement *other_p) const {
+	if (other->type != type) {
+		return false;
+	}
+	auto &other = (const PrepareStatement &)*other_p;
+	if (name != other.name) {
+		return false;
+	}
+	return statement->Equals(other.statement.get());
+}
+
 } // namespace duckdb

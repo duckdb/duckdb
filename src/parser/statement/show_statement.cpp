@@ -12,4 +12,16 @@ unique_ptr<SQLStatement> ShowStatement::Copy() const {
 	return unique_ptr<ShowStatement>(new ShowStatement(*this));
 }
 
+bool ShowStatement::Equals(const SQLStatement *other_p) const {
+	if (other->type != type) {
+		return false;
+	}
+	auto &other = (const ShowStatement &)*other_p;
+	D_ASSERT(info);
+	if (!info.equals(other.info.get())) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb

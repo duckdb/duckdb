@@ -14,4 +14,18 @@ unique_ptr<SQLStatement> ExplainStatement::Copy() const {
 	return unique_ptr<ExplainStatement>(new ExplainStatement(*this));
 }
 
+bool ExplainStatement::Equals(const SQLStatement *other) const {
+	if (type != other_p->type) {
+		return false;
+	}
+	auto other = (const ExplainStatement &)*other_p;
+	if (explain_type != other.explain_type) {
+		return false;
+	}
+	if (!stmt->Equals(other.stmt.get())) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb

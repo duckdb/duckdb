@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-static constexpr const char *RELATIVE_PATH_PLACEHOLDER = "DUCKDB_RELATIVE_PATH_PLACEHOLDER";
-
 class ExportStatement : public SQLStatement {
 public:
 	explicit ExportStatement(unique_ptr<CopyInfo> info);
@@ -28,6 +26,7 @@ protected:
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
+	bool Equals(const SQLStatement *other) const override;
 };
 
 } // namespace duckdb

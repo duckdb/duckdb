@@ -34,6 +34,7 @@ public:
 public:
 	string ToString() const;
 	CommonTableExpressionMap Copy() const;
+	bool Equals(const CommonTableExpressionMap &other) const;
 };
 
 class QueryNode {

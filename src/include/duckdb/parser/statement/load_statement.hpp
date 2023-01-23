@@ -24,5 +24,6 @@ public:
 	unique_ptr<SQLStatement> Copy() const override;
 
 	unique_ptr<LoadInfo> info;
+	bool Equals(const SQLStatement *other) const override;
 };
 } // namespace duckdb

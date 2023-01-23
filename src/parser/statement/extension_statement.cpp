@@ -11,4 +11,14 @@ unique_ptr<SQLStatement> ExtensionStatement::Copy() const {
 	return make_unique<ExtensionStatement>(extension, parse_data->Copy());
 }
 
+bool ExtensionStatement::Equals(const SQLStatement *other_p) const {
+	if (type != other_p->type) {
+		return false;
+	}
+	auto other = (ExtensionStatement *)other_p;
+	// FIXME: compare the ParserExtensionParseData
+	// requires adding virtual method, which changes the API
+	return false;
+}
+
 } // namespace duckdb

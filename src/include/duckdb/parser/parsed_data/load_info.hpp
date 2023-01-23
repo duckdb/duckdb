@@ -42,6 +42,16 @@ public:
 		reader.Finalize();
 		return std::move(load_info);
 	}
+
+	bool LoadInfo::Equals(const LoadInfo &other) const {
+		if (filename != other.filename) {
+			return false;
+		}
+		if (load_type != other.load_type) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

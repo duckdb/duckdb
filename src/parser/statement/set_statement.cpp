@@ -10,6 +10,23 @@ unique_ptr<SQLStatement> SetStatement::Copy() const {
 	return unique_ptr<SetStatement>(new SetStatement(*this));
 }
 
+bool SetStatement::Equals(const SQLStatement *other_p) const {
+	if (other->type != type) {
+		return false;
+	}
+	auto &other = (const SetStatement &)*other_p;
+	if (name != other.name) {
+		return false;
+	}
+	if (scope != other.scope) {
+		return false;
+	}
+	if (set_type != other.set_type) {
+		return false;
+	}
+	return true;
+}
+
 // Set Variable
 
 SetVariableStatement::SetVariableStatement(std::string name_p, Value value_p, SetScope scope_p)

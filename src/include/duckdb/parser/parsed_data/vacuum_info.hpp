@@ -23,7 +23,14 @@ struct VacuumOptions {
 struct VacuumInfo : public ParseInfo {
 public:
 	explicit VacuumInfo(VacuumOptions options) : options(options), has_table(false), table(nullptr) {};
+	const VacuumOptions options;
+	bool has_table;
+	unique_ptr<TableRef> ref;
+	TableCatalogEntry *table;
+	unordered_map<idx_t, idx_t> column_id_map;
+	vector<string> columns;
 
+public:
 	unique_ptr<VacuumInfo> Copy() {
 		auto result = make_unique<VacuumInfo>(options);
 		result->has_table = has_table;
@@ -32,15 +39,22 @@ public:
 		}
 		return result;
 	}
-
-	const VacuumOptions options;
-
-public:
-	bool has_table;
-	unique_ptr<TableRef> ref;
-	TableCatalogEntry *table;
-	unordered_map<idx_t, idx_t> column_id_map;
-	vector<string> columns;
+	bool Equals(const VacuumInfo &other) const {
+		if (options != other.options) {
+			return false;
+		}
+		if (has_table != other.has_table) {
+			return false;
+		}
+		if (!ref->Equals(other.ref)) {
+			return false;
+		}
+		if (table != other.table) {
+			// FIXME: TableCatalogEntry does not have an Equals method, cant check equality here
+			throw NotImplementedException("VACUUM_INFO");
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

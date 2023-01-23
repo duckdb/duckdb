@@ -56,5 +56,70 @@ string UpdateStatement::ToString() const {
 unique_ptr<SQLStatement> UpdateStatement::Copy() const {
 	return unique_ptr<UpdateStatement>(new UpdateStatement(*this));
 }
+unique_ptr<ParsedExpression> condition;
+unique_ptr<TableRef> table;
+unique_ptr<TableRef> from_table;
+vector<string> columns;
+vector<unique_ptr<ParsedExpression>> expressions;
+//! keep track of optional returningList if statement contains a RETURNING keyword
+vector<unique_ptr<ParsedExpression>> returning_list;
+//! CTEs
+CommonTableExpressionMap cte_map;
+
+bool UpdateStatement::Equals(const SQLStatement *other_p) const {
+	if (other->type != type) {
+		return false;
+	}
+	auto &other = (const UpdateStatement &)*other_p;
+
+	if (!condition && !other.condition) {
+	} else if (!condition || !other.condition) {
+		return false;
+	} else if (!condition->Equals(other.condition.get())) {
+		return false;
+	}
+
+	D_ASSERT(table);
+	if (!table->Equals(other.table)) {
+		return false;
+	}
+
+	if (!from_table && !other.from_table) {
+	} else if (!from_table || !other.from_table) {
+		return false;
+	} else if (!from_table->Equals(other.from_table.get())) {
+		return false;
+	}
+
+	if (columns != other.columns) {
+		return false;
+	}
+
+	if (expressions.size() != other.expressions.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		auto &lhs = expressions[i];
+		auto &rhs = other.expressions[i];
+
+		if (!lhs->Equals(rhs)) {
+			return false;
+		}
+	}
+
+	if (returning_list.size() != other.returning_list.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < returning_list.size(); i++) {
+		auto &lhs = returning_list[i];
+		auto &rhs = other.returning_list[i];
+
+		if (!lhs->Equals(rhs)) {
+			return false;
+		}
+	}
+
+	return cte_map.Equals(other.cte_map);
+}
 
 } // namespace duckdb

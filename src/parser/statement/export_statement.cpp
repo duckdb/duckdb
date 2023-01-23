@@ -13,4 +13,15 @@ unique_ptr<SQLStatement> ExportStatement::Copy() const {
 	return unique_ptr<ExportStatement>(new ExportStatement(*this));
 }
 
+bool ExportStatement::Equals(const SQLStatement *other) const {
+	if (type != other_p->type) {
+		return false;
+	}
+	auto other = (const ExportStatement &)*other_p;
+	if (database != other.database) {
+		return false;
+	}
+	return other.info->Equals(*info);
+}
+
 } // namespace duckdb

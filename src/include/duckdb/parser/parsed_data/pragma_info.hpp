@@ -33,6 +33,19 @@ public:
 		result->named_parameters = named_parameters;
 		return result;
 	}
+
+	bool PragmaInfo::Equals(const PragmaInfo &other) const {
+		if (name != other.name) {
+			return false;
+		}
+		if (parameters != other.parameters) {
+			return false;
+		}
+		if (named_parameters != other.named_parameters) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

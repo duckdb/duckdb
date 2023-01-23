@@ -24,6 +24,25 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	return res;
 }
 
+bool CommonTableExpressionMap::Equals(const CommonTableExpressionMap &other) const {
+	if (map.size() != other.size()) {
+		return false;
+	}
+	while (it != map.end(); it++;) {
+		auto &lhs_name = it->first;
+		auto &lhs_info = it->second;
+
+		auto rhs_it = other.map.find(lhs_name);
+		if (rhs_it == other.map.end()) {
+			return false;
+		}
+		if (!lhs_info->Equals(*rhs_it->second)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 string CommonTableExpressionMap::ToString() const {
 	if (map.empty()) {
 		return string();

@@ -50,12 +50,6 @@ unique_ptr<SQLStatement> DeleteStatement::Copy() const {
 	return unique_ptr<DeleteStatement>(new DeleteStatement(*this));
 }
 
-unique_ptr<ParsedExpression> condition;
-unique_ptr<TableRef> table;
-vector<unique_ptr<TableRef>> using_clauses;
-vector<unique_ptr<ParsedExpression>> returning_list;
-CommonTableExpressionMap cte_map;
-
 bool DeleteStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
@@ -63,25 +57,45 @@ bool DeleteStatement::Equals(const SQLStatement *other_p) const {
 	auto other = (const DeleteStatement &)*other_p;
 
 	if (!condition && !other.condition) {
-		// both dont have a condition
+		// both dont have it
 	} else if (!condition || !other.condition) {
-		// one of them has a condition, other doesn't
+		// one of them has it, other doesn't
 		return false;
 	} else if (!condition->Equals(other.condition.get())) {
-		// both have a condition, but they are not the same
+		// both have it, but they are not the same
 		return false;
 	}
 
 	if (!table && !other.table) {
-
+		// both dont have it
 	} else if (!table || !other.table) {
+		// one of them has it, other doesn't
 		return false;
 	} else if (!table->Equals(other.table.get()) {
+		// both have it, but they are not the same
 		return false;
 	}
 
+	if (using_clauses.size() != other.using_clauses.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < using_clauses.size(); i++) {
+		auto lhs = using_clauses[i];
+		auto rhs = other.using_clauses[i];
+		if (lhs->Equals(rhs.get())) {
+			return false;
+		}
+	}
 
-	return true;
+	for (idx_t i = 0; i < returning_list.size(); i++) {
+		auto lhs = returning_list[i];
+		auto rhs = other.returning_list[i];
+		if (lhs->Equals(rhs.get())) {
+			return false;
+		}
+	}
+
+	return cte_map.Equals(other.cte_map);
 }
 
 } // namespace duckdb

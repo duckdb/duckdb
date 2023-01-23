@@ -22,6 +22,7 @@ protected:
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
+	bool Equals(const SQLStatement *other) const override;
 
 public:
 	std::string name;

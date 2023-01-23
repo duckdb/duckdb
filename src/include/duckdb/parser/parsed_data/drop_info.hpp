@@ -72,6 +72,31 @@ public:
 		reader.Finalize();
 		return std::move(drop_info);
 	}
+
+	bool DropInfo::Equals(const DropInfo &other) const {
+		if (other.type != type) {
+			return false;
+		}
+		if (other.catalog != catalog) {
+			return false;
+		}
+		if (other.schema != schema) {
+			return false;
+		}
+		if (other.name != name) {
+			return false;
+		}
+		if (other.if_exists != if_exists) {
+			return false;
+		}
+		if (other.cascade != cascade) {
+			return false;
+		}
+		if (other.allow_drop_internal != allow_drop_internal) {
+			return false;
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb
