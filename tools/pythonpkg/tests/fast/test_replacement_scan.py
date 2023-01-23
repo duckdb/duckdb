@@ -13,13 +13,13 @@ class TestReplacementScan(object):
 		res = duckdb_cursor.execute("select count(*) from '%s'"%(filename))
 		assert res.fetchone()[0] == 3
 
-	def test_replacement_scan_relapi(self, duckdb_cursor):
+	def test_replacement_scan_relapi(self):
 		pyrel1 = duckdb.query('from (values (42), (84), (120)) t(i)')
-		assert (type(pyrel1) == duckdb.DuckDBPyRelation)
+		assert isinstance(pyrel1, duckdb.DuckDBPyRelation)
 		assert (pyrel1.fetchall() == [(42,), (84,), (120,)])
 
 		pyrel2 = duckdb.query('from pyrel1 limit 2')
-		assert (type(pyrel2) == duckdb.DuckDBPyRelation)
+		assert isinstance(pyrel2, duckdb.DuckDBPyRelation)
 		assert (pyrel2.fetchall() == [(42,), (84,)])
 
 		pyrel3 = duckdb.query('select i + 100 from pyrel2')
