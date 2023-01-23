@@ -62,6 +62,12 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
+		// remove the alias since it is assumed to be the name of the argument for the function
+		// i.e if you have CREATE OR REPLACE MACRO eq(a, b) AS a = b
+		// and a function expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right)))
+		// then the macro gets called with eq(left_b=left.left_b, right_b=right.right_b)
+		// and an error is thrown. If the alias is removed, the error is not thrown.
+		children.back()->alias = "";
 	}
 	return make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
 }
