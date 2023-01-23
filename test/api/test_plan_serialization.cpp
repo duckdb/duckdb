@@ -100,3 +100,15 @@ TEST_CASE("Test logical_update", "[serialization]") {
 // TEST_CASE("Test logical_prepare", "[serialization]") {
 //	test_helper("PREPARE v1 AS SELECT 42");
 //}
+
+TEST_CASE("Test logical_simple with DROP", "[serialization]") {
+	test_helper("DROP TABLE tbl", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_simple with ALTER", "[serialization]") {
+	test_helper("ALTER TABLE tbl ADD COLUMN bar INTEGER", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_simple with LOAD", "[serialization]") {
+	test_helper("LOAD foo");
+}
