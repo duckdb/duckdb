@@ -193,7 +193,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	} else if (join == "outer") {
 		join_type = JoinType::OUTER;
 	}
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), JoinType::INNER);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
