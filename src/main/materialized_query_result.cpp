@@ -1,6 +1,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,17 @@ string MaterializedQueryResult::ToString() {
 		result = GetError() + "\n";
 	}
 	return result;
+}
+
+string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
+	if (!success) {
+		return GetError() + "\n";
+	}
+	if (!collection) {
+		return "Internal error - result was successful but there was no collection";
+	}
+	BoxRenderer renderer(config);
+	return renderer.ToString(context, names, Collection());
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
