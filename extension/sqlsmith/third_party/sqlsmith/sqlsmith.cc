@@ -29,7 +29,6 @@ using namespace std::chrono;
 extern "C" {
 #include <signal.h>
 #include <stdlib.h>
-#include <unistd.h>
 }
 
 /* make the cerr logger globally accessible so we can emit one last
