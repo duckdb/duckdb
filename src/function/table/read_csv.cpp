@@ -875,8 +875,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(read_csv_auto);
 }
 
-unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const string &table_name,
-                                                ReplacementScanData *data) {
+unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {
@@ -892,7 +891,7 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(ClientContext &context, const st
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
 	table_function->function = make_unique<FunctionExpression>("read_csv_auto", std::move(children));
-	return table_function;
+	return std::move(table_function);
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {
