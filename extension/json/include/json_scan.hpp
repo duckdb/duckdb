@@ -68,8 +68,9 @@ public:
 	mutex lock;
 	//! One JSON reader per file
 	vector<unique_ptr<BufferedJSONReader>> json_readers;
-	//! Current file index
+	//! Current file/batch index
 	idx_t file_index;
+	idx_t batch_index;
 
 	//! Current number of threads active
 	idx_t system_threads;
@@ -105,6 +106,8 @@ public:
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_doc *objects[STANDARD_VECTOR_SIZE];
+
+	idx_t batch_index;
 
 private:
 	yyjson_doc *ParseLine(char *line_start, idx_t line_size, JSONLine &line, const bool &ignore_errors);

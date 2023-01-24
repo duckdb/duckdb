@@ -92,7 +92,7 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
     : bind_data(bind_data_p), allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
-      buffer_capacity(bind_data.maximum_object_size * 2), file_index(0),
+      buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	json_readers.reserve(bind_data.file_paths.size());
 	for (idx_t i = 0; i < bind_data_p.file_paths.size(); i++) {
@@ -110,8 +110,8 @@ idx_t JSONScanGlobalState::MaxThreads() const {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
-      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+    : batch_index(DConstants::INVALID_INDEX), json_allocator(BufferAllocator::Get(context)), current_reader(nullptr),
+      current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON objects when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size);
@@ -240,12 +240,16 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 				ReadNextBufferNoSeek(gstate, first_read, buffer_index);
 			}
 			if (buffer_size != 0) {
+				if (current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED) {
+					lock_guard<mutex> guard(gstate.lock);
+					batch_index = gstate.batch_index++;
+				}
 				break; // We read something!
 			}
 		}
 
 		// No reader, or exhausted current reader
-		lock_guard<mutex> gstate_guard(gstate.lock);
+		lock_guard<mutex> guard(gstate.lock);
 		D_ASSERT(gstate.file_index <= gstate.json_readers.size());
 		if (gstate.file_index == gstate.json_readers.size()) {
 			return false; // No more files left
@@ -269,6 +273,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 		// Unopened file
 		auto &options = current_reader->GetOptions();
 		current_reader->OpenJSONFile();
+		batch_index = gstate.batch_index++;
 		if (options.format == JSONFormat::UNSTRUCTURED) {
 			gstate.file_index++; // UNSTRUCTURED necessitates single-threaded read
 		}
@@ -490,8 +495,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const bool &ignore_e
 }
 
 idx_t JSONScanLocalState::GetBatchIndex() const {
-	// Is this enough? Needs to be lower than PipelineBuildState::BATCH_INCREMENT = 10000000000000
-	return current_reader->file_index * 1000000 + current_buffer_handle->buffer_index;
+	return batch_index;
 }
 
 } // namespace duckdb
