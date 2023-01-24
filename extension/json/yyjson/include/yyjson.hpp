@@ -229,7 +229,7 @@
 
 /** likely for compiler */
 #ifndef yyjson_likely
-#   if yyjson_has_builtin(__builtin_expect) || YYJSON_GCC_VER >= 4
+#   if yyjson_has_builtin(__builtin_expect) || (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
 #       define yyjson_likely(expr) __builtin_expect(!!(expr), 1)
 #   else
 #       define yyjson_likely(expr) (expr)
@@ -238,7 +238,7 @@
 
 /** unlikely for compiler */
 #ifndef yyjson_unlikely
-#   if yyjson_has_builtin(__builtin_expect) || YYJSON_GCC_VER >= 4
+#   if yyjson_has_builtin(__builtin_expect) || (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
 #       define yyjson_unlikely(expr) __builtin_expect(!!(expr), 0)
 #   else
 #       define yyjson_unlikely(expr) (expr)
