@@ -236,6 +236,12 @@ jobs:
           node -v
           npm -v
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.node }}
+          variant: sccache
+
       - name: Windows Build Tools
         shell: bash
         run: |
@@ -246,12 +252,6 @@ jobs:
         run: ./scripts/node_version.sh
         env:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.node }}
-          variant: sccache
 
       - name: Node
         shell: bash
