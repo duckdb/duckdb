@@ -125,6 +125,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	}
 
 	verification_positions.end_of_last_line = position_buffer;
+	finished = false;
 	return successfully_read_first_line;
 }
 
@@ -147,6 +148,7 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	reached_remainder_state = false;
 	verification_positions.beginning_of_first_line = 0;
 	verification_positions.end_of_last_line = 0;
+	finished = false;
 	D_ASSERT(end_buffer <= buffer_size);
 }
 
@@ -189,6 +191,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 				error_message = "Line does not fit in one buffer. Increase the buffer size.";
 				return false;
 			}
+			finished = true;
 			return true;
 		}
 	}
@@ -416,6 +419,15 @@ final_state : {
 		reached_remainder_state = false;
 	}
 	if (finished_chunk) {
+		if (position_buffer >= end_buffer) {
+			if (position_buffer == end_buffer &&
+			    StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1] && position_buffer < buffer_size)) {
+				// last position is a new line, we still have to go through one more line of this buffer
+				finished = false;
+			} else {
+				finished = true;
+			}
+		}
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
@@ -447,6 +459,17 @@ final_state : {
 	    !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
+	}
+	if (position_buffer >= end_buffer) {
+		if (position_buffer >= end_buffer) {
+			if (position_buffer == end_buffer && StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1]) &&
+			    position_buffer < buffer_size) {
+				// last position is a new line, we still have to go through one more line of this buffer
+				finished = false;
+			} else {
+				finished = true;
+			}
+		}
 	}
 	return true;
 };
