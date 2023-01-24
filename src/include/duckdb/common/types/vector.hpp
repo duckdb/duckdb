@@ -332,7 +332,8 @@ struct ListVector {
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
 	// ! Returns the child_vector of list starting at offset until offset + count
-	DUCKDB_API static idx_t GetConsecutiveChildList(Vector &list, idx_t offset, idx_t count, Vector &result);
+	DUCKDB_API static std::pair<bool, list_entry_t> GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
+	                                                                        idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 };

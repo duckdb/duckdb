@@ -54,8 +54,7 @@ private:
 	//! The set of filter infos created from the extracted filters
 	vector<unique_ptr<FilterInfo>> filter_infos;
 	//! A map of all expressions a given expression has to be equivalent to. This is used to add "implied join edges".
-	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A <->
-	//! C}
+	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A = C}
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	CardinalityEstimator cardinality_estimator;

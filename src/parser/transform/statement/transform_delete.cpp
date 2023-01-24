@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/tableref/crossproductref.hpp"
 
 namespace duckdb {
 

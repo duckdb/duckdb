@@ -344,12 +344,11 @@ struct StringValueCopy : public BaseValueCopy<string_t> {
 	}
 };
 
-struct FlatListValueCopy : public BaseValueCopy<list_entry_t> {
+struct ConstListValueCopy : public BaseValueCopy<list_entry_t> {
 	using TYPE = list_entry_t;
 
 	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
 		input.offset = meta_data.child_list_size;
-		meta_data.child_list_size += input.length;
 		return input;
 	}
 };
@@ -358,7 +357,8 @@ struct ListValueCopy : public BaseValueCopy<list_entry_t> {
 	using TYPE = list_entry_t;
 
 	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
-		input.offset += meta_data.child_list_size;
+		input.offset = meta_data.child_list_size;
+		meta_data.child_list_size += input.length;
 		return input;
 	}
 };
@@ -558,14 +558,10 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 
 	auto &child_vector = ListVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
-	auto child_list_size = ListVector::GetConsecutiveChildList(source, 0, copy_count, child_vector);
-
-	if (child_list_size == DConstants::INVALID_INDEX) {
-		child_list_size = ListVector::GetListSize(source);
-	}
+	auto info = ListVector::GetConsecutiveChildList(source, child_vector, offset, copy_count);
 
 	UnifiedVectorFormat child_vector_data;
-	child_vector.ToUnifiedFormat(child_list_size, child_vector_data);
+	child_vector.ToUnifiedFormat(info.second.length, child_vector_data);
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
@@ -585,12 +581,12 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 
 	// set the child vector
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_function.function(child_meta_data, child_vector_data, child_vector, 0, child_list_size);
+	child_function.function(child_meta_data, child_vector_data, child_vector, info.second.offset, info.second.length);
 
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
-	if (source.GetVectorType() == VectorType::FLAT_VECTOR) {
-		TemplatedColumnDataCopy<FlatListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	if (info.first) {
+		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
 	} else {
 		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
 	}

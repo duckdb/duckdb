@@ -1,16 +1,16 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/parser/expression/lambda_expression.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -27,6 +27,13 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                              function.function_name, false, error_context);
+
+	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
+	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {
+		throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+		                            "applicable to aggregate functions.",
+		                            function.function_name, CatalogTypeToString(func->type));
+	}
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
