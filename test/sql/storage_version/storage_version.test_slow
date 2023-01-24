@@ -89,7 +89,7 @@ SELECT * FROM all_types
 
 # complex views
 query IIIIIIIIIIIIIIIII
-SELECT * FROM cv1
+SELECT * FROM cv1 ORDER BY 1
 ----
 0	1	NULL	0	0	0	1	0	42	0	0	NULL	0	hello world	[1, 2, 3]	{'x': [42, 88]}	0
 1	3	2	1	1	0	1	1	42	1	1	1	1	hello world	[1, 2, 3]	{'x': [42, 88]}	1
