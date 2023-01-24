@@ -15,18 +15,18 @@ create table test (j json)
 statement ok
 insert into test values ('{"duck": 42}'), (NULL), ('{"goose": 43}')
 
-query T
-select * from test
+query II
+select typeof(j), j from test
 ----
-{"duck": 42}
-NULL
-{"goose": 43}
+JSON	{"duck": 42}
+JSON	NULL
+JSON	{"goose": 43}
 
 restart
 
-query T
-select * from test
+query II
+select typeof(j), j from test
 ----
-{"duck": 42}
-NULL
-{"goose": 43}
+JSON	{"duck": 42}
+JSON	NULL
+JSON	{"goose": 43}
