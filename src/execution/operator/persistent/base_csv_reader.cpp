@@ -215,14 +215,14 @@ bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &in
 
 template <class T>
 bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                           string &error_message) {
+                                         string &error_message) {
 	return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, T>(
 		options, input_vector, result_vector, count, error_message);
 }
 
 template <class T>
 bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                          string &error_message, uint8_t width, uint8_t scale) {
+                                        string &error_message, uint8_t width, uint8_t scale) {
 	return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, T>(options, input_vector, result_vector,
 																			count, error_message, width, scale);
 }
@@ -460,24 +460,24 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 				switch (type_id) {
 				case PhysicalType::INT16:
-					success = TryCastDecimalVector<int16_t>(options, parse_chunk.data[col_idx],
+					success = TryCastDecimalVectorCommaSeparated<int16_t>(options, parse_chunk.data[col_idx],
 					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
-					                                        error_message, width, scale, options.decimal_separator);
+					                                        error_message, width, scale);
 					break;
 				case PhysicalType::INT32:
-					success = TryCastDecimalVector<int32_t>(options, parse_chunk.data[col_idx],
+					success = TryCastDecimalVectorCommaSeparated<int32_t>(options, parse_chunk.data[col_idx],
 					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
-					                                        error_message, width, scale, options.decimal_separator);
+					                                        error_message, width, scale);
 					break;
 				case PhysicalType::INT64:
-					success = TryCastDecimalVector<int64_t>(options, parse_chunk.data[col_idx],
+					success = TryCastDecimalVectorCommaSeparated<int64_t>(options, parse_chunk.data[col_idx],
 					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
-					                                        error_message, width, scale, options.decimal_separator);
+					                                        error_message, width, scale);
 					break;
 				case PhysicalType::INT128:
-					success = TryCastDecimalVector<hugeint_t>(options, parse_chunk.data[col_idx],
+					success = TryCastDecimalVectorCommaSeparated<hugeint_t>(options, parse_chunk.data[col_idx],
 					                                          insert_chunk.data[insert_idx], parse_chunk.size(),
-					                                          error_message, width, scale, options.decimal_separator);
+					                                          error_message, width, scale);
 					break;
 				default:
 					throw InternalException("Unimplemented physical type for decimal");

@@ -27,13 +27,6 @@ struct TryCast {
 	}
 };
 
-struct TryCastCommaSeparated {
-	template <class SRC, class DST>
-	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
-		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
-	}
-};
-
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
 	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
@@ -452,10 +445,6 @@ template <>
 DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, float &result, string *error_message, bool strict);
 template <>
 DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict);
-template <>
-DUCKDB_API bool TryCastCommaSeparated::Operation(string_t input, float &result, bool strict);
-template <>
-DUCKDB_API bool TryCastCommaSeparated::Operation(string_t input, double &result, bool strict);
 template <>
 DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message,
                                                              bool strict);
