@@ -1760,9 +1760,7 @@ std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, 
 	auto list_data = (list_entry_t *)unified_list_data.data;
 
 	// boolean, if constant, and offset and length of the relevant child vector
-	// TODO: better a specific struct?
 	std::pair<bool, list_entry_t> info(true, list_entry_t(0, 0));
-	bool is_consecutive = true;
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
@@ -1776,7 +1774,17 @@ std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, 
 		break;
 	}
 
+	// small performance improvement for constant vectors
+	// avoids iterating over all their (constant) elements
+	if (list.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		info.second.length = first_length;
+		return info;
+	}
+
 	// now get the child count and determine whether the children are stored consecutively
+	// also determine if a flat vector has pseudo constant values (all offsets + length the same)
+	// this can happen e.g. for UNNESTs
+	bool is_consecutive = true;
 	for (idx_t i = offset; i < offset + count; i++) {
 		auto idx = unified_list_data.sel->get_index(i);
 		if (!unified_list_data.validity.RowIsValid(idx)) {
