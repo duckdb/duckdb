@@ -2826,3 +2826,12 @@ on the task state.
 function duckdb_destroy_task_state(state)
     return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
 end
+
+"""
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+"""
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Int32, (duckdb_connection,), con)
+end

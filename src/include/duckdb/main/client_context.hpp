@@ -188,6 +188,9 @@ public:
 
 	DUCKDB_API ClientProperties GetClientProperties() const;
 
+	//! Returns true if execution of the current query is finished
+	DUCKDB_API bool ExecutionIsFinished();
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
