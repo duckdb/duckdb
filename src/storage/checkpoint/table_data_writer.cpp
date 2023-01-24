@@ -23,7 +23,7 @@ CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
 }
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {
-	row_group_pointers.push_back(move(row_group_pointer));
+	row_group_pointers.push_back(std::move(row_group_pointer));
 	writer.reset();
 }
 

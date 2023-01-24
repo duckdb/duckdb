@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return std::move(result);
 }
 
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -67,7 +67,7 @@ struct TPCDSData : public GlobalTableFunctionState {
 
 unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TPCDSData>();
-	return move(result);
+	return std::move(result);
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,

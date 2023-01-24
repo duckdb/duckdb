@@ -1,12 +1,12 @@
 #include "include/icu-dateadd.hpp"
-#include "include/icu-datefunc.hpp"
 
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "include/icu-datefunc.hpp"
 
 namespace duckdb {
 
@@ -30,6 +30,26 @@ struct ICUCalendarAge : public ICUDateFunc {
 		throw InternalException("Unimplemented type for ICUCalendarAge");
 	}
 };
+
+static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hour, UErrorCode &status) {
+	if (interval_hour >= 0) {
+		while (interval_hour > 0) {
+			calendar->add(UCAL_HOUR,
+			              interval_hour > NumericLimits<int32_t>::Maximum() ? NumericLimits<int32_t>::Maximum()
+			                                                                : interval_hour,
+			              status);
+			interval_hour -= NumericLimits<int32_t>::Maximum();
+		}
+	} else {
+		while (interval_hour < 0) {
+			calendar->add(UCAL_HOUR,
+			              interval_hour < NumericLimits<int32_t>::Minimum() ? NumericLimits<int32_t>::Minimum()
+			                                                                : interval_hour,
+			              status);
+			interval_hour -= NumericLimits<int32_t>::Minimum();
+		}
+	}
+}
 
 template <>
 timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
@@ -57,10 +77,37 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	const auto udate = UDate(millis);
 	calendar->setTime(udate, status);
 
-	// Add interval fields from lowest to highest
-	calendar->add(UCAL_MILLISECOND, interval.micros / Interval::MICROS_PER_MSEC, status);
-	calendar->add(UCAL_DATE, interval.days, status);
-	calendar->add(UCAL_MONTH, interval.months, status);
+	// Break units apart to avoid overflow
+	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
+
+	const auto interval_ms = interval_h % Interval::MSECS_PER_SEC;
+	interval_h /= Interval::MSECS_PER_SEC;
+
+	const auto interval_s = interval_h % Interval::SECS_PER_MINUTE;
+	interval_h /= Interval::SECS_PER_MINUTE;
+
+	const auto interval_m = interval_h % Interval::MINS_PER_HOUR;
+	interval_h /= Interval::MINS_PER_HOUR;
+
+	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
+		// Add interval fields from lowest to highest (non-ragged to ragged)
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		CalendarAddHour(calendar, interval_h, status);
+
+		calendar->add(UCAL_DATE, interval.days, status);
+		calendar->add(UCAL_MONTH, interval.months, status);
+	} else {
+		// Add interval fields from highest to lowest (ragged to non-ragged)
+		calendar->add(UCAL_MONTH, interval.months, status);
+		calendar->add(UCAL_DATE, interval.days, status);
+
+		CalendarAddHour(calendar, interval_h, status);
+		calendar->add(UCAL_MINUTE, interval_m, status);
+		calendar->add(UCAL_SECOND, interval_s, status);
+		calendar->add(UCAL_MILLISECOND, interval_ms, status);
+	}
 
 	return ICUDateFunc::GetTime(calendar, micros);
 }
@@ -236,6 +283,18 @@ struct ICUDateAdd : public ICUDateFunc {
 		catalog.AddFunction(context, &func_info);
 	}
 };
+
+timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
+}
+
+timestamp_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+	return ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
+}
+
+interval_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date) {
+	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
+}
 
 void RegisterICUDateAddFunctions(ClientContext &context) {
 	ICUDateAdd::AddDateAddOperators("+", context);

@@ -55,12 +55,12 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 		for (auto &val : val_list) {
 			new_val_list.push_back(val->Copy());
 		}
-		result->values.push_back(move(new_val_list));
+		result->values.push_back(std::move(new_val_list));
 	}
 	result->expected_names = expected_names;
 	result->expected_types = expected_types;
 	CopyProperties(*result);
-	return move(result);
+	return std::move(result);
 }
 
 void ExpressionListRef::Serialize(FieldWriter &writer) const {
@@ -83,9 +83,9 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
 	for (idx_t i = 0; i < value_list_size; i++) {
 		vector<unique_ptr<ParsedExpression>> value_list;
 		source.ReadList<ParsedExpression>(value_list);
-		result->values.push_back(move(value_list));
+		result->values.push_back(std::move(value_list));
 	}
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -144,7 +144,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		if (score < best_score || forced_method_found) {
 			compression_idx = i;
 			best_score = score;
-			state = move(analyze_states[i]);
+			state = std::move(analyze_states[i]);
 		}
 		//! If we have found the forced method, we're done
 		if (forced_method_found) {
@@ -184,7 +184,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto best_function = compression_functions[compression_idx];
-	auto compress_state = best_function->init_compression(*this, move(analyze_state));
+	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
 	ScanSegments(
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
@@ -230,15 +230,15 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		state.global_stats->Merge(*segment->stats.statistics);
 
 		// directly append the current segment to the new tree
-		state.new_tree.AppendSegment(move(nodes[segment_idx].node));
+		state.new_tree.AppendSegment(std::move(nodes[segment_idx].node));
 
-		state.data_pointers.push_back(move(pointer));
+		state.data_pointers.push_back(std::move(pointer));
 	}
 }
 
 void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode> nodes) {
 	D_ASSERT(!nodes.empty());
-	this->nodes = move(nodes);
+	this->nodes = std::move(nodes);
 	// first check if any of the segments have changes
 	if (!HasChanges()) {
 		// no changes: only need to write the metadata for this column

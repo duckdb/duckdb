@@ -7,9 +7,9 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUnnest &op) {
 	D_ASSERT(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
-	auto unnest = make_unique<PhysicalUnnest>(op.types, move(op.expressions), op.estimated_cardinality);
-	unnest->children.push_back(move(plan));
-	return move(unnest);
+	auto unnest = make_unique<PhysicalUnnest>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	unnest->children.push_back(std::move(plan));
+	return std::move(unnest);
 }
 
 } // namespace duckdb

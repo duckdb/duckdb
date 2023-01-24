@@ -13,8 +13,8 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
-      function(move(function)), children(move(children)), bind_info(move(bind_info)), aggr_type(aggr_type),
-      filter(move(filter)) {
+      function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
+      aggr_type(aggr_type), filter(std::move(filter)) {
 	D_ASSERT(!function.name.empty());
 }
 
@@ -71,10 +71,10 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	}
 	auto new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 	auto new_filter = filter ? filter->Copy() : nullptr;
-	auto copy = make_unique<BoundAggregateExpression>(function, move(new_children), move(new_filter),
-	                                                  move(new_bind_info), aggr_type);
+	auto copy = make_unique<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
+	                                                  std::move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
@@ -92,7 +92,7 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
 	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
-	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info),
+	return make_unique<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
 	                                             distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }
 

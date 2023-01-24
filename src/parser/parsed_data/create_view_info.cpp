@@ -7,11 +7,12 @@ namespace duckdb {
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA) {
 }
 CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, move(schema_p), move(catalog_p)), view_name(move(view_name_p)) {
+    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)),
+      view_name(std::move(view_name_p)) {
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry *schema, string view_name)
-    : CreateViewInfo(schema->catalog->GetName(), schema->name, move(view_name)) {
+    : CreateViewInfo(schema->catalog->GetName(), schema->name, std::move(view_name)) {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
@@ -20,7 +21,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	result->aliases = aliases;
 	result->types = types;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<CreateViewInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {

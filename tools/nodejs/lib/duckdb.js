@@ -46,6 +46,10 @@ var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 // some wrappers for compatibilities sake
 /**
  * Main database interface
+ * @arg path - path to database file or :memory: for in-memory database
+ * @arg access_mode - access mode
+ * @arg config - the configuration object
+ * @arg callback - callback function
  */
 var Database = duckdb.Database;
 /**
@@ -608,6 +612,15 @@ Database.prototype.unregister_udf = function () {
     default_connection(this).unregister_udf.apply(this.default_connection, arguments);
     return this;
 }
+
+/**
+ * Register a table replace scan function
+ * @method
+ * @arg fun Replacement scan function
+ * @return {this}
+ */
+
+Database.prototype.registerReplacementScan;
 
 /**
  * Not implemented

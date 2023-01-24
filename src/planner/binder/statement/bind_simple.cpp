@@ -27,7 +27,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		stmt.info->catalog = entry->catalog->GetName();
 		stmt.info->schema = ((StandardEntry *)entry)->schema->name;
 	}
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -39,7 +39,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_TRANSACTION, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_TRANSACTION, std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

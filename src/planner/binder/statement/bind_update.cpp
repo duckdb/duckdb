@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
@@ -145,8 +145,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	if (stmt.from_table) {
-		BoundCrossProductRef bound_crossproduct;
-		bound_crossproduct.left = move(bound_table);
+		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
+		bound_crossproduct.left = std::move(bound_table);
 		bound_crossproduct.right = Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);
 		get = (LogicalGet *)root->children[0].get();
@@ -174,9 +174,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		auto condition = binder.Bind(stmt.condition);
 
 		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(move(condition));
-		filter->AddChild(move(root));
-		root = move(filter);
+		auto filter = make_unique<LogicalFilter>(std::move(condition));
+		filter->AddChild(std::move(root));
+		root = std::move(filter);
 	}
 
 	D_ASSERT(stmt.columns.size() == stmt.expressions.size());
@@ -209,13 +209,13 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 			update->expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
-			projection_expressions.push_back(move(bound_expr));
+			projection_expressions.push_back(std::move(bound_expr));
 		}
 	}
 
 	// now create the projection
-	auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
-	proj->AddChild(move(root));
+	auto proj = make_unique<LogicalProjection>(proj_index, std::move(projection_expressions));
+	proj->AddChild(std::move(root));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
 	BindUpdateConstraints(*table, *get, *proj, *update);
@@ -226,20 +226,20 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
-	update->AddChild(move(proj));
+	update->AddChild(std::move(proj));
 
 	auto update_table_index = GenerateTableIndex();
 	update->table_index = update_table_index;
 	if (!stmt.returning_list.empty()) {
-		unique_ptr<LogicalOperator> update_as_logicaloperator = move(update);
+		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(move(stmt.returning_list), table, update_table_index, move(update_as_logicaloperator),
-		                     move(result));
+		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		                     std::move(update_as_logicaloperator), std::move(result));
 	}
 
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
-	result.plan = move(update);
+	result.plan = std::move(update);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

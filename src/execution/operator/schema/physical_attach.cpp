@@ -65,7 +65,7 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	auto new_db = make_unique<AttachedDatabase>(db, Catalog::GetSystemCatalog(context.client), name, path, access_mode);
 	new_db->Initialize();
 
-	db_manager.AddDatabase(context.client, move(new_db));
+	db_manager.AddDatabase(context.client, std::move(new_db));
 	state.finished = true;
 }
 

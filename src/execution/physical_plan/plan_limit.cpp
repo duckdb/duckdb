@@ -14,22 +14,23 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 	unique_ptr<PhysicalOperator> limit;
 	if (!PreserveInsertionOrder(*plan)) {
 		// use parallel streaming limit if insertion order is not important
-		limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
-		                                            move(op.offset), op.estimated_cardinality, true);
+		limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, std::move(op.limit),
+		                                            std::move(op.offset), op.estimated_cardinality, true);
 	} else {
 		// maintaining insertion order is important
 		if (UseBatchIndex(*plan)) {
 			// source supports batch index: use parallel batch limit
-			limit = make_unique<PhysicalLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
-			                                   move(op.offset), op.estimated_cardinality);
+			limit = make_unique<PhysicalLimit>(op.types, (idx_t)op.limit_val, op.offset_val, std::move(op.limit),
+			                                   std::move(op.offset), op.estimated_cardinality);
 		} else {
 			// source does not support batch index: use a non-parallel streaming limit
-			limit = make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
-			                                            move(op.offset), op.estimated_cardinality, false);
+			limit =
+			    make_unique<PhysicalStreamingLimit>(op.types, (idx_t)op.limit_val, op.offset_val, std::move(op.limit),
+			                                        std::move(op.offset), op.estimated_cardinality, false);
 		}
 	}
 
-	limit->children.push_back(move(plan));
+	limit->children.push_back(std::move(plan));
 	return limit;
 }
 

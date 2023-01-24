@@ -40,6 +40,7 @@ public:
 	bool output_sql = false;
 	bool enable_verification = false;
 	bool skip_reload = false;
+	unordered_map<string, string> environment_variables;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
