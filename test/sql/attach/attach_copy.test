@@ -5,6 +5,9 @@
 require skip_reload
 
 statement ok
+pragma enable_verification;
+
+statement ok
 ATTACH DATABASE ':memory:' AS db1;
 
 statement ok

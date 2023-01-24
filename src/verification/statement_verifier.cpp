@@ -14,7 +14,8 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(std::move(name)), statement(std::move(statement_p)), select_list(nullptr) {
+    : type(type), name(std::move(name)), statement(std::move(statement_p)), statement_type(statement->type),
+      select_list(nullptr) {
 	if (statement->type == StatementType::SELECT_STATEMENT) {
 		auto &select_statement = (SelectStatement &)*statement;
 		select_list = &select_statement.node->GetSelectList();
@@ -49,10 +50,6 @@ unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, c
 }
 
 void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
-	if (!select_list) {
-		return;
-	}
-	auto &select_list = *this->select_list;
 	// Only the original statement should check other statements
 	D_ASSERT(type == VerificationType::ORIGINAL);
 
@@ -60,6 +57,11 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 	if (other.RequireEquality()) {
 		D_ASSERT(statement->Equals(other.statement.get()));
 	}
+
+	if (!select_list) {
+		return;
+	}
+	auto &select_list = *this->select_list;
 
 #ifdef DEBUG
 	// Now perform checking on the expressions
@@ -118,6 +120,13 @@ bool StatementVerifier::Run(
 	context.interrupted = false;
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.force_external = ForceExternal();
+
+	if (statement->type != StatementType::SELECT_STATEMENT) {
+		// Only if the statement type is SELECT can we verify the execution,
+		// because other statements might have side-effects that effect this or later statements
+		return true;
+	}
+
 	try {
 		auto result = run(query, std::move(statement));
 		if (result->HasError()) {
@@ -139,6 +148,13 @@ bool StatementVerifier::Run(
 string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	D_ASSERT(type == VerificationType::ORIGINAL);
 	string error;
+
+	if (!IsSelect()) {
+		D_ASSERT(!other.materialized_result);
+		// This is a non-select statement, it wasn't executed
+		return string();
+	}
+
 	if (materialized_result->HasError() != other.materialized_result->HasError()) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();

@@ -41,8 +41,10 @@ string CopyStatement::CopyOptionsToString(const string &format,
 		auto &values = it->second;
 
 		result += name + " ";
-		D_ASSERT(!values.empty());
-		if (values.size() == 1) {
+		if (values.empty()) {
+			// Options like HEADER don't need an explicit value
+			// just providing the name already sets it to true
+		} else if (values.size() == 1) {
 			result += ConvertOptionValueToString(values[0]);
 		} else {
 			result += "( ";

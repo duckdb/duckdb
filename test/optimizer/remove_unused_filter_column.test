@@ -4,6 +4,9 @@
 
 require parquet
 
+statement ok
+pragma enable_verification;
+
 #statement ok
 #PRAGMA explain_output = OPTIMIZED_ONLY;
 

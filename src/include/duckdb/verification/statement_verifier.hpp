@@ -47,9 +47,12 @@ public:
 	const VerificationType type;
 	const string name;
 	unique_ptr<SQLStatement> statement;
+	// The type of statement
+	StatementType statement_type;
 	const vector<unique_ptr<ParsedExpression>> *select_list;
 	unique_ptr<MaterializedQueryResult> materialized_result;
 
+	// Check if original->Equals(to_verify) in CheckExpressions
 	virtual bool RequireEquality() const {
 		return true;
 	}
@@ -60,6 +63,10 @@ public:
 
 	virtual bool ForceExternal() const {
 		return false;
+	}
+
+	bool IsSelect() const {
+		return statement_type == StatementType::SELECT_STATEMENT;
 	}
 };
 

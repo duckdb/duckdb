@@ -79,6 +79,7 @@ public:
 			}
 		}
 		// standard function call
+		// FIXME: this is missing support for catalog qualification
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
 		if (distinct) {

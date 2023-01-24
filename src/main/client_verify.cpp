@@ -92,7 +92,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	config.force_external = force_external;
 
 	// Check explain, only if q does not already contain EXPLAIN
-	if (original->materialized_result->success) {
+	if (original->IsSelect() && original->materialized_result->success) {
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(std::move(statement_copy_for_explain));
 		try {

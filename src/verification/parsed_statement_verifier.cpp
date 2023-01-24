@@ -17,7 +17,7 @@ unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement
 		throw InternalException("Parsed statement verification failed. Query:\n%s\n\nError: %s", query_str, ex.what());
 	}
 	D_ASSERT(parser.statements.size() == 1);
-	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
+	D_ASSERT(parser.statements[0]->type == statement.type);
 	return make_unique<ParsedStatementVerifier>(std::move(parser.statements[0]));
 }
 

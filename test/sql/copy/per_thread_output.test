@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+pragma enable_verification;
+
+statement ok
 PRAGMA verify_parallelism;
 
 statement ok
