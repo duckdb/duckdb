@@ -20,9 +20,9 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 
 	auto &context = state.gstate.context;
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
-	auto &catalog = Catalog::GetCatalog(context);
-	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
 
+	auto table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, catalog_info->schema, catalog_info->table);
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto create_info = reader.ReadOptional<CreateInfo>(nullptr);
@@ -42,8 +42,8 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
 	reader.Finalize();
-	return make_unique<LogicalCreateIndex>(move(bind_data), move(info), move(unbound_expressions), *table,
-	                                       move(function));
+	return make_unique<LogicalCreateIndex>(std::move(bind_data), std::move(info), std::move(unbound_expressions),
+	                                       *table, std::move(function));
 }
 
 } // namespace duckdb

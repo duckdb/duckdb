@@ -26,7 +26,7 @@ string SubqueryExpression::ToString() const {
 	}
 }
 
-bool SubqueryExpression::Equals(const SubqueryExpression *a, const SubqueryExpression *b) {
+bool SubqueryExpression::Equal(const SubqueryExpression *a, const SubqueryExpression *b) {
 	if (!a->subquery || !b->subquery) {
 		return false;
 	}
@@ -44,7 +44,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
 	copy->subquery_type = subquery_type;
 	copy->child = child ? child->Copy() : nullptr;
 	copy->comparison_type = comparison_type;
-	return move(copy);
+	return std::move(copy);
 }
 
 void SubqueryExpression::Serialize(FieldWriter &writer) const {
@@ -66,10 +66,10 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
-	expression->subquery = move(subquery);
+	expression->subquery = std::move(subquery);
 	expression->child = reader.ReadOptional<ParsedExpression>(nullptr);
 	expression->comparison_type = reader.ReadRequired<ExpressionType>();
-	return move(expression);
+	return std::move(expression);
 }
 
 } // namespace duckdb

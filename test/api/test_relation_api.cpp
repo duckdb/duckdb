@@ -782,7 +782,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	auto i1 = con.TableFunction("duckdb_tables");
 	result = i1->Execute();
-	REQUIRE(CHECK_COLUMN(result, 0, {"main"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"main"}));
 
 	// function with parameters
 	auto i2 = con.TableFunction("pragma_table_info", {"integers"});
@@ -878,4 +878,40 @@ TEST_CASE("Test TopK relation", "[relation_api]") {
 	                          ->Project("#2,#3")
 	                          ->Order("(#2-10)::UTINYINT ASC")
 	                          ->Limit(1));
+}
+
+TEST_CASE("Test Relation Pending Query API", "[relation_api]") {
+	DuckDB db;
+	Connection con(db);
+
+	SECTION("Materialized result") {
+		auto tbl = con.TableFunction("range", {Value(1000000)});
+		auto aggr = tbl->Aggregate("SUM(range)");
+		auto pending_query = con.context->PendingQuery(aggr, false);
+		REQUIRE(!pending_query->HasError());
+		auto result = pending_query->Execute();
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
+
+		// cannot fetch twice from the same pending query
+		REQUIRE_THROWS(pending_query->Execute());
+		REQUIRE_THROWS(pending_query->Execute());
+
+		// query the connection as normal after
+		result = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+	SECTION("Runtime error in pending query (materialized)") {
+		auto tbl = con.TableFunction("range", {Value(1000000)});
+		auto aggr = tbl->Aggregate("SUM(range) AS s")->Project("concat(s::varchar, 'hello')::int");
+		// this succeeds initially
+		auto pending_query = con.context->PendingQuery(aggr, false);
+		REQUIRE(!pending_query->HasError());
+		// we only encounter the failure later on as we are executing the query
+		auto result = pending_query->Execute();
+		REQUIRE_FAIL(result);
+
+		// query the connection as normal after
+		result = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
 }

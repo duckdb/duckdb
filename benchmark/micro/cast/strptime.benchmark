@@ -6,7 +6,7 @@ name StrpTime for STRING -> DATE
 group cast
 
 load
-CREATE TABLE dates AS SELECT strftime(DATE '1992-01-01' + i::INTEGER, '%Y/%m/%d') AS d FROM range(0, 10000000) tbl(i);
+CREATE TABLE dates AS SELECT strftime(DATE '1992-01-01' + i::INTEGER, '%Y/%m/%d') AS d FROM range(0, 1000000) tbl(i);
 
 run
 SELECT MIN(strptime(d, '%Y/%m/%d')) FROM dates

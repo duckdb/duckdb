@@ -29,7 +29,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	}
 
 	if (!node->typmods) {
-		return make_unique<CastExpression>(LogicalType::INTERVAL, move(expr));
+		return make_unique<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 	}
 
 	int32_t mask = ((duckdb_libpgquery::PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
@@ -109,11 +109,11 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		throw InternalException("Unsupported interval post-fix");
 	}
 	// first push a cast to the target type
-	expr = make_unique<CastExpression>(target_type, move(expr));
+	expr = make_unique<CastExpression>(target_type, std::move(expr));
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(move(expr));
-	return make_unique<FunctionExpression>(fname, move(children));
+	children.push_back(std::move(expr));
+	return make_unique<FunctionExpression>(fname, std::move(children));
 }
 
 } // namespace duckdb

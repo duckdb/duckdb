@@ -49,16 +49,17 @@ enum VerifyExistenceType : uint8_t {
 
 class ART : public Index {
 public:
+	//! Constructs an ART containing the bound expressions, which are resolved during index construction
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	    DatabaseInstance &db, idx_t block_id = DConstants::INVALID_INDEX,
+	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
 	//! Root of the tree
 	Node *tree;
-
-	DatabaseInstance &db;
+	//! Attached database
+	AttachedDatabase &db;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -88,8 +89,7 @@ public:
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct ARTs from sorted chunks and merge them.
-	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);

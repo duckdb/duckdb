@@ -10,60 +10,37 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 
 	unique_ptr<AlterInfo> info;
 
+	AlterEntryData data;
+	data.if_exists = stmt->missing_ok;
+	data.catalog = stmt->relation->catalogname ? stmt->relation->catalogname : INVALID_CATALOG;
+	data.schema = stmt->relation->schemaname ? stmt->relation->schemaname : INVALID_SCHEMA;
+	if (stmt->relation->relname) {
+		data.name = stmt->relation->relname;
+	}
+	if (stmt->relation->schemaname) {
+	}
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
 	case duckdb_libpgquery::PG_OBJECT_COLUMN: {
 		// change column name
 
-		// get the table and schema
-		string schema = INVALID_SCHEMA;
-		string table;
-		D_ASSERT(stmt->relation->relname);
-		if (stmt->relation->relname) {
-			table = stmt->relation->relname;
-		}
-		if (stmt->relation->schemaname) {
-			schema = stmt->relation->schemaname;
-		}
 		// get the old name and the new name
 		string old_name = stmt->subname;
 		string new_name = stmt->newname;
-		info = make_unique<RenameColumnInfo>(schema, table, stmt->missing_ok, old_name, new_name);
+		info = make_unique<RenameColumnInfo>(std::move(data), old_name, new_name);
 		break;
 	}
 	case duckdb_libpgquery::PG_OBJECT_TABLE: {
 		// change table name
-
-		// get the table and schema
-		string schema = INVALID_SCHEMA;
-		string table;
-		D_ASSERT(stmt->relation->relname);
-		if (stmt->relation->relname) {
-			table = stmt->relation->relname;
-		}
-		if (stmt->relation->schemaname) {
-			schema = stmt->relation->schemaname;
-		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameTableInfo>(schema, table, stmt->missing_ok, new_name);
+		info = make_unique<RenameTableInfo>(std::move(data), new_name);
 		break;
 	}
 
 	case duckdb_libpgquery::PG_OBJECT_VIEW: {
 		// change view name
-
-		// get the view and schema
-		string schema = INVALID_SCHEMA;
-		string view;
-		D_ASSERT(stmt->relation->relname);
-		if (stmt->relation->relname) {
-			view = stmt->relation->relname;
-		}
-		if (stmt->relation->schemaname) {
-			schema = stmt->relation->schemaname;
-		}
 		string new_name = stmt->newname;
-		info = make_unique<RenameViewInfo>(schema, view, stmt->missing_ok, new_name);
+		info = make_unique<RenameViewInfo>(std::move(data), new_name);
 		break;
 	}
 	case duckdb_libpgquery::PG_OBJECT_DATABASE:
@@ -71,10 +48,9 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		throw NotImplementedException("Schema element not supported yet!");
 	}
 	D_ASSERT(info);
-	info->if_exists = stmt->missing_ok;
 
 	auto result = make_unique<AlterStatement>();
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

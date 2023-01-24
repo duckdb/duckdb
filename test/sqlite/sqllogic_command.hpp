@@ -29,7 +29,7 @@ struct ExecuteContext {
 	ExecuteContext() : con(nullptr), is_parallel(false) {
 	}
 	ExecuteContext(Connection *con, vector<LoopDefinition> running_loops_p)
-	    : con(con), running_loops(move(running_loops_p)), is_parallel(true) {
+	    : con(con), running_loops(std::move(running_loops_p)), is_parallel(true) {
 	}
 
 	Connection *con;

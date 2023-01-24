@@ -48,6 +48,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_COMPARISON_JOIN = 52,
 	LOGICAL_ANY_JOIN = 53,
 	LOGICAL_CROSS_PRODUCT = 54,
+	LOGICAL_POSITIONAL_JOIN = 55,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
@@ -77,6 +78,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_PRAGMA = 133,
 	LOGICAL_TRANSACTION = 134,
 	LOGICAL_CREATE_TYPE = 135,
+	LOGICAL_ATTACH = 136,
 
 	// -----------------------------
 	// Explain

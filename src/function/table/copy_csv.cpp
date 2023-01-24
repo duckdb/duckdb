@@ -8,6 +8,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/main/config.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -61,7 +62,7 @@ static Value ConvertVectorToValue(vector<Value> set) {
 	if (set.empty()) {
 		return Value::EMPTYLIST(LogicalType::BOOLEAN);
 	}
-	return Value::LIST(move(set));
+	return Value::LIST(std::move(set));
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
@@ -72,7 +73,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -82,7 +83,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
@@ -101,7 +102,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		options.SetReadOption(loption, ConvertVectorToValue(move(set)), expected_names);
+		options.SetReadOption(loption, ConvertVectorToValue(std::move(set)), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
@@ -114,7 +115,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 		options = initial_reader->options;
 	}
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 //===--------------------------------------------------------------------===//
@@ -273,7 +274,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
-	return move(local_data);
+	return std::move(local_data);
 }
 
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -297,7 +298,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 
 		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
-	return move(global_data);
+	return std::move(global_data);
 }
 
 static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
@@ -390,6 +391,17 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	global_state.handle.reset();
 }
 
+//===--------------------------------------------------------------------===//
+// Parallel
+//===--------------------------------------------------------------------===//
+bool WriteCSVIsParallel(ClientContext &context, FunctionData &bind_data) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.preserve_insertion_order) {
+		return false;
+	}
+	return true;
+}
+
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
 	info.copy_to_bind = WriteCSVBind;
@@ -398,6 +410,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_sink = WriteCSVSink;
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
+	info.parallel = WriteCSVIsParallel;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

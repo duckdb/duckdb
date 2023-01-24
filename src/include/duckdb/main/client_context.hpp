@@ -72,8 +72,6 @@ public:
 
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
-	//! Data for the currently running transaction
-	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! External Objects (e.g., Python objects) that views depend of
@@ -84,9 +82,11 @@ public:
 	ClientConfig config;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
+	//! Data for the currently running transaction
+	TransactionContext transaction;
 
 public:
-	DUCKDB_API Transaction &ActiveTransaction() {
+	DUCKDB_API MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
@@ -122,6 +122,8 @@ public:
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
+	                                                       bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
@@ -244,6 +246,9 @@ private:
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
 	                                                            shared_ptr<PreparedStatementData> &prepared,
 	                                                            PendingQueryParameters parameters);
+
+	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
+	                                                    bool allow_stream_result);
 
 private:
 	//! Lock on using the ClientContext in parallel

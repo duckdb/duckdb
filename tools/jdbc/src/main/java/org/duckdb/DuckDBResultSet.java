@@ -371,7 +371,8 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BIGINT)) {
+		if (isType(columnIndex, DuckDBColumnType.BIGINT)
+			   || isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return getbuf(columnIndex, 8).getLong();
 		}
 		Object o = getObject(columnIndex);
@@ -1352,7 +1353,8 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to integer " + type.toString());
 			}
 		} else if (type == Long.class) {
-			if (sqlType == DuckDBColumnType.BIGINT) {
+			if (sqlType == DuckDBColumnType.BIGINT
+					|| sqlType == DuckDBColumnType.TIMESTAMP) {
 				return type.cast(getLong(columnIndex));
 			} else if (sqlType == DuckDBColumnType.UINTEGER) {
 				throw new SQLException("Can't convert value to long " + type.toString());

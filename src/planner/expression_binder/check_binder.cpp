@@ -7,7 +7,7 @@ namespace duckdb {
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, const ColumnList &columns,
                          physical_index_set_t &bound_columns)
-    : ExpressionBinder(binder, context), table(move(table_p)), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(std::move(table_p)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 
@@ -36,7 +36,7 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	}
 	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
 	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
-		result = CreateStructExtract(move(result), colref.column_names[i]);
+		result = CreateStructExtract(std::move(result), colref.column_names[i]);
 	}
 	return BindExpression(&result, 0);
 }

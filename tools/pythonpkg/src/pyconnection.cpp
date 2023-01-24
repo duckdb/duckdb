@@ -1,6 +1,5 @@
 #include "duckdb_python/pyconnection.hpp"
 
-#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
@@ -13,6 +12,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
@@ -20,7 +21,9 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <random>
 
@@ -66,9 +69,8 @@ bool DuckDBPyConnection::IsJupyter() {
 	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
-void DuckDBPyConnection::Initialize(py::handle &m) {
-	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
-	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
+	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -82,14 +84,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
-	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
-	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()",
-	         py::kw_only(), py::arg("date_as_object") = false)
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
+	         py::arg("date_as_object") = false)
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1,
 	         py::kw_only(), py::arg("date_as_object") = false)
-	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()", py::kw_only(),
+	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
@@ -130,11 +132,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false)
 	    .def("from_parquet", &DuckDBPyConnection::FromParquets,
 	         "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
 	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false)
+	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false)
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
@@ -144,14 +146,21 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter)
-	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
 
+void DuckDBPyConnection::Initialize(py::handle &m) {
+	auto connection_module =
+	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
+
+	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+
+	InitializeConnectionMethods(connection_module);
 	PyDateTime_IMPORT;
 	DuckDBPyConnection::ImportCache();
 }
@@ -181,6 +190,39 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 	return pending_query.Execute();
 }
 
+py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_param_map, const py::dict &params) {
+	py::list new_params(params.size());
+
+	for (auto &item : params) {
+		const std::string &item_name = item.first.cast<std::string>();
+		auto entry = named_param_map.find(item_name);
+		if (entry == named_param_map.end()) {
+			throw InvalidInputException(
+			    "Named parameters could not be transformed, because query string is missing named parameter '%s'",
+			    item_name);
+		}
+		auto param_idx = entry->second;
+		// Add the value of the named parameter to the list
+		new_params[param_idx - 1] = item.second;
+	}
+
+	if (named_param_map.size() != params.size()) {
+		// One or more named parameters were expected, but not found
+		vector<string> missing_params;
+		missing_params.reserve(named_param_map.size());
+		for (auto &entry : named_param_map) {
+			auto &name = entry.first;
+			if (!params.contains(name)) {
+				missing_params.push_back(name);
+			}
+		}
+		auto message = StringUtil::Join(missing_params, ", ");
+		throw InvalidInputException("Not all named parameters have been located, missing: %s", message);
+	}
+
+	return new_params;
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
@@ -202,7 +244,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto pending_query = connection->PendingQuery(move(statements[i]));
+			auto pending_query = connection->PendingQuery(std::move(statements[i]));
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -210,10 +252,23 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 			}
 		}
 
-		prep = connection->Prepare(move(statements.back()));
+		prep = connection->Prepare(std::move(statements.back()));
 		if (prep->HasError()) {
 			prep->error.Throw();
 		}
+	}
+
+	auto &named_param_map = prep->named_param_map;
+	if (py::isinstance<py::dict>(params)) {
+		if (named_param_map.empty()) {
+			throw InvalidInputException("Param is of type 'dict', but no named parameters were found in the query");
+		}
+		// Transform named parameters to regular positional parameters
+		params = TransformNamedParameters(named_param_map, params);
+		// Clear the map, we don't need it anymore
+		prep->named_param_map.clear();
+	} else if (!named_param_map.empty()) {
+		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
 	}
 
 	// this is a list of a list of parameters in executemany
@@ -245,7 +300,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		}
 
 		if (!many) {
-			result = move(res);
+			result = make_unique<DuckDBPyRelation>(std::move(res));
 		}
 	}
 	return shared_from_this();
@@ -273,7 +328,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
-		connection->context->external_dependencies[name] = move(dependencies);
+		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (IsAcceptedArrowObject(python_object)) {
 		auto stream_factory =
 		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
@@ -290,8 +345,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
-		connection->context->external_dependencies[name] = move(dependencies);
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), python_object)));
+		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
@@ -318,7 +373,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 	parser.ParseQuery(query);
 	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
 		return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(
-		    unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0])), alias));
+		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
 	Execute(query);
 	if (result) {
@@ -414,7 +469,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
                                                              bool file_row_number, bool filename,
-                                                             bool hive_partitioning) {
+                                                             bool hive_partitioning, bool union_by_name) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -424,14 +479,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
 	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
 	                                        {"filename", Value::BOOLEAN(filename)},
-	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)},
+	                                        {"union_by_name", Value::BOOLEAN(union_by_name)}});
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                               bool file_row_number, bool filename,
-                                                              bool hive_partitioning) {
+                                                              bool hive_partitioning, bool union_by_name) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -445,7 +501,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<strin
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
 	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
 	                                        {"filename", Value::BOOLEAN(filename)},
-	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)}});
+	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)},
+	                                        {"union_by_name", Value::BOOLEAN(union_by_name)}});
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
@@ -473,7 +530,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
 	        ->Alias(name));
 	rel->rel->extra_dependencies =
-	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), arrow_object));
+	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object));
 	return rel;
 }
 
@@ -592,21 +649,21 @@ py::object DuckDBPyConnection::FetchOne() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchone();
+	return result->FetchOne();
 }
 
 py::list DuckDBPyConnection::FetchMany(idx_t size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchmany(size);
+	return result->FetchMany(size);
 }
 
 py::list DuckDBPyConnection::FetchAll() {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->Fetchall();
+	return result->FetchAll();
 }
 
 py::dict DuckDBPyConnection::FetchNumpy() {
@@ -633,7 +690,7 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchArrowTable(chunk_size);
+	return result->ToArrowTable(chunk_size);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
@@ -642,8 +699,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
-static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
-                                                   py::object &current_frame) {
+static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                           py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -655,7 +712,7 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		string name = "df_" + GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
-		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+		table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
 		                                                                      make_unique<RegisteredObject>(new_df));
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
@@ -668,9 +725,17 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 
-		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
 		table_function->external_dependency =
-		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
+		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+	} else if (DuckDBPyRelation::IsRelation(entry)) {
+		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
+		// create a subquery from the underlying relation object
+		auto select = make_unique<SelectStatement>();
+		select->node = pyrel->rel->GetQueryNode();
+
+		auto subquery = make_unique<SubqueryRef>(std::move(select));
+		return std::move(subquery);
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
@@ -680,15 +745,15 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, Dataset, "
+		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
 		    "RecordBatchReader, or Scanner",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
-	return table_function;
+	return std::move(table_function);
 }
 
-static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
-                                                    ReplacementScanData *data) {
+static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                            ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
@@ -736,7 +801,7 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	CreateTableFunctionInfo scan_info(scan_fun);
 	MapFunction map_fun;
 	CreateTableFunctionInfo map_info(map_fun);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	catalog.CreateTableFunction(context, &scan_info);
 	catalog.CreateTableFunction(context, &map_info);
@@ -756,19 +821,9 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 		return;
 	}
 
-	// Get the options we want to set/override
-	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
-	D_ASSERT(progress_bar_time_opt);
-	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
-	D_ASSERT(enable_progress_bar_opt);
-	auto progress_bar_print_opt = DBConfig::GetOptionByName("enable_progress_bar_print");
-	D_ASSERT(progress_bar_print_opt);
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_progress_bar = true;
 
-	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
-	// FIXME: nasty hardcoded default value check
-	if (progress_bar_time_opt->get_setting(context) == 2000) {
-		progress_bar_time_opt->set_local(context, Value(0));
-	}
 	if (DuckDBPyConnection::IsJupyter()) {
 		// Set the function used to create the display for the progress bar
 		context.config.display_create_func = JupyterProgressBarDisplay::Create;

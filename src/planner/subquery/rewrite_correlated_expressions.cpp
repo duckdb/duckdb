@@ -105,10 +105,11 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
 		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 		is_null->children.push_back(expr.Copy());
-		auto check = move(is_null);
+		auto check = std::move(is_null);
 		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));
-		auto result_if_false = move(*expr_ptr);
-		return make_unique<BoundCaseExpression>(move(check), move(result_if_true), move(result_if_false));
+		auto result_if_false = std::move(*expr_ptr);
+		return make_unique<BoundCaseExpression>(std::move(check), std::move(result_if_true),
+		                                        std::move(result_if_false));
 	}
 	return nullptr;
 }

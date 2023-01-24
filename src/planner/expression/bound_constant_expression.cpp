@@ -7,7 +7,7 @@ namespace duckdb {
 
 BoundConstantExpression::BoundConstantExpression(Value value_p)
     : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value_p.type()),
-      value(move(value_p)) {
+      value(std::move(value_p)) {
 }
 
 string BoundConstantExpression::ToString() const {
@@ -30,7 +30,7 @@ hash_t BoundConstantExpression::Hash() const {
 unique_ptr<Expression> BoundConstantExpression::Copy() {
 	auto copy = make_unique<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundConstantExpression::Serialize(FieldWriter &writer) const {

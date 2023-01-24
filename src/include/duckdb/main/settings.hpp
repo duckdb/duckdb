@@ -262,6 +262,16 @@ struct LogQueryPathSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ImmediateTransactionModeSetting {
+	static constexpr const char *Name = "immediate_transaction_mode";
+	static constexpr const char *Description =
+	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct MaximumExpressionDepthSetting {
 	static constexpr const char *Name = "max_expression_depth";
 	static constexpr const char *Description =

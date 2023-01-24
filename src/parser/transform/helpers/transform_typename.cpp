@@ -52,23 +52,16 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::STRUCT(move(children));
+		result_type = LogicalType::STRUCT(std::move(children));
 	} else if (base_type == LogicalTypeId::MAP) {
-		//! We transform MAP<TYPE_KEY, TYPE_VALUE> to STRUCT<LIST<key: TYPE_KEY>, LIST<value: TYPE_VALUE>>
 
 		if (!type_name->typmods || type_name->typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
-		child_list_t<LogicalType> children;
 		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
 		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
 
-		children.push_back({"key", LogicalType::LIST(key_type)});
-		children.push_back({"value", LogicalType::LIST(value_type)});
-
-		D_ASSERT(children.size() == 2);
-
-		result_type = LogicalType::MAP(move(children));
+		result_type = LogicalType::MAP(std::move(key_type), std::move(value_type));
 	} else if (base_type == LogicalTypeId::UNION) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Union type needs at least one member");
@@ -104,7 +97,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::UNION(move(children));
+		result_type = LogicalType::UNION(std::move(children));
 	} else {
 		int64_t width, scale;
 		if (base_type == LogicalTypeId::DECIMAL) {
@@ -171,6 +164,27 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			result_type = LogicalType::USER(user_type_name);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP:
+			if (modifier_idx == 0) {
+				result_type = LogicalType::TIMESTAMP;
+			} else {
+				if (modifier_idx > 1) {
+					throw ParserException("TIMESTAMP only supports a single modifier");
+				}
+				if (width > 10) {
+					throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
+				}
+				if (width == 0) {
+					result_type = LogicalType::TIMESTAMP_S;
+				} else if (width <= 3) {
+					result_type = LogicalType::TIMESTAMP_MS;
+				} else if (width <= 6) {
+					result_type = LogicalType::TIMESTAMP;
+				} else {
+					result_type = LogicalType::TIMESTAMP_NS;
+				}
+			}
+			break;
 		default:
 			if (modifier_idx > 0) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
@@ -183,7 +197,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;
 		for (auto cell = type_name->arrayBounds->head; cell != nullptr; cell = cell->next) {
-			result_type = LogicalType::LIST(move(result_type));
+			result_type = LogicalType::LIST(std::move(result_type));
 			StackCheck(extra_stack++);
 		}
 	}

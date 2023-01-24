@@ -85,30 +85,39 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
                     const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
 	idx_t tries = 0;
 	while (true) {
-		auto res = request();
+		std::exception_ptr caught_e = nullptr;
+		duckdb_httplib_openssl::Error err;
+		duckdb_httplib_openssl::Response response;
+		int status;
 
-		// Connection level errors to retry
-		bool should_retry = res.error() == duckdb_httplib_openssl::Error::Read;
-		should_retry = should_retry || res.error() == duckdb_httplib_openssl::Error::Connection;
-		should_retry = should_retry || res.error() == duckdb_httplib_openssl::Error::Write;
+		try {
+			auto res = request();
+			err = res.error();
+			if (err == duckdb_httplib_openssl::Error::Success) {
+				status = res->status;
+				response = res.value();
+			}
+		} catch (IOException &e) {
+			caught_e = std::current_exception();
+		}
 
-		if (res.error() == duckdb_httplib_openssl::Error::Success) {
-			switch (res->status) {
+		// Note: all duckdb_httplib_openssl::Error types will be retried.
+		if (err == duckdb_httplib_openssl::Error::Success) {
+			switch (status) {
 			case 408: // Request Timeout
 			case 418: // Server is pretending to be a teapot
 			case 429: // Rate limiter hit
 			case 503: // Server has error
 			case 504: // Server has error
-				should_retry = true;
 				break;
 			default:
-				return make_unique<ResponseWrapper>(res.value());
+				return make_unique<ResponseWrapper>(response);
 			}
 		}
 
 		tries += 1;
 
-		if (should_retry && tries <= params.retries) {
+		if (tries <= params.retries) {
 			if (tries > 1) {
 				uint64_t sleep_amount = (uint64_t)((float)params.retry_wait_ms * pow(params.retry_backoff, tries - 2));
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
@@ -117,7 +126,14 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 				retry_cb();
 			}
 		} else {
-			throw IOException(to_string(res.error()) + " error for " + "HTTP " + method + " to '" + url + "'");
+			if (caught_e) {
+				std::rethrow_exception(caught_e);
+			} else if (err == duckdb_httplib_openssl::Error::Success) {
+				throw IOException("Request returned HTTP " + to_string(status) + " for HTTP " + method + " to '" + url +
+				                  "'");
+			} else {
+				throw IOException(to_string(err) + " error for " + "HTTP " + method + " to '" + url + "'");
+			}
 		}
 	}
 }
@@ -155,7 +171,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 				auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
 				auto tmp = unique_ptr<char[]> {new char[new_size]};
 				memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
-				buffer_out = move(tmp);
+				buffer_out = std::move(tmp);
 				buffer_out_len = new_size;
 			}
 			memcpy(buffer_out.get() + out_offset, data, data_length);
@@ -289,6 +305,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, cons
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                 FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+	if (!opener) {
+		throw IOException("Cannot open a HTTPFS file without a file opener");
+	}
 
 	// splitting query params from base path
 	string stripped_path, query_param;
@@ -304,7 +323,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 
 	auto handle = CreateHandle(stripped_path, query_param, flags, lock, compression, opener);
 	handle->Initialize(opener);
-	return move(handle);
+	return std::move(handle);
 }
 
 // Buffered read from http file.

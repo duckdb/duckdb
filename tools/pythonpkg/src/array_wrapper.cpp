@@ -246,7 +246,7 @@ struct ListConvert {
 	}
 };
 
-struct StructMapConvert {
+struct StructConvert {
 	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
 		py::dict py_struct;
 		auto val = input.GetValue(chunk_offset);
@@ -259,6 +259,29 @@ struct StructMapConvert {
 			auto &child_type = child_entry.second;
 			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type);
 		}
+		return py_struct;
+	}
+};
+
+struct MapConvert {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+		auto val = input.GetValue(chunk_offset);
+		auto &list_children = ListValue::GetChildren(val);
+
+		auto &key_type = MapType::KeyType(input.GetType());
+		auto &val_type = MapType::ValueType(input.GetType());
+
+		py::list keys;
+		py::list values;
+		for (auto &list_elem : list_children) {
+			auto &struct_children = StructValue::GetChildren(list_elem);
+			keys.append(PythonObject::FromValue(struct_children[0], key_type));
+			values.append(PythonObject::FromValue(struct_children[1], val_type));
+		}
+
+		py::dict py_struct;
+		py_struct["key"] = keys;
+		py_struct["value"] = values;
 		return py_struct;
 	}
 };
@@ -708,9 +731,12 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                        idata, count);
 		break;
 	case LogicalTypeId::MAP:
+		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
+		                                                                       idata, count);
+		break;
 	case LogicalTypeId::STRUCT:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructMapConvert>(current_offset, dataptr, maskptr,
-		                                                                             input, idata, count);
+		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
+		                                                                          input, idata, count);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
@@ -731,12 +757,12 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {
-		return move(data->array);
+		return std::move(data->array);
 	}
 	mask->Resize(mask->count);
 	// construct numpy arrays from the data and the mask
-	auto values = move(data->array);
-	auto nullmask = move(mask->array);
+	auto values = std::move(data->array);
+	auto nullmask = std::move(mask->array);
 
 	// create masked array and return it
 	auto masked_array = py::module::import("numpy.ma").attr("masked_array")(values, nullmask);

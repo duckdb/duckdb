@@ -13,7 +13,7 @@ namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	explicit DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	explicit DependencyExtractor(DependencyList &dependencies) : dependencies(dependencies) {
 	}
 
 protected:
@@ -26,7 +26,7 @@ protected:
 	}
 
 private:
-	unordered_set<CatalogEntry *> &dependencies;
+	DependencyList &dependencies;
 };
 
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
@@ -121,6 +121,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		plan = CreatePlan((LogicalCrossProduct &)op);
 		break;
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		plan = CreatePlan((LogicalPositionalJoin &)op);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -180,6 +183,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
 		plan = CreatePlan((LogicalSimple &)op);
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
@@ -204,7 +208,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 			throw InternalException("Missing PhysicalOperator for Extension Operator");
 		}
 		break;
-	default: {
+	case LogicalOperatorType::LOGICAL_JOIN:
+	case LogicalOperatorType::LOGICAL_INVALID: {
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 	}

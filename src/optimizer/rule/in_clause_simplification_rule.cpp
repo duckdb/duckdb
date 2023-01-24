@@ -9,7 +9,7 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 	// match on InClauseExpression that has a ConstantExpression as a check
 	auto op = make_unique<InClauseExpressionMatcher>();
 	op->policy = SetMatcher::Policy::SOME;
-	root = move(op);
+	root = std::move(op);
 }
 
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -41,17 +41,17 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 			return nullptr;
 		} else {
 			auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);
-			cast_list.push_back(move(new_constant_expr));
+			cast_list.push_back(std::move(new_constant_expr));
 		}
 	}
 	//! We can cast, so we move the new constant
 	for (size_t i = 1; i < expr->children.size(); i++) {
-		expr->children[i] = move(cast_list[i - 1]);
+		expr->children[i] = std::move(cast_list[i - 1]);
 
-		//		expr->children[i] = move(new_constant_expr);
+		//		expr->children[i] = std::move(new_constant_expr);
 	}
 	//! We can cast the full list, so we move the column
-	expr->children[0] = move(cast_expression->child);
+	expr->children[0] = std::move(cast_expression->child);
 	return nullptr;
 }
 

@@ -29,7 +29,7 @@ CREATE TABLE integral_values (
 
 # has_schema
 query I
-select nspname from pg_namespace " "where lower(nspname)='main'
+select distinct nspname from pg_namespace " "where lower(nspname)='main'
 ----
 main
 

@@ -147,6 +147,21 @@ NULL	NULL
 NULL	NULL
 
 #
+# Verify local time functions are implemented.
+#
+statement ok
+select localtimestamp;
+
+statement ok
+select localtime;
+
+statement ok
+select current_localtimestamp();
+
+statement ok
+select current_localtime();
+
+#
 # ICU time zone list
 #
 query III

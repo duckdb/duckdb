@@ -49,7 +49,7 @@ public:
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
 		lock_guard<mutex> glock(lock);
-		cache[key] = move(value);
+		cache[key] = std::move(value);
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);

@@ -60,7 +60,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 
 	data.out_names = names;
 	data.out_types = return_types;
-	return move(data_uptr);
+	return std::move(data_uptr);
 }
 
 static string TypeVectorToString(vector<LogicalType> &types) {
