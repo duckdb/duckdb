@@ -84,3 +84,9 @@ query T
 select json_contains(json('{"key":"value"}'),json('{"blah":"value"}'))
 ----
 False
+
+# Check if the recursion properly stops
+query T
+select json_contains('{"a": {"b": 42}}', '{"a": 42}')
+----
+False
