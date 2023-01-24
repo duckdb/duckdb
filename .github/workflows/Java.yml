@@ -163,6 +163,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' }}
       - name: Build
         shell: bash
         run: make
