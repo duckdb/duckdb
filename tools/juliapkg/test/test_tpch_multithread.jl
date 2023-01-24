@@ -3,7 +3,7 @@
 # DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
 
 function test_tpch_multithread()
-    sf = "0.01"
+    sf = "0.10"
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
