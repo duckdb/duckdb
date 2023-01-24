@@ -19,18 +19,15 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 
 	auto &info = (JSONScanInfo &)*input.info;
-	if (info.forced_format == JSONFormat::AUTO_DETECT) {
-		throw NotImplementedException("Auto-detection of JSON format");
-	}
-	options.format = info.forced_format;
-	result->return_json_strings = info.return_json_strings;
+	options.format = info.format;
+	result->auto_detect = info.auto_detect;
 
 	vector<string> patterns;
-	if (input.inputs[0].type().id() == LogicalTypeId::LIST) { // list of globs
+	if (input.inputs[0].type().id() == LogicalTypeId::LIST) { // List of globs
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
 			patterns.push_back(StringValue::Get(val));
 		}
-	} else { // single glob pattern
+	} else { // Single glob pattern
 		patterns.push_back(StringValue::Get(input.inputs[0]));
 	}
 	InitializeFilePaths(context, patterns, result->file_paths);
@@ -50,13 +47,22 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 			} else if (format == "newline_delimited") {
 				options.format = JSONFormat::NEWLINE_DELIMITED;
 			} else {
-				throw InvalidInputException("format must be one of ['auto', 'unstructured', 'newline_delimited']");
+				throw BinderException("format must be one of ['auto', 'unstructured', 'newline_delimited']");
+			}
+		} else if (loption == "compression") {
+			auto compression = StringUtil::Lower(StringValue::Get(kv.second));
+			if (compression == "none") {
+				options.compression = FileCompressionType::UNCOMPRESSED;
+			} else if (compression == "gzip") {
+				options.compression = FileCompressionType::GZIP;
+			} else if (compression == "zstd") {
+				options.compression = FileCompressionType::ZSTD;
+			} else if (compression == "auto") {
+				options.compression = FileCompressionType::AUTO_DETECT;
+			} else {
+				throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
 			}
 		}
-	}
-
-	if (result->ignore_errors && options.format == JSONFormat::UNSTRUCTURED) {
-		throw InvalidInputException("Cannot ignore errors with unstructured format");
 	}
 
 	return std::move(result);
@@ -79,7 +85,6 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteList<string>(file_paths);
 	writer.WriteField<bool>(ignore_errors);
 	writer.WriteField<idx_t>(maximum_object_size);
-	writer.WriteField<bool>(return_json_strings);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -87,7 +92,6 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	file_paths = reader.ReadRequiredList<string>();
 	ignore_errors = reader.ReadRequired<bool>();
 	maximum_object_size = reader.ReadRequired<idx_t>();
-	return_json_strings = reader.ReadRequired<bool>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
@@ -193,25 +197,26 @@ static inline void TrimWhitespace(JSONLine &line) {
 	}
 }
 
-yyjson_doc *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line,
+yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line,
                                           const bool &ignore_errors) {
 	// Parse to validate TODO: This is the only place we can maybe parse INSITU (if not returning strings)
-	yyjson_doc *result;
+	yyjson_doc *doc;
 	if (ignore_errors) {
-		result = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
-		                                        json_allocator.GetYYJSONAllocator());
+		doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
+		                                     json_allocator.GetYYJSONAllocator());
 	} else {
-		result =
+		doc =
 		    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
 	}
 
-	if (result) {
+	if (doc) {
 		// Set the JSONLine and trim
 		line = JSONLine(line_start, line_size);
 		TrimWhitespace(line);
+		return doc->root;
+	} else {
+		return nullptr;
 	}
-
-	return result;
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read) {
@@ -461,7 +466,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 		} else {
 			JSONCommon::ThrowParseError(obj_copy_start, remaining, error);
 		}
-		objects[count] = read_doc;
+		objects[count] = read_doc->root;
 	}
 }
 
@@ -496,6 +501,10 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const bool &ignore_e
 
 idx_t JSONScanLocalState::GetBatchIndex() const {
 	return batch_index;
+}
+
+yyjson_alc *JSONScanLocalState::GetAllocator() {
+	return json_allocator.GetYYJSONAllocator();
 }
 
 } // namespace duckdb

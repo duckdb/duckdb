@@ -1,7 +1,8 @@
+#include "json_transform.hpp"
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "json_common.hpp"
 #include "json_functions.hpp"
 
 namespace duckdb {
@@ -179,9 +180,6 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 	}
 }
 
-//! Forward declaration for recursion
-static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict);
-
 template <class T>
 static void TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
 	auto data = (T *)FlatVector::GetData(result);
@@ -241,44 +239,63 @@ static void TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	}
 }
 
-static void TransformObject(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                            const LogicalType &type, bool strict) {
-	// Initialize array for the nested values
-	auto nested_vals_ptr = unique_ptr<yyjson_val *[]>(new yyjson_val *[count]);
-	auto nested_vals = nested_vals_ptr.get();
-	// Loop through child types
-	auto &child_vs = StructVector::GetEntries(result);
-	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
-		const auto &name = StructType::GetChildName(type, child_i);
-		auto name_ptr = name.c_str();
-		auto name_len = name.size();
+static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict);
+
+void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
+                                    const vector<string> &names, const vector<Vector *> &result_vectors,
+                                    const bool strict) {
+	D_ASSERT(names.size() == result_vectors.size());
+	auto nested_vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
+	for (idx_t child_i = 0; child_i < names.size(); child_i++) {
+		const auto &name = names[child_i];
+		const auto name_ptr = name.c_str();
+		const auto name_len = name.size();
 		for (idx_t i = 0; i < count; i++) {
-			nested_vals[i] = yyjson_obj_getn(vals[i], name_ptr, name_len);
+			nested_vals[i] = yyjson_obj_getn(objects[i], name_ptr, name_len);
+			if (strict && !nested_vals[i]) {
+				JSONCommon::ThrowValFormatError("Object %s does not have key \"" + name + "\"", objects[i]);
+			}
 		}
-		// Transform child values
-		Transform(nested_vals, alc, *child_vs[child_i], count, strict);
+		Transform(nested_vals, alc, *result_vectors[child_i], count, strict);
 	}
 }
 
-static void TransformArray(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict) {
+static void TransformObject(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
+                            const LogicalType &type, bool strict) {
+	// Get child vectors and names
+	auto &child_vs = StructVector::GetEntries(result);
+	vector<string> child_names;
+	vector<Vector *> child_vectors;
+	child_names.reserve(child_vs.size());
+	child_vectors.reserve(child_vs.size());
+	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
+		child_names.push_back(StructType::GetChildName(type, child_i));
+		child_vectors.push_back(child_vs[child_i].get());
+	}
+
+	JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, strict);
+}
+
+static void TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict) {
 	// Initialize list vector
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (!vals[i] || yyjson_is_null(vals[i])) {
+		if (!arrays[i] || yyjson_is_null(arrays[i])) {
 			list_validity.SetInvalid(i);
 		}
 		auto &entry = list_entries[i];
 		entry.offset = offset;
-		entry.length = yyjson_arr_size(vals[i]);
+		entry.length = yyjson_arr_size(arrays[i]);
 		offset += entry.length;
 	}
 	ListVector::SetListSize(result, offset);
 	ListVector::Reserve(result, offset);
+
 	// Initialize array for the nested values
-	auto nested_vals_ptr = unique_ptr<yyjson_val *[]>(new yyjson_val *[offset]);
-	auto nested_vals = nested_vals_ptr.get();
+	auto nested_vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * offset);
+
 	// Get array values
 	size_t idx, max;
 	yyjson_val *val;
@@ -288,7 +305,7 @@ static void TransformArray(yyjson_val *vals[], yyjson_alc *alc, Vector &result, 
 			// We already marked this as invalid
 			continue;
 		}
-		yyjson_arr_foreach(vals[i], idx, max, val) {
+		yyjson_arr_foreach(arrays[i], idx, max, val) {
 			nested_vals[list_i] = val;
 			list_i++;
 		}
@@ -393,7 +410,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 			vals[i] = docs[i]->root;
 		}
 	}
-	// Transform
+
 	Transform(vals, alc, result, count, strict);
 
 	if (args.AllConstant()) {

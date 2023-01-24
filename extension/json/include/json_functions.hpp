@@ -97,6 +97,10 @@ private:
 	// Table functions
 	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
 	static CreateTableFunctionInfo GetReadNDJSONObjectsFunction();
+	static CreateTableFunctionInfo GetReadJSONFunction();
+	static CreateTableFunctionInfo GetReadNDJSONFunction();
+	static CreateTableFunctionInfo GetReadJSONAutoFunction();
+	static CreateTableFunctionInfo GetReadNDJSONAutoFunction();
 };
 
 } // namespace duckdb

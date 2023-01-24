@@ -149,6 +149,12 @@ vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadJSONObjectsFunction());
 	functions.push_back(GetReadNDJSONObjectsFunction());
 
+	// Read JSON as columnar data
+	functions.push_back(GetReadJSONFunction());
+	functions.push_back(GetReadNDJSONFunction());
+	functions.push_back(GetReadJSONAutoFunction());
+	functions.push_back(GetReadNDJSONAutoFunction());
+
 	return functions;
 }
 

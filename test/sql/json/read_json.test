@@ -1,0 +1,63 @@
+# name: test/sql/json/read_json.test
+# description: Read json files straight to columnar data
+# group: [json]
+
+require json
+
+statement error
+SELECT * FROM read_json('data/json/example_n.ndjson')
+----
+Binder Error: read_json "columns" parameter is required
+
+query II
+SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# We can also read only one of the columns
+query I
+SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER'})
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT * FROM read_json('data/json/example_n.ndjson', columns={name: 'VARCHAR'})
+----
+O Brother, Where Art Thou?
+Home for the Holidays
+The Firm
+Broadcast News
+Raising Arizona
+
+# what about a broken JSON file
+query II
+SELECT * FROM read_ndjson('data/json/unterminated_quotes.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, ignore_errors=true)
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+NULL	NULL
+4	Broadcast News
+5	Raising Arizona
+
+# some of these objects don't have "name"
+statement error
+SELECT * FROM read_json('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+Invalid Input Error: Object {"id":2} does not have key "name"
+
+query II
+SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, ignore_errors=true)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona

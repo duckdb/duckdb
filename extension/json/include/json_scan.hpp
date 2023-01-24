@@ -36,18 +36,23 @@ public:
 	bool ignore_errors = false;
 	//! Maximum JSON object size (defaults to 1MB)
 	idx_t maximum_object_size = 1048576;
-	//! Whether we return JSON strings (if not, we return YYJSON documents)
-	bool return_json_strings = true;
+
+	//! Whether we auto-detect a schema
+	bool auto_detect = false;
+	//! Sample size for detecting schema
+	idx_t sample_size = STANDARD_VECTOR_SIZE;
+	//! Column names (in order)
+	vector<string> names;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
 public:
-	explicit JSONScanInfo(JSONFormat forced_format_p, bool return_strings)
-	    : forced_format(forced_format_p), return_json_strings(return_strings) {
+	explicit JSONScanInfo(JSONFormat format_p = JSONFormat::AUTO_DETECT, bool auto_detect_p = false)
+	    : format(format_p), auto_detect(auto_detect_p) {
 	}
 
-	JSONFormat forced_format;
-	bool return_json_strings;
+	JSONFormat format;
+	bool auto_detect;
 };
 
 struct JSONScanGlobalState : public GlobalTableFunctionState {
@@ -103,14 +108,15 @@ public:
 	                                                GlobalTableFunctionState *global_state);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	idx_t GetBatchIndex() const;
+	yyjson_alc *GetAllocator();
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
-	yyjson_doc *objects[STANDARD_VECTOR_SIZE];
+	yyjson_val *objects[STANDARD_VECTOR_SIZE];
 
 	idx_t batch_index;
 
 private:
-	yyjson_doc *ParseLine(char *line_start, idx_t line_size, JSONLine &line, const bool &ignore_errors);
+	yyjson_val *ParseLine(char *line_start, idx_t line_size, JSONLine &line, const bool &ignore_errors);
 
 private:
 	//! Thread-local allocator
@@ -180,6 +186,7 @@ public:
 		table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
 		table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["format"] = LogicalType::VARCHAR;
+		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
 		table_function.table_scan_progress = JSONScanProgress;
 		table_function.get_batch_index = JSONScanGetBatchIndex;
@@ -187,6 +194,7 @@ public:
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;
 
+		// TODO: might be able to do some of these
 		table_function.projection_pushdown = false;
 		table_function.filter_pushdown = false;
 		table_function.filter_prune = false;
