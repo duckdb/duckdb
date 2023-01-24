@@ -83,6 +83,6 @@ bool duckdb_execution_is_finished(duckdb_connection con) {
 	if (!con) {
 		return false;
 	}
-	duckdb::Connection *conn = (duckdb::Connection *) con;
+	duckdb::Connection *conn = (duckdb::Connection *)con;
 	return conn->context->ExecutionIsFinished();
 }

@@ -617,7 +617,7 @@ function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
         GC.safepoint()
         ret = duckdb_execute_n_tasks_state(state, 1)
-        if duckdb_execution_is_finished(con.handle) >= 0
+        if duckdb_execution_is_finished(con.handle)
         	break
         end
     end
@@ -665,13 +665,16 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
         push!(tasks, task_val)
     end
     success = true
-    try
-        # now start executing tasks of the pending result in a loop
-        success = pending_execute_tasks(pending)
-    catch ex
-        cleanup_tasks(tasks, task_state)
-        throw(ex)
-    end
+	while !duckdb_execution_is_finished(stmt.con.handle)
+		GC.safepoint()
+	end
+    #try
+    #    # now start executing tasks of the pending result in a loop
+    #    success = pending_execute_tasks(pending)
+    #catch ex
+    #    cleanup_tasks(tasks, task_state)
+    #    throw(ex)
+    #end
 
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)
