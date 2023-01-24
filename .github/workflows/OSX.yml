@@ -31,6 +31,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       shell: bash
       run: make debug
@@ -139,6 +144,11 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.7'
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
       - name: Install OpenSSL
         shell: bash
