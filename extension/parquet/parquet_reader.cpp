@@ -257,13 +257,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
-	if (s_ele.__isset.repetition_type) {
-		if (s_ele.repetition_type != FieldRepetitionType::REQUIRED) {
-			max_define++;
-		}
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			max_repeat++;
-		}
+	auto repetition_type = FieldRepetitionType::REQUIRED;
+	if (s_ele.__isset.repetition_type && this_idx > 0) {
+		repetition_type = s_ele.repetition_type;
+	}
+	if (repetition_type != FieldRepetitionType::REQUIRED) {
+		max_define++;
+	}
+	if (repetition_type == FieldRepetitionType::REPEATED) {
+		max_repeat++;
 	}
 
 	if (!s_ele.__isset.type) { // inner node
@@ -290,7 +292,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 
-		bool is_repeated = s_ele.repetition_type == FieldRepetitionType::REPEATED;
+		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
 		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
 		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
@@ -365,6 +367,13 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data) {
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
+
+	if (file_meta_data->schema.empty()) {
+		throw IOException("Parquet reader: no schema elements found");
+	}
+	if (file_meta_data->schema[0].num_children == 0) {
+		throw IOException("Parquet reader: root schema element has no children");
+	}
 
 	auto ret = CreateReaderRecursive(file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
