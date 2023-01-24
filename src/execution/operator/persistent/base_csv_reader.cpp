@@ -214,27 +214,17 @@ bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &in
 }
 
 template <class T>
-bool TryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                           string &error_message, string decimal_separator) {
-	if (decimal_separator == ".") {
-		return TemplatedTryCastFloatingVector<TryCastErrorMessage, T>(options, input_vector, result_vector, count,
-		                                                              error_message);
-	} else {
-		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, T>(
-		    options, input_vector, result_vector, count, error_message);
-	}
+bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                           string &error_message) {
+	return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, T>(
+		options, input_vector, result_vector, count, error_message);
 }
 
 template <class T>
-bool TryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                          string &error_message, uint8_t width, uint8_t scale, string decimal_separator) {
-	if (decimal_separator == ".") {
-		return TemplatedTryCastDecimalVector<TryCastToDecimal, T>(options, input_vector, result_vector, count,
-		                                                          error_message, width, scale);
-	} else {
-		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, T>(options, input_vector, result_vector,
-		                                                                        count, error_message, width, scale);
-	}
+bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                          string &error_message, uint8_t width, uint8_t scale) {
+	return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, T>(options, input_vector, result_vector,
+																			count, error_message, width, scale);
 }
 
 bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
@@ -445,25 +435,25 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				// use the date format to cast the chunk
 				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
 				                                 parse_chunk.size(), error_message);
-			} else if ((return_types[col_idx].id() == LogicalTypeId::FLOAT) ||
-			           (return_types[col_idx].id() == LogicalTypeId::DOUBLE)) {
+			} else if (options.decimal_separator != "." && (return_types[col_idx].id() == LogicalTypeId::FLOAT ||
+			           return_types[col_idx].id() == LogicalTypeId::DOUBLE)) {
 				auto type_id = return_types[col_idx].InternalType();
 
 				switch (type_id) {
 				case PhysicalType::DOUBLE:
 					success =
-					    TryCastFloatingVector<double>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                  parse_chunk.size(), error_message, options.decimal_separator);
+					    TryCastFloatingVectorCommaSeparated<double>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+					                                  parse_chunk.size(), error_message);
 					break;
 				case PhysicalType::FLOAT:
 					success =
-					    TryCastFloatingVector<float>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-					                                 parse_chunk.size(), error_message, options.decimal_separator);
+					    TryCastFloatingVectorCommaSeparated<float>(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+					                                 parse_chunk.size(), error_message);
 					break;
 				default:
 					throw InternalException("Unimplemented physical type for floating");
 				}
-			} else if ((return_types[col_idx].id() == LogicalTypeId::DECIMAL)) {
+			} else if (options.decimal_separator != "." && return_types[col_idx].id() == LogicalTypeId::DECIMAL) {
 				auto type_id = return_types[col_idx].InternalType();
 				auto width = DecimalType::GetWidth(return_types[col_idx]);
 				auto scale = DecimalType::GetScale(return_types[col_idx]);
