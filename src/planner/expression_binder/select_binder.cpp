@@ -99,7 +99,8 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 			}
 			if (node.select_list[index]->IsUnnest()) {
 				throw BinderException("Alias \"%s\" is an unnest/unnlist expression. Cannot bind window directly "
-				                      " to an unnest/unnlist expression", colref.column_names[0]);
+				                      " to an unnest/unnlist expression",
+				                      colref.column_names[0]);
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
