@@ -49,8 +49,25 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 		return;
 	}
 
-	// found a delim join, rhs child must be projection(s) followed by an UNNEST
-	auto &delim_join = *op->children[0];
+	// found a delim join
+	auto &delim_join = (LogicalDelimJoin &)*op->children[0];
+
+	// TODO: also support joins with more than the default condition?
+	// delim join must have exactly one condition
+	if (delim_join.conditions.size() != 1) {
+		return;
+	}
+
+	// TODO: also support other operators on lhs?
+	// lhs child is a window that contains a projection
+	if (delim_join.children[0]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+		return;
+	}
+	if (delim_join.children[0]->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+
+	// rhs child must be projection(s) followed by an UNNEST
 	auto curr_op = &delim_join.children[1];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		if (curr_op->get()->children.size() != 1) {
