@@ -33,6 +33,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       shell: bash
       run: |
@@ -86,6 +91,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       shell: bash
       run: |
@@ -134,6 +144,11 @@ jobs:
          shell: msys2 {0}
          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
 
+       - name: Setup Ccache
+         uses: hendrikmuhs/ccache-action@main
+         with:
+           key: ${{ github.job }}
+
        - name: Build
          shell: msys2 {0}
          run: |
@@ -158,6 +173,11 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       shell: bash
