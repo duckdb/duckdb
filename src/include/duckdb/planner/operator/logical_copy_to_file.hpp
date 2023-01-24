@@ -24,6 +24,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
+	bool allow_overwrite;
 	bool per_thread_output;
 
 	bool partition_output;

@@ -921,6 +921,24 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	return result;
 }
 
+bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                             FileOpener *opener) {
+	string trimmed_dir = directory;
+	StringUtil::RTrim(trimmed_dir, '/');
+
+	auto glob_res = Glob(directory + "/*", opener);
+
+	if (glob_res.empty()) {
+		return false;
+	}
+
+	for (const auto &file : glob_res) {
+		callback(file, false);
+	}
+
+	return true;
+}
+
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
                                 string &continuation_token, HTTPStats *stats, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);

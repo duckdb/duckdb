@@ -68,8 +68,9 @@ public:
 		FindFileSystem(directory)->RemoveDirectory(directory);
 	}
 
-	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) override {
-		return FindFileSystem(directory)->ListFiles(directory, callback);
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override {
+		return FindFileSystem(directory)->ListFiles(directory, callback, opener);
 	}
 
 	void MoveFile(const string &source, const string &target) override {

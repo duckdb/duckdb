@@ -31,6 +31,12 @@ void StringUtil::RTrim(string &str) {
 	          str.end());
 }
 
+void StringUtil::RTrim(string &str, char char_to_trim) {
+	str.erase(
+	    find_if(str.rbegin(), str.rend(), [&char_to_trim](int ch) { return ch > 0 && ch != char_to_trim; }).base(),
+	    str.end());
+}
+
 void StringUtil::Trim(string &str) {
 	StringUtil::LTrim(str);
 	StringUtil::RTrim(str);

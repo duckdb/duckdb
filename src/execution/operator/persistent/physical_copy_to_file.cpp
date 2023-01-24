@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/file_opener.hpp"
 
 #include <algorithm>
 
@@ -81,19 +82,18 @@ static void CreateDir(ClientContext &context, const string &dir_path) {
 }
 
 static string CreateDirRecursive(ClientContext &context, const vector<idx_t> &cols, const vector<string> &names,
-                                 const vector<Value> &values, const string &path) {
+                                 const vector<Value> &values, string path) {
 	CreateDir(context, path);
-	string partition_path = path + "/";
 
 	for (idx_t i = 0; i < cols.size(); i++) {
 		auto partition_col_name = names[cols[i]];
 		auto partition_value = values[i];
-		string p_dir = partition_col_name + "=" + partition_value.ToString() + "/";
-		partition_path += p_dir + "/";
-		CreateDir(context, partition_path);
+		string p_dir = partition_col_name + "=" + partition_value.ToString();
+		path += "/" + p_dir;
+		CreateDir(context, path);
 	}
 
-	return partition_path;
+	return path;
 }
 
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
@@ -107,12 +107,15 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 
-			string hive_path =
-			    CreateDirRecursive(context.client, partition_columns, names, partition_key_map[i]->values, file_path);
+			auto trimmed_path = file_path;
+			StringUtil::RTrim(trimmed_path, '/');
+
+			string hive_path = CreateDirRecursive(context.client, partition_columns, names,
+			                                      partition_key_map[i]->values, trimmed_path);
 
 			auto &fs = FileSystem::GetFileSystem(context.client);
-			string full_path = fs.JoinPath(hive_path, "/data_" + to_string(l.writer_offset) + "." + function.extension);
-			if (fs.FileExists(full_path)) {
+			string full_path = fs.JoinPath(hive_path, "data_" + to_string(l.writer_offset) + "." + function.extension);
+			if (fs.FileExists(full_path) && !allow_overwrite) {
 				throw IOException("failed to create " + full_path + ", file exists!");
 			}
 			// Create a writer for the current file
@@ -185,7 +188,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		string output_path =
 		    fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
-		if (fs.FileExists(output_path)) {
+		if (fs.FileExists(output_path) && !allow_overwrite) {
 			throw IOException("%s exists", output_path);
 		}
 		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
@@ -198,14 +201,15 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	if (partition_output || per_thread_output) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
-		if (fs.FileExists(file_path)) {
+		if (fs.FileExists(file_path) && !allow_overwrite) {
 			throw IOException("%s exists", file_path);
 		}
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
-		} else {
+		} else if (!allow_overwrite) {
 			idx_t n_files = 0;
-			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
+			fs.ListFiles(
+			    file_path, [&n_files](const string &path, bool) { n_files++; }, FileOpener::Get(context));
 			if (n_files > 0) {
 				throw IOException("Directory %s is not empty", file_path);
 			}
