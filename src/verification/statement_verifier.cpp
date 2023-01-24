@@ -14,7 +14,7 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(std::move(name)), statement(std::move(statement_p)) {
+    : type(type), name(std::move(name)), statement(std::move(statement_p)), select_list(nullptr) {
 	if (statement->type == StatementType::SELECT_STATEMENT) {
 		auto &select_statement = (SelectStatement &)*statement;
 		select_list = &select_statement.node->GetSelectList();

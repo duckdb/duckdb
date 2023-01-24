@@ -20,14 +20,18 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// ToString() of statements and expressions
 	// Correctness of plans both with and without optimizers
 
+	const bool is_select = statement->type == StatementType::SELECT_STATEMENT;
+
 	const auto &stmt = *statement;
 	vector<unique_ptr<StatementVerifier>> statement_verifiers;
 	unique_ptr<StatementVerifier> prepared_statement_verifier;
 	if (config.query_verification_enabled) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
-		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
+		if (is_select) {
+			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
+			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
+			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
+			prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
+		}
 	}
 	if (config.verify_external) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
