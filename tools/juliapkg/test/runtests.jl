@@ -4,7 +4,6 @@ using Test
 using Dates
 using FixedPointDecimals
 using UUIDs
-using Debugger
 
 test_files = [
     "test_appender.jl",

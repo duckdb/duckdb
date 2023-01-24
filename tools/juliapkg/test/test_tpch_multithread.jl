@@ -2,8 +2,6 @@
 
 # DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
 
-using Debugger
-
 function test_tpch_multithread()
     sf = "0.01"
 
@@ -49,8 +47,8 @@ function test_tpch_multithread()
     DBInterface.close!(native_con)
 end
 
-#@testset "Test TPC-H" begin
-#	test_tpch_multithread()
-#end
+@testset "Test TPC-H" begin
+	test_tpch_multithread()
+end
 
-@enter test_tpch_multithread()
+#@enter test_tpch_multithread()
