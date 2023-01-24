@@ -2,14 +2,13 @@
 # description: Issue 5703: Can't have a window aggregate and unnest.
 # group: [general]
 
-
-statement ok
-select unnest([5,4,3]) as r, sum(42) OVER ();
-
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
 Binder Error
+
+statement ok
+select unnest([5,4,3]) as r, sum(42) OVER ();
 
 # row numbers are ok
 statement ok
@@ -55,8 +54,15 @@ Binder Error
 statement error
 select unnest([5,4,3]) as r, dense_rank(r) OVER ();
 
+query II
+select unnest([5,4,3]) as r, NTILE(3) OVER ();
+----
+5	1
+4	1
+3	1
+
 statement error
-select unnest([5,4,3]) as r, NTILE(1) OVER (ORDER BY (SELECT NULL));
+select unnest([5,4,3]) as r, NTILE(1) OVER (ORDER BY r);
 ----
 Binder Error
 

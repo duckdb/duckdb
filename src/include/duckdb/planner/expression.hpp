@@ -38,6 +38,7 @@ public:
 	virtual bool HasSideEffects() const;
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
+	virtual bool IsUnnest() const;
 
 	hash_t Hash() const override;
 

@@ -8,7 +8,7 @@ namespace duckdb {
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),
-      binding(binding), depth(depth) {
+      binding(binding), depth(depth), is_unnest(false) {
 	this->alias = std::move(alias_p);
 }
 

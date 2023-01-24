@@ -95,14 +95,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 			PlanSubqueries(&expr, &root);
 		}
 		D_ASSERT(!unnest->expressions.empty());
-		if (root->type == LogicalOperatorType::LOGICAL_WINDOW) {
-			for (auto &expression : root->expressions) {
-				if (expression->type != ExpressionType::WINDOW_ROW_NUMBER) {
-					throw BinderException(
-					    "Cannot have window expression over an unlist unless the window function is row_number()");
-				}
-			}
-		}
 		unnest->AddChild(std::move(root));
 		root = std::move(unnest);
 	}

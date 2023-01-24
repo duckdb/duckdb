@@ -29,6 +29,7 @@ public:
 	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
 	//! This is only non-zero for correlated expressions inside subqueries.
 	idx_t depth;
+	bool is_unnest;
 
 public:
 	bool IsScalar() const override {
@@ -36,6 +37,9 @@ public:
 	}
 	bool IsFoldable() const override {
 		return false;
+	}
+	bool IsUnnest() const override {
+		return is_unnest;
 	}
 
 	string ToString() const override;
