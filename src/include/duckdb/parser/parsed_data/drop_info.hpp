@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
 
@@ -44,6 +45,32 @@ public:
 		result->cascade = cascade;
 		result->allow_drop_internal = allow_drop_internal;
 		return result;
+	}
+
+	void Serialize(Serializer &serializer) const {
+		FieldWriter writer(serializer);
+		writer.WriteField<CatalogType>(type);
+		writer.WriteString(catalog);
+		writer.WriteString(schema);
+		writer.WriteString(name);
+		writer.WriteField(if_exists);
+		writer.WriteField(cascade);
+		writer.WriteField(allow_drop_internal);
+		writer.Finalize();
+	}
+
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer) {
+		FieldReader reader(deserializer);
+		auto drop_info = make_unique<DropInfo>();
+		drop_info->type = reader.ReadRequired<CatalogType>();
+		drop_info->catalog = reader.ReadRequired<string>();
+		drop_info->schema = reader.ReadRequired<string>();
+		drop_info->name = reader.ReadRequired<string>();
+		drop_info->if_exists = reader.ReadRequired<bool>();
+		drop_info->cascade = reader.ReadRequired<bool>();
+		drop_info->allow_drop_internal = reader.ReadRequired<bool>();
+		reader.Finalize();
+		return std::move(drop_info);
 	}
 };
 

@@ -25,6 +25,7 @@ add_library_unity(
   plan_limit.cpp
   plan_limit_percent.cpp
   plan_order.cpp
+  plan_positional_join.cpp
   plan_pragma.cpp
   plan_prepare.cpp
   plan_projection.cpp

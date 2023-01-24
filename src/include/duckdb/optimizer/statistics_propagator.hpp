@@ -36,6 +36,7 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> *node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalPositionalJoin &op, unique_ptr<LogicalOperator> *node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalProjection &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalComparisonJoin &op, unique_ptr<LogicalOperator> *node_ptr);
 	void PropagateStatistics(LogicalAnyJoin &op, unique_ptr<LogicalOperator> *node_ptr);
