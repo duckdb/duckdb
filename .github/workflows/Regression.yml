@@ -160,6 +160,11 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         pip install numpy pytest pandas mypy psutil pyarrow
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build Current Version
       shell: bash
       run: |
