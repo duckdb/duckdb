@@ -307,6 +307,16 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+# Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
+    - name: Build
+      shell: bash
+      run: make release
+
     - name: Test
       shell: bash
       run: make sqlite
