@@ -766,4 +766,16 @@ typedef enum PGOnConflictAction {
 	PG_ONCONFLICT_UPDATE   /* ON CONFLICT ... DO UPDATE */
 } PGOnConflictAction;
 
+/*
+ * PGOnConflictActionAlias -
+ *	  "INSERT OR [REPLACE|IGNORE]" aliases for OnConflictAction
+ *
+ * This is needed in both parsenodes.h and plannodes.h, so put it here...
+ */
+typedef enum PGOnConflictActionAlias {
+	PG_ONCONFLICT_ALIAS_NONE,    /* No "OR [IGNORE|REPLACE]" clause */
+	PG_ONCONFLICT_ALIAS_REPLACE, /* INSERT OR REPLACE */
+	PG_ONCONFLICT_ALIAS_IGNORE   /* INSERT OR IGNORE */
+} PGOnConflictActionAlias;
+
 }
