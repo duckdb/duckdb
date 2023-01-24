@@ -46,6 +46,10 @@ public:
 		return false;
 	}
 
+	AttachedDatabase &GetDB() {
+		return db;
+	}
+
 protected:
 	//! The attached database
 	AttachedDatabase &db;

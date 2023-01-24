@@ -1,4 +1,6 @@
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -7,6 +9,15 @@ Transaction::Transaction(TransactionManager &manager_p, ClientContext &context_p
 }
 
 Transaction::~Transaction() {
+}
+
+bool Transaction::IsReadOnly() {
+	auto ctxt = context.lock();
+	if (!ctxt) {
+		throw InternalException("Transaction::IsReadOnly() called after client context has been destroyed");
+	}
+	auto &db = manager.GetDB();
+	return MetaTransaction::Get(*ctxt).ModifiedDatabase() != &db;
 }
 
 } // namespace duckdb

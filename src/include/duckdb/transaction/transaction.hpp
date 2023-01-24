@@ -38,8 +38,8 @@ struct UpdateInfo;
 //! transaction
 class Transaction {
 public:
-	Transaction(TransactionManager &manager, ClientContext &context);
-	virtual ~Transaction();
+	DUCKDB_API Transaction(TransactionManager &manager, ClientContext &context);
+	DUCKDB_API virtual ~Transaction();
 
 	TransactionManager &manager;
 	weak_ptr<ClientContext> context;
@@ -48,8 +48,11 @@ public:
 	atomic<transaction_t> active_query;
 
 public:
-	static Transaction &Get(ClientContext &context, AttachedDatabase &db);
-	static Transaction &Get(ClientContext &context, Catalog &catalog);
+	DUCKDB_API static Transaction &Get(ClientContext &context, AttachedDatabase &db);
+	DUCKDB_API static Transaction &Get(ClientContext &context, Catalog &catalog);
+
+	//! Whether or not the transaction has made any modifications to the database so far
+	DUCKDB_API bool IsReadOnly();
 
 	virtual bool IsDTransaction() const {
 		return false;
