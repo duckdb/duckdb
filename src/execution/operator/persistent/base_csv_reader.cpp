@@ -113,8 +113,6 @@ bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type
 		auto width = DecimalType::GetWidth(sql_type);
 		auto scale = DecimalType::GetScale(sql_type);
 		switch (sql_type.InternalType()) {
-		case PhysicalType::INT8:
-			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int8_t>(value_str, width, scale);
 		case PhysicalType::INT16:
 			return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int16_t>(value_str, width, scale);
 		case PhysicalType::INT32:
@@ -471,11 +469,6 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				auto scale = DecimalType::GetScale(return_types[col_idx]);
 
 				switch (type_id) {
-				case PhysicalType::INT8:
-					success = TryCastDecimalVector<int8_t>(options, parse_chunk.data[col_idx],
-					                                       insert_chunk.data[insert_idx], parse_chunk.size(),
-					                                       error_message, width, scale, options.decimal_separator);
-					break;
 				case PhysicalType::INT16:
 					success = TryCastDecimalVector<int16_t>(options, parse_chunk.data[col_idx],
 					                                        insert_chunk.data[insert_idx], parse_chunk.size(),
