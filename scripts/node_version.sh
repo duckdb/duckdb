@@ -10,8 +10,8 @@ export TAG=''
 if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
 	# proper release
 	npm version `echo $GITHUB_REF | sed 's|refs/tags/v||'`
-else 
-	git describe --tags --long  
+else
+	git describe --tags --long || exit
 
 	export VER=`git describe --tags --abbrev=0 | tr -d "v"`
 	export DIST=`git describe --tags --long | cut -f2 -d-`

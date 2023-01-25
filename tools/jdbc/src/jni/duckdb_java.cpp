@@ -723,7 +723,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			vec.ReferenceAndSetType(string_vec);
 			// fall through on purpose
 		}
-		case LogicalTypeId::JSON:
 		case LogicalTypeId::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {

@@ -554,19 +554,17 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
+
 	auto &segment = meta_data.segment;
 
 	auto &child_vector = ListVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
-	auto info = ListVector::GetConsecutiveChildList(source, child_vector, offset, copy_count);
-
-	UnifiedVectorFormat child_vector_data;
-	child_vector.ToUnifiedFormat(info.second.length, child_vector_data);
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
+
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
 
@@ -580,12 +578,31 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 
 	// set the child vector
+	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_function.function(child_meta_data, child_vector_data, child_vector, info.second.offset, info.second.length);
+	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
+
+	if (info.needs_slicing) {
+		SelectionVector sel(info.child_list_info.length);
+		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+
+		auto sliced_child_vector = Vector(child_vector, sel, info.child_list_info.length);
+		sliced_child_vector.Flatten(info.child_list_info.length);
+		info.child_list_info.offset = 0;
+
+		sliced_child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		child_function.function(child_meta_data, child_vector_data, sliced_child_vector, info.child_list_info.offset,
+		                        info.child_list_info.length);
+
+	} else {
+		child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
+		                        info.child_list_info.length);
+	}
 
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
-	if (info.first) {
+	if (info.is_constant) {
 		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
 	} else {
 		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
