@@ -1375,6 +1375,7 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Blob::ToString(input, result.GetDataWriteable());
 	result.Finalize();
+
 	return result;
 }
 
@@ -1383,12 +1384,13 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromBit::Operation(string_t input, Vector &vector) {
-    idx_t result_size = Bit::GetStringSize(input);
 
-    string_t result = StringVector::EmptyString(vector, result_size);
-    Bit::ToString(input, result.GetDataWriteable());
-    result.Finalize();
-    return result;
+	idx_t result_size = Bit::BitLength(input);
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Bit::ToString(input, result.GetDataWriteable());
+	result.Finalize();
+
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1420,19 +1422,19 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 // Cast To Bit
 //===--------------------------------------------------------------------===//
-    template <>
-    bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
-                                  bool strict) {
-        idx_t result_size;
-        if (!Bit::TryGetBitSize(input, result_size, error_message)) {
-            return false;
-        }
+template <>
+bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                             bool strict) {
+	idx_t result_size;
+	if (!Bit::TryGetBitStringSize(input, result_size, error_message)) {
+		return false;
+	}
 
-        result = StringVector::EmptyString(result_vector, result_size);
-        Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
-        result.Finalize();
-        return true;
-    }
+	result = StringVector::EmptyString(result_vector, result_size);
+	Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
+	result.Finalize();
+	return true;
+}
 
 //===--------------------------------------------------------------------===//
 // Cast From UUID

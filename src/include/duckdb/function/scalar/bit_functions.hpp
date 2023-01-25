@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/blob_functions.hpp
+// duckdb/function/scalar/bit_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,7 +14,15 @@
 namespace duckdb {
 
 struct GetBitFun {
-	static void RegisterFunction(BuiltinFunctions &set); // step 2
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SetBitFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct BitPositionFun {
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb

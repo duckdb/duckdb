@@ -615,10 +615,10 @@ Value Value::BLOB(const string &data) {
 }
 
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
-    Value result(LogicalType::BIT);
-    result.is_null = false;
-    result.str_value = string((const char *)data, len);
-    return result;
+	Value result(LogicalType::BIT);
+	result.is_null = false;
+	result.str_value = string((const char *)data, len);
+	return result;
 }
 
 Value Value::JSON(const char *val) {

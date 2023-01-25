@@ -409,8 +409,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "USER";
 	case LogicalTypeId::JSON:
 		return "JSON";
-    case LogicalTypeId::BIT:
-            return "BIT";
+	case LogicalTypeId::BIT:
+		return "BIT";
 	}
 	return "UNDEFINED";
 }
