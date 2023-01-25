@@ -37,6 +37,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -95,6 +96,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -148,6 +150,7 @@ jobs:
          uses: hendrikmuhs/ccache-action@main
          with:
            key: ${{ github.job }}
+           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
        - name: Build
          shell: msys2 {0}
@@ -178,6 +181,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -238,6 +242,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
      - name: Install OpenSSL
        shell: bash
