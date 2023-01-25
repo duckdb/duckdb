@@ -58,7 +58,7 @@ public:
 		}
 	}
 	explicit VectorBuffer(unique_ptr<data_t[]> data_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(move(data_p)) {
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -71,7 +71,7 @@ public:
 	}
 
 	void SetData(unique_ptr<data_t[]> new_data) {
-		data = move(new_data);
+		data = std::move(new_data);
 	}
 
 	VectorAuxiliaryData *GetAuxiliaryData() {
@@ -79,7 +79,7 @@ public:
 	}
 
 	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
-		aux_data = move(aux_data_p);
+		aux_data = std::move(aux_data_p);
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -109,7 +109,7 @@ public:
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
 	}
 	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)) {
 	}
 	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
@@ -150,7 +150,7 @@ public:
 	}
 
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
-		references.push_back(move(heap));
+		references.push_back(std::move(heap));
 	}
 
 private:

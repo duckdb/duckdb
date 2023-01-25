@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(move(type_p), StatisticsType::LOCAL_STATS) {
+ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	InitializeBase();
 	auto &child_type = ListType::GetChildType(type);
@@ -35,7 +35,7 @@ unique_ptr<BaseStatistics> ListStatistics::Copy() const {
 	result->CopyBase(*this);
 
 	result->child_stats = child_stats ? child_stats->Copy() : nullptr;
-	return move(result);
+	return std::move(result);
 }
 
 void ListStatistics::Serialize(FieldWriter &writer) const {
@@ -44,10 +44,10 @@ void ListStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto result = make_unique<ListStatistics>(move(type));
+	auto result = make_unique<ListStatistics>(std::move(type));
 	auto &child_type = ListType::GetChildType(result->type);
 	result->child_stats = reader.ReadRequiredSerializable<BaseStatistics>(child_type);
-	return move(result);
+	return std::move(result);
 }
 
 string ListStatistics::ToString() const {

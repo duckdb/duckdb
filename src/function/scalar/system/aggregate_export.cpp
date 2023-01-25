@@ -15,7 +15,7 @@ struct ExportAggregateBindData : public FunctionData {
 	idx_t state_size;
 
 	explicit ExportAggregateBindData(AggregateFunction aggr_p, idx_t state_size_p)
-	    : aggr(move(aggr_p)), state_size(state_size_p) {
+	    : aggr(std::move(aggr_p)), state_size(state_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -219,6 +219,7 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
 		vector<unique_ptr<Expression>> args;
+		args.reserve(state_type.bound_argument_types.size());
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_unique<BoundConstantExpression>(Value(arg_type)));
 		}
@@ -302,7 +303,6 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	// this should be required
 	D_ASSERT(bound_function.state_size);
 	D_ASSERT(bound_function.finalize);
-	D_ASSERT(!bound_function.window);
 
 	D_ASSERT(child_aggregate->function.return_type.id() != LogicalTypeId::INVALID);
 #ifdef DEBUG
@@ -313,7 +313,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	auto export_bind_data = make_unique<ExportAggregateFunctionBindData>(child_aggregate->Copy());
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.return_type,
 	                             child_aggregate->function.arguments);
-	auto return_type = LogicalType::AGGREGATE_STATE(move(state_type));
+	auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
 
 	auto export_function =
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,
@@ -325,8 +325,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	export_function.serialize = ExportStateAggregateSerialize;
 	export_function.deserialize = ExportStateAggregateDeserialize;
 
-	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
-	                                             move(child_aggregate->filter), move(export_bind_data),
+	return make_unique<BoundAggregateExpression>(export_function, std::move(child_aggregate->children),
+	                                             std::move(child_aggregate->filter), std::move(export_bind_data),
 	                                             child_aggregate->aggr_type);
 }
 

@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -23,7 +24,7 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
 	if (parent) {
 
@@ -152,9 +153,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind((BaseTableRef &)ref);
 		break;
-	case TableReferenceType::CROSS_PRODUCT:
-		result = Bind((CrossProductRef &)ref);
-		break;
 	case TableReferenceType::JOIN:
 		result = Bind((JoinRef &)ref);
 		break;
@@ -170,10 +168,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
-	default:
+	case TableReferenceType::CTE:
+	case TableReferenceType::INVALID:
 		throw InternalException("Unknown table ref type");
 	}
-	result->sample = move(ref.sample);
+	result->sample = std::move(ref.sample);
 	return result;
 }
 
@@ -189,9 +188,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::JOIN:
 		root = CreatePlan((BoundJoinRef &)ref);
 		break;
-	case TableReferenceType::CROSS_PRODUCT:
-		root = CreatePlan((BoundCrossProductRef &)ref);
-		break;
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan((BoundTableFunction &)ref);
 		break;
@@ -204,12 +200,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::CTE:
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
-	default:
-		throw InternalException("Unsupported bound table ref type type");
+	case TableReferenceType::INVALID:
+		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause
 	if (ref.sample) {
-		root = make_unique<LogicalSample>(move(ref.sample), move(root));
+		root = make_unique<LogicalSample>(std::move(ref.sample), std::move(root));
 	}
 	return root;
 }
@@ -299,10 +295,10 @@ vector<ExpressionBinder *> &Binder::GetActiveBinders() {
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
 	if (parent) {
-		parent->AddUsingBindingSet(move(set));
+		parent->AddUsingBindingSet(std::move(set));
 		return;
 	}
-	bind_context.AddUsingBindingSet(move(set));
+	bind_context.AddUsingBindingSet(std::move(set));
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
@@ -390,10 +386,10 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 
 void Binder::AddTableName(string table_name) {
 	if (parent) {
-		parent->AddTableName(move(table_name));
+		parent->AddTableName(std::move(table_name));
 		return;
 	}
-	table_names.insert(move(table_name));
+	table_names.insert(std::move(table_name));
 }
 
 const unordered_set<string> &Binder::GetTableNames() {
@@ -414,6 +410,23 @@ string Binder::FormatError(TableRef &ref_context, const string &message) {
 string Binder::FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values) {
 	QueryErrorContext context(root_statement, query_location);
 	return context.FormatErrorRecursive(message, values);
+}
+
+// FIXME: this is extremely naive
+void VerifyNotExcluded(ParsedExpression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)expr;
+		if (!column_ref.IsQualified()) {
+			return;
+		}
+		auto &table_name = column_ref.GetTableName();
+		if (table_name == "excluded") {
+			throw NotImplementedException("'excluded' qualified columns are not supported in the RETURNING clause yet");
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { VerifyNotExcluded((ParsedExpression &)child); });
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
@@ -451,20 +464,22 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 				auto star_expr = returning_binder.Bind(star_column, &result_type);
 				result.types.push_back(result_type);
 				result.names.push_back(star_expr->GetName());
-				projection_expressions.push_back(move(star_expr));
+				projection_expressions.push_back(std::move(star_expr));
 			}
 		} else {
+			// TODO: accept 'excluded' in the RETURNING clause
+			VerifyNotExcluded(*returning_expr);
 			auto expr = returning_binder.Bind(returning_expr, &result_type);
 			result.names.push_back(expr->GetName());
 			result.types.push_back(result_type);
-			projection_expressions.push_back(move(expr));
+			projection_expressions.push_back(std::move(expr));
 		}
 	}
 
-	auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), move(projection_expressions));
-	projection->AddChild(move(child_operator));
+	auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
+	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
-	result.plan = move(projection);
+	result.plan = std::move(projection);
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;

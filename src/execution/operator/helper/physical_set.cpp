@@ -14,10 +14,10 @@ void PhysicalSet::SetExtensionVariable(ExecutionContext &context, DBConfig &conf
 		extension_option.set_function(context.client, scope, target_value);
 	}
 	if (scope == SetScope::GLOBAL) {
-		config.SetOption(name, move(target_value));
+		config.SetOption(name, std::move(target_value));
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[name] = move(target_value);
+		client_config.set_variables[name] = std::move(target_value);
 	}
 }
 

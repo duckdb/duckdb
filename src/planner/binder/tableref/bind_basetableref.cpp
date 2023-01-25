@@ -57,8 +57,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			(*cteref)++;
 
 			result->types = b->types;
-			result->bound_columns = move(names);
-			return move(result);
+			result->bound_columns = std::move(names);
+			return std::move(result);
 		}
 	}
 	// not a CTE
@@ -79,7 +79,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				auto replacement_function = scan.function(context, table_name, scan.data.get());
 				if (replacement_function) {
 					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-					replacement_function->column_name_alias = ref.column_name_alias;
+					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+						auto &table_function = (TableFunctionRef &)*replacement_function;
+						table_function.column_name_alias = ref.column_name_alias;
+						;
+					} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+						auto &subquery = (SubqueryRef &)*replacement_function;
+						subquery.column_name_alias = ref.column_name_alias;
+					} else {
+						throw InternalException("Replacement scan should return either a table function or a subquery");
+					}
 					return Bind(*replacement_function);
 				}
 			}
@@ -126,11 +135,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
-		                                           move(return_names));
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, std::move(bind_data),
+		                                           std::move(return_types), std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
 		                          logical_get->GetTable());
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents

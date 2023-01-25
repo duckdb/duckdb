@@ -28,8 +28,8 @@ struct CAPIReplacementScanInfo {
 	string error;
 };
 
-unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
-                                                              ReplacementScanData *data) {
+unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
+                                                      ReplacementScanData *data) {
 	auto &scan_data = (CAPIReplacementScanData &)*data;
 
 	CAPIReplacementScanInfo info(&scan_data);
@@ -44,10 +44,10 @@ unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &con
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &param : info.parameters) {
-		children.push_back(make_unique<ConstantExpression>(move(param)));
+		children.push_back(make_unique<ConstantExpression>(std::move(param)));
 	}
-	table_function->function = make_unique<FunctionExpression>(info.function_name, move(children));
-	return table_function;
+	table_function->function = make_unique<FunctionExpression>(info.function_name, std::move(children));
+	return std::move(table_function);
 }
 
 } // namespace duckdb
@@ -65,7 +65,7 @@ void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback
 
 	auto &config = duckdb::DBConfig::GetConfig(*wrapper->database->instance);
 	config.replacement_scans.push_back(
-	    duckdb::ReplacementScan(duckdb::duckdb_capi_replacement_callback, move(scan_info)));
+	    duckdb::ReplacementScan(duckdb::duckdb_capi_replacement_callback, std::move(scan_info)));
 }
 
 void duckdb_replacement_scan_set_function_name(duckdb_replacement_scan_info info_p, const char *function_name) {

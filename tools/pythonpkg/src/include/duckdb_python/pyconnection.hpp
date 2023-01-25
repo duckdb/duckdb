@@ -29,7 +29,7 @@ class RegisteredArrow : public RegisteredObject {
 
 public:
 	RegisteredArrow(unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory_p, py::object obj_p)
-	    : RegisteredObject(std::move(obj_p)), arrow_factory(move(arrow_factory_p)) {};
+	    : RegisteredObject(std::move(obj_p)), arrow_factory(std::move(arrow_factory_p)) {};
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
@@ -89,10 +89,11 @@ public:
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
-	                                         bool filename, bool hive_partitioning);
+	                                         bool filename, bool hive_partitioning, bool union_by_name);
 
 	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
-	                                          bool file_row_number, bool filename, bool hive_partitioning);
+	                                          bool file_row_number, bool filename, bool hive_partitioning,
+	                                          bool union_by_name);
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
@@ -149,9 +150,10 @@ public:
 	static bool IsPandasDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
+	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
+
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
-	unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

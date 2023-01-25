@@ -87,7 +87,29 @@ SELECT iv, '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ + iv FROM intervals;
 00:00:00.000612	2021-12-01 05:54:48.124068-08
 -00:00:00.000485	2021-12-01 05:54:48.122971-08
 
-#  interval + timestamp
+# ms overflow
+query I
+select '1999-12-31 16:00:00-08'::timestamptz + interval 2400 hours
+----
+2000-04-09 17:00:00-07
+
+statement error
+select 'epoch'::timestamptz + '9223372036854775000 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz + '9223372036854774999 microseconds'::interval
+----
+294247-01-09 20:00:54.774999-08
+
+statement error
+select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
+----
+290303-12-10 (BC) 16:07:02-07:52
+
+# interval + timestamp
 query II
 SELECT iv, iv + '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ FROM intervals;
 ----
@@ -121,6 +143,49 @@ SELECT iv, iv + '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ FROM intervals;
 -00:00:00.000001	2021-12-01 05:54:48.123455-08
 00:00:00.000612	2021-12-01 05:54:48.124068-08
 -00:00:00.000485	2021-12-01 05:54:48.122971-08
+
+# ms overflow
+query I
+select interval 2400 hours + '1999-12-31 16:00:00-08'::timestamptz
+----
+2000-04-09 17:00:00-07
+
+statement error
+select '9223372036854775000 microseconds'::interval + 'epoch'::timestamptz
+
+query I
+select '9223372036854774999 microseconds'::interval + 'epoch'::timestamptz
+----
+294247-01-09 20:00:54.774999-08
+
+statement error
+select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
+
+query I
+select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
+----
+290303-12-10 (BC) 16:07:02-07:52
+
+# infinity
+query I
+select 'infinity'::timestamptz + '1 microsecond'::interval
+----
+infinity
+
+query I
+select '1 microsecond'::interval + 'infinity'::timestamptz
+----
+infinity
+
+query I
+select '-infinity'::timestamptz + '1 microsecond'::interval
+----
+-infinity
+
+query I
+select '1 microsecond'::interval + '-infinity'::timestamptz
+----
+-infinity
 
 # timestamp - interval
 query II
@@ -156,6 +221,31 @@ SELECT iv, '2021-12-01 13:54:48.123456Z'::TIMESTAMPTZ - iv FROM intervals;
 -00:00:00.000001	2021-12-01 05:54:48.123457-08
 00:00:00.000612	2021-12-01 05:54:48.122844-08
 -00:00:00.000485	2021-12-01 05:54:48.123941-08
+
+# ms overflow
+query I
+select '2000-04-09 17:00:00-07'::timestamptz - interval 2400 hours
+----
+1999-12-31 16:00:00-08
+
+statement error
+select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
+
+query I
+select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
+----
+290303-12-10 (BC) 16:07:02-07:52
+
+# infinity
+query I
+select 'infinity'::timestamptz - '1 day'::interval
+----
+infinity
+
+query I
+select '-infinity'::timestamptz - '1 day'::interval
+----
+-infinity
 
 # Before the epoch
 query II
@@ -354,4 +444,24 @@ SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
 statement error
 SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
 
+# DST arithmetic
+statement ok
+set timezone = 'Europe/London';
 
+statement ok
+CREATE TABLE london AS (
+	SELECT *
+	FROM (VALUES
+		('2000-10-29 03:00:00+00'::TIMESTAMPTZ, '2000-03-26 03:00:00+01'::TIMESTAMPTZ, '2000-01-03 00:00:00+00'::TIMESTAMPTZ)
+		) tbl(dst2, dst1, origin)
+	);
+
+query I
+SELECT origin + (dst1 - origin) FROM london;
+----
+2000-03-26 03:00:00+01
+
+query I
+SELECT origin + (dst2 - origin) FROM london;
+----
+2000-10-29 03:00:00+00

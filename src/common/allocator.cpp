@@ -102,7 +102,7 @@ Allocator::Allocator()
 Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
                      reallocate_function_ptr_t reallocate_function_p, unique_ptr<PrivateAllocatorData> private_data_p)
     : allocate_function(allocate_function_p), free_function(free_function_p),
-      reallocate_function(reallocate_function_p), private_data(move(private_data_p)) {
+      reallocate_function(reallocate_function_p), private_data(std::move(private_data_p)) {
 	D_ASSERT(allocate_function);
 	D_ASSERT(free_function);
 	D_ASSERT(reallocate_function);

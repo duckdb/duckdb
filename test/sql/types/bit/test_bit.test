@@ -66,11 +66,6 @@ SELECT * FROM bits
 (empty)
 NULL
 
-query I
-SELECT ''::BIT
-----
-NULL
-
 # try cast
 query I
 SELECT TRY_CAST('101' AS BIT)

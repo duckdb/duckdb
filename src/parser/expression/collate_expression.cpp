@@ -6,16 +6,16 @@
 namespace duckdb {
 
 CollateExpression::CollateExpression(string collation_p, unique_ptr<ParsedExpression> child)
-    : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE), collation(move(collation_p)) {
+    : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE), collation(std::move(collation_p)) {
 	D_ASSERT(child);
-	this->child = move(child);
+	this->child = std::move(child);
 }
 
 string CollateExpression::ToString() const {
 	return child->ToString() + " COLLATE " + KeywordHelper::WriteOptionallyQuoted(collation);
 }
 
-bool CollateExpression::Equals(const CollateExpression *a, const CollateExpression *b) {
+bool CollateExpression::Equal(const CollateExpression *a, const CollateExpression *b) {
 	if (!a->child->Equals(b->child.get())) {
 		return false;
 	}
@@ -28,7 +28,7 @@ bool CollateExpression::Equals(const CollateExpression *a, const CollateExpressi
 unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 	auto copy = make_unique<CollateExpression>(collation, child->Copy());
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void CollateExpression::Serialize(FieldWriter &writer) const {
@@ -39,7 +39,7 @@ void CollateExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto collation = reader.ReadRequired<string>();
-	return make_unique_base<ParsedExpression, CollateExpression>(collation, move(child));
+	return make_unique_base<ParsedExpression, CollateExpression>(collation, std::move(child));
 }
 
 } // namespace duckdb

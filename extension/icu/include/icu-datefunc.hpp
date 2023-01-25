@@ -32,7 +32,7 @@ struct ICUDateFunc {
 	};
 
 	struct CastData : public BoundCastData {
-		explicit CastData(unique_ptr<FunctionData> info_p) : info(move(info_p)) {
+		explicit CastData(unique_ptr<FunctionData> info_p) : info(std::move(info_p)) {
 		}
 
 		unique_ptr<BoundCastData> Copy() const override {
@@ -58,6 +58,16 @@ struct ICUDateFunc {
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar
 	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
+	//! Adds the timestamp and the interval using the calendar
+	static timestamp_t Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
+	//! Subtracts the interval from the timestamp using the calendar
+	static timestamp_t Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
+	//! Subtracts the latter timestamp from the former timestamp using the calendar
+	static interval_t Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date);
+	//! Pulls out the bin values from the timestamp assuming it is an instant,
+	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
+	//! Adding offset doesn't really work around DST because the bin values are ambiguous
+	static timestamp_t FromNaive(icu::Calendar *calendar, timestamp_t naive);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);

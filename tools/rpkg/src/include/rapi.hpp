@@ -38,7 +38,7 @@ struct RStatement {
 };
 
 struct RelationWrapper {
-	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(move(rel_p)) {
+	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
 	}
 	shared_ptr<Relation> rel;
 };
@@ -55,8 +55,8 @@ struct RQueryResult {
 typedef cpp11::external_pointer<RQueryResult> rqry_eptr_t;
 
 // internal
-unique_ptr<TableFunctionRef> ArrowScanReplacement(ClientContext &context, const std::string &table_name,
-                                                  ReplacementScanData *data);
+unique_ptr<TableRef> ArrowScanReplacement(ClientContext &context, const std::string &table_name,
+                                          ReplacementScanData *data);
 
 struct ArrowScanReplacementData : public ReplacementScanData {
 	DBWrapper *wrapper;

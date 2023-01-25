@@ -255,7 +255,7 @@ simple_select:
             | select_clause UNION all_or_distinct by_name select_clause
 				{
 					$$ = makeSetOp(PG_SETOP_UNION_BY_NAME, $3, $1, $5);
-				}    
+				}
 			| select_clause UNION all_or_distinct select_clause
 				{
 					$$ = makeSetOp(PG_SETOP_UNION, $3, $1, $4);
@@ -954,6 +954,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
  * A NATURAL JOIN implicitly matches column names between
  * tables and the shape is determined by which columns are
  * in common. We'll collect columns during the later transformations.
+ * A POSITIONAL JOIN implicitly matches row numbers and is more like a table.
  */
 
 joined_table:
@@ -1025,6 +1026,19 @@ joined_table:
 					n->rarg = $4;
 					n->usingClause = NIL; /* figure out which columns later... */
 					n->quals = NULL; /* fill later */
+					n->location = @2;
+					$$ = n;
+				}
+			| table_ref POSITIONAL JOIN table_ref
+				{
+					/* POSITIONAL JOIN is a coordinated scan */
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_POSITION;
+					n->isNatural = false;
+					n->larg = $1;
+					n->rarg = $4;
+					n->usingClause = NIL;
+					n->quals = NULL;
 					n->location = @2;
 					$$ = n;
 				}

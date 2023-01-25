@@ -358,7 +358,7 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
 
-void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops,
+void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_ops,
                                                          vector<unique_ptr<FilterInfo>> *filter_infos) {
 	InitEquivalentRelations(filter_infos);
 	InitTotalDomains();
@@ -541,12 +541,12 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
 			idx_t cardinality_with_and_filter =
-			    InspectConjunctionAND(cardinality, it.first, &filter, move(column_statistics));
+			    InspectConjunctionAND(cardinality, it.first, &filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 			auto &filter = (ConjunctionOrFilter &)*it.second;
 			idx_t cardinality_with_or_filter =
-			    InspectConjunctionOR(cardinality, it.first, &filter, move(column_statistics));
+			    InspectConjunctionOR(cardinality, it.first, &filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
 	}
@@ -564,12 +564,12 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	auto table_filters = GetTableFilters(op);
 
 	auto card_after_filters = node->GetBaseTableCardinality();
-	// Logical Filter on a seq scan
-	if (has_logical_filter) {
-		card_after_filters *= DEFAULT_SELECTIVITY;
-	} else if (table_filters) {
+	if (table_filters) {
 		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
 		card_after_filters = MinValue(inspect_result, (double)card_after_filters);
+	}
+	if (has_logical_filter) {
+		card_after_filters *= DEFAULT_SELECTIVITY;
 	}
 	node->SetEstimatedCardinality(card_after_filters);
 }

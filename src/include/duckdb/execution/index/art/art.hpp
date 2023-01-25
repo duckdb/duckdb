@@ -26,6 +26,8 @@
 
 namespace duckdb {
 
+class ConflictManager;
+
 struct ARTIndexScanState : public IndexScanState {
 	ARTIndexScanState() : checked(false), result_index(0) {
 	}
@@ -41,7 +43,7 @@ struct ARTIndexScanState : public IndexScanState {
 	idx_t result_index = 0;
 };
 
-enum VerifyExistenceType : uint8_t {
+enum class VerifyExistenceType : uint8_t {
 	APPEND = 0,    // for purpose to append into table
 	APPEND_FK = 1, // for purpose to append into table has foreign key
 	DELETE_FK = 2  // for purpose to delete from table related to foreign key
@@ -49,6 +51,7 @@ enum VerifyExistenceType : uint8_t {
 
 class ART : public Index {
 public:
+	//! Constructs an ART containing the bound expressions, which are resolved during index construction
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
 	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
@@ -57,7 +60,7 @@ public:
 
 	//! Root of the tree
 	Node *tree;
-
+	//! Attached database
 	AttachedDatabase &db;
 
 public:
@@ -79,17 +82,18 @@ public:
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
 	void VerifyAppend(DataChunk &chunk) override;
+	//! Verify that data can be appended to the index
+	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
 	//! Verify that data can be appended to the index for foreign key constraint
-	void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
+	void VerifyAppendForeignKey(DataChunk &chunk) override;
 	//! Verify that data can be delete from the index for foreign key constraint
-	void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) override;
+	void VerifyDeleteForeignKey(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert data into the index.
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct ARTs from sorted chunks and merge them.
-	void ConstructAndMerge(IndexLock &lock, PayloadScanner &scanner, Allocator &allocator) override;
+	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);
@@ -105,6 +109,9 @@ public:
 	//! Returns the string representation of an ART
 	string ToString() override;
 
+	string GenerateErrorKeyName(DataChunk &input, idx_t row);
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+
 private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
@@ -114,6 +121,9 @@ private:
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
 
+	//! Perform 'Lookup' for an entire chunk, marking which succeeded
+	void LookupValues(DataChunk &input, ConflictManager &conflict_manager) final override;
+
 	//! Find the node with a matching key, optimistic version
 	Leaf *Lookup(Node *node, Key &key, idx_t depth);
 
@@ -122,8 +132,6 @@ private:
 	                vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
-
-	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
 
 private:
 	//! The estimated ART memory consumption

@@ -78,7 +78,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	}
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	return move(((BoundExpression &)*expr).expr);
+	return std::move(((BoundExpression &)*expr).expr);
 }
 
 static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> &expr, const LogicalType &type) {
@@ -89,9 +89,9 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 
 	auto &bound = (BoundExpression &)*expr;
-	bound.expr = BoundCastExpression::AddDefaultCastToType(move(bound.expr), type);
+	bound.expr = BoundCastExpression::AddDefaultCastToType(std::move(bound.expr), type);
 
-	return move(bound.expr);
+	return std::move(bound.expr);
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
@@ -107,15 +107,15 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = (BoundExpression &)*expr;
-	children.emplace_back(move(bound.expr));
+	children.emplace_back(std::move(bound.expr));
 
 	string error;
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, move(children), error, true);
+	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
 		throw BinderException(error);
 	}
-	bound.expr = move(function);
+	bound.expr = std::move(function);
 	return bound.expr->return_type;
 }
 
@@ -172,19 +172,19 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
-				bound.expr = BoundCastExpression::AddCastToType(context, move(bound.expr), LogicalType::BIGINT);
+				bound.expr = BoundCastExpression::AddCastToType(context, std::move(bound.expr), LogicalType::BIGINT);
 			}
 			break;
 		case ExpressionType::WINDOW_NTH_VALUE:
 			// nth_value(<expr>, index)
 			if (argno == 1) {
-				bound.expr = BoundCastExpression::AddCastToType(context, move(bound.expr), LogicalType::BIGINT);
+				bound.expr = BoundCastExpression::AddCastToType(context, std::move(bound.expr), LogicalType::BIGINT);
 			}
 		default:
 			break;
 		}
 		types.push_back(bound.expr->return_type);
-		children.push_back(move(bound.expr));
+		children.push_back(std::move(bound.expr));
 	}
 	//  Determine the function type.
 	LogicalType sql_type;
@@ -205,18 +205,18 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func->functions.GetFunctionByOffset(best_function);
-		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, move(children));
+		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);
-		bind_info = move(bound_aggregate->bind_info);
-		children = move(bound_aggregate->children);
+		bind_info = std::move(bound_aggregate->bind_info);
+		children = std::move(bound_aggregate->children);
 		sql_type = bound_aggregate->return_type;
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types);
 	}
-	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate), move(bind_info));
-	result->children = move(children);
+	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
+	result->children = std::move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
 	}
@@ -271,7 +271,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		// Cast all three to match
-		bound_order.expr = BoundCastExpression::AddCastToType(context, move(bound_order.expr), order_type);
+		bound_order.expr = BoundCastExpression::AddCastToType(context, std::move(bound_order.expr), order_type);
 		start_type = end_type = order_type;
 	}
 
@@ -279,7 +279,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto type = ResolveOrderType(config, order.type);
 		auto null_order = ResolveNullOrder(config, order.null_order);
 		auto expression = GetExpression(order.expression);
-		result->orders.emplace_back(type, null_order, move(expression));
+		result->orders.emplace_back(type, null_order, std::move(expression));
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);
@@ -292,11 +292,11 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(move(name), result->return_type,
+	auto colref = make_unique<BoundColumnRefExpression>(std::move(name), result->return_type,
 	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
-	node.windows.push_back(move(result));
-	return BindResult(move(colref));
+	node.windows.push_back(std::move(result));
+	return BindResult(std::move(colref));
 }
 
 } // namespace duckdb

@@ -17,7 +17,7 @@ DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewri
 	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
-	root = move(func);
+	root = std::move(func);
 }
 
 unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -93,11 +93,11 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	// found a replacement function: bind it
 	vector<unique_ptr<Expression>> children;
-	children.push_back(move(date_part.children[1]));
+	children.push_back(std::move(date_part.children[1]));
 
 	string error;
 	FunctionBinder binder(rewriter.context);
-	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, move(children), error, false);
+	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, std::move(children), error, false);
 	if (!function) {
 		throw BinderException(error);
 	}

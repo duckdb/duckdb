@@ -23,7 +23,6 @@ struct ListSortBindData : public FunctionData {
 	vector<LogicalType> payload_types;
 
 	ClientContext &context;
-	unique_ptr<GlobalSortState> global_sort_state;
 	RowLayout payload_layout;
 	vector<BoundOrderByNode> orders;
 
@@ -53,8 +52,8 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_unique_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
 	auto lists_col_expr = make_unique_base<Expression, BoundReferenceExpression>(child_type, 1);
-	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, move(idx_col_expr));
-	orders.emplace_back(order_type, null_order, move(lists_col_expr));
+	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
+	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
@@ -94,6 +93,7 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 	payload_chunk.Verify();
 
 	// sink
+	key_chunk.Flatten();
 	local_sort_state.SinkChunk(key_chunk, payload_chunk);
 	data_to_sort = true;
 }
@@ -116,8 +116,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	info.global_sort_state = make_unique<GlobalSortState>(buffer_manager, info.orders, info.payload_layout);
-	auto &global_sort_state = *info.global_sort_state;
+	GlobalSortState global_sort_state(buffer_manager, info.orders, info.payload_layout);
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 

@@ -11,7 +11,7 @@
 namespace duckdb {
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
 	switch (radix_bits) {
 	case 1:
@@ -40,7 +40,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 }
 
 template <class OP, class RETURN_TYPE, idx_t radix_bits_1, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
+RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&... args) {
 	D_ASSERT(radix_bits_2 <= sizeof(hash_t) * 8);
 	switch (radix_bits_2) {
 	case 1:
@@ -69,7 +69,7 @@ RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
 }
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&...args) {
+RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&... args) {
 	D_ASSERT(radix_bits_1 <= sizeof(hash_t) * 8);
 	switch (radix_bits_1) {
 	case 1:
@@ -422,7 +422,7 @@ void RadixPartitioning::PartitionRowData(BufferManager &buffer_manager, const Ro
 //===--------------------------------------------------------------------===//
 RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p, vector<LogicalType> types_p,
                                                        idx_t radix_bits_p, idx_t hash_col_idx_p)
-    : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, move(types_p)), radix_bits(radix_bits_p),
+    : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, std::move(types_p)), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(hash_col_idx < types.size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
