@@ -15,6 +15,32 @@ UpdateSetInfo::UpdateSetInfo(const UpdateSetInfo &other) : columns(other.columns
 	}
 }
 
+bool UpdateSetInfo::Equals(const UpdateSetInfo &other) const {
+	if (!condition && !other.condition) {
+	} else if (!condition || !other.condition) {
+		return false;
+	} else if (!condition->Equals(other.condition.get())) {
+		return false;
+	}
+
+	if (columns != other.columns) {
+		return false;
+	}
+
+	if (expressions.size() != other.expressions.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		auto &lhs = expressions[i];
+		auto &rhs = other.expressions[i];
+
+		if (!lhs->Equals(rhs.get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
 	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
 }
@@ -78,10 +104,8 @@ bool UpdateStatement::Equals(const SQLStatement *other_p) const {
 	}
 	auto &other = (const UpdateStatement &)*other_p;
 
-	if (!condition && !other.condition) {
-	} else if (!condition || !other.condition) {
-		return false;
-	} else if (!condition->Equals(other.condition.get())) {
+	D_ASSERT(other.set_info);
+	if (!set_info->Equals(*other.set_info)) {
 		return false;
 	}
 
@@ -95,22 +119,6 @@ bool UpdateStatement::Equals(const SQLStatement *other_p) const {
 		return false;
 	} else if (!from_table->Equals(other.from_table.get())) {
 		return false;
-	}
-
-	if (columns != other.columns) {
-		return false;
-	}
-
-	if (expressions.size() != other.expressions.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		auto &lhs = expressions[i];
-		auto &rhs = other.expressions[i];
-
-		if (!lhs->Equals(rhs.get())) {
-			return false;
-		}
 	}
 
 	if (returning_list.size() != other.returning_list.size()) {

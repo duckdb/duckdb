@@ -643,16 +643,18 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (statement && config.AnyVerification()) {
+
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
+		auto original_statement = move(statement);
 		switch (statement->type) {
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			PreservedError error;
 			try {
-				error = VerifyQuery(lock, query, std::move(statement));
+				error = VerifyQuery(lock, query, move(original_statement));
 			} catch (const Exception &ex) {
 				error = PreservedError(ex);
 			} catch (std::exception &ex) {
@@ -665,13 +667,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+		case StatementType::COPY_STATEMENT:
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
 			Parser parser;
 			PreservedError error;
 			try {
-				parser.ParseQuery(statement->ToString());
+				parser.ParseQuery(original_statement->ToString());
 			} catch (const Exception &ex) {
 				error = PreservedError(ex);
 			} catch (std::exception &ex) {
@@ -687,6 +690,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		default:
 			statement = std::move(copied_statement);
 			break;
+		}
+		// When the StatementType is SELECT_STATEMENT, we will have already consumed the 'original_statement'
+		// Verify that the newly generated statement equals the original
+		if (original_statement && !original_statement->Equals(statement.get())) {
+			PreservedError error = InternalException("Verification statement does not equal the original statement");
+			return make_unique<PendingQueryResult>(error);
 		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
