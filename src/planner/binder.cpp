@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -411,6 +412,23 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 	return context.FormatErrorRecursive(message, values);
 }
 
+// FIXME: this is extremely naive
+void VerifyNotExcluded(ParsedExpression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)expr;
+		if (!column_ref.IsQualified()) {
+			return;
+		}
+		auto &table_name = column_ref.GetTableName();
+		if (table_name == "excluded") {
+			throw NotImplementedException("'excluded' qualified columns are not supported in the RETURNING clause yet");
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { VerifyNotExcluded((ParsedExpression &)child); });
+}
+
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
                                      idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
                                      BoundStatement result) {
@@ -449,6 +467,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 				projection_expressions.push_back(std::move(star_expr));
 			}
 		} else {
+			// TODO: accept 'excluded' in the RETURNING clause
+			VerifyNotExcluded(*returning_expr);
 			auto expr = returning_binder.Bind(returning_expr, &result_type);
 			result.names.push_back(expr->GetName());
 			result.types.push_back(result_type);

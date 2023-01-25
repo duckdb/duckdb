@@ -5,6 +5,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -375,15 +376,26 @@ bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifi
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND);
+	ConflictManager conflict_manager(VerifyExistenceType::APPEND, chunk.size());
+	LookupValues(chunk, conflict_manager);
 }
 
-void ART::VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) {
-	VerifyExistence(chunk, VerifyExistenceType::APPEND_FK, err_msg_ptr);
+void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
+	D_ASSERT(conflict_manager.LookupType() == VerifyExistenceType::APPEND);
+	LookupValues(chunk, conflict_manager);
 }
 
-void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
-	VerifyExistence(chunk, VerifyExistenceType::DELETE_FK, err_msg_ptr);
+void ART::VerifyAppendForeignKey(DataChunk &chunk) {
+	ConflictManager conflict_manager(VerifyExistenceType::APPEND_FK, chunk.size());
+	LookupValues(chunk, conflict_manager);
+}
+
+void ART::VerifyDeleteForeignKey(DataChunk &chunk) {
+	if (!IsUnique()) {
+		return;
+	}
+	ConflictManager conflict_manager(VerifyExistenceType::DELETE_FK, chunk.size());
+	LookupValues(chunk, conflict_manager);
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
@@ -789,69 +801,90 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	return true;
 }
 
-void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr) {
-	if (verify_type != VerifyExistenceType::DELETE_FK && !IsUnique()) {
-		return;
-	}
+string ART::GenerateErrorKeyName(DataChunk &input, idx_t row) {
+	// re-executing the expressions is not very fast, but we're going to throw anyways, so we don't care
+	DataChunk expression_chunk;
+	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	ExecuteExpressions(input, expression_chunk);
 
+	string key_name;
+	for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
+		if (k > 0) {
+			key_name += ", ";
+		}
+		key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(row).ToString();
+	}
+	return key_name;
+}
+
+string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) {
+	switch (verify_type) {
+	case VerifyExistenceType::APPEND: {
+		// This node already exists in the tree
+		string type = IsPrimary() ? "primary key" : "unique";
+		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint", key_name, type);
+	}
+	case VerifyExistenceType::APPEND_FK: {
+		// The node we tried to insert does not exist in the foreign table
+		return StringUtil::Format(
+		    "Violates foreign key constraint because key \"%s\" does not exist in referenced table", key_name);
+	}
+	case VerifyExistenceType::DELETE_FK: {
+		// The node we tried to delete still exists in the foreign table
+		return StringUtil::Format("Violates foreign key constraint because key \"%s\" exists in table has foreign key",
+		                          key_name);
+	}
+	default:
+		throw NotImplementedException("Type not implemented for VerifyExistenceType");
+	}
+}
+
+void ART::LookupValues(DataChunk &input, ConflictManager &conflict_manager) {
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// unique index, check
 	lock_guard<mutex> l(lock);
+
 	// first resolve the expressions for the index
-	ExecuteExpressions(chunk, expression_chunk);
+	ExecuteExpressions(input, expression_chunk);
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(expression_chunk.size());
 	GenerateKeys(arena_allocator, expression_chunk, keys);
 
-	for (idx_t i = 0; i < chunk.size(); i++) {
+	idx_t found_conflict = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < input.size(); i++) {
 		if (keys[i].Empty()) {
-			continue;
-		}
-		Node *node_ptr = Lookup(tree, keys[i], 0);
-		bool throw_exception =
-		    verify_type == VerifyExistenceType::APPEND_FK ? node_ptr == nullptr : node_ptr != nullptr;
-		if (!throw_exception) {
-			continue;
-		}
-		string key_name;
-		for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
-			if (k > 0) {
-				key_name += ", ";
+			if (conflict_manager.AddNull(i)) {
+				found_conflict = i;
 			}
-			key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(i).ToString();
+			continue;
 		}
-		string exception_msg;
-		switch (verify_type) {
-		case VerifyExistenceType::APPEND: {
-			// node already exists in tree
-			string type = IsPrimary() ? "primary key" : "unique";
-			exception_msg = "duplicate key \"" + key_name + "\" violates ";
-			exception_msg += type + " constraint";
-			break;
+		Leaf *leaf_ptr = Lookup(tree, keys[i], 0);
+		if (leaf_ptr == nullptr) {
+			if (conflict_manager.AddMiss(i)) {
+				found_conflict = i;
+			}
+			continue;
 		}
-		case VerifyExistenceType::APPEND_FK: {
-			// found node no exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
-			break;
-		}
-		case VerifyExistenceType::DELETE_FK: {
-			// found node exists in tree
-			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" exist in table has foreign key";
-			break;
-		}
-		}
-		if (err_msg_ptr) {
-			err_msg_ptr[i] = exception_msg;
-		} else {
-			throw ConstraintException(exception_msg);
+		// When we find a node, we need to update the 'matches' and 'row_ids'
+		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
+		D_ASSERT(leaf_ptr->count == 1);
+		auto row_id = leaf_ptr->GetRowId(0);
+		if (conflict_manager.AddHit(i, row_id)) {
+			found_conflict = i;
 		}
 	}
+	conflict_manager.FinishLookup();
+	if (found_conflict == DConstants::INVALID_INDEX) {
+		// No conflicts detected
+		return;
+	}
+	auto key_name = GenerateErrorKeyName(input, found_conflict);
+	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
+	throw ConstraintException(exception_msg);
 }
 
 //===--------------------------------------------------------------------===//

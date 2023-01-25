@@ -42,6 +42,7 @@
 	PGWithClause			*with;
 	PGInferClause			*infer;
 	PGOnConflictClause	*onconflict;
+	PGOnConflictActionAlias onconflictshorthand;
 	PGAIndices			*aind;
 	PGResTarget			*target;
 	PGInsertStmt			*istmt;
