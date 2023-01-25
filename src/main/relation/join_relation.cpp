@@ -41,8 +41,7 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> lef
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
 	if (right->type != RelationType::PROJECTION_RELATION) {
-		throw Exception(JoinTypeToString(join_type) +
-		                " requires a projection for the right relation. Received " +
+		throw Exception(JoinTypeToString(join_type) + " requires a projection for the right relation. Received " +
 		                RelationTypeToString(right->type));
 	}
 	condition = nullptr;
@@ -59,7 +58,8 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
 		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_expr);
 		if (right_projection->expressions.size() != left_projection->expressions.size()) {
-			throw Exception(JoinTypeToString(join_type) + " JOIN requires projections to have the same number of expressions");
+			throw Exception(JoinTypeToString(join_type) +
+			                " JOIN requires projections to have the same number of expressions");
 		}
 		auto where_child = make_unique<SubqueryExpression>();
 		auto select_statement = make_unique<SelectStatement>();
