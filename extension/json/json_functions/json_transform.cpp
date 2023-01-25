@@ -24,7 +24,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
-		auto key_str = yyjson_get_str(key);
+		auto key_str = unsafe_yyjson_get_str(key);
 		if (names.find(key_str) != names.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
@@ -42,7 +42,7 @@ static LogicalType StructureToType(yyjson_val *val, ClientContext &context) {
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context);
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		return TransformStringToLogicalType(yyjson_get_str(val), context);
+		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
 	default:
 		throw InvalidInputException("invalid JSON structure");
 	}
@@ -156,7 +156,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 		return false;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-		result = StringVector::AddString(vector, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:

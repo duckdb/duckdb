@@ -136,13 +136,13 @@ static inline yyjson_mut_val *BuildStructureObject(yyjson_val *obj, yyjson_mut_d
 	size_t idx, max;
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
-		string key_string(yyjson_get_str(key), yyjson_get_len(key));
+		string key_string(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		if (elem_keys.find(key_string) != elem_keys.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate key \"" + key_string + "\" in object %s", obj);
 		} else {
 			elem_keys.insert(key_string);
 		}
-		auto mut_key = yyjson_mut_strn(structure_doc, yyjson_get_str(key), yyjson_get_len(key));
+		auto mut_key = yyjson_mut_strn(structure_doc, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		auto mut_val = BuildStructure(val, structure_doc);
 		yyjson_mut_obj_add(result, mut_key, mut_val);
 	}

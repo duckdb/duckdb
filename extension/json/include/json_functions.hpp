@@ -82,6 +82,7 @@ private:
 
 	static CreateScalarFunctionInfo GetArrayLengthFunction();
 	static CreateScalarFunctionInfo GetContainsFunction();
+	static CreateScalarFunctionInfo GetKeysFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 
