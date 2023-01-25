@@ -62,6 +62,12 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
+		// remove the alias since it is assumed to be the name of the argument for the function
+		// i.e if you have CREATE OR REPLACE MACRO eq(a, b) AS a = b
+		// and a function expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right)))
+		// then the macro gets called with eq(left_b=left.left_b, right_b=right.right_b)
+		// and an error is thrown. If the alias is removed, the error is not thrown.
+		children.back()->alias = "";
 	}
 	return make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
 }
@@ -169,11 +175,12 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_inner_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds) {
+[[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
+                                       std::string join) {
 	unique_ptr<ParsedExpression> cond;
 
 	if (conds.size() == 0) { // nop
-		stop("rel_inner_join needs conditions");
+		stop("join needs conditions");
 	} else if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
@@ -184,7 +191,15 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), JoinType::INNER);
+	auto join_type = JoinType::INNER;
+	if (join == "left") {
+		join_type = JoinType::LEFT;
+	} else if (join == "right") {
+		join_type = JoinType::RIGHT;
+	} else if (join == "outer") {
+		join_type = JoinType::OUTER;
+	}
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
