@@ -52,6 +52,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 	}
 	dependencies.AddDependency(op.table);
 
+	D_ASSERT(plan);
 	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
 	bool use_batch_index = UseBatchIndex(*plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -60,18 +61,28 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		parallel_streaming_insert = false;
 		use_batch_index = false;
 	}
+	if (op.action_type != OnConflictAction::THROW) {
+		// We don't support ON CONFLICT clause in batch insertion operation currently
+		use_batch_index = false;
+	}
+	if (op.action_type == OnConflictAction::UPDATE) {
+		// When we potentially need to perform updates, we have to check that row is not updated twice
+		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
+		parallel_streaming_insert = false;
+	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
 		insert = make_unique<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
 		                                          op.estimated_cardinality);
 	} else {
-		insert = make_unique<PhysicalInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
-		                                     op.estimated_cardinality, op.return_chunk,
-		                                     parallel_streaming_insert && num_threads > 1);
+		insert = make_unique<PhysicalInsert>(
+		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
+		    std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
+		    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
+		    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(op.columns_to_fetch));
 	}
-	if (plan) {
-		insert->children.push_back(std::move(plan));
-	}
+	D_ASSERT(plan);
+	insert->children.push_back(std::move(plan));
 	return insert;
 }
 

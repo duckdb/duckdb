@@ -190,7 +190,7 @@ bool RowGroupCollection::Scan(Transaction &transaction, const std::function<bool
 // Fetch
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
-                               Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+                               const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	idx_t count = 0;

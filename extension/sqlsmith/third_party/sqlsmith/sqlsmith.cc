@@ -29,7 +29,13 @@ using namespace std::chrono;
 extern "C" {
 #include <signal.h>
 #include <stdlib.h>
+#if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
 #include <unistd.h>
+#define GETPID ::getpid
+#else
+#include <windows.h>
+#define GETPID (int)GetCurrentProcessId
+#endif
 }
 
 /* make the cerr logger globally accessible so we can emit one last
@@ -84,7 +90,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 		//		if (options.count("rng-state")) {
 		//			istringstream(options["rng-state"]) >> smith::rng;
 		//		} else {
-		smith::rng.seed(opt.seed >= 0 ? opt.seed : getpid());
+		smith::rng.seed(opt.seed >= 0 ? opt.seed : GETPID());
 		//		}
 
 		vector<shared_ptr<logger>> loggers;

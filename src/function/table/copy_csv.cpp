@@ -202,7 +202,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 					break;
 				}
 			}
-		} else {
+		} else if (options.quote.length() != 0) {
 			// complex CSV
 			// check for quote or escape separately
 			if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
@@ -316,8 +316,8 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
-			// VARCHAR, just create a reference
-			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
+			// VARCHAR, just reinterpret (cannot reference, because LogicalTypeId::VARCHAR is used by the JSON type too)
+			cast_chunk.data[col_idx].Reinterpret(input.data[col_idx]);
 		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(

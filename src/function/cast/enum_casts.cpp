@@ -140,7 +140,6 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
