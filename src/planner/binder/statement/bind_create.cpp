@@ -11,6 +11,9 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_database_info.hpp"
+#include "duckdb/function/create_database_extension.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -426,8 +429,11 @@ unique_ptr<LogicalOperator> DCatalog::BindCreateIndex(Binder &binder, CreateStat
 	}
 
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-	for (auto &index : get.column_ids) {
-		create_index_info->scan_types.push_back(get.returned_types[index]);
+	for (auto &column_id : get.column_ids) {
+		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+			throw BinderException("Cannot create an index on the rowid!");
+		}
+		create_index_info->scan_types.push_back(get.returned_types[column_id]);
 	}
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
@@ -495,12 +501,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		auto &get = (LogicalGet &)*plan;
-		for (auto &column_id : get.column_ids) {
-			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-				throw BinderException("Cannot create an index on the rowid!");
-			}
-		}
 		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, move(plan));
 		break;
 	}
@@ -624,6 +624,28 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			LogicalType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
+		}
+		break;
+	}
+	case CatalogType::DATABASE_ENTRY: {
+		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
+		auto &base = (CreateDatabaseInfo &)*stmt.info;
+		string extension_name = base.extension_name;
+		string database_name = base.name;
+		string source_path = base.path;
+
+		auto &config = DBConfig::GetConfig(context);
+		for (auto &extension : config.create_database_extensions) {
+			auto create_database_function_ref =
+			    extension.function(context, extension_name, database_name, source_path, extension.data.get());
+			if (create_database_function_ref) {
+				auto bound_create_database_func = Bind(*create_database_function_ref);
+				result.plan = CreatePlan(*bound_create_database_func);
+				break;
+			}
+		}
+		if (!result.plan) {
+			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
 		}
 		break;
 	}

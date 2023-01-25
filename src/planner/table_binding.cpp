@@ -11,6 +11,8 @@
 #include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
@@ -142,6 +144,41 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	return (expression);
 }
 
+const vector<column_t> &TableBinding::GetBoundColumnIds() const {
+#ifdef DEBUG
+	unordered_set<column_t> column_ids;
+	for (auto &id : bound_column_ids) {
+		auto result = column_ids.insert(id);
+		// assert that all entries in the bound_column_ids are unique
+		D_ASSERT(result.second);
+		auto it = std::find_if(name_map.begin(), name_map.end(),
+		                       [&](const std::pair<const string, column_t> &it) { return it.second == id; });
+		// assert that every id appears in the name_map
+		D_ASSERT(it != name_map.end());
+		// the order that they appear in is not guaranteed to be sequential
+	}
+#endif
+	return bound_column_ids;
+}
+
+ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
+	auto &column_ids = bound_column_ids;
+	ColumnBinding binding;
+
+	// Locate the column_id that matches the 'column_index'
+	auto it = std::find_if(column_ids.begin(), column_ids.end(),
+	                       [&](const column_t &id) -> bool { return id == column_index; });
+	// Get the index of it
+	binding.column_index = std::distance(column_ids.begin(), it);
+	// If it wasn't found, add it
+	if (it == column_ids.end()) {
+		column_ids.push_back(column_index);
+	}
+
+	binding.table_index = index;
+	return binding;
+}
+
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	column_t column_index;
@@ -172,23 +209,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 			colref.alias = names[column_index];
 		}
 	}
-
-	auto &column_ids = bound_column_ids;
-	// check if the entry already exists in the column list for the table
-	ColumnBinding binding;
-
-	binding.column_index = column_ids.size();
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == column_index) {
-			binding.column_index = i;
-			break;
-		}
-	}
-	if (binding.column_index == column_ids.size()) {
-		// column binding not found: add it to the list of bindings
-		column_ids.push_back(column_index);
-	}
-	binding.table_index = index;
+	ColumnBinding binding = GetColumnBinding(column_index);
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 

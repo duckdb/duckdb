@@ -303,7 +303,9 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
+
 	table->GetStorage().VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);

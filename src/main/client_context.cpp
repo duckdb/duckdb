@@ -1040,9 +1040,10 @@ unordered_set<string> ClientContext::GetTableNames(const string &query) {
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
-	auto lock = LockContext();
-	InitialCleanup(*lock);
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
+                                                                   const shared_ptr<Relation> &relation,
+                                                                   bool allow_stream_result) {
+	InitialCleanup(lock);
 
 	string query;
 	if (config.query_verification_enabled) {
@@ -1053,14 +1054,32 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatementInternal(*lock, query, std::move(select), false);
+			RunStatementInternal(lock, query, std::move(select), false);
 		}
 	}
-	auto &expected_columns = relation->Columns();
+
 	auto relation_stmt = make_unique<RelationStatement>(relation);
+	PendingQueryParameters parameters;
+	parameters.allow_stream_result = allow_stream_result;
+	return PendingQueryInternal(lock, std::move(relation_stmt), parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Relation> &relation,
+                                                           bool allow_stream_result) {
+	auto lock = LockContext();
+	return PendingQueryInternal(*lock, relation, allow_stream_result);
+}
+
+unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
+	auto lock = LockContext();
+	auto &expected_columns = relation->Columns();
+	auto pending = PendingQueryInternal(*lock, relation, false);
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
+	}
 
 	unique_ptr<QueryResult> result;
-	result = RunStatementInternal(*lock, query, std::move(relation_stmt), false);
+	result = ExecutePendingQueryInternal(*lock, *pending);
 	if (result->HasError()) {
 		return result;
 	}

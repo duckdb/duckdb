@@ -6,8 +6,8 @@
 namespace duckdb {
 
 LogicalInsert::LogicalInsert(TableCatalogEntry *table, idx_t table_index)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index),
-      return_chunk(false) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false),
+      action_type(OnConflictAction::THROW) {
 }
 
 void LogicalInsert::Serialize(FieldWriter &writer) const {
@@ -22,6 +22,7 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
+	writer.WriteField(action_type);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -38,6 +39,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	auto action_type = reader.ReadRequired<OnConflictAction>();
 
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
@@ -55,6 +57,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
 	result->bound_defaults = std::move(bound_defaults);
+	result->action_type = action_type;
 	return std::move(result);
 }
 

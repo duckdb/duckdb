@@ -209,8 +209,8 @@ private:
 	}
 };
 
-unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context, const string &table_name,
-                                                          ReplacementScanData *data_p) {
+unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const string &table_name,
+                                                  ReplacementScanData *data_p) {
 	auto &data = (ArrowScanReplacementData &)*data_p;
 	auto db_wrapper = data.wrapper;
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
@@ -224,7 +224,7 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
 			table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
-			return table_function;
+			return std::move(table_function);
 		}
 	}
 	return nullptr;

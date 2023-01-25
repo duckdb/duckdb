@@ -261,6 +261,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = LogicalCrossProduct::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		result = LogicalPositionalJoin::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(state, reader);
 		break;

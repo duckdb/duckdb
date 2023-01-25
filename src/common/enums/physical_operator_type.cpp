@@ -63,6 +63,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "IE_JOIN";
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
+	case PhysicalOperatorType::POSITIONAL_JOIN:
+		return "POSITIONAL_JOIN";
+	case PhysicalOperatorType::POSITIONAL_SCAN:
+		return "POSITIONAL_SCAN";
 	case PhysicalOperatorType::UNION:
 		return "UNION";
 	case PhysicalOperatorType::INSERT:

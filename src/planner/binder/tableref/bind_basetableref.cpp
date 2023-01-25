@@ -79,7 +79,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				auto replacement_function = scan.function(context, table_name, scan.data.get());
 				if (replacement_function) {
 					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-					replacement_function->column_name_alias = ref.column_name_alias;
+					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+						auto &table_function = (TableFunctionRef &)*replacement_function;
+						table_function.column_name_alias = ref.column_name_alias;
+						;
+					} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+						auto &subquery = (SubqueryRef &)*replacement_function;
+						subquery.column_name_alias = ref.column_name_alias;
+					} else {
+						throw InternalException("Replacement scan should return either a table function or a subquery");
+					}
 					return Bind(*replacement_function);
 				}
 			}

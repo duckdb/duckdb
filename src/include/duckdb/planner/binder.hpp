@@ -32,6 +32,8 @@ class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TableMacroCatalogEntry;
+class UpdateSetInfo;
+class LogicalProjection;
 
 class ColumnList;
 class ExternalDependency;
@@ -80,7 +82,7 @@ public:
 	//! The client context
 	ClientContext &context;
 	//! A mapping of names to common table expressions
-	case_insensitive_map_t<CommonTableExpressionInfo *> CTE_bindings;
+	case_insensitive_map_t<CommonTableExpressionInfo *> CTE_bindings; // NOLINT
 	//! The CTEs that have already been bound
 	unordered_set<CommonTableExpressionInfo *> bound_ctes;
 	//! The bind context
@@ -145,18 +147,25 @@ public:
 	string FormatError(TableRef &ref_context, const string &message);
 
 	string FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values);
-	template <class T, typename... Args>
+	template <class T, typename... ARGS>
 	string FormatErrorRecursive(idx_t query_location, const string &msg, vector<ExceptionFormatValue> &values, T param,
-	                            Args... params) {
+	                            ARGS... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
-	template <typename... Args>
-	string FormatError(idx_t query_location, const string &msg, Args... params) {
+	template <typename... ARGS>
+	string FormatError(idx_t query_location, const string &msg, ARGS... params) {
 		vector<ExceptionFormatValue> values;
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
+
+	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root,
+	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
+	                                          vector<PhysicalIndex> &columns);
+	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
+	                                TableCatalogEntry *table);
+	void BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,
@@ -256,7 +265,6 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
@@ -277,7 +285,6 @@ private:
 	                          unique_ptr<ExternalDependency> external_dependency);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
@@ -331,7 +338,7 @@ private:
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool I_know_what_I_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
+	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
 };
 
 } // namespace duckdb
