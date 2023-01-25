@@ -20,6 +20,7 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 
 	auto &info = (JSONScanInfo &)*input.info;
 	options.format = info.format;
+	result->type = info.type;
 	result->auto_detect = info.auto_detect;
 
 	vector<string> patterns;
@@ -82,16 +83,24 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 
 void JSONScanData::Serialize(FieldWriter &writer) {
 	options.Serialize(writer);
+	writer.WriteField<JSONScanType>(type);
 	writer.WriteList<string>(file_paths);
 	writer.WriteField<bool>(ignore_errors);
 	writer.WriteField<idx_t>(maximum_object_size);
+	writer.WriteField<bool>(auto_detect);
+	writer.WriteField<idx_t>(sample_size);
+	writer.WriteList<string>(names);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
 	options.Deserialize(reader);
+	type = reader.ReadRequired<JSONScanType>();
 	file_paths = reader.ReadRequiredList<string>();
 	ignore_errors = reader.ReadRequired<bool>();
 	maximum_object_size = reader.ReadRequired<idx_t>();
+	auto_detect = reader.ReadRequired<bool>();
+	sample_size = reader.ReadRequired<idx_t>();
+	names = reader.ReadRequiredList<string>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
@@ -106,6 +115,18 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &b
 
 unique_ptr<GlobalTableFunctionState> JSONScanGlobalState::Init(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (JSONScanData &)*input.bind_data;
+
+	// Check if we need to do projection pushdown
+	if (bind_data.type == JSONScanType::READ_JSON && input.column_ids.size() != bind_data.names.size()) {
+		D_ASSERT(input.column_ids.size() < bind_data.names.size()); // Can't project to have more columns
+		vector<string> names;
+		names.reserve(input.column_ids.size());
+		for (const auto &id : input.column_ids) {
+			names.push_back(std::move(bind_data.names[id]));
+		}
+		bind_data.names = std::move(names);
+	}
+
 	return make_unique<JSONScanGlobalState>(context, bind_data);
 }
 

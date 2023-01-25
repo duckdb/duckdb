@@ -16,6 +16,14 @@ namespace duckdb {
 
 struct JSONScanLocalState;
 
+enum class JSONScanType : uint8_t {
+	INVALID = 0,
+	//! Read JSON straight to columnar data
+	READ_JSON = 1,
+	//! Read JSON objects as strings
+	READ_JSON_OBJECTS = 2,
+};
+
 struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
@@ -27,6 +35,8 @@ public:
 	void Deserialize(FieldReader &reader);
 
 public:
+	//! Scan type
+	JSONScanType type;
 	//! File-specific options
 	BufferedJSONReaderOptions options;
 	//! The files we're reading
@@ -47,10 +57,12 @@ public:
 
 struct JSONScanInfo : public TableFunctionInfo {
 public:
-	explicit JSONScanInfo(JSONFormat format_p = JSONFormat::AUTO_DETECT, bool auto_detect_p = false)
-	    : format(format_p), auto_detect(auto_detect_p) {
+	explicit JSONScanInfo(JSONScanType type_p = JSONScanType::INVALID, JSONFormat format_p = JSONFormat::AUTO_DETECT,
+	                      bool auto_detect_p = false)
+	    : type(type_p), format(format_p), auto_detect(auto_detect_p) {
 	}
 
+	JSONScanType type;
 	JSONFormat format;
 	bool auto_detect;
 };

@@ -61,3 +61,23 @@ SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'IN
 3	The Firm
 4	NULL
 5	Raising Arizona
+
+# test projection pushdown
+query I
+SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+1
+2
+3
+4
+5
+
+# test projection pushdown
+query I
+SELECT name FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+O Brother, Where Art Thou?
+Home for the Holidays
+The Firm
+Broadcast News
+Raising Arizona

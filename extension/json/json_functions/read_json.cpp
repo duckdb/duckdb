@@ -90,6 +90,9 @@ TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanI
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
+
+	table_function.projection_pushdown = true;
+
 	table_function.function_info = std::move(function_info);
 
 	return table_function;
@@ -97,7 +100,7 @@ TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanI
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 	TableFunctionSet function_set("read_json");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::UNSTRUCTURED, false);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, false);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -105,7 +108,7 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 	TableFunctionSet function_set("read_ndjson");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::NEWLINE_DELIMITED, false);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, false);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -113,7 +116,7 @@ CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
 	TableFunctionSet function_set("read_json_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::AUTO_DETECT, true);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, true);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -121,7 +124,7 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
 	TableFunctionSet function_set("read_ndjson_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::NEWLINE_DELIMITED, true);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, true);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);

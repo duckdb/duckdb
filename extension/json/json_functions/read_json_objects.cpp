@@ -48,7 +48,7 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::UNSTRUCTURED);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::UNSTRUCTURED);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -56,7 +56,7 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONObjectsFunction() {
 	TableFunctionSet function_set("read_ndjson_objects");
-	auto function_info = make_shared<JSONScanInfo>(JSONFormat::NEWLINE_DELIMITED);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::NEWLINE_DELIMITED);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
