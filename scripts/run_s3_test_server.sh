@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#Note: DONT run as root
 
 mkdir -p /tmp/minio_test_data
 mkdir -p /tmp/minio_root_data

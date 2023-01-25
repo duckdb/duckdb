@@ -2,6 +2,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,10 @@ QueryResult::~QueryResult() {
 const string &QueryResult::ColumnName(idx_t index) const {
 	D_ASSERT(index < names.size());
 	return names[index];
+}
+
+string QueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
+	return ToString();
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {
