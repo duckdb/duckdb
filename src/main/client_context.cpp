@@ -649,7 +649,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
 		auto original_statement = move(statement);
-		switch (statement->type) {
+		switch (original_statement->type) {
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			PreservedError error;
@@ -693,8 +693,20 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 		// When the StatementType is SELECT_STATEMENT, we will have already consumed the 'original_statement'
 		// Verify that the newly generated statement equals the original
-		if (original_statement && !original_statement->Equals(statement.get())) {
-			PreservedError error = InternalException("Verification statement does not equal the original statement");
+		PreservedError error;
+		try {
+			if (original_statement && !original_statement->Equals(statement.get())) {
+				error = InternalException("Verification statement does not equal the original statement");
+			}
+		} catch (NotImplementedException &ex) {
+			// Ignore the exception, Equals is not implemented
+			(void)ex;
+		} catch (Exception &ex) {
+			error = PreservedError(ex);
+		} catch (std::exception &ex) {
+			error = PreservedError(ex);
+		}
+		if (error) {
 			return make_unique<PendingQueryResult>(error);
 		}
 	}

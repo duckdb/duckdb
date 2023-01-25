@@ -53,9 +53,15 @@ public:
 		if (has_table != other.has_table) {
 			return false;
 		}
-		if (!ref->Equals(other.ref.get())) {
+
+		if (!ref && !other.ref) {
+
+		} else if (!ref || !other.ref) {
+			return false;
+		} else if (!ref->Equals(other.ref.get())) {
 			return false;
 		}
+
 		if (table != other.table) {
 			// FIXME: TableCatalogEntry does not have an Equals method, cant check equality here
 			throw NotImplementedException("VACUUM_INFO");
