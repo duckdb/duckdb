@@ -35,6 +35,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 
 namespace duckdb {
 
@@ -411,6 +412,32 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	return false;
 }
 
+unique_ptr<LogicalOperator> DCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+                                                      unique_ptr<LogicalOperator> plan) {
+	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
+	auto &base = (CreateIndexInfo &)*stmt.info;
+
+	auto &get = (LogicalGet &)*plan;
+	// bind the index expressions
+	vector<unique_ptr<Expression>> expressions;
+	IndexBinder index_binder(binder, binder.context);
+	for (auto &expr : base.expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
+	for (auto &index : get.column_ids) {
+		create_index_info->scan_types.push_back(get.returned_types[index]);
+	}
+	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+	create_index_info->names = get.names;
+	create_index_info->column_ids = get.column_ids;
+
+	// the logical CREATE INDEX also needs all fields to scan the referenced table
+	return make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
+	                                       std::move(expressions), table, std::move(get.function));
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -455,18 +482,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
-			throw BinderException("Can only delete from base table!");
+			throw BinderException("Can only create an index over a base table!");
 		}
 		auto &table_binding = (BoundBaseTableRef &)*bound_table;
 		auto table = table_binding.table;
-
-		// bind the index expressions
-		vector<unique_ptr<Expression>> expressions;
-		IndexBinder binder(*this, context);
-		for (auto &expr : base.expressions) {
-			expressions.push_back(binder.Bind(expr));
+		if (table->temporary) {
+			stmt.info->temporary = true;
 		}
-
+		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
@@ -478,21 +501,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				throw BinderException("Cannot create an index on the rowid!");
 			}
 		}
-		if (table->temporary) {
-			stmt.info->temporary = true;
-		}
-
-		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-		for (auto &index : get.column_ids) {
-			create_index_info->scan_types.push_back(get.returned_types[index]);
-		}
-		create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
-		create_index_info->names = get.names;
-		create_index_info->column_ids = get.column_ids;
-
-		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
-		                                              std::move(expressions), *table, std::move(get.function));
+		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

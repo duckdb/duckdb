@@ -53,11 +53,15 @@ struct CatalogLookup;
 struct CatalogEntryLookup;
 struct SimilarCatalogEntry;
 
+class Binder;
+class LogicalOperator;
 class PhysicalOperator;
+class LogicalCreateIndex;
 class LogicalCreateTable;
 class LogicalInsert;
 class LogicalDelete;
 class LogicalUpdate;
+class CreateStatement;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -217,6 +221,8 @@ public:
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
 	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+	                                                    unique_ptr<LogicalOperator> plan) = 0;
 
 public:
 	template <class T>

@@ -46,6 +46,9 @@ public:
 	                                                   unique_ptr<PhysicalOperator> plan) override;
 	DUCKDB_API unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 	                                                   unique_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
+	                                                       TableCatalogEntry &table,
+	                                                       unique_ptr<LogicalOperator> plan) override;
 
 private:
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
