@@ -1776,8 +1776,8 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto info = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Prepare(*state.child_state, &state_p, child_list, info.second.length);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
@@ -1790,8 +1790,8 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto info = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Write(*state.child_state, child_list, info.second.length);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {

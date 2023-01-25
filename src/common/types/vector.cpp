@@ -1752,15 +1752,25 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 	target_buffer.PushBack(insert);
 }
 
-std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
-                                                                  idx_t count) {
+idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 
+	auto info = ListVector::GetConsecutiveChildListInfo(list, offset, count);
+	if (info.needs_slicing) {
+		SelectionVector sel(info.child_list_info.length);
+		ListVector::GetConsecutiveChildSelVector(list, sel, offset, count);
+
+		result.Slice(sel, info.child_list_info.length);
+		result.Flatten(info.child_list_info.length);
+	}
+	return info.child_list_info.length;
+}
+
+ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
+
+	ConsecutiveChildListInfo info;
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);
 	auto list_data = (list_entry_t *)unified_list_data.data;
-
-	// boolean, if constant, and offset and length of the relevant child vector
-	std::pair<bool, list_entry_t> info(true, list_entry_t(0, 0));
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
@@ -1769,7 +1779,7 @@ std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, 
 		if (!unified_list_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		info.second.offset = list_data[idx].offset;
+		info.child_list_info.offset = list_data[idx].offset;
 		first_length = list_data[idx].length;
 		break;
 	}
@@ -1777,7 +1787,7 @@ std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, 
 	// small performance improvement for constant vectors
 	// avoids iterating over all their (constant) elements
 	if (list.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		info.second.length = first_length;
+		info.child_list_info.length = first_length;
 		return info;
 	}
 
@@ -1790,39 +1800,47 @@ std::pair<bool, list_entry_t> ListVector::GetConsecutiveChildList(Vector &list, 
 		if (!unified_list_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		if (list_data[idx].offset != info.second.offset || list_data[idx].length != first_length) {
-			info.first = false;
+		if (list_data[idx].offset != info.child_list_info.offset || list_data[idx].length != first_length) {
+			info.is_constant = false;
 		}
-		if (list_data[idx].offset != info.second.offset + info.second.length) {
+		if (list_data[idx].offset != info.child_list_info.offset + info.child_list_info.length) {
 			is_consecutive = false;
 		}
-		info.second.length += list_data[idx].length;
+		info.child_list_info.length += list_data[idx].length;
 	}
 
-	if (info.first) {
-		info.second.length = first_length;
+	if (info.is_constant) {
+		info.child_list_info.length = first_length;
 	}
-
-	if (!info.first && !is_consecutive) {
-		SelectionVector child_sel(info.second.length);
-		idx_t entry = 0;
-
-		for (idx_t i = offset; i < offset + count; i++) {
-			auto idx = unified_list_data.sel->get_index(i);
-			if (!unified_list_data.validity.RowIsValid(idx)) {
-				continue;
-			}
-			for (idx_t k = 0; k < list_data[idx].length; k++) {
-				child_sel.set_index(entry++, list_data[idx].offset + k);
-			}
-		}
-
-		result.Slice(child_sel, info.second.length);
-		result.Flatten(info.second.length);
-		info.second.offset = 0;
+	if (!info.is_constant && !is_consecutive) {
+		info.needs_slicing = true;
 	}
 
 	return info;
+}
+
+void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
+
+	UnifiedVectorFormat unified_list_data;
+	list.ToUnifiedFormat(offset + count, unified_list_data);
+	auto list_data = (list_entry_t *)unified_list_data.data;
+
+	//	SelectionVector child_sel(info.second.length);
+	idx_t entry = 0;
+	for (idx_t i = offset; i < offset + count; i++) {
+		auto idx = unified_list_data.sel->get_index(i);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		for (idx_t k = 0; k < list_data[idx].length; k++) {
+			//			child_sel.set_index(entry++, list_data[idx].offset + k);
+			sel.set_index(entry++, list_data[idx].offset + k);
+		}
+	}
+	//
+	//	result.Slice(child_sel, info.second.length);
+	//	result.Flatten(info.second.length);
+	//	info.second.offset = 0;
 }
 
 // Union vector
