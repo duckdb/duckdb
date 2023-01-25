@@ -34,7 +34,7 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
-	auto join_ref = make_unique<JoinRef>();
+	auto join_ref = make_unique<JoinRef>(JoinRefType::REGULAR);
 	join_ref->left = left->GetTableRef();
 	join_ref->right = right->GetTableRef();
 	if (condition) {

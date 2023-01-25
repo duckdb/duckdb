@@ -2,7 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 
 namespace duckdb {
 
@@ -23,7 +23,7 @@ unique_ptr<QueryNode> CrossProductRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> CrossProductRelation::GetTableRef() {
-	auto cross_product_ref = make_unique<CrossProductRef>();
+	auto cross_product_ref = make_unique<JoinRef>(JoinRefType::CROSS);
 	cross_product_ref->left = left->GetTableRef();
 	cross_product_ref->right = right->GetTableRef();
 	return std::move(cross_product_ref);

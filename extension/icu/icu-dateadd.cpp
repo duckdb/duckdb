@@ -53,6 +53,10 @@ static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hou
 
 template <>
 timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+	if (!Timestamp::IsFinite(timestamp)) {
+		return timestamp;
+	}
+
 	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
 

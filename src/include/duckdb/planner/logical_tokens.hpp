@@ -39,6 +39,7 @@ class LogicalInsert;
 class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
+class LogicalPositionalJoin;
 class LogicalPragma;
 class LogicalPrepare;
 class LogicalProjection;

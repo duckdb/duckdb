@@ -5,10 +5,6 @@
 
 #include <string>
 
-extern "C" {
-#include <unistd.h>
-}
-
 #include "log.hh"
 #include "schema.hh"
 #include "impedance.hh"

@@ -1,0 +1,24 @@
+# name: benchmark/micro/join/positional_join.benchmark
+# description: Range self-join between random numbers
+# group: [join]
+
+name Positional Join
+group join
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE df1 AS
+SELECT round(random()*100)::INTEGER as df1_0
+FROM range(0, 10000000)
+;
+CREATE TABLE df2 AS
+SELECT round(random()*100)::INTEGER as df2_0
+FROM range(0, 10000000)
+;
+
+run
+SELECT COUNT(*), SUM(df1_0), SUM(df2_0),
+FROM df1 POSITIONAL JOIN df2;
+
+result III
+10000000	500016646	500028063

@@ -30,6 +30,8 @@ public:
 	DUCKDB_API ColumnDefinition &GetColumnMutable(LogicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(PhysicalIndex index);
 	DUCKDB_API ColumnDefinition &GetColumnMutable(const string &name);
+	DUCKDB_API vector<string> GetColumnNames() const;
+	DUCKDB_API vector<LogicalType> GetColumnTypes() const;
 
 	DUCKDB_API bool ColumnExists(const string &name) const;
 

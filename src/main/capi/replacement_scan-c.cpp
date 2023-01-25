@@ -28,8 +28,8 @@ struct CAPIReplacementScanInfo {
 	string error;
 };
 
-unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
-                                                              ReplacementScanData *data) {
+unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
+                                                      ReplacementScanData *data) {
 	auto &scan_data = (CAPIReplacementScanData &)*data;
 
 	CAPIReplacementScanInfo info(&scan_data);
@@ -47,7 +47,7 @@ unique_ptr<TableFunctionRef> duckdb_capi_replacement_callback(ClientContext &con
 		children.push_back(make_unique<ConstantExpression>(std::move(param)));
 	}
 	table_function->function = make_unique<FunctionExpression>(info.function_name, std::move(children));
-	return table_function;
+	return std::move(table_function);
 }
 
 } // namespace duckdb

@@ -236,6 +236,8 @@ public:
 
 	string Explain();
 
+	static bool IsRelation(const py::object &object);
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -246,9 +248,11 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void ExecuteOrThrow();
+	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
 	unique_ptr<DuckDBPyResult> result;
+	std::string rendered_result;
 };
 
 } // namespace duckdb
