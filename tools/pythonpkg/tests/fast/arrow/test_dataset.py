@@ -82,3 +82,52 @@ class TestArrowDataset(object):
         arrow_table_2 = pyarrow.Table.from_pandas(df)
 
         assert arrow_table.equals(arrow_table_2)
+
+    def test_ducktyping(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+        dataset = CustomDataset()
+        query = duckdb_conn.execute("SELECT b FROM dataset WHERE a < 5")
+        record_batch_reader = query.fetch_record_batch(2048)
+        arrow_table = record_batch_reader.read_all()
+        assert arrow_table.equals(DATA[:5].select(['b']))
+
+
+if can_run:
+    # For testing duck-typing of dataset/scanner https://github.com/duckdb/duckdb/pull/5998
+    SCHEMA = pyarrow.schema([pyarrow.field("a", pyarrow.int64(), True),
+                             pyarrow.field("b", pyarrow.float64(), True)])
+    DATA = pyarrow.Table.from_arrays([pyarrow.array(range(100)),
+                                      pyarrow.array(np.arange(100)*1.0)],
+                                     schema=SCHEMA)
+    class CustomDataset(pyarrow.dataset.Dataset):
+
+        def __init__(self):
+            pass
+
+        def scanner(self, **kwargs):
+            return CustomScanner(**kwargs)
+
+        @property
+        def schema(self):
+            return SCHEMA
+
+
+    class CustomScanner(pyarrow.dataset.Scanner):
+
+        def __init__(self, filter=None, columns=None, **kwargs):
+            self.filter = filter
+            self.columns = columns
+            self.kwargs = kwargs
+
+        @property
+        def projected_schema(self):
+            if self.columns is None:
+                return SCHEMA
+            else:
+                return pyarrow.schema([f for f in SCHEMA.fields
+                                       if f.name in self.columns])
+
+        def to_reader(self):
+            return pyarrow.dataset.dataset(DATA).scanner(
+                filter=self.filter, columns=self.columns
+            ).to_reader()
