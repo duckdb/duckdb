@@ -3,10 +3,13 @@
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "json_common.hpp"
 #include "json_functions.hpp"
 
 namespace duckdb {
@@ -18,31 +21,37 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
-static DefaultMacro table_macros[] = {
-    {DEFAULT_SCHEMA,
-     "read_json_objects",
-     {"json_file", nullptr},
-     "SELECT * FROM read_csv(json_file, columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)"},
-    {DEFAULT_SCHEMA, "read_ndjson_objects", {"json_file", nullptr}, "SELECT * FROM read_json_objects(json_file)"},
-    {nullptr, nullptr, {nullptr}, nullptr}};
-
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-
 	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-	for (auto &fun : JSONFunctions::GetFunctions()) {
+
+	// JSON type
+	auto json_type = JSONCommon::JSONType();
+	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);
+	type_info.temporary = true;
+	type_info.internal = true;
+	catalog.CreateType(*con.context, &type_info);
+
+	// JSON casts
+	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(*con.context).GetCastFunctions());
+
+	// JSON scalar functions
+	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
 		catalog.CreateFunction(*con.context, &fun);
 	}
 
+	// JSON table functions
+	for (auto &fun : JSONFunctions::GetTableFunctions()) {
+		catalog.CreateTableFunction(*con.context, &fun);
+	}
+
+	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
 		catalog.CreateFunction(*con.context, info.get());
 	}
-	for (idx_t index = 0; table_macros[index].name != nullptr; index++) {
-		auto info = DefaultFunctionGenerator::CreateInternalTableMacroInfo(table_macros[index]);
-		catalog.CreateFunction(*con.context, info.get());
-	}
+
 	con.Commit();
 }
 

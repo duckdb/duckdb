@@ -9,41 +9,63 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "json_common.hpp"
 
 namespace duckdb {
 
+class CastFunctionSet;
+struct CastParameters;
+
+// Scalar function stuff
+struct JSONReadFunctionData : public FunctionData {
+public:
+	JSONReadFunctionData(bool constant, string path_p, idx_t len);
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+public:
+	const bool constant;
+	const string path;
+	const char *ptr;
+	const size_t len;
+};
+
+struct JSONReadManyFunctionData : public FunctionData {
+public:
+	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+
+public:
+	const vector<string> paths;
+	vector<const char *> ptrs;
+	const vector<size_t> lens;
+};
+
+struct JSONFunctionLocalState : public FunctionLocalState {
+public:
+	explicit JSONFunctionLocalState(ClientContext &context);
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                           FunctionData *bind_data);
+	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
+
+public:
+	JSONAllocator json_allocator;
+};
+
 class JSONFunctions {
 public:
-	static vector<CreateScalarFunctionInfo> GetFunctions() {
-		vector<CreateScalarFunctionInfo> functions;
-
-		// Extract functions
-		AddAliases({"json_extract", "json_extract_path"}, GetExtractFunction(), functions);
-		AddAliases({"json_extract_string", "json_extract_path_text", "->>"}, GetExtractStringFunction(), functions);
-
-		// Create functions
-		functions.push_back(GetArrayFunction());
-		functions.push_back(GetObjectFunction());
-		AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
-		functions.push_back(GetArrayToJSONFunction());
-		functions.push_back(GetRowToJSONFunction());
-		functions.push_back(GetMergePatchFunction());
-
-		// Structure/Transform
-		functions.push_back(GetStructureFunction());
-		AddAliases({"json_transform", "from_json"}, GetTransformFunction(), functions);
-		AddAliases({"json_transform_strict", "from_json_strict"}, GetTransformStrictFunction(), functions);
-
-		// Other
-		functions.push_back(GetArrayLengthFunction());
-		functions.push_back(GetContainsFunction());
-		functions.push_back(GetTypeFunction());
-		functions.push_back(GetValidFunction());
-
-		return functions;
-	}
+	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
+	static vector<CreateTableFunctionInfo> GetTableFunctions();
+	static void RegisterCastFunctions(CastFunctionSet &casts);
 
 private:
+	// Scalar functions
 	static CreateScalarFunctionInfo GetExtractFunction();
 	static CreateScalarFunctionInfo GetExtractStringFunction();
 
@@ -63,13 +85,18 @@ private:
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 
-	static void AddAliases(vector<string> names, CreateScalarFunctionInfo fun,
-	                       vector<CreateScalarFunctionInfo> &functions) {
+	template <class FUNCTION_INFO>
+	static void AddAliases(vector<string> names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
 			fun.name = name;
 			functions.push_back(fun);
 		}
 	}
+
+private:
+	// Table functions
+	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
+	static CreateTableFunctionInfo GetReadNDJSONObjectsFunction();
 };
 
 } // namespace duckdb

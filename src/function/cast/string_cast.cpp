@@ -366,7 +366,6 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::SQLNULL:
 		return &DefaultCasts::TryVectorNullCast;
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		return &DefaultCasts::ReinterpretCast;
 	case LogicalTypeId::LIST:
 		// the second argument allows for a secondary casting function to be passed in the CastParameters

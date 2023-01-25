@@ -50,6 +50,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning CSV files is disabled through configuration");
 	}
+
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 
@@ -84,7 +85,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val)));
+				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");

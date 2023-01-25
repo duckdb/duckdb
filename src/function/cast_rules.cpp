@@ -215,13 +215,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// Implicit cast not allowed from BLOB to VARCHAR
 		return -1;
 	}
-	if ((from.id() == LogicalTypeId::VARCHAR && to.id() == LogicalTypeId::JSON) ||
-	    (from.id() == LogicalTypeId::JSON && to.id() == LogicalTypeId::VARCHAR)) {
-		// Virtually no cost, just a different tag
-		return 1;
-	}
-	if (to.id() == LogicalTypeId::VARCHAR || to.id() == LogicalTypeId::JSON) {
-		// everything can be cast to VARCHAR/JSON, but this cast has a high cost
+	if (to.id() == LogicalTypeId::VARCHAR) {
+		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
