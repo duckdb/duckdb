@@ -128,7 +128,7 @@ TextSearchShiftArray::TextSearchShiftArray() {
 
 TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_term.size()) {
 	if (length > 255) {
-		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
+		throw InvalidInputException("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 	// initialize the shifts array
 	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
@@ -248,7 +248,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect) {
 		return_types = SniffCSV(requested_types);
 		if (return_types.empty()) {
-			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
+			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
 		if (cached_chunks.empty()) {
 			JumpToBeginning(options.skip_rows, options.header);

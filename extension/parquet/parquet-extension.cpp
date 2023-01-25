@@ -809,8 +809,8 @@ bool ParquetWriteIsParallel(ClientContext &context, FunctionData &bind_data) {
 	return true;
 }
 
-unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
-                                                    ReplacementScanData *data) {
+unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
+                                            ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
 	if (!StringUtil::EndsWith(lower_name, ".parquet") && !StringUtil::Contains(lower_name, ".parquet?")) {
 		return nullptr;
@@ -819,7 +819,7 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, cons
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
 	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
-	return table_function;
+	return std::move(table_function);
 }
 
 void ParquetExtension::Load(DuckDB &db) {

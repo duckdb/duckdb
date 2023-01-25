@@ -42,8 +42,8 @@ public:
 	TaskScheduler(DatabaseInstance &db);
 	~TaskScheduler();
 
-	static TaskScheduler &GetScheduler(ClientContext &context);
-	static TaskScheduler &GetScheduler(DatabaseInstance &db);
+	DUCKDB_API static TaskScheduler &GetScheduler(ClientContext &context);
+	DUCKDB_API static TaskScheduler &GetScheduler(DatabaseInstance &db);
 
 	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler
@@ -62,7 +62,7 @@ public:
 	//! The main thread will also be used for execution
 	void SetThreads(int32_t n);
 	//! Returns the number of threads
-	int32_t NumberOfThreads();
+	DUCKDB_API int32_t NumberOfThreads();
 
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);

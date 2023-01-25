@@ -118,7 +118,6 @@ BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::LIST:
 		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		return BoundCastInfo(ListToVarcharCast, ListBoundCastData::BindListToListCast(
 		                                            input, source, LogicalType::LIST(LogicalType::VARCHAR)));
 	default:

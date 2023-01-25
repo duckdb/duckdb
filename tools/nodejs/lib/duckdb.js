@@ -46,6 +46,10 @@ var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 // some wrappers for compatibilities sake
 /**
  * Main database interface
+ * @arg path - path to database file or :memory: for in-memory database
+ * @arg access_mode - access mode
+ * @arg config - the configuration object
+ * @arg callback - callback function
  */
 var Database = duckdb.Database;
 /**
