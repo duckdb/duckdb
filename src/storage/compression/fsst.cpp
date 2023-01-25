@@ -223,6 +223,7 @@ public:
 		// Reset the buffers and string map
 		index_buffer.clear();
 		current_width = 0;
+		max_compressed_string_length = 0;
 
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
