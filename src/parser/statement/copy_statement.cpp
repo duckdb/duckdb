@@ -21,23 +21,30 @@ string ConvertOptionValueToString(const Value &val) {
 	}
 }
 
-string CopyStatement::CopyOptionsToString(const unordered_map<string, vector<Value>> &options) const {
-	if (options.empty()) {
+string CopyStatement::CopyOptionsToString(const string &format,
+                                          const unordered_map<string, vector<Value>> &options) const {
+	if (format.empty() && options.empty()) {
 		return string();
 	}
 	string result;
 
 	result += " (";
+	if (!format.empty()) {
+		result += " FORMAT ";
+		result += format;
+	}
 	for (auto it = options.begin(); it != options.end(); it++) {
-		if (it != options.begin()) {
+		if (!format.empty() || it != options.begin()) {
 			result += ", ";
 		}
 		auto &name = it->first;
 		auto &values = it->second;
 
 		result += name + " ";
-		D_ASSERT(!values.empty());
-		if (values.size() == 1) {
+		if (values.empty()) {
+			// Options like HEADER don't need an explicit value
+			// just providing the name already sets it to true
+		} else if (values.size() == 1) {
 			result += ConvertOptionValueToString(values[0]);
 		} else {
 			result += "( ";
@@ -90,8 +97,8 @@ string CopyStatement::ToString() const {
 		D_ASSERT(!select_statement);
 		result += TablePart(*info);
 		result += " FROM";
-		result += StringUtil::Format("'%s'", info->file_path);
-		result += CopyOptionsToString(info->options);
+		result += StringUtil::Format(" '%s'", info->file_path);
+		result += CopyOptionsToString(info->format, info->options);
 	} else {
 		if (select_statement) {
 			// COPY (select-node) TO ...
@@ -101,7 +108,7 @@ string CopyStatement::ToString() const {
 		}
 		result += " TO";
 		result += StringUtil::Format("'%s'", info->file_path);
-		result += CopyOptionsToString(info->options);
+		result += CopyOptionsToString(info->format, info->options);
 	}
 	return result;
 }
