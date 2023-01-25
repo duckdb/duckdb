@@ -16,8 +16,8 @@
 namespace duckdb {
 
 struct VacuumOptions {
-	bool vacuum;
-	bool analyze;
+	bool vacuum = false;
+	bool analyze = false;
 	bool operator==(const VacuumOptions &other) const {
 		return other.vacuum == vacuum && other.analyze == analyze;
 	}

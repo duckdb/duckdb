@@ -19,7 +19,7 @@ bool ExtensionStatement::Equals(const SQLStatement *other_p) const {
 	(void)other;
 	// FIXME: compare the ParserExtensionParseData
 	// requires adding virtual method, which changes the API
-	return false;
+	throw NotImplementedException("ParserExtensionParseData does not have an Equals method");
 }
 
 } // namespace duckdb

@@ -75,6 +75,14 @@ bool ColumnRefExpression::Equal(const ColumnRefExpression *a, const ColumnRefExp
 	return true;
 }
 
+bool ColumnRefExpression::Equals(const BaseExpression *other_p) const {
+	if (this->type != other_p->type) {
+		return false;
+	}
+	auto &other = (ColumnRefExpression &)*other_p;
+	return Equal(this, &other);
+}
+
 hash_t ColumnRefExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	for (auto &column_name : column_names) {

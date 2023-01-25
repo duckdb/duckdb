@@ -638,6 +638,19 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *res
 	return active_query->open_result == result;
 }
 
+bool StatementTypeSupportsVerification(const unique_ptr<SQLStatement> &statement) {
+	if (!statement) {
+		// This was a SELECT statement, has been consumed by the StatementVerifier
+		return false;
+	}
+	if (statement->type == StatementType::INSERT_STATEMENT) {
+		// currently VALUES() gets expanded to SELECT * FROM VALUES() AS valueslist
+		// Equals does not think they are equivalent, so we skip all insert statement Equals checks
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
@@ -695,7 +708,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// Verify that the newly generated statement equals the original
 		PreservedError error;
 		try {
-			if (original_statement && !original_statement->Equals(statement.get())) {
+			if (StatementTypeSupportsVerification(original_statement) && !original_statement->Equals(statement.get())) {
 				error = InternalException("Verification statement does not equal the original statement");
 			}
 		} catch (NotImplementedException &ex) {

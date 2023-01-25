@@ -10,8 +10,13 @@ DeleteStatement::DeleteStatement(const DeleteStatement &other) : SQLStatement(ot
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
+	using_clauses.reserve(other.using_clauses.size());
 	for (const auto &using_clause : other.using_clauses) {
 		using_clauses.push_back(using_clause->Copy());
+	}
+	returning_list.reserve(other.returning_list.size());
+	for (const auto &item : other.returning_list) {
+		returning_list.push_back(item->Copy());
 	}
 	cte_map = other.cte_map.Copy();
 }
@@ -87,10 +92,13 @@ bool DeleteStatement::Equals(const SQLStatement *other_p) const {
 		}
 	}
 
+	if (returning_list.size() != other.returning_list.size()) {
+		return false;
+	}
 	for (idx_t i = 0; i < returning_list.size(); i++) {
 		auto &lhs = returning_list[i];
 		auto &rhs = other.returning_list[i];
-		if (lhs->Equals(rhs.get())) {
+		if (!lhs->Equals(rhs.get())) {
 			return false;
 		}
 	}
