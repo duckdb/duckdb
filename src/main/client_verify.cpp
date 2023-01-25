@@ -9,7 +9,7 @@ namespace duckdb {
 
 PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
                                           unique_ptr<SQLStatement> statement) {
-	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT || statement->type == StatementType::COPY_STATEMENT);
+	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
@@ -20,18 +20,14 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// ToString() of statements and expressions
 	// Correctness of plans both with and without optimizers
 
-	const bool is_select = statement->type == StatementType::SELECT_STATEMENT;
-
 	const auto &stmt = *statement;
 	vector<unique_ptr<StatementVerifier>> statement_verifiers;
 	unique_ptr<StatementVerifier> prepared_statement_verifier;
 	if (config.query_verification_enabled) {
-		if (is_select) {
-			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
-			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-			statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
-			prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
-		}
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
+		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 	}
 	if (config.verify_external) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
@@ -92,7 +88,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	config.force_external = force_external;
 
 	// Check explain, only if q does not already contain EXPLAIN
-	if (original->IsSelect() && original->materialized_result->success) {
+	if (original->materialized_result->success) {
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(std::move(statement_copy_for_explain));
 		try {

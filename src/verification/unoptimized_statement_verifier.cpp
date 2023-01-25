@@ -1,5 +1,4 @@
 #include "duckdb/verification/unoptimized_statement_verifier.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 

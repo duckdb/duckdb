@@ -3,7 +3,6 @@
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
 #include "duckdb/verification/external_statement_verifier.hpp"
@@ -14,12 +13,9 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(std::move(name)), statement(std::move(statement_p)), statement_type(statement->type),
-      select_list(nullptr) {
-	if (statement->type == StatementType::SELECT_STATEMENT) {
-		auto &select_statement = (SelectStatement &)*statement;
-		select_list = &select_statement.node->GetSelectList();
-	}
+    : type(type), name(std::move(name)),
+      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
+      select_list(statement->node->GetSelectList()) {
 }
 
 StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p)
@@ -58,15 +54,9 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 		D_ASSERT(statement->Equals(other.statement.get()));
 	}
 
-	if (!select_list) {
-		return;
-	}
-	auto &select_list = *this->select_list;
-
 #ifdef DEBUG
 	// Now perform checking on the expressions
-	auto &other_select_list = *other.select_list;
-	D_ASSERT(select_list.size() == other_select_list.size());
+	D_ASSERT(select_list.size() == other.select_list.size());
 	const auto expr_count = select_list.size();
 	if (other.RequireEquality()) {
 		for (idx_t i = 0; i < expr_count; i++) {
@@ -79,22 +69,17 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 			}
 
 			// Check that the expressions are equivalent
-			D_ASSERT(select_list[i]->Equals(other_select_list[i].get()));
+			D_ASSERT(select_list[i]->Equals(other.select_list[i].get()));
 			// Check that the hashes are equivalent too
-			D_ASSERT(select_list[i]->Hash() == other_select_list[i]->Hash());
+			D_ASSERT(select_list[i]->Hash() == other.select_list[i]->Hash());
 
-			other_select_list[i]->Verify();
+			other.select_list[i]->Verify();
 		}
 	}
 #endif
 }
 
 void StatementVerifier::CheckExpressions() const {
-	if (!select_list) {
-		return;
-	}
-	auto &select_list = *this->select_list;
-
 #ifdef DEBUG
 	D_ASSERT(type == VerificationType::ORIGINAL);
 	// Perform additional checking within the expressions
@@ -120,13 +105,6 @@ bool StatementVerifier::Run(
 	context.interrupted = false;
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.force_external = ForceExternal();
-
-	if (statement->type != StatementType::SELECT_STATEMENT) {
-		// Only if the statement type is SELECT can we verify the execution,
-		// because other statements might have side-effects that effect this or later statements
-		return true;
-	}
-
 	try {
 		auto result = run(query, std::move(statement));
 		if (result->HasError()) {
@@ -148,13 +126,6 @@ bool StatementVerifier::Run(
 string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	D_ASSERT(type == VerificationType::ORIGINAL);
 	string error;
-
-	if (!IsSelect()) {
-		D_ASSERT(!other.materialized_result);
-		// This is a non-select statement, it wasn't executed
-		return string();
-	}
-
 	if (materialized_result->HasError() != other.materialized_result->HasError()) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();

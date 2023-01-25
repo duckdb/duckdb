@@ -18,7 +18,7 @@ public:
 	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
 
 	bool RequireEquality() const override {
-		return true;
+		return false;
 	}
 };
 

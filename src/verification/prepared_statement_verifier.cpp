@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -15,12 +14,11 @@ PreparedStatementVerifier::PreparedStatementVerifier(unique_ptr<SQLStatement> st
 }
 
 unique_ptr<StatementVerifier> PreparedStatementVerifier::Create(const SQLStatement &statement) {
-	D_ASSERT(statement.type == StatementType::SELECT_STATEMENT);
 	return make_unique<PreparedStatementVerifier>(statement.Copy());
 }
 
 void PreparedStatementVerifier::Extract() {
-	auto &select = (SelectStatement &)*statement;
+	auto &select = *statement;
 	// replace all the constants from the select statement and replace them with parameter expressions
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
