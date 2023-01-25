@@ -736,7 +736,7 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 }
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-                                FileOpener *opener = nullptr) {
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
