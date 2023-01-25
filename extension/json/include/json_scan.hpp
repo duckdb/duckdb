@@ -128,9 +128,11 @@ public:
 	idx_t batch_index;
 
 private:
-	yyjson_val *ParseLine(char *line_start, idx_t line_size, JSONLine &line, const bool &ignore_errors);
+	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
 
 private:
+	//! Bind data
+	JSONScanData &bind_data;
 	//! Thread-local allocator
 	JSONAllocator json_allocator;
 
@@ -145,6 +147,7 @@ private:
 	idx_t buffer_size;
 	idx_t buffer_offset;
 	idx_t prev_buffer_remainder;
+	idx_t lines_or_bytes_in_buffer;
 
 	//! Buffer to reconstruct split objects
 	AllocatedData reconstruct_buffer;
@@ -160,7 +163,7 @@ private:
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
 	void ReadUnstructured(idx_t &count);
-	void ReadNewlineDelimited(idx_t &count, const bool &ignore_errors);
+	void ReadNewlineDelimited(idx_t &count);
 };
 
 struct JSONScan {

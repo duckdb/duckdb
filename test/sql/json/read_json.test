@@ -4,6 +4,9 @@
 
 require json
 
+statement ok
+pragma threads=1
+
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
 ----
@@ -62,7 +65,7 @@ SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'IN
 4	NULL
 5	Raising Arizona
 
-# test projection pushdown
+# test projection pushdown (unstructured json)
 query I
 SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
@@ -72,9 +75,27 @@ SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', n
 4
 5
 
-# test projection pushdown
 query I
 SELECT name FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+O Brother, Where Art Thou?
+Home for the Holidays
+The Firm
+Broadcast News
+Raising Arizona
+
+# test projection pushdown (newline-delimited json)
+query I
+SELECT id FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT name FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 O Brother, Where Art Thou?
 Home for the Holidays

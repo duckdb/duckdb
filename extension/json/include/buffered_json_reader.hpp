@@ -93,10 +93,17 @@ public:
 	BufferedJSONReaderOptions &GetOptions();
 	JSONFileHandle &GetFileHandle() const;
 
+	//! Insert/get/remove buffer (grabs the lock)
 	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
 	JSONBufferHandle *GetBuffer(idx_t buffer_idx);
 	AllocatedData RemoveBuffer(idx_t buffer_idx);
+
+	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();
+	//! Set line count for a buffer that is done (grabs the lock)
+	void SetBufferLineOrByteCount(idx_t index, idx_t count);
+	//! Throws an error that mentions the file name and line number
+	void ThrowError(idx_t buf_index, idx_t line_or_byte_in_buf, yyjson_read_err &err, const string &extra = "");
 
 	double GetProgress() const;
 
@@ -118,6 +125,9 @@ private:
 	idx_t buffer_index;
 	//! Mapping from batch index to currently held buffers
 	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
+
+	//! Line count per buffer
+	vector<int64_t> buffer_line_or_byte_counts;
 };
 
 } // namespace duckdb

@@ -135,11 +135,12 @@ idx_t JSONScanGlobalState::MaxThreads() const {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : batch_index(DConstants::INVALID_INDEX), json_allocator(BufferAllocator::Get(context)), current_reader(nullptr),
-      current_buffer_handle(nullptr), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+    : batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
+      json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
+      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON objects when they cross a buffer boundary
-	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size);
+	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size + YYJSON_PADDING_SIZE);
 
 	// This is needed for JSONFormat::UNSTRUCTURED, to make use of YYJSON_READ_INSITU
 	current_buffer_copy = gstate.allocator.Allocate(gstate.buffer_capacity);
@@ -169,7 +170,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 		if (!ReadNextBuffer(gstate, first_read)) {
 			return 0;
 		}
-
 		if (!first_read && current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED) {
 			ReconstructFirstObject(gstate);
 			count++;
@@ -182,7 +182,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 		ReadUnstructured(count);
 		break;
 	case JSONFormat::NEWLINE_DELIMITED:
-		ReadNewlineDelimited(count, gstate.bind_data.ignore_errors);
+		ReadNewlineDelimited(count);
 		break;
 	default:
 		throw InternalException("Unknown JSON format");
@@ -218,17 +218,42 @@ static inline void TrimWhitespace(JSONLine &line) {
 	}
 }
 
-yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSONLine &line,
-                                          const bool &ignore_errors) {
-	// Parse to validate TODO: This is the only place we can maybe parse INSITU (if not returning strings)
+yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line) {
 	yyjson_doc *doc;
-	if (ignore_errors) {
+	if (bind_data.ignore_errors) {
 		doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
 		                                     json_allocator.GetYYJSONAllocator());
 	} else {
-		doc =
-		    JSONCommon::ReadDocument(line_start, line_size, JSONCommon::READ_FLAG, json_allocator.GetYYJSONAllocator());
+		yyjson_read_err err;
+		if (bind_data.type != JSONScanType::READ_JSON_OBJECTS) {
+			// Optimization: if we don't ignore errors, and don't need to return strings, we can parse INSITU
+			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::STOP_READ_FLAG,
+			                                     json_allocator.GetYYJSONAllocator(), &err);
+			idx_t read_size = yyjson_doc_get_read_size(doc);
+			if (read_size > line_size) {
+				err.pos = line_size;
+				err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
+				err.msg = "unexpected end of data";
+			} else if (read_size < line_size) {
+				idx_t diff = line_size - read_size;
+				char *ptr = line_start + read_size;
+				for (idx_t i = 0; i < diff; i++) {
+					if (!StringUtil::CharacterIsSpace(ptr[i])) {
+						err.pos = read_size;
+						err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
+						err.msg = "unexpected content after document";
+					}
+				}
+			}
+		} else {
+			doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
+			                                     json_allocator.GetYYJSONAllocator(), &err);
+		}
+		if (err.code != YYJSON_READ_SUCCESS) {
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, err);
+		}
 	}
+	lines_or_bytes_in_buffer++;
 
 	if (doc) {
 		// Set the JSONLine and trim
@@ -241,6 +266,11 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, JSO
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read) {
+	if (current_reader) {
+		D_ASSERT(current_buffer_handle);
+		current_reader->SetBufferLineOrByteCount(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer);
+	}
+
 	AllocatedData buffer;
 	if (current_buffer_handle && --current_buffer_handle->readers == 0) {
 		D_ASSERT(current_reader);
@@ -266,10 +296,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 				ReadNextBufferNoSeek(gstate, first_read, buffer_index);
 			}
 			if (buffer_size != 0) {
-				if (current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED) {
-					lock_guard<mutex> guard(gstate.lock);
-					batch_index = gstate.batch_index++;
-				}
 				break; // We read something!
 			}
 		}
@@ -355,9 +381,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 
 	buffer_offset = 0;
 	prev_buffer_remainder = 0;
+	lines_or_bytes_in_buffer = 0;
 
+	memset((void *)(buffer_ptr + buffer_size), 0, YYJSON_PADDING_SIZE);
 	if (current_reader->GetOptions().format == JSONFormat::UNSTRUCTURED) {
-		memset((void *)(buffer_ptr + buffer_size), 0, YYJSON_PADDING_SIZE);
 		memcpy((void *)buffer_copy_ptr, buffer_ptr, buffer_size + YYJSON_PADDING_SIZE);
 	}
 
@@ -382,9 +409,14 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
 		}
+
+		if (current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED) {
+			batch_index = gstate.batch_index++;
+		}
 	}
 	buffer_size = prev_buffer_remainder + read_size;
 	if (buffer_size == 0) {
+		current_reader->SetBufferLineOrByteCount(buffer_index, 0);
 		return;
 	}
 
@@ -408,8 +440,16 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
 			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->file_path);
 		}
+
+		if (current_reader->GetOptions().format == JSONFormat::NEWLINE_DELIMITED) {
+			batch_index = gstate.batch_index++;
+		}
 	}
 	buffer_size = prev_buffer_remainder + read_size;
+	if (buffer_size == 0) {
+		current_reader->SetBufferLineOrByteCount(buffer_index, 0);
+		return;
+	}
 }
 
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
@@ -434,14 +474,21 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	auto line_end = NextNewline(buffer_ptr, buffer_size);
 	if (line_end == nullptr) { // TODO I don't think we can ignore this even with ignore_errors ...
 		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (>%llu bytes), is the JSON valid?",
-		                            gstate.bind_data.maximum_object_size, buffer_size - buffer_offset);
+		                            bind_data.maximum_object_size, buffer_size - buffer_offset);
 	} else {
 		line_end++;
 	}
 	idx_t part2_size = line_end - buffer_ptr;
 
+	idx_t line_size = part1_size + part2_size;
+	if (line_size > bind_data.maximum_object_size) {
+		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (%llu bytes), is the JSON valid?",
+		                            bind_data.maximum_object_size, line_size);
+	}
+
 	// And copy the remainder of the line to the reconstruct buffer
 	memcpy(reconstruct_ptr + part1_size, buffer_ptr, part2_size);
+	memset((void *)(reconstruct_ptr + line_size), 0, YYJSON_PADDING_SIZE);
 	buffer_offset += part2_size;
 
 	// We copied the object, so we are no longer reading the previous buffer
@@ -449,7 +496,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		current_reader->RemoveBuffer(current_buffer_handle->buffer_index - 1);
 	}
 
-	objects[0] = ParseLine((char *)reconstruct_ptr, part1_size + part2_size, lines[0], gstate.bind_data.ignore_errors);
+	objects[0] = ParseLine((char *)reconstruct_ptr, line_size, line_size, lines[0]);
 }
 
 void JSONScanLocalState::ReadUnstructured(idx_t &count) {
@@ -474,9 +521,11 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 
 			buffer_offset += line_size;
 			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+			lines_or_bytes_in_buffer += (buffer_ptr + buffer_offset) - obj_start;
 		} else if (error.pos > max_obj_size) {
-			JSONCommon::ThrowParseError(obj_copy_start, remaining, error,
-			                            "Have you tried increasing maximum_object_size?");
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, error,
+			                           "Try increasing \"maximum_object_size\".");
+
 		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END && !is_last) {
 			// Copy remaining to reconstruct_buffer
 			const auto reconstruct_ptr = reconstruct_buffer.get();
@@ -485,13 +534,13 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 			buffer_offset = buffer_size;
 			break;
 		} else {
-			JSONCommon::ThrowParseError(obj_copy_start, remaining, error);
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, error);
 		}
 		objects[count] = read_doc->root;
 	}
 }
 
-void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const bool &ignore_errors) {
+void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
 		auto line_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
@@ -513,7 +562,7 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count, const bool &ignore_e
 		}
 		idx_t line_size = line_end - line_start;
 
-		objects[count] = ParseLine((char *)line_start, line_size, lines[count], ignore_errors);
+		objects[count] = ParseLine((char *)line_start, line_size, remaining, lines[count]);
 
 		buffer_offset += line_size;
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
