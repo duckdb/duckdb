@@ -105,14 +105,14 @@ public:
 
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
+	//! Verifies that the memory_size value of the index matches its actual size
+	virtual void Verify() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
 	//! Returns how many of the input values were found in the 'input' chunk, with the option to also record what those
-	//! matches were
-	//  what row_ids those matches have
-	//  for this purpose, nulls count as a match, and are returned in 'null_count'
+	//! matches were. For this purpose, nulls count as a match, and are returned in 'null_count'
 	virtual void LookupValues(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
 	//! Returns unique flag

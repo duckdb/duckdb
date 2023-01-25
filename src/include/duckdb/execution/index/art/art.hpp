@@ -88,9 +88,10 @@ public:
 	void VerifyDeleteForeignKey(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
-	//! Insert data into the index.
+	//! Insert data into the index
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
+	//! Construct an ART from a vector of sorted keys
 	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
@@ -104,11 +105,16 @@ public:
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
+
+	//! Generate a string containing all the expressions and their respective values that violate a constraint
+	string GenerateErrorKeyName(DataChunk &input, idx_t row);
+	//! Generate the matching error message for a constraint violation
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+
 	//! Returns the string representation of an ART
 	string ToString() override;
-
-	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+	//! Verifies that the memory_size value of the ART matches its actual size
+	void Verify() override;
 
 private:
 	//! Insert a row id into a leaf node

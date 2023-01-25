@@ -306,6 +306,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		leaf->Deserialize(art, reader);
 		art.memory_size += leaf->MemorySize(art, false);
 		D_ASSERT(art.memory_size >= old_memory_size);
+		art.Verify();
 		if (art.track_memory) {
 			art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
 		}
@@ -333,6 +334,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	deserialized_node->DeserializeInternal(art, reader);
 	art.memory_size += deserialized_node->MemorySize(art, false);
 	D_ASSERT(art.memory_size >= old_memory_size);
+	art.Verify();
 	if (art.track_memory) {
 		art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
 	}

@@ -58,6 +58,7 @@ ART::~ART() {
 	if (!tree) {
 		return;
 	}
+	Verify();
 	if (track_memory) {
 		buffer_manager.DecreaseUsedMemory(memory_size);
 	}
@@ -366,9 +367,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		return false;
 	}
 
-	D_ASSERT(old_memory_size <= this->memory_size);
-	if (this->track_memory) {
-		this->buffer_manager.IncreaseUsedMemory(this->memory_size - old_memory_size);
+	D_ASSERT(old_memory_size <= memory_size);
+	Verify();
+	if (track_memory) {
+		buffer_manager.IncreaseUsedMemory(memory_size - old_memory_size);
 	}
 	return true;
 }
@@ -541,9 +543,10 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 	}
 
-	D_ASSERT(old_memory_size >= this->memory_size);
-	if (this->track_memory) {
-		this->buffer_manager.DecreaseUsedMemory(old_memory_size - this->memory_size);
+	D_ASSERT(old_memory_size >= memory_size);
+	Verify();
+	if (track_memory) {
+		buffer_manager.DecreaseUsedMemory(old_memory_size - memory_size);
 	}
 }
 
@@ -965,6 +968,19 @@ string ART::ToString() {
 		return tree->ToString(*this);
 	}
 	return "[empty]";
+}
+
+void ART::Verify() {
+#ifdef DEBUG
+	idx_t current_mem_size = 0;
+	if (tree) {
+		current_mem_size = tree->MemorySize(*this, true);
+	}
+	if (memory_size != current_mem_size) {
+		throw InternalException("Memory_size value (%d) does not match actual memory size (%d).", memory_size,
+		                        current_mem_size);
+	}
+#endif
 }
 
 } // namespace duckdb

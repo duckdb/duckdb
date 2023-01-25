@@ -113,6 +113,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 
+	state.global_index->Verify();
 	if (state.global_index->track_memory) {
 		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
