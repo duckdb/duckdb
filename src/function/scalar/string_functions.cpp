@@ -45,7 +45,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<Base64Fun>();
 	Register<EncodeFun>();
 
-	// bit functions TODO is this the right place?
+	// bit functions
 	Register<GetBitFun>();
 	Register<SetBitFun>();
 	Register<BitPositionFun>();

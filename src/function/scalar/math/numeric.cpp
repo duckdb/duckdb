@@ -227,7 +227,6 @@ struct BitStringBitCntOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		TR count = Bit::BitCount(input);
-		// printf("tr count %d ", count);
 		return count;
 	}
 };
