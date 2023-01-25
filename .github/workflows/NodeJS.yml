@@ -52,6 +52,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -128,6 +129,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -240,6 +242,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.node }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
           variant: sccache
 
       - name: Windows Build Tools

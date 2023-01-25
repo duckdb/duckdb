@@ -38,6 +38,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -184,6 +185,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -216,6 +218,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Install
       shell: bash
@@ -259,6 +262,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Install
       shell: bash
@@ -286,6 +290,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Run
       shell: bash
