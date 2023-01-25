@@ -2,6 +2,14 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -15,6 +23,15 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 
 namespace duckdb {
@@ -148,6 +165,60 @@ CatalogEntry *DSchemaCatalogEntry::CreateFunction(CatalogTransaction transaction
 	}
 	function->internal = info->internal;
 	return AddEntry(transaction, std::move(function), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+                                            OnCreateConflict on_conflict) {
+	DependencyList dependencies;
+	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
+	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
+	return AddEntry(transaction, std::move(sequence), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
+	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
+	return AddEntry(transaction, std::move(type_entry), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
+	auto view = make_unique<ViewCatalogEntry>(catalog, this, info);
+	return AddEntry(transaction, std::move(view), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info,
+                                               TableCatalogEntry *table) {
+	DependencyList dependencies;
+	dependencies.AddDependency(table);
+	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
+	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
+	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
+	collation->internal = info->internal;
+	return AddEntry(transaction, std::move(collation), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
+	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	table_function->internal = info->internal;
+	return AddEntry(transaction, std::move(table_function), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
+	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
+	copy_function->internal = info->internal;
+	return AddEntry(transaction, std::move(copy_function), info->on_conflict);
+}
+
+CatalogEntry *DSchemaCatalogEntry::CreatePragmaFunction(CatalogTransaction transaction,
+                                                        CreatePragmaFunctionInfo *info) {
+	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	pragma_function->internal = info->internal;
+	return AddEntry(transaction, std::move(pragma_function), info->on_conflict);
 }
 
 void DSchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {

@@ -166,6 +166,8 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	}
 
 	D_ASSERT(active_query.get());
+	active_query.reset();
+	query_progress = -1;
 	PreservedError error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -203,8 +205,6 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	} catch (...) { // LCOV_EXCL_START
 		error = PreservedError("Unhandled exception!");
 	} // LCOV_EXCL_STOP
-	active_query.reset();
-	query_progress = -1;
 	return error;
 }
 

@@ -1,6 +1,4 @@
 #include "duckdb/catalog/default/default_views.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -52,23 +50,19 @@ static DefaultView internal_views[] = {
     {"information_schema", "tables", "SELECT database_name table_catalog, schema_name table_schema, table_name, CASE WHEN temporary THEN 'LOCAL TEMPORARY' ELSE 'BASE TABLE' END table_type, NULL self_referencing_column_name, NULL reference_generation, NULL user_defined_type_catalog, NULL user_defined_type_schema, NULL user_defined_type_name, 'YES' is_insertable_into, 'NO' is_typed, CASE WHEN temporary THEN 'PRESERVE' ELSE NULL END commit_action FROM duckdb_tables() UNION ALL SELECT NULL table_catalog, schema_name table_schema, view_name table_name, 'VIEW' table_type, NULL self_referencing_column_name, NULL reference_generation, NULL user_defined_type_catalog, NULL user_defined_type_schema, NULL user_defined_type_name, 'NO' is_insertable_into, 'NO' is_typed, NULL commit_action FROM duckdb_views;"},
     {nullptr, nullptr, nullptr}};
 
-static unique_ptr<CreateViewInfo> GetDefaultView(const string &input_schema, const string &input_name) {
+static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const string &input_schema, const string &input_name) {
 	auto schema = StringUtil::Lower(input_schema);
 	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_unique<CreateViewInfo>();
 			result->schema = schema;
+			result->view_name = name;
 			result->sql = internal_views[index].sql;
-
-			Parser parser;
-			parser.ParseQuery(internal_views[index].sql);
-			D_ASSERT(parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-			result->query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 			result->temporary = true;
 			result->internal = true;
-			result->view_name = name;
-			return result;
+
+			return CreateViewInfo::FromSelect(context, move(result));
 		}
 	}
 	return nullptr;
@@ -79,11 +73,8 @@ DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry 
 }
 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	auto info = GetDefaultView(schema->name, entry_name);
+	auto info = GetDefaultView(context, schema->name, entry_name);
 	if (info) {
-		auto binder = Binder::CreateBinder(context);
-		binder->BindCreateViewInfo(*info);
-
 		return make_unique_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
 	}
 	return nullptr;

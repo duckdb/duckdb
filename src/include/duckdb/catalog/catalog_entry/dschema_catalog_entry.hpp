@@ -38,10 +38,21 @@ private:
 	CatalogSet types;
 
 public:
+	CatalogEntry *AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
+	                       OnCreateConflict on_conflict);
 	CatalogEntry *AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-	                               OnCreateConflict on_conflict, DependencyList dependencies) override;
+	                               OnCreateConflict on_conflict, DependencyList dependencies);
+
 	CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) override;
 	CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) override;
+	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) override;
+	CatalogEntry *CreateView(CatalogTransaction transaction, CreateViewInfo *info) override;
+	CatalogEntry *CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) override;
+	CatalogEntry *CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) override;
+	CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) override;
+	CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) override;
+	CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) override;
+	CatalogEntry *CreateType(CatalogTransaction transaction, CreateTypeInfo *info) override;
 	void Alter(ClientContext &context, AlterInfo *info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) override;
