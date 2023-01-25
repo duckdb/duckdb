@@ -87,7 +87,7 @@ bool DeleteStatement::Equals(const SQLStatement *other_p) const {
 	for (idx_t i = 0; i < using_clauses.size(); i++) {
 		auto &lhs = using_clauses[i];
 		auto &rhs = other.using_clauses[i];
-		if (lhs->Equals(rhs.get())) {
+		if (!lhs->Equals(rhs.get())) {
 			return false;
 		}
 	}

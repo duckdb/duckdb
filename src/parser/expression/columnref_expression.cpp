@@ -76,6 +76,9 @@ bool ColumnRefExpression::Equal(const ColumnRefExpression *a, const ColumnRefExp
 }
 
 bool ColumnRefExpression::Equals(const BaseExpression *other_p) const {
+	if (!other_p) {
+		return false;
+	}
 	if (this->type != other_p->type) {
 		return false;
 	}

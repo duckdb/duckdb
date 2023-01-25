@@ -638,19 +638,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *res
 	return active_query->open_result == result;
 }
 
-bool StatementTypeSupportsVerification(const unique_ptr<SQLStatement> &statement) {
-	if (!statement) {
-		// This was a SELECT statement, has been consumed by the StatementVerifier
-		return false;
-	}
-	if (statement->type == StatementType::INSERT_STATEMENT) {
-		// currently VALUES() gets expanded to SELECT * FROM VALUES() AS valueslist
-		// Equals does not think they are equivalent, so we skip all insert statement Equals checks
-		return false;
-	}
-	return true;
-}
-
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
@@ -662,6 +649,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
 		auto original_statement = move(statement);
+		bool from_string = false;
 		switch (original_statement->type) {
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
@@ -698,6 +686,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				return make_unique<PendingQueryResult>(error);
 			}
 			statement = std::move(parser.statements[0]);
+			from_string = true;
 			break;
 		}
 		default:
@@ -708,7 +697,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// Verify that the newly generated statement equals the original
 		PreservedError error;
 		try {
-			if (StatementTypeSupportsVerification(original_statement) && !original_statement->Equals(statement.get())) {
+			if (!from_string && original_statement && !original_statement->Equals(statement.get())) {
 				error = InternalException("Verification statement does not equal the original statement");
 			}
 		} catch (NotImplementedException &ex) {
