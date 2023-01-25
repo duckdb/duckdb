@@ -32,6 +32,8 @@ class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TableMacroCatalogEntry;
+class UpdateSetInfo;
+class LogicalProjection;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -153,6 +155,13 @@ public:
 		vector<ExceptionFormatValue> values;
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
+
+	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root,
+	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
+	                                          vector<PhysicalIndex> &columns);
+	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
+	                                TableCatalogEntry *table);
+	void BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,

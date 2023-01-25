@@ -37,6 +37,8 @@ class TableIOManager;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
+class ConflictManager;
+enum class VerifyExistenceType : uint8_t;
 
 //! DataTable represents a physical table on disk
 class DataTable {
@@ -83,13 +85,14 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, const Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
 	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);
 	//! Append a DataChunk to the transaction-local storage of the table.
-	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	                 bool unsafe = false);
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
 	//! Append a chunk to the transaction-local storage of this table
@@ -177,7 +180,8 @@ public:
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
 
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	                             ConflictManager *conflict_manager = nullptr);
 
 private:
 	//! Verify the new added constraints against current persistent&local data
@@ -192,7 +196,7 @@ private:
 	                              idx_t end_row);
 
 	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
-	                                bool is_append);
+	                                VerifyExistenceType verify_type);
 	void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
 	                                      DataChunk &chunk);
 	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,

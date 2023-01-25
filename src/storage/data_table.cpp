@@ -19,7 +19,10 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 
@@ -252,7 +255,7 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-                      Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+                      const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
@@ -260,9 +263,11 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<
 // Append
 //===--------------------------------------------------------------------===//
 static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, const string &col_name) {
-	if (VectorOperations::HasNull(vector, count)) {
-		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
+	if (!VectorOperations::HasNull(vector, count)) {
+		return;
 	}
+
+	throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
@@ -274,8 +279,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	Vector result(col.Type());
 	try {
 		executor.ExecuteExpression(chunk, result);
+	} catch (InternalException &ex) {
+		throw;
 	} catch (std::exception &ex) {
-
 		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
 		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
 	}
@@ -326,10 +332,65 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	return true;
 }
 
+// Find the first index that is not null, and did not find a match
+static idx_t FirstMissingMatch(const ManagedSelection &matches) {
+	idx_t match_idx = 0;
+
+	for (idx_t i = 0; i < matches.Size(); i++) {
+		auto match = matches.IndexMapsToLocation(match_idx, i);
+		match_idx += match;
+		if (!match) {
+			// This index is missing in the matches vector
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
+idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
+	idx_t failed_index = DConstants::INVALID_INDEX;
+	if (!is_append) {
+		// We expected to find nothing, so the first error is the first match
+		failed_index = matches[0];
+	} else {
+		// We expected to find matches for all of them, so the first missing match is the first error
+		return FirstMissingMatch(matches);
+	}
+	return failed_index;
+}
+
+[[noreturn]] static void ThrowForeignKeyConstraintError(idx_t failed_index, bool is_append, Index *index,
+                                                        DataChunk &input) {
+	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
+
+	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
+	D_ASSERT(index->type == IndexType::ART);
+	auto &art_index = (ART &)*index;
+	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
+	throw ConstraintException(exception_msg);
+}
+
+bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {
+	if (is_append) {
+		// We need to find a match for all of the values
+		return matches.Count() != input_count;
+	} else {
+		// We should not find any matches
+		return matches.Count() != 0;
+	}
+}
+
+static bool IsAppend(VerifyExistenceType verify_type) {
+	return verify_type == VerifyExistenceType::APPEND_FK;
+}
+
 void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
-                                           DataChunk &chunk, bool is_append) {
+                                           DataChunk &chunk, VerifyExistenceType verify_type) {
 	const vector<PhysicalIndex> *src_keys_ptr = &bfk.info.fk_keys;
 	const vector<PhysicalIndex> *dst_keys_ptr = &bfk.info.pk_keys;
+
+	bool is_append = IsAppend(verify_type);
 	if (!is_append) {
 		src_keys_ptr = &bfk.info.pk_keys;
 		dst_keys_ptr = &bfk.info.fk_keys;
@@ -359,60 +420,107 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		return;
 	}
 
-	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
-	vector<string> err_msgs, tran_err_msgs;
-	err_msgs.resize(count);
-	tran_err_msgs.resize(count);
+	// Set up a way to record conflicts, rather than directly throw on them
+	unordered_set<column_t> empty_column_list;
+	ConflictInfo empty_conflict_info(empty_column_list, false);
+	ConflictManager regular_conflicts(verify_type, count, &empty_conflict_info);
+	ConflictManager transaction_conflicts(verify_type, count, &empty_conflict_info);
+	regular_conflicts.SetMode(ConflictManagerMode::SCAN);
+	transaction_conflicts.SetMode(ConflictManagerMode::SCAN);
 
-	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, err_msgs);
+	data_table->info->indexes.VerifyForeignKey(*dst_keys_ptr, dst_chunk, regular_conflicts);
+	regular_conflicts.Finalize();
+	auto &regular_matches = regular_conflicts.Conflicts();
 	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
 	auto &local_storage = LocalStorage::Get(context, db);
+
+	bool error = IsForeignKeyConstraintError(is_append, count, regular_matches);
+	bool transaction_error = false;
+
 	bool transaction_check = local_storage.Find(data_table);
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
-		transact_index.VerifyForeignKey(*dst_keys_ptr, is_append, dst_chunk, tran_err_msgs);
+		transact_index.VerifyForeignKey(*dst_keys_ptr, dst_chunk, transaction_conflicts);
+		transaction_conflicts.Finalize();
+		auto &transaction_matches = transaction_conflicts.Conflicts();
+		transaction_error = IsForeignKeyConstraintError(is_append, count, transaction_matches);
 	}
 
-	// we need to look at the error messages concurrently in data table's index and transaction local storage's index
-	for (idx_t i = 0; i < count; i++) {
-		if (!transaction_check) {
-			// if there is no transaction-local data we only need to check if there is an error message in the main
-			// index
-			if (!err_msgs[i].empty()) {
-				throw ConstraintException(err_msgs[i]);
-			} else {
-				continue;
+	if (!transaction_error && !error) {
+		// No error occurred;
+		return;
+	}
+
+	// Some error occurred, and we likely want to throw
+	Index *index;
+	Index *transaction_index;
+
+	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+	index = data_table->info->indexes.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
+	if (transaction_check) {
+		auto &transact_index = local_storage.GetIndexes(data_table);
+		// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+		transaction_index = transact_index.FindForeignKeyIndex(*dst_keys_ptr, fk_type);
+	}
+
+	if (!transaction_check) {
+		// Only local state is checked, throw the error
+		D_ASSERT(error);
+		auto failed_index = LocateErrorIndex(is_append, regular_matches);
+		D_ASSERT(failed_index != DConstants::INVALID_INDEX);
+		ThrowForeignKeyConstraintError(failed_index, is_append, index, dst_chunk);
+	}
+	if (transaction_error && error && is_append) {
+		// When we want to do an append, we only throw if the foreign key does not exist in both transaction and local
+		// storage
+		auto &transaction_matches = transaction_conflicts.Conflicts();
+		idx_t failed_index = DConstants::INVALID_INDEX;
+		idx_t regular_idx = 0;
+		idx_t transaction_idx = 0;
+		for (idx_t i = 0; i < count; i++) {
+			bool in_regular = regular_matches.IndexMapsToLocation(regular_idx, i);
+			regular_idx += in_regular;
+			bool in_transaction = transaction_matches.IndexMapsToLocation(transaction_idx, i);
+			transaction_idx += in_transaction;
+
+			if (!in_regular && !in_transaction) {
+				// We need to find a match for all of the input values
+				// The failed index is i, it does not show up in either regular or transaction storage
+				failed_index = i;
+				break;
 			}
 		}
-		if (is_append) {
-			// if we are appending we need to check to ensure the foreign key exists in either the transaction-local
-			// storage or the main table
-			if (!err_msgs[i].empty() && !tran_err_msgs[i].empty()) {
-				throw ConstraintException(err_msgs[i]);
-			} else {
-				continue;
-			}
+		if (failed_index == DConstants::INVALID_INDEX) {
+			// We don't throw, every value was present in either regular or transaction storage
+			return;
 		}
-		// if we are deleting we need to ensure the foreign key DOES NOT exist in EITHER the transaction-local storage
-		// OR the main table
-		if (!err_msgs[i].empty() || !tran_err_msgs[i].empty()) {
-			string &err_msg = err_msgs[i];
-			if (err_msg.empty()) {
-				err_msg = tran_err_msgs[i];
-			}
-			throw ConstraintException(err_msg);
+		ThrowForeignKeyConstraintError(failed_index, true, index, dst_chunk);
+	}
+	if (!is_append && transaction_check) {
+		auto &transaction_matches = transaction_conflicts.Conflicts();
+		if (error) {
+			auto failed_index = LocateErrorIndex(false, regular_matches);
+			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
+			ThrowForeignKeyConstraintError(failed_index, false, index, dst_chunk);
+		} else {
+			D_ASSERT(transaction_error);
+			D_ASSERT(transaction_matches.Count() != DConstants::INVALID_INDEX);
+			auto failed_index = LocateErrorIndex(false, transaction_matches);
+			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
+			ThrowForeignKeyConstraintError(failed_index, false, transaction_index, dst_chunk);
 		}
 	}
 }
 
 void DataTable::VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                                  DataChunk &chunk) {
-	VerifyForeignKeyConstraint(bfk, context, chunk, true);
+	VerifyForeignKeyConstraint(bfk, context, chunk, VerifyExistenceType::APPEND_FK);
 }
 
 void DataTable::VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
                                                  DataChunk &chunk) {
-	VerifyForeignKeyConstraint(bfk, context, chunk, false);
+	VerifyForeignKeyConstraint(bfk, context, chunk, VerifyExistenceType::DELETE_FK);
 }
 
 void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint) {
@@ -425,8 +533,10 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	local_storage.VerifyNewConstraint(parent, *constraint);
 }
 
-void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                                        ConflictManager *conflict_manager) {
 	if (table.HasGeneratedColumns()) {
+		// Verify that the generated columns expression work with the inserted values
 		auto binder = Binder::CreateBinder(context);
 		physical_index_set_t bound_columns;
 		CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
@@ -459,10 +569,49 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		}
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
-			info->indexes.Scan([&](Index &index) {
-				index.VerifyAppend(chunk);
-				return false;
-			});
+			if (conflict_manager) {
+				// This is only provided when a ON CONFLICT clause was provided
+				idx_t matching_indexes = 0;
+				auto &conflict_info = conflict_manager->GetConflictInfo();
+				// First we figure out how many indexes match our conflict target
+				// So we can optimize accordingly
+				info->indexes.Scan([&](Index &index) {
+					matching_indexes += conflict_info.ConflictTargetMatches(index);
+					return false;
+				});
+				conflict_manager->SetMode(ConflictManagerMode::SCAN);
+				conflict_manager->SetIndexCount(matching_indexes);
+				// First we verify only the indexes that match our conflict target
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
+					}
+					if (conflict_info.ConflictTargetMatches(index)) {
+						index.VerifyAppend(chunk, *conflict_manager);
+					}
+					return false;
+				});
+
+				conflict_manager->SetMode(ConflictManagerMode::THROW);
+				// Then we scan the other indexes, throwing if they cause conflicts on tuples that were not found during
+				// the scan
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
+					}
+					index.VerifyAppend(chunk, *conflict_manager);
+					return false;
+				});
+			} else {
+				// Only need to verify that no unique constraints are violated
+				info->indexes.Scan([&](Index &index) {
+					if (!index.IsUnique()) {
+						return false;
+					}
+					index.VerifyAppend(chunk);
+					return false;
+				});
+			}
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
@@ -487,8 +636,8 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, ClientContext &co
 	local_storage.InitializeAppend(state, this);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
-                            DataChunk &chunk) {
+void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                            bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -500,7 +649,9 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	chunk.Verify();
 
 	// verify any constraints on the new chunk
-	VerifyAppendConstraints(table, context, chunk);
+	if (!unsafe) {
+		VerifyAppendConstraints(table, context, chunk);
+	}
 
 	// append to the transaction local data
 	LocalStorage::Append(state, chunk);
@@ -835,6 +986,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 
 void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
                                         const vector<PhysicalIndex> &column_ids) {
+	// FIXME: double usage of 'i'?
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
 		auto &constraint = table.bound_constraints[i];
@@ -843,6 +995,7 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
+			// FIXME: double usage of 'i'?
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == bound_not_null.index) {
 					// found the column id: check the data in
@@ -884,6 +1037,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
+	D_ASSERT(column_ids.size() == updates.ColumnCount());
 	auto count = updates.size();
 	updates.Verify();
 	if (count == 0) {
