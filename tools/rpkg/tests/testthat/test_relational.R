@@ -267,13 +267,19 @@ test_that("Symmetric difference returns the symmetric difference", {
 })
 
 test_that("rel aggregate with no groups but a sum over a column, sums the column", {
-skip("duckplyr specific")
+   rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- duckdb:::rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(3))
+   expect_equal(rel_df, sum)
 })
 
 test_that("rel aggregate with groups and aggregate function works", {
-skip("duckplyr specific")
-})
-
-test_that("rel aggregate with no groups and no aggregate function returns one line", {
-skip("duckplyr specific")
+   rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1, 2, 5, 5), b=c(3, 3, 4, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- duckdb:::rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(3, 10), b=c(3, 4))
+   expect_equal(rel_df, sum)
 })
