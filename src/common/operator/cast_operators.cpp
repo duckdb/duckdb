@@ -1219,26 +1219,6 @@ bool TryCast::Operation(string_t input, double &result, bool strict) {
 }
 
 template <>
-bool TryCastErrorMessage::Operation(string_t input, float &result, string *error_message, bool strict) {
-	if (!TryCast::Operation<string_t, float>(input, result, strict)) {
-		HandleCastError::AssignError(StringUtil::Format("Could not cast string to float: \"%s\"", input.GetString()),
-		                             error_message);
-		return false;
-	}
-	return true;
-}
-
-template <>
-bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict) {
-	if (!TryCast::Operation<string_t, double>(input, result, strict)) {
-		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
-		                             error_message);
-		return false;
-	}
-	return true;
-}
-
-template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message, bool strict) {
 	if (!TryDoubleCast<float, ','>(input.GetDataUnsafe(), input.GetSize(), result, strict)) {
 		HandleCastError::AssignError(StringUtil::Format("Could not cast string to float: \"%s\"", input.GetString()),
