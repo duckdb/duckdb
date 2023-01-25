@@ -369,7 +369,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		DirectConversion(vector, array, scan_state, nested_offset);
 		break;
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];

@@ -17,12 +17,14 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class TableIOManager;
 class Transaction;
+class ConflictManager;
 
 struct IndexLock;
 
@@ -72,10 +74,12 @@ public:
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	//! Verify that data can be appended to the index
+	virtual void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
-	virtual void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyAppendForeignKey(DataChunk &chunk) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
-	virtual void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
@@ -93,6 +97,12 @@ public:
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
+
+	//! Returns how many of the input values were found in the 'input' chunk, with the option to also record what those
+	//! matches were
+	//  what row_ids those matches have
+	//  for this purpose, nulls count as a match, and are returned in 'null_count'
+	virtual void LookupValues(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
 	//! Returns unique flag
 	bool IsUnique() {

@@ -30,6 +30,8 @@ struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
+class OnConflictInfo;
+class UpdateSetInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -127,6 +129,13 @@ private:
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGNode *node);
+
+	//! Transform a Postgres duckdb_libpgquery::T_PGOnConflictClause node into a OnConflictInfo
+	unique_ptr<OnConflictInfo> TransformOnConflictClause(duckdb_libpgquery::PGOnConflictClause *node,
+	                                                     const string &relname);
+	//! Transform a ON CONFLICT shorthand into a OnConflictInfo
+	unique_ptr<OnConflictInfo> DummyOnConflictClause(duckdb_libpgquery::PGOnConflictActionAlias type,
+	                                                 const string &relname);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(duckdb_libpgquery::PGNode *node);
 	void TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList *options);
@@ -220,6 +229,18 @@ private:
 
 	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell *cell, ColumnDefinition &column,
 	                                           idx_t index);
+
+	//===--------------------------------------------------------------------===//
+	// Update transform
+	//===--------------------------------------------------------------------===//
+	unique_ptr<UpdateSetInfo> TransformUpdateSetInfo(duckdb_libpgquery::PGList *target_list,
+	                                                 duckdb_libpgquery::PGNode *where_clause);
+
+	//===--------------------------------------------------------------------===//
+	// Index transform
+	//===--------------------------------------------------------------------===//
+	vector<unique_ptr<ParsedExpression>> TransformIndexParameters(duckdb_libpgquery::PGList *list,
+	                                                              const string &relation_name);
 
 	//===--------------------------------------------------------------------===//
 	// Collation transform

@@ -1,23 +1,24 @@
 #include "duckdb/common/types.hpp"
 
-#include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/cast_rules.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/function/cast_rules.hpp"
-#include "duckdb/common/string_map_set.hpp"
 
 #include <cmath>
 
@@ -103,7 +104,6 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::JSON:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -177,7 +177,6 @@ constexpr const LogicalTypeId LogicalType::HASH;
 constexpr const LogicalTypeId LogicalType::POINTER;
 
 constexpr const LogicalTypeId LogicalType::VARCHAR;
-constexpr const LogicalTypeId LogicalType::JSON;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
@@ -212,7 +211,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
 	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
 	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalTypeId::UNION,  LogicalType::UUID,      LogicalType::JSON};
+	    LogicalTypeId::UNION,  LogicalType::UUID};
 	return types;
 }
 
@@ -404,8 +403,6 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "AGGREGATE_STATE";
 	case LogicalTypeId::USER:
 		return "USER";
-	case LogicalTypeId::JSON:
-		return "JSON";
 	}
 	return "UNDEFINED";
 }
@@ -501,6 +498,13 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::SQLNULL;
 	}
 	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
+}
+
+LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
+	auto type = TransformStringToLogicalType(str);
+	return type.id() == LogicalTypeId::USER
+	           ? Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, str)
+	           : type;
 }
 
 bool LogicalType::IsIntegral() const {
