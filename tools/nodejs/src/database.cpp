@@ -315,7 +315,7 @@ void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, 
 	jsargs->done = true;
 }
 
-static duckdb::unique_ptr<duckdb::TableFunctionRef>
+static duckdb::unique_ptr<duckdb::TableRef>
 ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
 	JSRSArgs jsargs;
 	jsargs.table = table_name;
@@ -334,7 +334,7 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 		}
 		table_function->function =
 		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
-		return table_function;
+		return std::move(table_function);
 	}
 	return nullptr;
 }

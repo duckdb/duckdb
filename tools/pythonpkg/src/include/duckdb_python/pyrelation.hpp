@@ -68,11 +68,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
 	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                 bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -236,6 +236,8 @@ public:
 
 	string Explain();
 
+	static bool IsRelation(const py::object &object);
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -246,9 +248,11 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void ExecuteOrThrow();
+	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
 	unique_ptr<DuckDBPyResult> result;
+	std::string rendered_result;
 };
 
 } // namespace duckdb

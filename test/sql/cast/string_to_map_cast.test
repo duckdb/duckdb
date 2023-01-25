@@ -1,0 +1,326 @@
+# name: test/sql/cast/string_to_map_cast.test
+# description: cast strings into map structures
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+#               Basic tests:
+# ---------------------------------------------------
+
+query I
+SELECT '{a=1, b=2, c=3}'::MAP(VARCHAR, INT)
+----
+{a=1, b=2, c=3}
+
+query I
+SELECT '{key_A=Duck, key_B="hello world"}'::MAP(VARCHAR, VARCHAR)
+----
+{key_A=Duck, key_B=hello world}
+
+query I
+SELECT '{1=Duck, 2=hello world, 3=!}'::MAP(INT, VARCHAR)
+----
+{1=Duck, 2=hello world, 3=!}
+
+query I
+SELECT '{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, Bye DuckDB]}'::MAP(VARCHAR, VARCHAR[]);
+----
+{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, Bye DuckDB]}
+
+query I
+SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
+----
+{key=A=Duck, key=B=hello=world}
+
+statement error
+SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
+----
+Invalid Input Error: Map keys have to be unique
+
+
+#               Nested Maps
+# ---------------------------------------------------
+query I
+SELECT '{{1=100, 2=200}=value}'::MAP(MAP(INT, INT), VARCHAR);
+----
+{{1=100, 2=200}=value}
+
+query I
+SELECT '{{1=100, 2=200}={3=c, 5=e, 7=g}}'::MAP(MAP(INT, INT), MAP(INT, VARCHAR));
+----
+{{1=100, 2=200}={3=c, 5=e, 7=g}}
+
+
+#               Cast from table
+# ---------------------------------------------------
+statement ok
+CREATE TABLE stringMap (col1 VARCHAR)
+
+statement ok
+INSERT INTO stringMap VALUES ('{1=Duck, 2=DB}'), ('{999=🦆}'), ('{7=Hello, 8=World, 2=!}');
+
+query I
+SELECT col1::MAP(INT, VARCHAR) FROM stringMap;
+----
+{1=Duck, 2=DB}
+{999=🦆}
+{7=Hello, 8=World, 2=!}
+
+
+#               Quote escaping
+# ---------------------------------------------------
+query I
+SELECT CAST('{''hello''=2, ''world''=50, ''!''=12}' AS MAP(VARCHAR, INT));
+----
+{hello=2, world=50, !=12}
+
+query I
+SELECT CAST('{''''hello''''=hello, ''''world''''=world, ''''!''''=!}' AS MAP(VARCHAR, VARCHAR));
+----
+{'hello'=hello, 'world'=world, '!'=!}
+
+query I
+SELECT CAST('{[[''🦆, 🦆, 🦆'']]=100, [[duck, db, ''🦆'']]=101}' AS MAP(VARCHAR[][], INT));
+----
+{[['🦆, 🦆, 🦆']]=100, [[duck, db, '🦆']]=101}
+
+query I
+SELECT CAST('{"can''t"="you''re", "i''m"="q''u''o''t''e"}' AS MAP(VARCHAR, VARCHAR));
+----
+{can't=you're, i'm=q'u'o't'e}
+
+query I
+SELECT CAST('{"{"="}", "["="]"}' AS MAP(VARCHAR, VARCHAR));
+----
+{{=}, [=]}
+
+query I
+SELECT CAST('{''}''="{", '']''="["}' AS MAP(VARCHAR, VARCHAR));
+----
+{}={, ]=[}
+
+
+#               Test for whitespaces
+# ---------------------------------------------------
+query I
+SELECT ' {greetings    =[    Hello World  !, Hello     DuckDB  , Howdy ]  ,      farewells=  [Bye World, Bye DuckDB  ] }    '::MAP(VARCHAR, VARCHAR[]);
+----
+{greetings=[Hello World  !, Hello     DuckDB, Howdy], farewells=[Bye World, Bye DuckDB]}
+
+query I
+SELECT CAST('{ [12,     13,14]=val, [       8, 9         ]      =val, [ 4    ]=val   }' AS MAP(INT[], VARCHAR));
+----
+{[12, 13, 14]=val, [8, 9]=val, [4]=val}
+
+query I
+SELECT CAST('   { { a:[2,    3], b:  Duckster      }=         {50.0        =50}, {a    : [9,1,4], b:Duck          }
+                ={  1      =    0}  }' AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
+----
+{{'a': [2, 3], 'b': Duckster}={50=50.0}, {'a': [9, 1, 4], 'b': Duck}={1=0.0}}
+
+
+#               NULL values
+# ---------------------------------------------------
+statement ok
+CREATE TABLE null_tbl(col1 VARCHAR);
+
+statement ok
+INSERT INTO null_tbl VALUES(NULL), ('{key=NULL}'), ('{zero=0, key=NULL}');
+
+query I
+SELECT col1::MAP(VARCHAR, VARCHAR) FROM null_tbl;
+----
+NULL
+{key=NULL}
+{zero=0, key=NULL}
+
+query I
+SELECT CAST(NULL AS MAP(INT, VARCHAR));
+----
+NULL
+
+query I
+SELECT CAST('{12=34, 56=NULL, 910=1112, 1314=NULL}' AS MAP(INT, INT));
+----
+{12=34, 56=NULL, 910=1112, 1314=NULL}
+
+statement error
+SELECT CAST('{NULL=5}' AS MAP(INT, INT));
+----
+Conversion Error: Type VARCHAR with value '{NULL=5}' can't be cast to the destination type MAP
+
+query I
+SELECT CAST('{}' AS MAP(INT, INT));
+----
+{}
+
+#               Try Cast
+#---------------------------------------------------
+query I
+SELECT TRY_CAST('Hello World' AS MAP(VARCHAR, VARCHAR));
+----
+NULL
+
+statement ok
+CREATE TABLE try_cast_tbl (col1 VARCHAR);
+
+statement ok
+INSERT INTO try_cast_tbl VALUES ('{1=2, XXX=2}'), ('{NULL=DuckDB}'), ('{3=oops, 5=5 44=4.0}'), ('{12345678901=0}'), ('{5=6!, 7=7000}'), ('{3 0, 1=1}');
+
+query I
+SELECT TRY_CAST(col1 AS MAP(INT, INT)) FROM try_cast_tbl;
+----
+NULL
+NULL
+{3=NULL, 5=NULL}
+NULL
+{5=NULL, 7=7000}
+NULL
+
+#               Syntax error checking
+# ---------------------------------------------------
+statement error
+SELECT CAST('{3==3}' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{[5]=5}' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{3=three}}' AS MAP(INT, VARCHAR));
+
+statement error   
+SELECT CAST('{Ducky=, DB=ok}' AS MAP(VARCHAR, INT));
+
+statement error
+SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));
+
+statement error
+SELECT CAST('{                                                                      ' AS MAP(INT, INT));
+
+#               Test WHERE clause
+# ---------------------------------------------------
+statement ok
+CREATE TABLE Duck_tbl (col1 VARCHAR);
+
+statement ok
+INSERT INTO Duck_tbl VALUES ('{1=Duck, 3=DB}'), ('{12=DuckDB}'), ('{3=DB, 5=🦆 4=Ducky, 7=Duckster}'), ('{0=DuckParty}'), ('{5=DBDuck, 7=Duckster, 1=🦆}'), ('{1="final Quack"}');
+
+query I
+SELECT * FROM Duck_tbl WHERE list_contains(cast(col1 as MAP(INT, VARCHAR))[7], 'Duckster') ;
+----
+{3=DB, 5=🦆 4=Ducky, 7=Duckster}
+{5=DBDuck, 7=Duckster, 1=🦆}
+
+query I
+SELECT col1::MAP(INT, VARCHAR) FROM Duck_tbl WHERE cardinality(cast(col1 as MAP(INT, VARCHAR))) < 3;
+----
+{1=Duck, 3=DB}
+{12=DuckDB}
+{0=DuckParty}
+{1=final Quack}
+
+#               Maps of structs and lists:
+# ---------------------------------------------------
+
+query I
+SELECT CAST('{A={a:[12,13,14], b:"🦆", c:0.12}, B={a:[12,13,14], b:DuckDuck, c:9.03}}' AS MAP(VARCHAR, STRUCT(a INT[], b VARCHAR, c FLOAT)));
+----
+{A={'a': [12, 13, 14], 'b': 🦆, 'c': 0.12}, B={'a': [12, 13, 14], 'b': DuckDuck, 'c': 9.03}}
+
+query I
+SELECT CAST('{{a:Meow=Meow}={a:12, b:0.8, c:MeowMeow}, {a:Quack}={a:13, b:3.2, c:QuackQuack}}' AS MAP(STRUCT(a VARCHAR), STRUCT(a INT, b DOUBLE, c VARCHAR)));
+----
+{{'a': Meow=Meow}={'a': 12, 'b': 0.8, 'c': MeowMeow}, {'a': Quack}={'a': 13, 'b': 3.2, 'c': QuackQuack}}
+
+query I
+SELECT CAST('{{A:AAA}={a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}}' AS MAP(STRUCT(A VARCHAR), STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))));
+----
+{{'A': AAA}={'a': [12, 13, 14], 'b': 🦆, 'c': {'a': [[a], [b, c]], 'b': [123]}}}
+
+query I
+SELECT '{[[a, b], [c, d], [e]]= {a:2000}, [[aaa]]={a:100}, [[z],[y], [x]]={}}'::MAP(VARCHAR[][], STRUCT(a INT));
+----
+{[[a, b], [c, d], [e]]={'a': 2000}, [[aaa]]={'a': 100}, [[z], [y], [x]]={'a': NULL}}
+
+
+#               All types:
+# ---------------------------------------------------
+
+query I
+SELECT CAST('{a=True, b=False, z=true, X=FALSE}' AS MAP(VARCHAR, BOOL));
+----
+{a=true, b=false, z=true, X=false}
+
+query I
+SELECT CAST('{True=[true, FALSE, true], False=[false, false, false]}' AS MAP(BOOL, BOOL[]));
+----
+{true=[true, false, true], false=[false, false, false]}
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
+
+query I
+SELECT CAST('{0={a:1, b: 8.3}, 5.7={a:2, b: 3}}' AS MAP(${type}, STRUCT(a ${type}, b ${type})));
+----
+{0={'a': 1, 'b': 8}, 6={'a': 2, 'b': 3}}
+
+endloop
+
+foreach type DOUBLE FLOAT
+
+query I
+SELECT CAST('{-9.01=9.13 ,3=0.00002}' AS MAP(${type}, ${type}));
+----
+{-9.01=9.13, 3.0=2e-05}
+
+endloop
+
+statement ok
+CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
+
+query I
+SELECT '{🦆=ok, duck=happy}'::MAP(VARCHAR, MOOD)
+----
+{🦆=ok, duck=happy}
+
+query I
+SELECT '{ok=happy, sad=ok}'::MAP(MOOD, MOOD)
+----
+{ok=happy, sad=ok}
+
+statement error
+SELECT '{sadDucky: nothappy}'::MAP(VARCHAR, MOOD)
+
+#               Larger input test
+# ---------------------------------------------------
+
+statement ok
+CREATE TABLE intMap AS SELECT map([i], [i+1])::VARCHAR::MAP(INT, INT) col FROM range(0, 10000) tbl(i);
+
+query I
+SELECT MAX(CAST(col AS MAP(INT, INT))) FROM intMap;
+----
+{9999=10000}
+
+
+#               CSV reader
+# ---------------------------------------------------
+statement ok
+CREATE TABLE assembled_maps(col1 MAP(INT, VARCHAR));
+
+statement ok
+COPY (SELECT '{8="hello, DuckDB"}') TO '__TEST_DIR__/assembled_maps.csv';
+
+statement ok
+COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';
+
+query I
+SELECT * FROM assembled_maps;
+----
+{8=hello, DuckDB}

@@ -46,7 +46,6 @@ class BoundWindowExpression;
 class BoundTableRef;
 
 class BoundBaseTableRef;
-class BoundCrossProductRef;
 class BoundJoinRef;
 class BoundSubqueryRef;
 class BoundTableFunction;

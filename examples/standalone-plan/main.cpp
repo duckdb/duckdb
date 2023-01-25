@@ -98,13 +98,12 @@ void RunExampleDuckDBCatalog() {
 //===--------------------------------------------------------------------===//
 void CreateMyScanFunction(Connection &con);
 
-unique_ptr<TableFunctionRef> MyReplacementScan(ClientContext &context, const string &table_name,
-                                               ReplacementScanData *data) {
+unique_ptr<TableRef> MyReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
 	table_function->function = make_unique<FunctionExpression>("my_scan", std::move(children));
-	return table_function;
+	return std::move(table_function);
 }
 
 void RunExampleTableScan() {

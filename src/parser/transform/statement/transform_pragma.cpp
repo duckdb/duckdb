@@ -36,6 +36,13 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);
+			} else if (expr->type == ExpressionType::COLUMN_REF) {
+				auto &colref = (ColumnRefExpression &)*expr;
+				if (!colref.IsQualified()) {
+					info.parameters.emplace_back(colref.GetColumnName());
+				} else {
+					info.parameters.emplace_back(expr->ToString());
+				}
 			} else {
 				info.parameters.emplace_back(expr->ToString());
 			}

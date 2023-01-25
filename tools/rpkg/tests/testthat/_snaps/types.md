@@ -87,9 +87,6 @@
       $varchar
       [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
       
-      $json
-      [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
-      
       $blob
       $blob[[1]]
        [1] 74 68 69 73 69 73 61 6c 6f 6e 67 62 6c 6f 62 00 77 69 74 68 6e 75 6c 6c 62
