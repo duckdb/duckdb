@@ -17,10 +17,6 @@ class Optimizer;
 
 struct ReplaceBinding {
 	ReplaceBinding() {};
-	ReplaceBinding(idx_t old_tbl_idx, idx_t new_tbl_idx) {
-		old_binding = ColumnBinding(old_tbl_idx, 0);
-		new_binding = ColumnBinding(new_tbl_idx, 0);
-	}
 	ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding)
 	    : old_binding(old_binding), new_binding(new_binding) {
 	}
@@ -47,7 +43,7 @@ public:
 //! the SELECT
 class UnnestRewriter {
 public:
-	UnnestRewriter() : sequence_of_projections(false) {
+	UnnestRewriter() {
 	}
 	//! Rewrite duplicate eliminated joins with UNNESTs
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
@@ -74,12 +70,10 @@ private:
 	vector<unique_ptr<Expression>> lhs_expressions;
 	//! LHS table index
 	idx_t lhs_tbl_idx;
-	//! Stores the table index of the overwritten LOGICAL_PROJECTION
-	idx_t overwritten_proj_tbl_idx;
+	//! Stores the table index of the former child of the LOGICAL_UNNEST
+	idx_t overwritten_tbl_idx;
 	//! Stores the unnest_idx
 	idx_t unnest_idx;
-	//! Indicates whether the rhs is a sequence of LOGICAL_PROJECTION(s)
-	bool sequence_of_projections;
 };
 
 } // namespace duckdb
