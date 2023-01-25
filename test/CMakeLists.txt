@@ -15,11 +15,6 @@ add_subdirectory(sqlite)
 add_subdirectory(ossfuzz)
 add_subdirectory(mbedtls)
 
-if(BUILD_ARROW_ABI_TEST)
-  add_subdirectory(arrow)
-  target_compile_options(test_arrow PRIVATE "-w")
-endif()
-
 if(NOT WIN32 AND NOT SUN)
   if(${BUILD_TPCE})
     add_subdirectory(tpce)
@@ -30,10 +25,6 @@ endif()
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
-
-if(BUILD_ARROW_ABI_TEST)
-  target_link_libraries(unittest test_arrow)
-endif()
 
 if(NOT WIN32 AND NOT SUN)
   target_link_libraries(unittest duckdb test_helpers)

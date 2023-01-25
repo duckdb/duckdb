@@ -1,5 +1,4 @@
-#include "json_common.hpp"
-#include "json_functions.hpp"
+#include "json_executors.hpp"
 
 namespace duckdb {
 
@@ -42,7 +41,7 @@ static inline yyjson_mut_val *GetConsistentArrayStructureObject(const vector<yyj
 
 	auto result = yyjson_mut_obj(structure_doc);
 	for (const auto &key_string : key_insert_order) {
-		key = yyjson_mut_strcpy(structure_doc, key_string.c_str());
+		key = yyjson_mut_strncpy(structure_doc, key_string.c_str(), key_string.length());
 		val = GetConsistentArrayStructure(key_values.at(key_string), structure_doc);
 		yyjson_mut_obj_add(result, key, val);
 	}
@@ -196,21 +195,27 @@ static inline yyjson_mut_val *ConvertStructure(yyjson_mut_val *val, yyjson_mut_d
 	}
 }
 
-static inline string_t Structure(yyjson_val *val, Vector &result) {
-	auto structure_doc = JSONCommon::CreateDocument();
-	auto structure = ConvertStructure(BuildStructure(val, *structure_doc), *structure_doc);
+static inline string_t Structure(yyjson_val *val, yyjson_alc *alc, Vector &result) {
+	auto structure_doc = JSONCommon::CreateDocument(alc);
+	auto structure = ConvertStructure(BuildStructure(val, structure_doc), structure_doc);
 	D_ASSERT(structure);
-	yyjson_mut_doc_set_root(*structure_doc, structure);
-	return JSONCommon::WriteDoc(*structure_doc, result);
+	return JSONCommon::WriteVal<yyjson_mut_val>(structure, alc);
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::UnaryExecute<string_t>(args, state, result, Structure);
+	JSONExecutors::UnaryExecute<string_t>(args, state, result, Structure);
+}
+
+static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type}, JSONCommon::JSONType(), StructureFunction, nullptr, nullptr, nullptr,
+	                               JSONFunctionLocalState::Init));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
-	return CreateScalarFunctionInfo(
-	    ScalarFunction("json_structure", {LogicalType::JSON}, LogicalType::JSON, StructureFunction));
+	ScalarFunctionSet set("json_structure");
+	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	GetStructureFunctionInternal(set, JSONCommon::JSONType());
+	return CreateScalarFunctionInfo(set);
 }
 
 } // namespace duckdb

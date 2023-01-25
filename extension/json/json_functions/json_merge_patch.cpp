@@ -3,6 +3,24 @@
 
 namespace duckdb {
 
+static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.size() < 2) {
+		throw InvalidInputException("json_merge_patch requires at least two parameters");
+	}
+	bound_function.arguments.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		const auto &arg_type = arg->return_type;
+		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR ||
+		    JSONCommon::LogicalTypeIsJSON(arg_type)) {
+			bound_function.arguments.push_back(arg_type);
+		} else {
+			throw InvalidInputException("Arguments to json_merge_patch must be of type VARCHAR or JSON");
+		}
+	}
+	return nullptr;
+}
+
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
 	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
@@ -26,24 +44,28 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 		if (!input_data.validity.RowIsValid(idx)) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] = yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx])->root);
+			objs[i] =
+			    yyjson_val_mut_copy(doc, JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, &doc->alc)->root);
 		}
 	}
 }
 
 //! Follows MySQL behaviour
 static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto doc = JSONCommon::CreateDocument();
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYJSONAllocator());
 	const auto count = args.size();
 
 	// Read the first json arg
 	yyjson_mut_val *origs[STANDARD_VECTOR_SIZE];
-	ReadObjects(*doc, args.data[0], origs, count);
+	ReadObjects(doc, args.data[0], origs, count);
 
 	// Read the next json args one by one and merge them into the first json arg
 	yyjson_mut_val *patches[STANDARD_VECTOR_SIZE];
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		ReadObjects(*doc, args.data[arg_idx], patches, count);
+		ReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				// Next json arg is NULL, obj becomes NULL
@@ -53,7 +75,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 				origs[i] = patches[i];
 			} else {
 				// Neither is NULL, merge them
-				origs[i] = MergePatch(*doc, origs[i], patches[i]);
+				origs[i] = MergePatch(doc, origs[i], patches[i]);
 			}
 		}
 	}
@@ -65,7 +87,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (origs[i] == nullptr) {
 			result_validity.SetInvalid(i);
 		} else {
-			result_data[i] = JSONCommon::WriteVal(origs[i], result);
+			result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc);
 		}
 	}
 
@@ -75,12 +97,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
-	// Needs at least two json inputs, but supports merging vararg json inputs
-	ScalarFunction fun("json_merge_patch", {LogicalType::JSON, LogicalType::JSON}, LogicalType::JSON,
-	                   MergePatchFunction);
-	fun.varargs = LogicalType::JSON;
+	ScalarFunction fun("json_merge_patch", {}, JSONCommon::JSONType(), MergePatchFunction, JSONMergePatchBind, nullptr,
+	                   nullptr, JSONFunctionLocalState::Init);
+	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return CreateScalarFunctionInfo(std::move(fun));
+
+	return CreateScalarFunctionInfo(fun);
 }
 
 } // namespace duckdb

@@ -1,13 +1,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/tableref/crossproductref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *root) {
-	auto result = make_unique<JoinRef>();
+	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
 	switch (root->jointype) {
 	case duckdb_libpgquery::PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
@@ -29,6 +28,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		result->type = JoinType::SEMI;
 		break;
 	}
+	case duckdb_libpgquery::PG_JOIN_POSITION: {
+		result->ref_type = JoinRefType::POSITIONAL;
+		break;
+	}
 	default: {
 		throw NotImplementedException("Join type %d not supported\n", root->jointype);
 	}
@@ -37,7 +40,9 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);
-	result->is_natural = root->isNatural;
+	if (root->isNatural) {
+		result->ref_type = JoinRefType::NATURAL;
+	}
 	result->query_location = root->location;
 
 	if (root->usingClause && root->usingClause->length > 0) {
@@ -51,11 +56,8 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		return std::move(result);
 	}
 
-	if (!root->quals && result->using_columns.empty() && !result->is_natural) { // CROSS PRODUCT
-		auto cross = make_unique<CrossProductRef>();
-		cross->left = std::move(result->left);
-		cross->right = std::move(result->right);
-		return std::move(cross);
+	if (!root->quals && result->using_columns.empty() && result->ref_type == JoinRefType::REGULAR) { // CROSS PRODUCT
+		result->ref_type = JoinRefType::CROSS;
 	}
 	result->condition = TransformExpression(root->quals);
 	return std::move(result);

@@ -1,0 +1,32 @@
+# name: test/sql/json/test_json_persistence.test
+# description: Test persistence of the JSON type
+# group: [json]
+
+require json
+
+require skip_reload
+
+# load the DB from disk
+load __TEST_DIR__/json_type.db
+
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values ('{"duck": 42}'), (NULL), ('{"goose": 43}')
+
+query II
+select typeof(j), j from test
+----
+JSON	{"duck": 42}
+JSON	NULL
+JSON	{"goose": 43}
+
+restart
+
+query II
+select typeof(j), j from test
+----
+JSON	{"duck": 42}
+JSON	NULL
+JSON	{"goose": 43}

@@ -302,6 +302,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 	}
 	lstate.current_index = lstate.batch_index;
 	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+	// TODO: call method that returns for which values the constraint check failed
+	// so we can support ON CONFLICT in here
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);
