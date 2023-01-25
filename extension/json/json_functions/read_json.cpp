@@ -76,6 +76,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		result_vectors.push_back(&output.data[col_idx]);
 	}
 
+	// TODO: if errors occur during transformation, we don't have line number information
 	JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names, result_vectors,
 	                               !gstate.bind_data.ignore_errors);
 	output.SetCardinality(count);
@@ -109,22 +110,6 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 	TableFunctionSet function_set("read_ndjson");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, false);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
-}
-
-CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
-	TableFunctionSet function_set("read_json_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, true);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
-}
-
-CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
-	TableFunctionSet function_set("read_ndjson_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, true);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
