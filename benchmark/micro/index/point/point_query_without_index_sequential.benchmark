@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/point_query_without_index_sequential.benchmark
+# name: benchmark/micro/index/point/point_query_without_index_sequential.benchmark
 # description: Point query without on sequentially ordered data
-# group: [index]
+# group: [point]
 
 name Point Query (No Index, Ordered Data)
 group index
