@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/vector_operations/ternary_executor.hpp
+// duckdb/common/vector_operations/quaternary_executor.hpp
 //
 //
 //===----------------------------------------------------------------------===//
