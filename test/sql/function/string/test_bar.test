@@ -120,5 +120,10 @@ select bar(1, 0, 10, 1)
 ----
 (empty)
 
+query I
+select bar(10, 10, 10, 10)
+----
+(empty)
+
 statement error
 select bar(1, 0, 10, 0.99)
