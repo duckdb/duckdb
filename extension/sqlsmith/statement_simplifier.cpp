@@ -76,12 +76,6 @@ void StatementSimplifier::Simplify(TableRef &ref) {
 		Simplify(*subquery.subquery->node);
 		break;
 	}
-	case TableReferenceType::CROSS_PRODUCT: {
-		auto &cp = (CrossProductRef &)ref;
-		Simplify(*cp.left);
-		Simplify(*cp.right);
-		break;
-	}
 	case TableReferenceType::JOIN: {
 		auto &cp = (JoinRef &)ref;
 		Simplify(*cp.left);
