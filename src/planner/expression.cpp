@@ -38,10 +38,6 @@ bool Expression::IsScalar() const {
 	return is_scalar;
 }
 
-bool Expression::IsUnnest() const {
-	return false;
-}
-
 bool Expression::HasSideEffects() const {
 	bool has_side_effects = false;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {

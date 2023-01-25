@@ -3,6 +3,11 @@
 # group: [general]
 
 statement error
+select sum(unnest([1,2,3])) over ();
+----
+Binder Error
+
+statement error
 select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
 Binder Error
@@ -81,5 +86,10 @@ Binder Error
 
 statement error
 select unnest([5,4,3]) as r, sum(r + 42) OVER ();
+----
+Binder Error
+
+statement error
+select sum(unnest([1,2,3])) over ();
 ----
 Binder Error
