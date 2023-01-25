@@ -27,7 +27,7 @@ using namespace duckdb;
 using namespace cpp11;
 
 template <typename T, typename... Args>
-external_pointer<T> make_external(const string &rclass, Args &&... args) {
+external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	auto extptr = external_pointer<T>(new T(std::forward<Args>(args)...));
 	((sexp)extptr).attr("class") = rclass;
 	return (extptr);
@@ -160,7 +160,7 @@ external_pointer<T> make_external(const string &rclass, Args &&... args) {
 		res_aggregates.push_back(std::move(expr));
 		aggr_idx++;
 	}
-	
+
 	auto res = std::make_shared<AggregateRelation>(rel->rel, std::move(res_aggregates), std::move(res_groups));
 	if (groups.size() == 0) {
 		auto lim = std::make_shared<LimitRelation>(res, 1, 0);
