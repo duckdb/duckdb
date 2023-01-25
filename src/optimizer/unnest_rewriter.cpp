@@ -52,6 +52,11 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	// found a delim join
 	auto &delim_join = (LogicalDelimJoin &)*op->children[0];
 
+	// only support INNER joins
+	if (delim_join.join_type != JoinType::INNER) {
+		return;
+	}
+
 	// TODO: also support joins with more than the default condition?
 	// delim join must have exactly one condition
 	if (delim_join.conditions.size() != 1) {
