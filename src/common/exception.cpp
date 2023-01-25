@@ -145,7 +145,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message, std::shared_ptr<Exception> original) {
+void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message,
+                                       const std::shared_ptr<Exception> &original) {
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		throw OutOfRangeException(message);

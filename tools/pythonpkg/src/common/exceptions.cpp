@@ -65,21 +65,21 @@ void RegisterExceptions(const py::module &m) {
 	auto io_exception = py::register_exception<IOException>(m, "IOException", operational_error);
 	py::register_exception<SerializationException>(m, "SerializationException", operational_error);
 
-	static py::exception<HTTPException> http_exception(m, "HTTPException", io_exception);
-	py::register_exception_translator([](std::exception_ptr p) {
+	static py::exception<HTTPException> HTTP_EXCEPTION(m, "HTTPException", io_exception);
+	py::register_exception_translator([](std::exception_ptr p) { // NOLINT(performance-unnecessary-value-param)
 		try {
 			if (p) {
 				std::rethrow_exception(p);
 			}
 		} catch (const HTTPException &httpe) {
 			// construct exception object
-			auto e = py::handle(http_exception.ptr())(py::str(httpe.what()));
+			auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(httpe.what()));
 
 			e.attr("status_code") = httpe.GetStatusCode();
 			e.attr("response") = py::str(httpe.GetResponse());
 
 			// "throw" exception object
-			PyErr_SetObject(http_exception.ptr(), e.ptr());
+			PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());
 		}
 	});
 

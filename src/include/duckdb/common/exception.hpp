@@ -93,7 +93,7 @@ public:
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,
-	                                                           std::shared_ptr<Exception> original);
+	                                                           const std::shared_ptr<Exception> &original);
 	virtual std::shared_ptr<Exception> Copy() const {
 		return make_shared<Exception>(type, raw_message_);
 	}
