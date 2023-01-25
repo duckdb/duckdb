@@ -9,8 +9,18 @@ SET experimental_parallel_csv=true;
 statement ok
 PRAGMA verify_parallelism
 
+
 query I
 select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column.csv')
+----
+1
+2
+3
+4
+5
+
+query I
+select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column_rn.csv')
 ----
 1
 2
