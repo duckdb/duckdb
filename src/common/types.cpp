@@ -1292,13 +1292,23 @@ enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
-	      enum_name(std::move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
+	      dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
 	}
-	EnumDictType dict_type;
-	string enum_name;
-	Vector values_insert_order;
-	idx_t dict_size;
+	const EnumDictType &GetEnumDictType() {
+		return dict_type;
+	};
+	const string &GetEnumName() {
+		return enum_name;
+	};
+	const Vector &GetValuesInsertOrder() {
+		return values_insert_order;
+	};
+	const idx_t &GetDictSize() {
+		return dict_size;
+	};
+	EnumTypeInfo(const EnumTypeInfo &) = delete;
+	EnumTypeInfo &operator=(const EnumTypeInfo &) = delete;
 
 protected:
 	// Equalities are only used in enums with different catalog entries
@@ -1332,6 +1342,13 @@ protected:
 		writer.WriteString(enum_name);
 		((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
 	}
+
+	Vector values_insert_order;
+
+private:
+	EnumDictType dict_type;
+	string enum_name;
+	idx_t dict_size;
 };
 
 template <class T>
@@ -1364,6 +1381,14 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
+	string_map_t<T> &GetValues() {
+		return values;
+	}
+
+	EnumTypeInfoTemplated(const EnumTypeInfoTemplated &) = delete;
+	EnumTypeInfoTemplated &operator=(const EnumTypeInfoTemplated &) = delete;
+
+private:
 	string_map_t<T> values;
 };
 
@@ -1371,7 +1396,7 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).enum_name;
+	return ((EnumTypeInfo &)*info).GetEnumName();
 }
 
 static PhysicalType EnumVectorDictType(idx_t size) {
@@ -1420,11 +1445,11 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint8_t> &)*info).values, key);
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint8_t> &)*info).GetValues(), key);
 	case PhysicalType::UINT16:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint16_t> &)*info).values, key);
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint16_t> &)*info).GetValues(), key);
 	case PhysicalType::UINT32:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint32_t> &)*info).values, key);
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint32_t> &)*info).GetValues(), key);
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}
@@ -1432,22 +1457,22 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
+	auto &values_insert_order = ((EnumTypeInfo &)*info).GetValuesInsertOrder();
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
 
-Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
+const Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).values_insert_order;
+	return ((EnumTypeInfo &)*info).GetValuesInsertOrder();
 }
 
 idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).dict_size;
+	return ((EnumTypeInfo &)*info).GetDictSize();
 }
 
 void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
@@ -1468,8 +1493,8 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto aux_info = type.AuxInfo();
 	D_ASSERT(aux_info);
 	auto &info = (EnumTypeInfo &)*aux_info;
-	D_ASSERT(info.dict_type == EnumDictType::VECTOR_DICT);
-	return EnumVectorDictType(info.dict_size);
+	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
+	return EnumVectorDictType(info.GetDictSize());
 }
 
 //===--------------------------------------------------------------------===//

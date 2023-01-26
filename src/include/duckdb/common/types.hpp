@@ -442,7 +442,7 @@ struct UserType{
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
-	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static const Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
