@@ -108,6 +108,7 @@ Binder Error
 query I
 SELECT * FROM integers WHERE [i, 1] NOT IN ((SELECT [i, 1] FROM integers WHERE i=1)) ORDER BY i
 ----
+NULL
 2
 3
 
