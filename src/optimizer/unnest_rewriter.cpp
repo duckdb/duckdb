@@ -68,9 +68,6 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	if (delim_join.children[0]->type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return;
 	}
-	if (delim_join.children[0]->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-		return;
-	}
 
 	// rhs child must be projection(s) followed by an UNNEST
 	auto curr_op = &delim_join.children[1];
@@ -101,16 +98,10 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 		path_to_unnest.push_back(curr_op);
 		auto &proj = (LogicalProjection &)*curr_op->get();
 
-		// remove the delim_index BOUND_COLUMN_REF by iterating the expressions
-		for (idx_t i = 0; i < proj.expressions.size(); i++) {
-			if (proj.expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &bound_colref_expr = (BoundColumnRefExpression &)*proj.expressions[i];
-				if (bound_colref_expr.alias == "delim_index") {
-					proj.expressions.erase(proj.expressions.begin() + i);
-					break;
-				}
-			}
-		}
+		// pop the two last expressions from all projections (delim_idx and UNNEST column)
+		D_ASSERT(proj.expressions.size() > 2);
+		proj.expressions.pop_back();
+		proj.expressions.pop_back();
 
 		// store all shifted current bindings
 		idx_t tbl_idx = proj.table_index;
@@ -121,12 +112,6 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 		curr_op = &curr_op->get()->children[0];
 	}
-
-	// make sure that the parent LOGICAL_PROJECTION of the LOGICAL_UNNEST
-	// only contains one expression
-	auto &back = (LogicalProjection &)*(*path_to_unnest.back());
-	back.expressions.pop_back();
-	updater.replace_bindings.pop_back();
 
 	// update all bindings by shifting them
 	updater.VisitOperator(*plan_ptr->get());
@@ -202,15 +187,14 @@ void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 	}
 }
 
-bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
+void UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 	if (topmost_op.type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_WINDOW) {
-		return false;
-		// TODO: add topmost_op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY
-		//		throw InternalException("Error in UnnestRewriter: unknown parent for LOGICAL_DELIM_JOIN: \"%s\"",
-		//				                        LogicalOperatorToString((*candidate)->type));
+	    topmost_op.type != LogicalOperatorType::LOGICAL_WINDOW &&
+	    topmost_op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		throw InternalException("Error in UnnestRewriter: unknown parent for LOGICAL_DELIM_JOIN: \"%s\"",
+		                        LogicalOperatorToString((*candidate)->type));
 	}
 
 	// get the LOGICAL_DELIM_JOIN, which is a child of the candidate
@@ -245,7 +229,6 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 
 	// replace the LOGICAL_DELIM_JOIN with its rhs child operator
 	topmost_op.children[0] = std::move(*path_to_unnest.front());
-	return true;
 }
 
 void UnnestRewriter::UpdateBoundUnnestBinding(unique_ptr<LogicalOperator> *candidate) {
@@ -282,17 +265,14 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 	// rewrite the plan and update the bindings
 	for (auto &candidate : candidates) {
 		// rearrange the logical operators
-		// TODO: change, just temporarily
-		auto did_rewrite = RewriteCandidate(candidate);
+		RewriteCandidate(candidate);
 
-		if (did_rewrite) {
-			// update the binding of the BOUND_UNNEST expression
-			UpdateBoundUnnestBinding(candidate);
+		// update the binding of the BOUND_UNNEST expression
+		UpdateBoundUnnestBinding(candidate);
 
-			// update the sequence of LOGICAL_PROJECTION(s)
-			UnnestRewriterPlanUpdater updater;
-			UpdateRHSBindings(&op, candidate, updater);
-		}
+		// update the sequence of LOGICAL_PROJECTION(s)
+		UnnestRewriterPlanUpdater updater;
+		UpdateRHSBindings(&op, candidate, updater);
 
 		delim_columns.clear();
 		lhs_expressions.clear();

@@ -52,7 +52,7 @@ private:
 	//! Find delim joins that contain an UNNEST
 	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
 	//! Rewrite a delim join that contain an UNNEST
-	bool RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
+	void RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
 	//! Update the bindings of the sequence of LOGICAL_PROJECTION(s)
 	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
 	                       UnnestRewriterPlanUpdater &updater);
