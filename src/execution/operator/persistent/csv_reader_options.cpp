@@ -109,12 +109,30 @@ static vector<bool> ParseColumnList(const Value &value, vector<string> &names, c
 	return ParseColumnList(children, names, loption);
 }
 
+void BufferedCSVReaderOptions::SetHeader(bool input) {
+	this->header = input;
+	this->has_header = true;
+}
+
+void BufferedCSVReaderOptions::SetEscape(const string &input) {
+	this->escape = input;
+	this->has_escape = true;
+}
+
 void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
 	if (input.empty()) {
 		this->delimiter = string("\0", 1);
 	}
+}
+
+void BufferedCSVReaderOptions::SetQuote(const string &quote) {
+	if (quote.empty()) {
+		return;
+	}
+	this->quote = quote;
+	this->has_quote = true;
 }
 
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
@@ -181,9 +199,6 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
-	} else if (loption == "escape") {
-		escape = ParseString(value, loption);
-		has_escape = true;
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
 	} else if (loption == "union_by_name") {
@@ -226,14 +241,11 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
-		quote = ParseString(value, loption);
-		has_quote = true;
+		SetQuote(ParseString(value, loption));
 	} else if (loption == "escape") {
-		escape = ParseString(value, loption);
-		has_escape = true;
+		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {
-		header = ParseBoolean(value, loption);
-		has_header = true;
+		SetHeader(ParseBoolean(value, loption));
 	} else if (loption == "null" || loption == "nullstr") {
 		null_str = ParseString(value, loption);
 	} else if (loption == "encoding") {

@@ -18,6 +18,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -60,6 +61,8 @@ public:
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
+
+	unique_ptr<DuckDBPyRelation> ReadCSV(const string &filename, const py::kwargs &kwargs);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 

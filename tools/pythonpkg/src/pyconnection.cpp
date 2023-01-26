@@ -6,6 +6,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 #include <random>
 
@@ -123,6 +125,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
+	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identifier by 'name'", py::arg("name"),
+	         py::kw_only {})
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
@@ -151,6 +155,23 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
+
+unordered_map<string, Value> TransformPyKeywordArgs(const py::kwargs &kwargs) {
+	unordered_map<string, Value> dict;
+	for (auto &kv : kwargs) {
+		auto key = py::str(kv.first);
+		dict[key] = TransformPythonValue(kv.second);
+	}
+	return dict;
+}
+
+unordered_set<string> SetKeywordArguments(const py::kwargs &kwargs) {
+	unordered_set<string> keywords;
+	for (auto &kv : kwargs) {
+		keywords.insert(py::str(kv.first));
+	}
+	return keywords;
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -352,6 +373,84 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return shared_from_this();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, const py::kwargs &kwargs) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	auto keywords = SetKeywordArguments(kwargs);
+
+	auto read_csv_p = connection->ReadCSV(name);
+	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
+
+	// 'sep' and 'delimiter'
+	bool has_sep = keywords.count("sep");
+	bool has_delimiter = keywords.count("delimiter");
+	if (has_sep && has_delimiter) {
+		throw InvalidInputException("read_csv takes either 'delimiter' or 'sep', not both");
+	}
+	if (has_sep) {
+		read_csv.AddNamedParameter("delimiter", Value(py::str(kwargs["sep"])));
+	} else if (has_delimiter) {
+		read_csv.AddNamedParameter("delimiter", Value(py::str(kwargs["delimiter"])));
+	}
+
+	// 'header'
+	if (keywords.count("header")) {
+		auto header = kwargs["header"];
+
+		bool header_as_int = py::isinstance<py::int_>(header);
+		bool header_as_bool = py::isinstance<py::bool_>(header);
+
+		if (!header_as_int && !header_as_bool) {
+			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
+		}
+
+		if (header_as_int) {
+			if ((int)py::int_(header) != 0) {
+				throw InvalidInputException("read_csv only accepts 0 if 'header' is given as an integer");
+			}
+			read_csv.AddNamedParameter("header", Value::BOOLEAN(true));
+		}
+		if (header_as_bool) {
+			read_csv.AddNamedParameter("header", Value::BOOLEAN((bool)header));
+		}
+	}
+
+	// We don't support overriding the names of the header yet
+	// 'names'
+	// if (keywords.count("names")) {
+	//	if (!py::isinstance<py::list>(kwargs["names"])) {
+	//		throw InvalidInputException("read_csv only accepts 'names' as a list of strings");
+	//	}
+	//	vector<string> names;
+	//	py::list names_list = kwargs["names"];
+	//	for (auto& elem : names_list) {
+	//		if (!py::isinstance<py::str>(elem)) {
+	//			throw InvalidInputException("read_csv 'names' list has to consist of only strings");
+	//		}
+	//		names.push_back(py::str(elem));
+	//	}
+	//	// FIXME: Check for uniqueness of 'names' ?
+	//}
+
+	// 'dtype'
+	if (keywords.count("dtype")) {
+		if (!py::isinstance<py::dict>(kwargs["dtype"])) {
+			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary");
+		}
+
+		child_list_t<Value> struct_fields;
+		py::dict dtype_dict = kwargs["dtype"];
+		for (auto &kv : dtype_dict) {
+			struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
+		}
+		auto dtype_struct = Value::STRUCT(move(struct_fields));
+		read_csv.AddNamedParameter("dtypes", move(dtype_struct));
+	}
+
+	return make_unique<DuckDBPyRelation>(move(read_csv_p));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {

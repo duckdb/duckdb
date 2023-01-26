@@ -109,6 +109,9 @@ struct BufferedCSVReaderOptions {
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
 
+	void SetHeader(bool has_header);
+	void SetEscape(const string &escape);
+	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
