@@ -36,3 +36,7 @@ x-soft-wrap-text = false
 
 [*keywords.list]
 insert_final_newline = false
+
+[tools/rpkg/**.R]
+end_of_line = lf
+insert_final_newline = true
