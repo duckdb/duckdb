@@ -424,8 +424,8 @@ final_state : {
 	}
 	if (finished_chunk) {
 		if (position_buffer >= end_buffer) {
-			if (position_buffer == end_buffer &&
-			    StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1] && position_buffer < buffer_size)) {
+			if (position_buffer == end_buffer && StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1]) &&
+			    position_buffer < buffer_size) {
 				// last position is a new line, we still have to go through one more line of this buffer
 				finished = false;
 			} else {
