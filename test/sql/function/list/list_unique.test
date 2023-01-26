@@ -36,7 +36,7 @@ SELECT list_unique([1, 2], 2)
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT list_unique(NULL::${type})
@@ -202,18 +202,6 @@ SELECT list_unique([NULL::${type}])
 0
 
 endloop
-
-# JSON
-
-query I
-SELECT list_unique(['{a: 1}'::JSON, '{a: 1}'::JSON])
-----
-1
-
-query I
-SELECT list_unique([NULL::JSON])
-----
-0
 
 # enums
 statement ok

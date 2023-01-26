@@ -64,6 +64,10 @@ public:
 	RadixPartitionedColumnData(const RadixPartitionedColumnData &other);
 	~RadixPartitionedColumnData() override;
 
+	idx_t GetRadixBits() const {
+		return radix_bits;
+	}
+
 protected:
 	//===--------------------------------------------------------------------===//
 	// Radix Partitioning interface implementation

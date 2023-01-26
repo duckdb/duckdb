@@ -1,5 +1,5 @@
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -8,7 +8,11 @@ namespace duckdb {
 bool VectorOperations::TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
                                idx_t count, string *error_message, bool strict) {
 	auto cast_function = set.GetCastFunction(source.GetType(), result.GetType(), input);
-	CastParameters parameters(cast_function.cast_data.get(), strict, error_message);
+	unique_ptr<FunctionLocalState> local_state;
+	if (cast_function.init_local_state) {
+		local_state = cast_function.init_local_state(*input.context);
+	}
+	CastParameters parameters(cast_function.cast_data.get(), strict, error_message, local_state.get());
 	return cast_function.function(source, result, count, parameters);
 }
 

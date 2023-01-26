@@ -285,39 +285,8 @@ SELECT list_aggr([INTERVAL 1 YEAR], '${func_name}')
 
 endloop
 
-# JSON
-
-# result {a: 1}
-foreach func_name first arbitrary last max median min mode string_agg group_concat
-
-query I
-SELECT list_aggr(['{a: 1}'::JSON], '${func_name}')
-----
-{a: 1}
-
-query I
-SELECT list_aggr([NULL::JSON], '${func_name}')
-----
-NULL
-
-endloop
-
 # any other result
 foreach func_name approx_count_distinct count entropy histogram array_agg list
-
-statement ok
-SELECT list_aggr(['{a: 1}'::JSON], '${func_name}')
-
-statement ok
-SELECT list_aggr([NULL::JSON], '${func_name}')
-
-endloop
-
-# statement error for JSON
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
-
-statement error
-SELECT list_aggr(['{a: 1}'::JSON], '${func_name}')
 
 endloop
 

@@ -1,4 +1,5 @@
 #include "duckdb/storage/arena_allocator.hpp"
+
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
@@ -44,6 +45,35 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 	auto result = head->data.get() + head->current_position;
 	head->current_position += len;
 	return result;
+}
+
+data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size) {
+	D_ASSERT(head);
+	if (old_size == size) {
+		// nothing to do
+		return pointer;
+	}
+
+	auto head_ptr = head->data.get() + head->current_position;
+	int64_t diff = size - old_size;
+	if (pointer == head_ptr && (size < old_size || head->current_position + diff <= head->maximum_size)) {
+		// passed pointer is the head pointer, and the diff fits on the current chunk
+		head->current_position += diff;
+		return pointer;
+	} else {
+		// allocate new memory
+		auto result = Allocate(size);
+		memcpy(result, pointer, old_size);
+		return result;
+	}
+}
+
+data_ptr_t ArenaAllocator::AllocateAligned(idx_t size) {
+	return Allocate(AlignValue<idx_t>(size));
+}
+
+data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size) {
+	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
 void ArenaAllocator::Reset() {

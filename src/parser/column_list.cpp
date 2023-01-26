@@ -93,6 +93,24 @@ const ColumnDefinition &ColumnList::GetColumn(const string &name) const {
 	return columns[logical_index];
 }
 
+vector<string> ColumnList::GetColumnNames() const {
+	vector<string> names;
+	names.reserve(columns.size());
+	for (auto &column : columns) {
+		names.push_back(column.Name());
+	}
+	return names;
+}
+
+vector<LogicalType> ColumnList::GetColumnTypes() const {
+	vector<LogicalType> types;
+	types.reserve(columns.size());
+	for (auto &column : columns) {
+		types.push_back(column.Type());
+	}
+	return types;
+}
+
 bool ColumnList::ColumnExists(const string &name) const {
 	auto entry = name_map.find(name);
 	return entry != name_map.end();
