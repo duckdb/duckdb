@@ -1,20 +1,15 @@
 import duckdb
 import os
-try:
-    import pyarrow
-    import pyarrow.parquet
-    import pyarrow.dataset
-    import numpy as np
-    can_run = True
-except:
-    can_run = False
+import pytest
+pyarrow = pytest.importorskip("pyarrow")
+np = pytest.importorskip("numpy")
+pyarrow.parquet = pytest.importorskip("pyarrow.parquet")
+pyarrow.dataset = pytest.importorskip("pyarrow.dataset")
+
 
 class TestArrowDataset(object):
 
     def test_parallel_dataset(self,duckdb_cursor):
-        if not can_run:
-            return
-
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
@@ -33,9 +28,6 @@ class TestArrowDataset(object):
         assert rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)').execute().fetchone()[0] == 12
 
     def test_parallel_dataset_register(self,duckdb_cursor):
-        if not can_run:
-            return
-
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
@@ -54,9 +46,6 @@ class TestArrowDataset(object):
         assert duckdb_conn.execute("Select count(*) from dataset where first_name = 'Jose' and salary > 134708.82").fetchone()[0] == 12
 
     def test_parallel_dataset_roundtrip(self,duckdb_cursor):
-        if not can_run:
-            return
-
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
@@ -89,45 +78,43 @@ class TestArrowDataset(object):
         query = duckdb_conn.execute("SELECT b FROM dataset WHERE a < 5")
         record_batch_reader = query.fetch_record_batch(2048)
         arrow_table = record_batch_reader.read_all()
-        assert arrow_table.equals(DATA[:5].select(['b']))
+        assert arrow_table.equals(CustomDataset.DATA[:5].select(['b']))
 
 
-if can_run:
+class CustomDataset(pyarrow.dataset.Dataset):
     # For testing duck-typing of dataset/scanner https://github.com/duckdb/duckdb/pull/5998
     SCHEMA = pyarrow.schema([pyarrow.field("a", pyarrow.int64(), True),
                              pyarrow.field("b", pyarrow.float64(), True)])
     DATA = pyarrow.Table.from_arrays([pyarrow.array(range(100)),
                                       pyarrow.array(np.arange(100)*1.0)],
                                      schema=SCHEMA)
-    class CustomDataset(pyarrow.dataset.Dataset):
+    def __init__(self):
+        pass
 
-        def __init__(self):
-            pass
+    def scanner(self, **kwargs):
+        return CustomScanner(**kwargs)
 
-        def scanner(self, **kwargs):
-            return CustomScanner(**kwargs)
-
-        @property
-        def schema(self):
-            return SCHEMA
+    @property
+    def schema(self):
+        return CustomDataset.SCHEMA
 
 
-    class CustomScanner(pyarrow.dataset.Scanner):
+class CustomScanner(pyarrow.dataset.Scanner):
 
-        def __init__(self, filter=None, columns=None, **kwargs):
-            self.filter = filter
-            self.columns = columns
-            self.kwargs = kwargs
+    def __init__(self, filter=None, columns=None, **kwargs):
+        self.filter = filter
+        self.columns = columns
+        self.kwargs = kwargs
 
-        @property
-        def projected_schema(self):
-            if self.columns is None:
-                return SCHEMA
-            else:
-                return pyarrow.schema([f for f in SCHEMA.fields
-                                       if f.name in self.columns])
+    @property
+    def projected_schema(self):
+        if self.columns is None:
+            return CustomDataset.SCHEMA
+        else:
+            return pyarrow.schema([f for f in CustomDataset.SCHEMA.fields
+                                   if f.name in self.columns])
 
-        def to_reader(self):
-            return pyarrow.dataset.dataset(DATA).scanner(
-                filter=self.filter, columns=self.columns
-            ).to_reader()
+    def to_reader(self):
+        return pyarrow.dataset.dataset(CustomDataset.DATA).scanner(
+            filter=self.filter, columns=self.columns
+        ).to_reader()
