@@ -90,6 +90,8 @@ struct BufferedCSVReaderOptions {
 	bool union_by_name = false;
 	//! Buffer Size (Parallel Scan)
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
+	//! Decimal separator when reading as numeric
+	string decimal_separator = ".";
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions

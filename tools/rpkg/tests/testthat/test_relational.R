@@ -123,6 +123,60 @@ test_that("we can get the relation object back from an altrep df", {
   expect_true(TRUE)
 })
 
+
+test_that("Inner join returns all inner relations", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+    right <- rel_from_df(con, data.frame(right_b=c(1, 3), right_c=c(4, 5)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_join(left, right, cond, "inner")
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_a=c(1, 2), left_b=c(1, 1), right_b=c(1, 1), right_c=c(4, 4))
+    expect_equal(rel_df, expected_result)
+})
+
+
+test_that("Left join returns all left relations", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+    right <- rel_from_df(con, data.frame(right_b=c(1)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_join(left, right, cond, "left")
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2), right_b=c(1, 1, NA))
+    expect_equal(rel_df, expected_result)
+})
+
+test_that("Right join returns all right relations", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    left <- rel_from_df(con, data.frame(left_b=c(1)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    rel2 <- rel_join(left, right, cond, "right")
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_b=c(1, 1, NA), right_a=c(1, 2, 3), right_b=c(1, 1, 2))
+    expect_equal(rel_df, expected_result)
+})
+
+test_that("Full join returns all outer relations", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 5), left_b=c(4, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    cond <- list(expr_function("eq", list(expr_reference("left_a", left), expr_reference("right_a", right))))
+    rel2 <- rel_join(left, right, cond, "outer")
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_a=c(1, 2, 5, NA),
+                                  left_b=c(4, 5, 6, NA),
+                                  right_a=c(1, 2, NA, 3),
+                                  right_b=c(1, 1, NA, 2))
+    expect_equal(rel_df, expected_result)
+})
+
+
 test_that("Union all does not immediately materialize", {
     test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
     test_df_b <- rel_from_df(con, data.frame(a=c('5', '6'), b=c('7', '8')))
