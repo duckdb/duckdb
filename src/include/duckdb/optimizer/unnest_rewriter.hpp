@@ -24,6 +24,15 @@ struct ReplaceBinding {
 	ColumnBinding new_binding;
 };
 
+struct LHSBinding {
+	LHSBinding() {};
+	LHSBinding(ColumnBinding binding, LogicalType type) : binding(binding), type(type) {
+	}
+	ColumnBinding binding;
+	LogicalType type;
+	string alias;
+};
+
 //! The UnnestRewriterPlanUpdater updates column bindings after changing the operator plan
 class UnnestRewriterPlanUpdater : LogicalOperatorVisitor {
 public:
@@ -66,10 +75,8 @@ private:
 
 	//! Keep track of these columns to find the correct UNNEST column
 	vector<ColumnBinding> delim_columns;
-	//! Store the expressions of the lhs LOGICAL_PROJECTION
-	vector<unique_ptr<Expression>> lhs_expressions;
-	//! LHS table index
-	idx_t lhs_tbl_idx;
+	//! Store the column bindings of the LHS child of the LOGICAL_DELIM_JOIN
+	vector<LHSBinding> lhs_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
 	idx_t overwritten_tbl_idx;
 };
