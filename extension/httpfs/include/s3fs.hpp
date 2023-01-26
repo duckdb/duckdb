@@ -164,6 +164,7 @@ public:
 	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
+	string GetName() const override;
 
 public:
 	// HTTP Requests

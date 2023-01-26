@@ -921,6 +921,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	return result;
 }
 
+string S3FileSystem::GetName() const {
+	return "S3FileSystem";
+}
+
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;
