@@ -98,6 +98,19 @@ SELECT * FROM integers WHERE i NOT IN ((SELECT * FROM integers WHERE i=1)) ORDER
 2
 3
 
+# transform into ANTI join
+statement error
+SELECT * FROM integers WHERE (select i, 1 from integers) NOT IN ((SELECT *, 1 FROM integers WHERE i=1)) ORDER BY i
+----
+Binder Error
+
+# transform into ANTI join
+query I
+SELECT * FROM integers WHERE [i, 1] NOT IN ((SELECT [i, 1] FROM integers WHERE i=1)) ORDER BY i
+----
+2
+3
+
 # condition pushdown
 query I
 SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) AND i<3 ORDER BY i

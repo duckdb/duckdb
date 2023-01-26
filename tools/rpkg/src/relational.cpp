@@ -199,7 +199,8 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		return make_external<RelationWrapper>("duckdb_relation", res);
 	}
 
-	// Semi and anti joins require separate constructor
+	// Semi and anti joins require separate constructor because the condition is in the
+	// the definition of the join.
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		auto left_proj = ((rel_extptr_t)conds[0]);
 		auto res = std::make_shared<JoinRelation>(left->rel, left_proj->rel, right->rel, join_type);
