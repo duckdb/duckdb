@@ -164,8 +164,8 @@ public:
 	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
 	                                          vector<PhysicalIndex> &columns);
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
-	                                TableCatalogEntry *table);
-	void BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt);
+	                                TableCatalogEntry &table);
+	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,

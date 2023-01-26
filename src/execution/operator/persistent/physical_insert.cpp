@@ -18,17 +18,6 @@
 
 namespace duckdb {
 
-unordered_set<column_t> GetIndexedOnColumns(TableCatalogEntry *table) {
-	unordered_set<column_t> indexed_columns;
-	auto &indexes = table->GetStorage().info->indexes.Indexes();
-	for (auto &index : indexes) {
-		for (auto &column_id : index->column_id_set) {
-			indexed_columns.insert(column_id);
-		}
-	}
-	return indexed_columns;
-}
-
 PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *table,
                                physical_index_vector_t<idx_t> column_index_map,
                                vector<unique_ptr<Expression>> bound_defaults,
