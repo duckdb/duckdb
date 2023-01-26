@@ -57,7 +57,7 @@ private:
 	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
 	                       UnnestRewriterPlanUpdater &updater);
 	//! Update the binding of the BOUND_UNNEST expression of the LOGICAL_UNNEST
-	void UpdateBoundUnnestBinding(unique_ptr<LogicalOperator> *candidate);
+	void UpdateBoundUnnestBinding(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> *candidate);
 
 	//! Store all delim columns of the delim join
 	void GetDelimColumns(LogicalOperator &op);
@@ -72,8 +72,6 @@ private:
 	idx_t lhs_tbl_idx;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
 	idx_t overwritten_tbl_idx;
-	//! Stores the unnest_idx
-	idx_t unnest_idx;
 };
 
 } // namespace duckdb

@@ -26,6 +26,11 @@ void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expressi
 			if (bound_column_ref.binding == replace_bindings[i].old_binding) {
 				bound_column_ref.binding = replace_bindings[i].new_binding;
 			}
+			// previously pointing to the LOGICAL_DELIM_GET
+			if (bound_column_ref.binding.table_index == replace_bindings[i].old_binding.table_index &&
+			    replace_bindings[i].old_binding.column_index == DConstants::INVALID_INDEX) {
+				bound_column_ref.binding = replace_bindings[i].new_binding;
+			}
 		}
 	}
 
@@ -51,7 +56,6 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 
 	// found a delim join
 	auto &delim_join = (LogicalDelimJoin &)*op->children[0];
-
 	// only support INNER joins
 	if (delim_join.join_type != JoinType::INNER) {
 		return;
@@ -63,8 +67,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 		return;
 	}
 
-	// TODO: also support other operators on lhs?
-	// lhs child is a window that contains a projection
+	// lhs child is a window
 	if (delim_join.children[0]->type != LogicalOperatorType::LOGICAL_WINDOW) {
 		return;
 	}
@@ -89,13 +92,13 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 	idx_t shift = lhs_expressions.size();
-	updater.replace_bindings.clear();
 
 	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
 	auto curr_op = &(topmost_op.children[0]);
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 
 		path_to_unnest.push_back(curr_op);
+		D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = (LogicalProjection &)*curr_op->get();
 
 		// pop the two last expressions from all projections (delim_idx and UNNEST column)
@@ -115,27 +118,32 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 	// update all bindings by shifting them
 	updater.VisitOperator(*plan_ptr->get());
+	updater.replace_bindings.clear();
 
 	// update all bindings coming from the LHS to RHS bindings
+	D_ASSERT(topmost_op.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &top_proj = (LogicalProjection &)*topmost_op.children[0];
-	updater.replace_bindings.clear();
 	for (idx_t i = 0; i < lhs_expressions.size(); i++) {
 		ReplaceBinding replace_binding(ColumnBinding(lhs_tbl_idx, i), ColumnBinding(top_proj.table_index, i));
 		updater.replace_bindings.push_back(replace_binding);
 	}
+
 	// temporarily remove the BOUND_UNNEST from the plan
+	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
 	auto &unnest = (LogicalUnnest &)*curr_op->get();
 	auto temp_bound_unnest = std::move(unnest.expressions[0]);
 	unnest.expressions.clear();
 	// update the bindings of the plan
 	updater.VisitOperator(*plan_ptr->get());
+	updater.replace_bindings.clear();
 	// add the child again
 	unnest.expressions.push_back(std::move(temp_bound_unnest));
 
-	// add the expressions to each LOGICAL_PROJECTION
+	// add the LHS expressions to each LOGICAL_PROJECTION
 	auto curr_tbl_idx = lhs_tbl_idx;
 	for (idx_t i = path_to_unnest.size(); i > 0; i--) {
 
+		D_ASSERT(path_to_unnest[i - 1]->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = (LogicalProjection &)*path_to_unnest[i - 1]->get();
 
 		// temporarily store the existing expressions
@@ -149,6 +157,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 		// add the new expressions
 		for (idx_t expr_idx = 0; expr_idx < lhs_expressions.size(); expr_idx++) {
 			auto new_expr = lhs_expressions[expr_idx]->Copy();
+			D_ASSERT(new_expr->type == ExpressionType::BOUND_COLUMN_REF);
 			auto &bound_col_ref = (BoundColumnRefExpression &)*new_expr;
 			bound_col_ref.binding.table_index = curr_tbl_idx;
 			bound_col_ref.binding.column_index = expr_idx;
@@ -166,6 +175,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 
+	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &proj = (LogicalProjection &)op;
 	lhs_tbl_idx = proj.table_index;
 
@@ -179,9 +189,11 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 
+	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &delim_join = (LogicalDelimJoin &)op;
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
+		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_colref_expr = (BoundColumnRefExpression &)expr;
 		delim_columns.push_back(bound_colref_expr.binding);
 	}
@@ -198,7 +210,6 @@ void UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 	}
 
 	// get the LOGICAL_DELIM_JOIN, which is a child of the candidate
-	// TODO: can the candidate have more than one LOGICAL_DELIM_JOIN as its children?
 	D_ASSERT(topmost_op.children.size() == 1);
 	auto &delim_join = *(topmost_op.children[0]);
 	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
@@ -223,15 +234,16 @@ void UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 	// then update the plan by making the lhs_proj the child of the LOGICAL_UNNEST
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
 	auto &unnest = (LogicalUnnest &)*curr_op->get();
-	unnest_idx = unnest.unnest_index;
-	overwritten_tbl_idx = ((LogicalProjection &)*unnest.children[0]).table_index;
+	D_ASSERT(unnest.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET);
+	overwritten_tbl_idx = ((LogicalDelimGet &)*unnest.children[0]).table_index;
 	unnest.children[0] = std::move(lhs_proj);
 
 	// replace the LOGICAL_DELIM_JOIN with its rhs child operator
 	topmost_op.children[0] = std::move(*path_to_unnest.front());
 }
 
-void UnnestRewriter::UpdateBoundUnnestBinding(unique_ptr<LogicalOperator> *candidate) {
+void UnnestRewriter::UpdateBoundUnnestBinding(UnnestRewriterPlanUpdater &updater,
+                                              unique_ptr<LogicalOperator> *candidate) {
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 
@@ -242,23 +254,29 @@ void UnnestRewriter::UpdateBoundUnnestBinding(unique_ptr<LogicalOperator> *candi
 	}
 
 	// found the LOGICAL_UNNEST
+	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
 	auto &unnest = (LogicalUnnest &)*curr_op->get();
 
-	// update the column binding of the BOUND_UNNEST expression of the LOGICAL_UNNEST
-	auto &bound_unnest_expr = (BoundUnnestExpression &)*unnest.expressions[0];
-	auto &bound_column_ref_expr = (BoundColumnRefExpression &)*bound_unnest_expr.child;
+	// add all binding that need updating to the updater
+	D_ASSERT(unnest.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &unnest_child_op = (LogicalProjection &)*unnest.children[0];
-	bound_column_ref_expr.binding.table_index = unnest_child_op.table_index;
 	for (idx_t i = 0; i < delim_columns.size(); i++) {
 		if (delim_columns[i].table_index == unnest_child_op.table_index) {
-			bound_column_ref_expr.binding.column_index = delim_columns[i].column_index;
+			ColumnBinding old_binding(overwritten_tbl_idx, DConstants::INVALID_INDEX);
+			updater.replace_bindings.push_back(ReplaceBinding(old_binding, delim_columns[i]));
 			break;
 		}
 	}
+
+	// update bindings
+	D_ASSERT(unnest.expressions.size() == 1);
+	updater.VisitExpression(&unnest.expressions[0]);
+	updater.replace_bindings.clear();
 }
 
 unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator> op) {
 
+	UnnestRewriterPlanUpdater updater;
 	vector<unique_ptr<LogicalOperator> *> candidates;
 	FindCandidates(&op, candidates);
 
@@ -268,10 +286,9 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 		RewriteCandidate(candidate);
 
 		// update the binding of the BOUND_UNNEST expression
-		UpdateBoundUnnestBinding(candidate);
+		UpdateBoundUnnestBinding(updater, candidate);
 
 		// update the sequence of LOGICAL_PROJECTION(s)
-		UnnestRewriterPlanUpdater updater;
 		UpdateRHSBindings(&op, candidate, updater);
 
 		delim_columns.clear();
