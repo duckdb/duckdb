@@ -1,7 +1,8 @@
 #include "duckdb/common/string_util.hpp"
+
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/exception.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -31,9 +32,9 @@ void StringUtil::RTrim(string &str) {
 	          str.end());
 }
 
-void StringUtil::RTrim(string &str, char char_to_trim) {
+void StringUtil::RTrim(string &str, const string &chars_to_trim) {
 	str.erase(
-	    find_if(str.rbegin(), str.rend(), [&char_to_trim](int ch) { return ch > 0 && ch != char_to_trim; }).base(),
+	    find_if(str.rbegin(), str.rend(), [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; }).base(),
 	    str.end());
 }
 

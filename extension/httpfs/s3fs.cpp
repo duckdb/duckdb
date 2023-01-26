@@ -924,9 +924,8 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;
-	StringUtil::RTrim(trimmed_dir, '/');
-
-	auto glob_res = Glob(directory + "/*", opener);
+	StringUtil::RTrim(trimmed_dir, PathSeparator());
+	auto glob_res = Glob(JoinPath(trimmed_dir, "*"), opener);
 
 	if (glob_res.empty()) {
 		return false;

@@ -74,23 +74,22 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static void CreateDir(ClientContext &context, const string &dir_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
+static void CreateDir(const string &dir_path, FileSystem & fs) {
 	if (!fs.DirectoryExists(dir_path)) {
 		fs.CreateDirectory(dir_path);
 	}
 }
 
-static string CreateDirRecursive(ClientContext &context, const vector<idx_t> &cols, const vector<string> &names,
-                                 const vector<Value> &values, string path) {
-	CreateDir(context, path);
+static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string> &names,
+                                 const vector<Value> &values, string path, FileSystem& fs) {
+	CreateDir(path, fs);
 
 	for (idx_t i = 0; i < cols.size(); i++) {
 		auto partition_col_name = names[cols[i]];
 		auto partition_value = values[i];
 		string p_dir = partition_col_name + "=" + partition_value.ToString();
-		path += "/" + p_dir;
-		CreateDir(context, path);
+		path = fs.JoinPath(path, p_dir);
+		CreateDir(path, fs);
 	}
 
 	return path;
@@ -101,19 +100,17 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	if (partition_output) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
 		l.part_buffer->FlushAppendState(*l.part_buffer_append_state);
 		auto &partitions = l.part_buffer->GetPartitions();
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
+		string trimmed_path = file_path;
+		StringUtil::RTrim(trimmed_path, fs.PathSeparator());
+
 		for (idx_t i = 0; i < partitions.size(); i++) {
-
-			auto trimmed_path = file_path;
-			StringUtil::RTrim(trimmed_path, '/');
-
-			string hive_path = CreateDirRecursive(context.client, partition_columns, names,
-			                                      partition_key_map[i]->values, trimmed_path);
-
-			auto &fs = FileSystem::GetFileSystem(context.client);
+			string hive_path = CreateDirRecursive(partition_columns, names,
+			                                      partition_key_map[i]->values, trimmed_path, fs);
 			string full_path = fs.JoinPath(hive_path, "data_" + to_string(l.writer_offset) + "." + function.extension);
 			if (fs.FileExists(full_path) && !allow_overwrite) {
 				throw IOException("failed to create " + full_path + ", file exists!");
