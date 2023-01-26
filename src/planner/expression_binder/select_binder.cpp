@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -16,10 +17,12 @@ namespace duckdb {
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
                            case_insensitive_map_t<idx_t> alias_map)
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info), alias_map(std::move(alias_map)) {
+	unnest_indexes = vector<idx_t>();
 }
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : SelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
+	unnest_indexes = vector<idx_t>();
 }
 
 BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -28,6 +31,12 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
+	}
+	if (expr.expression_class == ExpressionClass::FUNCTION) {
+		auto &function_expr = (FunctionExpression&)expr;
+		if (function_expr.function_name == "unnest" || function_expr.function_name == "unlist") {
+			unnest_indexes.push_back(node.select_list.size());
+		}
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::COLUMN_REF:
@@ -95,6 +104,10 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 			if (node.select_list[index]->HasSubquery()) {
 				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
 				                      " This is not yet supported.",
+				                      colref.column_names[0]);
+			}
+			if (std::count(unnest_indexes.begin(), unnest_indexes.end(), index) != 0) {
+				throw BinderException("Alias \"%s\" is an unnest, cannot bind a window on an unnest ",
 				                      colref.column_names[0]);
 			}
 			auto result = BindResult(node.select_list[index]->Copy());

@@ -140,6 +140,12 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	this->inside_window = true;
 	string error;
 	for (auto &child : window.children) {
+		if (child->GetExpressionType() == ExpressionType::FUNCTION) {
+			auto &function_child = (FunctionExpression&)*child;
+			if (function_child.function_name == "unnest" || function_child.function_name == "unlist") {
+				throw BinderException("Cannot have window over an unnest expression");
+			}
+		}
 		BindChild(child, depth, error);
 	}
 	for (auto &child : window.partitions) {

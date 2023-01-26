@@ -52,6 +52,7 @@ protected:
 	BoundSelectNode &node;
 	BoundGroupInformation &info;
 	case_insensitive_map_t<idx_t> alias_map;
+	vector<idx_t> unnest_indexes;
 
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth);
