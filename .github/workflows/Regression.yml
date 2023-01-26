@@ -66,31 +66,31 @@ jobs:
         cp -r benchmark duckdb/
 
     - name: Regression Test Micro
-      continue-on-error: true
+      if: ${{ always() }}
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
 
     - name: Regression Test TPCH
-      continue-on-error: true
+      if: ${{ always() }}
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
 
     - name: Regression Test TPCDS
-      continue-on-error: true
+      if: ${{ always() }}
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
 
     - name: Regression Test H2OAI
-      continue-on-error: true
+      if: ${{ always() }}
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
 
     - name: Regression Test IMDB
-      continue-on-error: true
+      if: ${{ always() }}
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
