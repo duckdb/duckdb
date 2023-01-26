@@ -178,6 +178,8 @@ std::map<idx_t, const HivePartitionKey *> HivePartitionedColumnData::GetReverseM
 }
 
 void HivePartitionedColumnData::GrowAllocators() {
+	unique_lock<mutex> lck_gstate(allocators->lock);
+
 	idx_t current_allocator_size = allocators->allocators.size();
 	idx_t required_allocators = local_partition_map.size();
 
@@ -222,22 +224,28 @@ void HivePartitionedColumnData::SynchronizeLocalMap() {
 
 idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state) {
 	if (global_state) {
-		// We need to lock both the GlobalHivePartitionState and the allocators while adding a partition
-		unique_lock<mutex> lck_gstate(global_state->lock);
-		unique_lock<mutex> lck_alloc(allocators->lock);
+		idx_t partition_id;
 
-		// Insert into global map, or return partition if already present
-		auto res =
-		    global_state->partition_map.emplace(std::make_pair(std::move(key), global_state->partition_map.size()));
-		auto it = res.first;
-		idx_t partition_id = it->second;
+		// Synchronize Global state with our local state with the newly discoveren partition
+		{
+			unique_lock<mutex> lck_gstate(global_state->lock);
 
-		// Add iterator to vector to allow incrementally updating local states from global state
-		global_state->partitions.emplace_back(it);
-		SynchronizeLocalMap();
+			// Insert into global map, or return partition if already present
+			auto res =
+			    global_state->partition_map.emplace(std::make_pair(std::move(key), global_state->partition_map.size()));
+			auto it = res.first;
+			partition_id = it->second;
 
-		// Grow all the things!
+			// Add iterator to vector to allow incrementally updating local states from global state
+			global_state->partitions.emplace_back(it);
+			SynchronizeLocalMap();
+		}
+
+		// Now with the global state lock released we can grow the shared allocators to the number of partions that
+		// are currently in the local state.
 		GrowAllocators();
+
+		// Grow local partition data
 		GrowAppendState(state);
 		GrowPartitions(state);
 

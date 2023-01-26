@@ -84,11 +84,11 @@ public:
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
 protected:
-	//! Create allocators for all currently registered partitions (requires lock!)
+	//! Create allocators for all currently registered partitions
 	void GrowAllocators();
-	//! Create append states for all currently registered partitions (requires lock!)
+	//! Create append states for all currently registered partitions
 	void GrowAppendState(PartitionedColumnDataAppendState &state);
-	//! Create and initialize partitions for all currently registered partitions (requires lock!)
+	//! Create and initialize partitions for all currently registered partitions
 	void GrowPartitions(PartitionedColumnDataAppendState &state);
 	//! Register a newly discovered partition
 	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state);
