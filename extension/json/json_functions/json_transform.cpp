@@ -241,6 +241,36 @@ static void TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict);
 
+struct JSONKey {
+	const char *ptr;
+	size_t len;
+};
+
+struct JSONKeyHash {
+	inline std::size_t operator()(const JSONKey &k) const {
+		size_t result;
+		if (k.len >= sizeof(size_t)) {
+			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
+		} else {
+			result = 0;
+			duckdb::FastMemcpy(&result, k.ptr, k.len);
+		}
+		return result;
+	}
+};
+
+struct JSONKeyEquality {
+	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
+		if (a.len != b.len) {
+			return false;
+		}
+		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+	}
+};
+
+template <typename T>
+using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
+
 void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     const bool strict) {
@@ -248,25 +278,56 @@ void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	D_ASSERT(names.size() == result_vectors.size());
 	const idx_t column_count = names.size();
 
+	// Build hash map from key to column index so we don't have to linearly search using the key
+	json_key_map_t<idx_t> key_map;
 	vector<yyjson_val **> nested_vals;
 	nested_vals.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		key_map.insert({{names[col_idx].c_str(), names[col_idx].length()}, col_idx});
 		nested_vals.push_back((yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count));
 	}
 
+	idx_t found_key_count;
+	auto found_keys = (bool *)alc->malloc(alc->ctx, sizeof(bool) * column_count);
+
+	size_t idx, max;
+	yyjson_val *key, *val;
 	for (idx_t i = 0; i < count; i++) {
 		if (objects[i]) {
-			yyjson_obj_iter iter;
-			yyjson_obj_iter_init(objects[i], &iter);
-			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-				nested_vals[col_idx][i] = yyjson_obj_iter_getn(&iter, names[col_idx].c_str(), names[col_idx].length());
-				if (strict && !nested_vals[col_idx][i]) {
-					JSONCommon::ThrowValFormatError("Object %s does not have key \"" + names[col_idx] + "\"",
-					                                objects[i]);
+			found_key_count = 0;
+			memset(found_keys, false, column_count);
+			yyjson_obj_foreach(objects[i], idx, max, key, val) {
+				auto it = key_map.find({yyjson_get_str(key), yyjson_get_len(key)});
+				if (it != key_map.end()) {
+					const auto &col_idx = it->second;
+					nested_vals[col_idx][i] = val;
+					found_keys[col_idx] = true;
+					if (++found_key_count == column_count) {
+						break;
+					}
 				}
 			}
 			// TODO: if we auto-detected the schema but the object has more keys than 'column_count', throw an error
 			//  auto-detect is not implemented yet, though.
+			if (found_key_count != column_count) {
+				// If strict, we throw an error if one of the keys was not found.
+				// If not, we set the nested val to null so the recursion doesn't break
+				for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+					if (!found_keys[col_idx]) {
+						if (strict) {
+							JSONCommon::ThrowValFormatError("Object %s does not have key \"" + names[col_idx] + "\"",
+							                                objects[i]);
+						} else {
+							nested_vals[col_idx][i] = nullptr;
+						}
+					}
+				}
+			}
+		} else {
+			// Set nested val to null so the recursion doesn't break
+			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+				nested_vals[col_idx][i] = nullptr;
+			}
 		}
 	}
 
