@@ -33,7 +33,7 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindGroup(expr, depth, group_index);
 	}
 	if (expr.expression_class == ExpressionClass::FUNCTION) {
-		auto &function_expr = (FunctionExpression&)expr;
+		auto &function_expr = (FunctionExpression &)expr;
 		if (function_expr.function_name == "unnest" || function_expr.function_name == "unlist") {
 			unnest_indexes.push_back(node.select_list.size());
 		}
@@ -116,11 +116,6 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 					// in this select binder may be a window over this current select node.
 					unnest_indexes.push_back(node.select_list.size());
 				}
-			}
-			if (std::count(unnest_indexes.begin(), unnest_indexes.end(), index) != 0 && !inside_window) {
-
-
-//				throw BinderException("some other shit");
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
