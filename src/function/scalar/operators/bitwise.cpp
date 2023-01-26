@@ -191,23 +191,24 @@ struct BitwiseShiftLeftOperator {
 		}
 		return input << shift;
 	}
-
-	template <>
-	inline string_t Operation<string_t, int32_t, string_t>(string_t input, int32_t shift) {
-
-		int32_t max_shift = input.GetSize() * 8;
-		if (shift == 0) {
-			return input;
-		}
-		if (shift < 0) {
-			throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
-		}
-		if (shift >= max_shift) {
-			return (string_t(input.GetSize())); // all zero bit string
-		}
-		return input << shift;
-	}
 };
+
+template <>
+inline string_t BitwiseShiftLeftOperator::Operation<string_t, int32_t, string_t>(string_t input, int32_t shift) {
+
+	int32_t max_shift = input.GetSize() * 8;
+	if (shift == 0) {
+		return input;
+	}
+	if (shift < 0) {
+		throw OutOfRangeException("Cannot left-shift by negative number %s", NumericHelper::ToString(shift));
+	}
+	if (shift >= max_shift) {
+		return (string_t(input.GetSize())); // all zero bit string
+	}
+	// return input << shift;
+	return Bit::LeftShift(input, shift);
+}
 
 void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
@@ -234,19 +235,20 @@ struct BitwiseShiftRightOperator {
 	static inline TR Operation(TA input, TB shift) {
 		return RightShiftInRange(shift) ? input >> shift : 0;
 	}
-
-	template <>
-	inline string_t Operation<string_t, int32_t, string_t>(string_t input, int32_t shift) {
-		int32_t max_shift = input.GetSize() * 8;
-		if (shift == 0) {
-			return input;
-		}
-		if (shift < 0 || shift >= max_shift) {
-			return (string_t(input.GetSize())); // all zero bit string
-		}
-		return input >> shift;
-	}
 };
+
+template <>
+inline string_t BitwiseShiftRightOperator::Operation<string_t, int32_t, string_t>(string_t input, int32_t shift) {
+	int32_t max_shift = input.GetSize() * 8;
+	if (shift == 0) {
+		return input;
+	}
+	if (shift < 0 || shift >= max_shift) {
+		return (string_t(input.GetSize())); // all zero bit string
+	}
+	// return input >> shift;
+	return Bit::RightShift(input, shift);
+}
 
 void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");

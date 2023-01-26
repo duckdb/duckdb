@@ -37,6 +37,9 @@ public:
 	//! Returns first starting index of the specified substring within bits, or zero if it's not present.
 	DUCKDB_API static idx_t BitPosition(string_t substring, string_t bits);
 
+	DUCKDB_API static string_t RightShift(const string_t &bit_string, const idx_t &shift);
+	DUCKDB_API static string_t LeftShift(const string_t &bit_string, const idx_t &shift);
+
 private:
 	//! Returns the amount of padded zeroes to fill up to a full byte. This information is stored in the first byte of
 	//! the bitstring.
