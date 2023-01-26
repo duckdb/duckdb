@@ -20,11 +20,11 @@ void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
 }
 
 JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
-    : buffer_index(buffer_index_p), readers(readers_p), buffer(move(buffer_p)), buffer_size(buffer_size_p) {
+    : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
 }
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p)
-    : file_handle(move(file_handle_p)), can_seek(file_handle->CanSeek()),
+    : file_handle(std::move(file_handle_p)), can_seek(file_handle->CanSeek()),
       plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()),
       read_position(0) {
 }

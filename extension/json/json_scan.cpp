@@ -375,7 +375,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 	}
 
 	// Create an entry and insert it into the map
-	auto json_buffer_handle = make_unique<JSONBufferHandle>(buffer_index, readers, move(buffer), buffer_size);
+	auto json_buffer_handle = make_unique<JSONBufferHandle>(buffer_index, readers, std::move(buffer), buffer_size);
 	current_buffer_handle = json_buffer_handle.get();
 	current_reader->InsertBuffer(buffer_index, std::move(json_buffer_handle));
 

@@ -244,6 +244,7 @@ static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const
 void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     const bool strict) {
+	D_ASSERT(alc);
 	D_ASSERT(names.size() == result_vectors.size());
 	const idx_t column_count = names.size();
 
