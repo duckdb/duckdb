@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_catalog_entries
   OBJECT
   copy_function_catalog_entry.cpp
+  dindex_catalog_entry.cpp
   dschema_catalog_entry.cpp
   dtable_catalog_entry.cpp
   type_catalog_entry.cpp

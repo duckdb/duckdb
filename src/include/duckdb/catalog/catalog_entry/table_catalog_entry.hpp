@@ -36,6 +36,10 @@ struct DropNotNullInfo;
 class TableFunction;
 struct FunctionData;
 
+class TableColumnInfo;
+class TableIndexInfo;
+class TableStorageInfo;
+
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
@@ -93,6 +97,11 @@ public:
 	virtual bool IsDTable() {
 		return false;
 	}
+
+	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
+
+	//! Returns the storage info of this table
+	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
 protected:
 	//! A list of columns that are part of this table

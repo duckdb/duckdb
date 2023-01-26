@@ -4,7 +4,7 @@
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dindex_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -192,7 +192,7 @@ CatalogEntry *DSchemaCatalogEntry::CreateIndex(ClientContext &context, CreateInd
                                                TableCatalogEntry *table) {
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
-	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
+	auto index = make_unique<DIndexCatalogEntry>(catalog, this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
 }
 

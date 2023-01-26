@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dindex_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -135,7 +135,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	}
 
 	auto &schema = *table.schema;
-	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context, info.get(), &table);
+	auto index_entry = (DIndexCatalogEntry *)schema.CreateIndex(context, info.get(), &table);
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return SinkFinalizeType::READY;

@@ -1,6 +1,7 @@
 #include "duckdb/catalog/dcatalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/dschema_catalog_entry.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -82,6 +83,10 @@ SchemaCatalogEntry *DCatalog::GetSchema(CatalogTransaction transaction, const st
 		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
 	}
 	return (SchemaCatalogEntry *)entry;
+}
+
+DatabaseSize DCatalog::GetDatabaseSize(ClientContext &context) {
+	return db.GetStorageManager().GetDatabaseSize();
 }
 
 void DCatalog::Verify() {

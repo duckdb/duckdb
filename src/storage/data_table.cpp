@@ -1157,8 +1157,8 @@ void DataTable::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetStorageInfo
 //===--------------------------------------------------------------------===//
-vector<vector<Value>> DataTable::GetStorageInfo() {
-	return row_groups->GetStorageInfo();
+void DataTable::GetStorageInfo(TableStorageInfo &result) {
+	row_groups->GetStorageInfo(result);
 }
 
 } // namespace duckdb

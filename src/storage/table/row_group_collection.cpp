@@ -550,9 +550,7 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetStorageInfo
 //===--------------------------------------------------------------------===//
-vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
-	vector<vector<Value>> result;
-
+void RowGroupCollection::GetStorageInfo(TableStorageInfo &result) {
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
 	idx_t row_group_index = 0;
 	while (row_group) {
@@ -561,8 +559,6 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 
 		row_group = (RowGroup *)row_group->Next();
 	}
-
-	return result;
 }
 
 //===--------------------------------------------------------------------===//

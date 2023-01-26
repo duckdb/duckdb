@@ -40,6 +40,8 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
+	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+
 	bool IsDTable() override {
 		return true;
 	}

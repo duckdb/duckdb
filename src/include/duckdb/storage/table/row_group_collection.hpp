@@ -83,7 +83,7 @@ public:
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	vector<vector<Value>> GetStorageInfo();
+	void GetStorageInfo(TableStorageInfo &result);
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,

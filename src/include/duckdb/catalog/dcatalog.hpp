@@ -50,6 +50,8 @@ public:
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
 
+	DatabaseSize GetDatabaseSize(ClientContext &context) override;
+
 private:
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
 

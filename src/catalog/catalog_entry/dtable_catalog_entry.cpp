@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -724,6 +725,22 @@ const vector<unique_ptr<BoundConstraint>> &DTableCatalogEntry::GetBoundConstrain
 TableFunction DTableCatalogEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 	bind_data = make_unique<TableScanBindData>(this);
 	return TableScanFunction::GetFunction();
+}
+
+TableStorageInfo DTableCatalogEntry::GetStorageInfo(ClientContext &context) {
+	TableStorageInfo result;
+	result.cardinality = storage->info->cardinality.load();
+	storage->GetStorageInfo(result);
+	storage->info->indexes.Scan([&](Index &index) {
+		IndexInfo info;
+		info.is_primary = index.IsPrimary();
+		info.is_unique = index.IsUnique();
+		info.is_foreign = index.IsForeign();
+		index.column_id_set = index.column_id_set;
+		result.index_info.push_back(std::move(info));
+		return false;
+	});
+	return result;
 }
 
 } // namespace duckdb

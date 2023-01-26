@@ -31,6 +31,7 @@ struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
+struct DatabaseSize;
 
 class AttachedDatabase;
 class ClientContext;
@@ -223,6 +224,8 @@ public:
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
 	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
 	                                                    unique_ptr<LogicalOperator> plan) = 0;
+
+	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
 
 public:
 	template <class T>

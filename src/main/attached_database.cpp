@@ -102,7 +102,7 @@ void AttachedDatabase::Initialize() {
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
-	if (IsSystem()) {
+	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");
 	}
 	return *storage;

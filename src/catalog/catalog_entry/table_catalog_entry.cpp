@@ -74,16 +74,10 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source,
 	return info;
 }
 
-string TableCatalogEntry::ToSQL() {
+string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
 	std::stringstream ss;
 
-	ss << "CREATE TABLE ";
-
-	if (schema->name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
-	}
-
-	ss << KeywordHelper::WriteOptionallyQuoted(name) << "(";
+	ss << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	logical_index_set_t not_null_columns;
@@ -161,7 +155,23 @@ string TableCatalogEntry::ToSQL() {
 		ss << extra_constraint;
 	}
 
-	ss << ");";
+	ss << ")";
+	return ss.str();
+}
+
+string TableCatalogEntry::ToSQL() {
+	std::stringstream ss;
+
+	ss << "CREATE TABLE ";
+
+	if (schema->name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
+	}
+
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << ColumnsToSQL(columns, constraints);
+	ss << ";";
+
 	return ss.str();
 }
 

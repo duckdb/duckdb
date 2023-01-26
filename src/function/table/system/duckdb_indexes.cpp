@@ -98,21 +98,27 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value(index.name));
 		// index_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(index.oid));
-		// table_name, VARCHAR
-		output.SetValue(col++, count, Value(index.info->table));
-		// table_oid, BIGINT
 		// find the table in the catalog
 		auto table_entry =
-		    index.schema->catalog->GetEntry<TableCatalogEntry>(context, index.info->schema, index.info->table);
+		    index.schema->catalog->GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
+		// table_name, VARCHAR
+		output.SetValue(col++, count, Value(table_entry->name));
+		// table_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table_entry->oid));
-		// is_unique, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));
-		// is_primary, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(index.index->IsPrimary()));
+		if (index.index) {
+			// is_unique, BOOLEAN
+			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));
+			// is_primary, BOOLEAN
+			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsPrimary()));
+		} else {
+			output.SetValue(col++, count, Value());
+			output.SetValue(col++, count, Value());
+		}
 		// expressions, VARCHAR
 		output.SetValue(col++, count, Value());
 		// sql, VARCHAR
-		output.SetValue(col++, count, Value(index.ToSQL()));
+		auto sql = index.ToSQL();
+		output.SetValue(col++, count, sql.empty() ? Value() : Value(std::move(sql)));
 
 		count++;
 	}
