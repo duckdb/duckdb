@@ -24,10 +24,10 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// set the root node of the tree
+	tree = nullptr;
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
-	} else {
-		tree = nullptr;
+		Verify();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
