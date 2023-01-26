@@ -107,8 +107,20 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 				                      colref.column_names[0]);
 			}
 			if (std::count(unnest_indexes.begin(), unnest_indexes.end(), index) != 0) {
-				throw BinderException("Alias \"%s\" is an unnest, cannot bind a window on an unnest ",
-				                      colref.column_names[0]);
+				if (inside_window) {
+					throw BinderException("Alias \"%s\" is an unnest, cannot bind a window on an unnest ",
+					                      colref.column_names[0]);
+				} else {
+					// Here you are binding to the alias of an unnest, and are not inside a window.
+					// We still add the select node index to the unnest indexes because a future select node
+					// in this select binder may be a window over this current select node.
+					unnest_indexes.push_back(node.select_list.size());
+				}
+			}
+			if (std::count(unnest_indexes.begin(), unnest_indexes.end(), index) != 0 && !inside_window) {
+
+
+//				throw BinderException("some other shit");
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {

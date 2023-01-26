@@ -2,7 +2,6 @@
 # description: Issue 5703: Can't have a window aggregate and unnest.
 # group: [general]
 
-
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER () + 42;
 ----
@@ -13,6 +12,14 @@ select sum(unnest([1,2,3])) over ();
 ----
 Binder Error
 
+# can still perform other functions over unnest alias
+query II
+select unnest([1, 2, 3]) as r, r + 1;
+----
+1	2
+2	3
+3	4
+
 statement error
 select unnest([5,4,3]) as r, sum(r) OVER ();
 ----
@@ -20,6 +27,19 @@ Binder Error
 
 statement ok
 select unnest([5,4,3]) as r, sum(42) OVER ();
+
+# unnest hiding behind two aliases is not ok
+statement error
+SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
+----
+Binder Error
+
+# our unnest_index logic is not disturbed by other select nodes in the select list. 
+statement error
+SELECT unlist(str_split('A',' ')) AS "r", 5, 6, CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
+----
+Binder Error
+
 
 # row numbers are ok
 statement ok
@@ -79,11 +99,6 @@ Binder Error
 
 statement ok
 select unnest([5, 4, 3]), sum(41) over ();
-
-statement error
-SELECT unlist(str_split('A',' ')) AS "r", CASE WHEN ("r" = 'A') THEN (-1) ELSE 0 END AS "x", sum("x") OVER () AS "s";
-----
-Binder Error
 
 statement error
 select unnest([5,4,3]) as r, sum(r + 42) OVER ();
