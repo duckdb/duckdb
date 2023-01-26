@@ -125,7 +125,7 @@ public:
 
 	// bitwise operators
 	// DUCKDB_API string_t operator>>(const idx_t &rhs) const;
-	//DUCKDB_API string_t operator<<(const idx_t &rhs) const;
+	// DUCKDB_API string_t operator<<(const idx_t &rhs) const;
 	DUCKDB_API string_t operator&(const string_t &rhs) const;
 	DUCKDB_API string_t operator|(const string_t &rhs) const;
 	DUCKDB_API string_t operator^(const string_t &rhs) const;

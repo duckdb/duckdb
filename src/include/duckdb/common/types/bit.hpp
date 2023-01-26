@@ -30,6 +30,7 @@ public:
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBit(string_t str, data_ptr_t output);
+	DUCKDB_API static string ToBit(string_t str);
 	//! Extracts the nth bit from bit string; the first (leftmost) bit is indexed 0
 	DUCKDB_API static idx_t GetBit(string_t bit_string, idx_t n);
 	//! Sets the nth bit in bit string to newvalue; the first (leftmost) bit is indexed 0
@@ -44,5 +45,6 @@ private:
 	//! Returns the amount of padded zeroes to fill up to a full byte. This information is stored in the first byte of
 	//! the bitstring.
 	DUCKDB_API static idx_t GetPadding(string_t &bit_string);
+	DUCKDB_API static idx_t GetBitSize(string_t str);
 };
 } // namespace duckdb

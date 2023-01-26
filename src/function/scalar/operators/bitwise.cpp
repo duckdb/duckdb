@@ -43,14 +43,13 @@ static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) 
 	return function;
 }
 
-template <class OP>
-static scalar_function_t GetScalarBitstringUnaryFunction(const LogicalType &type) {
-
-	if (type != LogicalTypeId::BIT) {
-		throw NotImplementedException("Unimplemented type for GetScalarBitstringUnaryFunction");
-	}
-	return &ScalarFunction::UnaryFunction<string_t, string_t, OP>;
-}
+// template <class OP>
+// static scalar_function_t GetScalarBitstringUnaryFunction(const LogicalType &type) {
+//	if (type != LogicalTypeId::BIT) {
+//		throw NotImplementedException("Unimplemented type for GetScalarBitstringUnaryFunction");
+//	}
+//	return &ScalarFunction::UnaryFunction<string_t, string_t, OP>;
+// }
 
 template <class OP>
 static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type) {
@@ -89,14 +88,13 @@ static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type)
 	return function;
 }
 
-template <class OP>
-static scalar_function_t GetScalarBitstringBinaryFunction(const LogicalType &type) {
-
-	if (type != LogicalTypeId::BIT) {
-		throw NotImplementedException("Unimplemented type for GetScalarBitstringBinaryFunction");
-	}
-	return &ScalarFunction::BinaryFunction<string_t, string_t, string_t, OP>;
-}
+// template <class OP>
+// static scalar_function_t GetScalarBitstringBinaryFunction(const LogicalType &type) {
+//	if (type != LogicalTypeId::BIT) {
+//		throw NotImplementedException("Unimplemented type for GetScalarBitstringBinaryFunction");
+//	}
+//	return &ScalarFunction::BinaryFunction<string_t, string_t, string_t, OP>;
+// }
 
 //===--------------------------------------------------------------------===//
 // & [bitwise_and]
@@ -114,8 +112,12 @@ void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
-	                                     GetScalarBitstringBinaryFunction<BitwiseANDOperator>(LogicalType::BIT)));
+	//	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	//	                                     GetScalarBitstringBinaryFunction<BitwiseANDOperator>(LogicalType::BIT)));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	                   &ScalarFunction::BinaryFunction<string_t, string_t, string_t, BitwiseANDOperator>));
+
 	set.AddFunction(functions);
 }
 
@@ -135,8 +137,11 @@ void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
-	                                     GetScalarBitstringBinaryFunction<BitwiseOROperator>(LogicalType::BIT)));
+	//	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	//	                                     GetScalarBitstringBinaryFunction<BitwiseOROperator>(LogicalType::BIT)));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	                   &ScalarFunction::BinaryFunction<string_t, string_t, string_t, BitwiseOROperator>));
 	set.AddFunction(functions);
 }
 
@@ -156,8 +161,11 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
-	                                     GetScalarBitstringBinaryFunction<BitwiseXOROperator>(LogicalType::BIT)));
+	//	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	//	                                     GetScalarBitstringBinaryFunction<BitwiseXOROperator>(LogicalType::BIT)));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT,
+	                   &ScalarFunction::BinaryFunction<string_t, string_t, string_t, BitwiseXOROperator>));
 	set.AddFunction(functions);
 }
 
@@ -277,8 +285,11 @@ void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
+	//	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIT,
+	//	                                     GetScalarBitstringUnaryFunction<BitwiseNotOperator>(LogicalType::BIT)));
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIT,
-	                                     GetScalarBitstringUnaryFunction<BitwiseNotOperator>(LogicalType::BIT)));
+	                                     &ScalarFunction::UnaryFunction<string_t, string_t, BitwiseNotOperator>));
+
 	set.AddFunction(functions);
 }
 

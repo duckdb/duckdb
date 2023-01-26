@@ -620,6 +620,13 @@ Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
+Value Value::BIT(const string &data) {
+	Value result(LogicalType::BIT);
+	result.is_null = false;
+	result.str_value = Bit::ToBit(string_t(data));
+	return result;
+}
+
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);

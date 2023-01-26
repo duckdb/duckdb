@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -91,6 +92,15 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 	return true;
 }
 
+idx_t Bit::GetBitSize(string_t str) {
+	string error_message;
+	idx_t str_len;
+	if (!Bit::TryGetBitStringSize(str, str_len, &error_message)) {
+		throw ConversionException(error_message);
+	}
+	return str_len;
+}
+
 void Bit::ToBit(string_t str, data_ptr_t output) {
 	auto data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto len = str.GetSize();
@@ -118,6 +128,13 @@ void Bit::ToBit(string_t str, data_ptr_t output) {
 		}
 		*(output++) = byte;
 	}
+}
+
+string Bit::ToBit(string_t str) {
+	auto bit_len = GetBitSize(str);
+	auto buffer = std::unique_ptr<char[]>(new char[bit_len]);
+	Bit::ToBit(str, (data_ptr_t)buffer.get());
+	return string(buffer.get(), bit_len);
 }
 
 idx_t Bit::GetBit(string_t bit_string, idx_t n) {
