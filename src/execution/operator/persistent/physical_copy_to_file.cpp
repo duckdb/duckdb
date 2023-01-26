@@ -74,14 +74,14 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static void CreateDir(const string &dir_path, FileSystem & fs) {
+static void CreateDir(const string &dir_path, FileSystem &fs) {
 	if (!fs.DirectoryExists(dir_path)) {
 		fs.CreateDirectory(dir_path);
 	}
 }
 
-static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string> &names,
-                                 const vector<Value> &values, string path, FileSystem& fs) {
+static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+                                 string path, FileSystem &fs) {
 	CreateDir(path, fs);
 
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -109,11 +109,12 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		StringUtil::RTrim(trimmed_path, fs.PathSeparator());
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
-			string hive_path = CreateDirRecursive(partition_columns, names,
-			                                      partition_key_map[i]->values, trimmed_path, fs);
+			string hive_path =
+			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
 			string full_path = fs.JoinPath(hive_path, "data_" + to_string(l.writer_offset) + "." + function.extension);
 			if (fs.FileExists(full_path) && !allow_overwrite) {
-				throw IOException("failed to create " + full_path + ", file exists! Enable ALLOW_OVERWRITE option to force writing");
+				throw IOException("failed to create " + full_path +
+				                  ", file exists! Enable ALLOW_OVERWRITE option to force writing");
 			}
 			// Create a writer for the current file
 			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
@@ -208,7 +209,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			fs.ListFiles(
 			    file_path, [&n_files](const string &path, bool) { n_files++; }, FileOpener::Get(context));
 			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable ALLOW_OVERWRITE option to force writing", file_path);
+				throw IOException("Directory %s is not empty! Enable ALLOW_OVERWRITE option to force writing",
+				                  file_path);
 			}
 		}
 

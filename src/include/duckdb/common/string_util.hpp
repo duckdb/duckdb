@@ -138,7 +138,7 @@ public:
 	//! Remove the whitespace char in the right end of the string
 	DUCKDB_API static void RTrim(string &str);
 	//! Remove the all chars from chars_to_trim char in the right end of the string
-	DUCKDB_API static void RTrim(string &str, const string& chars_to_trim);
+	DUCKDB_API static void RTrim(string &str, const string &chars_to_trim);
 	//! Remove the whitespace char in the left and right end of the string
 	DUCKDB_API static void Trim(string &str);
 

@@ -33,9 +33,10 @@ void StringUtil::RTrim(string &str) {
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
-	str.erase(
-	    find_if(str.rbegin(), str.rend(), [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; }).base(),
-	    str.end());
+	str.erase(find_if(str.rbegin(), str.rend(),
+	                  [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
+	              .base(),
+	          str.end());
 }
 
 void StringUtil::Trim(string &str) {

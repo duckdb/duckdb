@@ -241,8 +241,8 @@ idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, Part
 			SynchronizeLocalMap();
 		}
 
-		// Now with the global state lock released we can grow the shared allocators to the number of partions that
-		// are currently in the local state.
+		// After synchronizing with the global state, we need to grow the shared allocators to support
+		// the number of partitions, which guarantees that there's always enough allocators available to each thread
 		GrowAllocators();
 
 		// Grow local partition data
