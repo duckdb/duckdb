@@ -245,18 +245,32 @@ void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     const bool strict) {
 	D_ASSERT(names.size() == result_vectors.size());
-	auto nested_vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
-	for (idx_t child_i = 0; child_i < names.size(); child_i++) {
-		const auto &name = names[child_i];
-		const auto name_ptr = name.c_str();
-		const auto name_len = name.size();
-		for (idx_t i = 0; i < count; i++) {
-			nested_vals[i] = yyjson_obj_getn(objects[i], name_ptr, name_len);
-			if (strict && !nested_vals[i]) {
-				JSONCommon::ThrowValFormatError("Object %s does not have key \"" + name + "\"", objects[i]);
+	const idx_t column_count = names.size();
+
+	vector<yyjson_val **> nested_vals;
+	nested_vals.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		nested_vals.push_back((yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count));
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (objects[i]) {
+			yyjson_obj_iter iter;
+			yyjson_obj_iter_init(objects[i], &iter);
+			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+				nested_vals[col_idx][i] = yyjson_obj_iter_getn(&iter, names[col_idx].c_str(), names[col_idx].length());
+				if (strict && !nested_vals[col_idx][i]) {
+					JSONCommon::ThrowValFormatError("Object %s does not have key \"" + names[col_idx] + "\"",
+					                                objects[i]);
+				}
 			}
+			// TODO: if we auto-detected the schema but the object has more keys than 'column_count', throw an error
+			//  auto-detect is not implemented yet, though.
 		}
-		Transform(nested_vals, alc, *result_vectors[child_i], count, strict);
+	}
+
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, strict);
 	}
 }
 

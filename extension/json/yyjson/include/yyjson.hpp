@@ -22,9 +22,8 @@
 #include <limits.h>
 #include <string.h>
 #include <float.h>
+
 #include "duckdb/common/fast_mem.hpp"
-
-
 
 /*==============================================================================
  * Compile-time Options
@@ -229,7 +228,8 @@
 
 /** likely for compiler */
 #ifndef yyjson_likely
-#   if yyjson_has_builtin(__builtin_expect) || (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
+#   if yyjson_has_builtin(__builtin_expect) || \
+    (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
 #       define yyjson_likely(expr) __builtin_expect(!!(expr), 1)
 #   else
 #       define yyjson_likely(expr) (expr)
@@ -238,7 +238,8 @@
 
 /** unlikely for compiler */
 #ifndef yyjson_unlikely
-#   if yyjson_has_builtin(__builtin_expect) || (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
+#   if yyjson_has_builtin(__builtin_expect) || \
+    (YYJSON_GCC_VER >= 4 && YYJSON_GCC_VER != 5)
 #       define yyjson_unlikely(expr) __builtin_expect(!!(expr), 0)
 #   else
 #       define yyjson_unlikely(expr) (expr)
@@ -620,7 +621,7 @@ typedef uint32_t yyjson_read_code;
 /** Success, no error. */
 static const yyjson_read_code YYJSON_READ_SUCCESS                       = 0;
 
-/** Invalid parameter, such as NULL string or invalid file path. */
+/** Invalid parameter, such as NULL input string or 0 input length. */
 static const yyjson_read_code YYJSON_READ_ERROR_INVALID_PARAMETER       = 1;
 
 /** Memory allocation failure occurs. */
@@ -816,6 +817,9 @@ yyjson_api_inline size_t yyjson_read_max_memory_usage(size_t len,
  @param flg The JSON read options.
     Multiple options can be combined with `|` operator. 0 means no options.
     Suppors `YYJSON_READ_NUMBER_AS_RAW` and `YYJSON_READ_ALLOW_INF_AND_NAN`.
+ @param alc The memory allocator used for long number.
+    It is only used when the built-in floating point reader is disabled.
+    Pass NULL to use the libc's default allocator.
  @param err A pointer to receive error information.
     Pass NULL if you don't need error information.
  @return If successful, a pointer to the character after the last character
@@ -824,6 +828,7 @@ yyjson_api_inline size_t yyjson_read_max_memory_usage(size_t len,
 yyjson_api const char *yyjson_read_number(const char *dat,
                                           yyjson_val *val,
                                           yyjson_read_flag flg,
+                                          const yyjson_alc *alc,
                                           yyjson_read_err *err);
 
 /**
@@ -839,6 +844,9 @@ yyjson_api const char *yyjson_read_number(const char *dat,
  @param flg The JSON read options.
     Multiple options can be combined with `|` operator. 0 means no options.
     Suppors `YYJSON_READ_NUMBER_AS_RAW` and `YYJSON_READ_ALLOW_INF_AND_NAN`.
+ @param alc The memory allocator used for long number.
+    It is only used when the built-in floating point reader is disabled.
+    Pass NULL to use the libc's default allocator.
  @param err A pointer to receive error information.
     Pass NULL if you don't need error information.
  @return If successful, a pointer to the character after the last character
@@ -847,8 +855,9 @@ yyjson_api const char *yyjson_read_number(const char *dat,
 yyjson_api_inline const char *yyjson_mut_read_number(const char *dat,
                                                      yyjson_mut_val *val,
                                                      yyjson_read_flag flg,
+                                                     const yyjson_alc *alc,
                                                      yyjson_read_err *err) {
-    return yyjson_read_number(dat, (yyjson_val *)val, flg, err);
+    return yyjson_read_number(dat, (yyjson_val *)val, flg, alc, err);
 }
 
 
@@ -4230,14 +4239,14 @@ yyjson_api_inline char *unsafe_yyjson_mut_strncpy(yyjson_mut_doc *doc,
     char *mem;
     const yyjson_alc *alc = &doc->alc;
     yyjson_str_pool *pool = &doc->str_pool;
-    
+
     if (!str) return NULL;
     if (yyjson_unlikely((size_t)(pool->end - pool->cur) <= len)) {
         if (yyjson_unlikely(!unsafe_yyjson_str_pool_grow(pool, alc, len + 1))) {
             return NULL;
         }
     }
-    
+
     mem = pool->cur;
     pool->cur = mem + len + 1;
     memcpy((void *)mem, (const void *)str, len);
@@ -4255,7 +4264,7 @@ yyjson_api_inline yyjson_mut_val *unsafe_yyjson_mut_val(yyjson_mut_doc *doc,
             return NULL;
         }
     }
-    
+
     val = pool->cur;
     pool->cur += count;
     return val;

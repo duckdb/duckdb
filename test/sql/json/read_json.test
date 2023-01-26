@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma threads=1
-
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
 ----

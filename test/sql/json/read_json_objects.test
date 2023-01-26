@@ -8,10 +8,12 @@ SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, d
 
 require json
 
+# we cannot check the error output for the specific byte, because on Windows the \n are replaced with \r\n
+# therefore, the byte count is different. So, we cut off the error message here
 statement error
 select * from read_json_objects('data/json/unterminated_quotes.ndjson')
 ----
-Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson" at byte 111: unexpected control character in string.
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson" at byte
 
 # now it should work!
 query I
@@ -172,7 +174,7 @@ select * from read_ndjson_objects('data/json/empty.ndjson')
 statement error
 select * from read_json_objects('data/json/unterminated_quotes.ndjson')
 ----
-Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson" at byte 111: unexpected control character in string.
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson" at byte
 
 statement error
 select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson')
@@ -209,7 +211,7 @@ Invalid Input Error: Malformed JSON in file "data/json/multiple_objects_per_line
 statement error
 select * from read_json_objects('data/csv/tpcds_14.csv')
 ----
-Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv" at byte 1: unexpected character.
+Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv" at byte
 
 statement error
 select * from read_ndjson_objects('data/csv/tpcds_14.csv')
@@ -220,7 +222,7 @@ Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv", line 1 at b
 statement error
 select * from read_json_objects('data/parquet-testing/blob.parquet')
 ----
-Invalid Input Error: Malformed JSON in file "data/parquet-testing/blob.parquet" at byte 1: unexpected character.
+Invalid Input Error: Malformed JSON in file "data/parquet-testing/blob.parquet" at byte
 
 statement error
 select * from read_ndjson_objects('data/parquet-testing/blob.parquet')
