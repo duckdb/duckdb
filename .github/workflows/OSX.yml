@@ -4,6 +4,7 @@ on:
     paths-ignore:
       - '**.md'
   pull_request:
+    types: [read_for_review, opened, reopened, review_requested]
     branches-ignore:
       - '**'
 
