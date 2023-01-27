@@ -62,15 +62,14 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
-	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
 
 	py::object scanner;
-	py::object arrow_scanner = scanner_class.attr("from_dataset");
 	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
 	switch (arrow_object_type) {
 	case PyArrowObjectType::Table: {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
+		py::object arrow_scanner = dataset.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
 		break;
 	}
@@ -86,6 +85,7 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		break;
 	}
 	case PyArrowObjectType::Dataset: {
+		py::object arrow_scanner = arrow_obj_handle.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->config);
 		break;
 	}
