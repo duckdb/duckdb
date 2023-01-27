@@ -91,6 +91,10 @@ struct CSVBufferRead {
 	idx_t estimated_linenr;
 };
 
+struct VerificationPositions {
+	idx_t beginning_of_first_line = 0;
+	idx_t end_of_last_line = 0;
+};
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class ParallelCSVReader : public BaseCSVReader {
 public:
@@ -111,7 +115,10 @@ public:
 	//! If this flag is set, it means we are about to try to read our last row.
 	bool reached_remainder_state = false;
 
+	bool finished = false;
+
 	unique_ptr<CSVBufferRead> buffer;
+	VerificationPositions GetVerificationPositions();
 
 public:
 	void SetBufferRead(unique_ptr<CSVBufferRead> buffer);
@@ -134,8 +141,13 @@ private:
 	//! when changing the buffer end the first time.
 	//! It returns FALSE if the parser should jump to the final state of parsing or not
 	bool BufferRemainder();
+
+	bool NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char);
+
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
+	//! Position of the first read line and last read line for verification purposes
+	VerificationPositions verification_positions;
 };
 
 } // namespace duckdb

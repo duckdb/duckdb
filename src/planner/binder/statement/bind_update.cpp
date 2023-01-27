@@ -165,7 +165,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 		}
 	}
 	if (op->type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
-		return move(root);
+		return root;
 	}
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(proj_index, std::move(projection_expressions));
