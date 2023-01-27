@@ -129,7 +129,7 @@ void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
 	if (val.IsNull()) {
 		return;
 	}
-	switch(val.type().InternalType()) {
+	switch (val.type().InternalType()) {
 	case PhysicalType::BOOL:
 		writer.WriteField<bool>(BooleanValue::Get(val));
 		break;
@@ -182,7 +182,7 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 		return Value(type);
 	}
 	Value result;
-	switch(type.InternalType()) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		result = Value::BOOLEAN(reader.ReadRequired<bool>());
 		break;
@@ -229,7 +229,8 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	auto min = DeserializeNumericStatsValue(type, reader);
 	auto max = DeserializeNumericStatsValue(type, reader);
-	return make_unique_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max), StatisticsType::LOCAL_STATS);
+	return make_unique_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max),
+	                                                           StatisticsType::LOCAL_STATS);
 }
 
 string NumericStatistics::ToString() const {
