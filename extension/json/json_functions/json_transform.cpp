@@ -270,6 +270,10 @@ void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				auto it = key_map.find({yyjson_get_str(key), yyjson_get_len(key)});
 				if (it != key_map.end()) {
 					const auto &col_idx = it->second;
+					if (strict && found_keys[col_idx]) {
+						JSONCommon::ThrowValFormatError(
+						    "Duplicate key \"" + GetString(key).GetString() + "\" in object %s", objects[i]);
+					}
 					nested_vals[col_idx][i] = val;
 					found_keys[col_idx] = true;
 					if (++found_key_count == column_count) {

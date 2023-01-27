@@ -165,6 +165,7 @@ static inline yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yy
 		return yyjson_mut_str(doc, JSONCommon::JSON_TYPE_NAME);
 	}
 	auto &desc = node.descriptions[0];
+	D_ASSERT(desc.type != LogicalTypeId::INVALID);
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
 		return ConvertStructureArray(node, doc);
