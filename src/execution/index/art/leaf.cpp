@@ -108,7 +108,11 @@ void Leaf::Insert(ART &art, row_t row_id) {
 
 	if (count == capacity) {
 		// grow array
-		art.memory_size += capacity * sizeof(row_t);
+		if (IsInlined()) {
+			art.memory_size += (capacity + 1) * sizeof(row_t);
+		} else {
+			art.memory_size += capacity * sizeof(row_t);
+		}
 		row_ids = Resize(row_ids, count, capacity * 2);
 	}
 	// insert new row ID

@@ -433,6 +433,7 @@ bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
 
 	if (node->type == NodeType::NLeaf) {
 		// replace leaf with Node4 and store both leaves in it
+		// or add a row ID to a leaf, if they have the same key
 		auto leaf = (Leaf *)node;
 		uint32_t new_prefix_length = 0;
 

@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
+
 namespace duckdb {
 SwizzleablePointer::~SwizzleablePointer() {
 	if (pointer) {
