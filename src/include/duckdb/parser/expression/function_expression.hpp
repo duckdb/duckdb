@@ -57,6 +57,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 	void Verify() const override;
+	bool IsUnnest();
 
 public:
 	template <class T, class BASE>

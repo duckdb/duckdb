@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -142,7 +143,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &child : window.children) {
 		if (child->GetExpressionType() == ExpressionType::FUNCTION) {
 			auto &function_child = (FunctionExpression &)*child;
-			if (function_child.function_name == "unnest" || function_child.function_name == "unlist") {
+			if (function_child.IsUnnest()) {
 				throw BinderException("Cannot have window over an unnest expression");
 			}
 		}

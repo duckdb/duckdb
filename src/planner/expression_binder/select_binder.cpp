@@ -34,7 +34,7 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 	}
 	if (expr.expression_class == ExpressionClass::FUNCTION) {
 		auto &function_expr = (FunctionExpression &)expr;
-		if (function_expr.function_name == "unnest" || function_expr.function_name == "unlist") {
+		if (function_expr.IsUnnest()) {
 			unnest_indexes.push_back(node.select_list.size());
 		}
 	}

@@ -40,7 +40,6 @@ SELECT unlist(str_split('A',' ')) AS "r", 5, 6, CASE WHEN ("r" = 'A') THEN (-1) 
 ----
 Binder Error
 
-
 # row numbers are ok
 statement ok
 select unnest([5,4,3]) as r, row_number() OVER (partition by (SELECT NULL));

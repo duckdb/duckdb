@@ -59,6 +59,10 @@ bool FunctionExpression::Equal(const FunctionExpression *a, const FunctionExpres
 	return true;
 }
 
+bool FunctionExpression::IsUnnest() {
+	return (function_name == "unnest" || function_name == "unlist");
+}
+
 hash_t FunctionExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
@@ -67,6 +71,7 @@ hash_t FunctionExpression::Hash() const {
 	result = CombineHash(result, duckdb::Hash<bool>(export_state));
 	return result;
 }
+
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;

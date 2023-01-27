@@ -19,9 +19,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
 
-	if (function.function_name == "unnest" || function.function_name == "unlist") {
+	if (function.IsUnnest()) {
 		// special case, not in catalog
-		// TODO make sure someone does not create such a function OR
+		// TODO make sure someone does not create an UNNEST/UNLIST function OR
 		// have unnest live in catalog, too
 		return BindUnnest(function, depth);
 	}
