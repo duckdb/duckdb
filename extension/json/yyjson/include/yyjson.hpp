@@ -381,9 +381,9 @@
  *============================================================================*/
 
 /* extern "C" begin */
-//#ifdef __cplusplus
-//extern "C" {
-//#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* warning suppress begin */
 #if defined(__clang__)
@@ -5996,8 +5996,8 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 #   pragma warning(pop)
 #endif /* warning suppress end */
 
-//#ifdef __cplusplus
-//}
-//#endif /* extern "C" end */
+#ifdef __cplusplus
+}
+#endif /* extern "C" end */
 
 #endif /* YYJSON_H */
