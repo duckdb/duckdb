@@ -29,6 +29,9 @@ statement ok
 SET experimental_parallel_csv=true;
 
 statement ok
+PRAGMA verify_parallelism
+
+statement ok
 CREATE TABLE ncvoters2 AS SELECT * FROM ncvoters LIMIT 0
 
 statement ok
