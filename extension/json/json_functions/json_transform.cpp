@@ -241,36 +241,6 @@ static void TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict);
 
-struct JSONKey {
-	const char *ptr;
-	size_t len;
-};
-
-struct JSONKeyHash {
-	inline std::size_t operator()(const JSONKey &k) const {
-		size_t result;
-		if (k.len >= sizeof(size_t)) {
-			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
-		} else {
-			result = 0;
-			duckdb::FastMemcpy(&result, k.ptr, k.len);
-		}
-		return result;
-	}
-};
-
-struct JSONKeyEquality {
-	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
-		if (a.len != b.len) {
-			return false;
-		}
-		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
-	}
-};
-
-template <typename T>
-using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
-
 void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     const bool strict) {
