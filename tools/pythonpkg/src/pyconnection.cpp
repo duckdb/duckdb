@@ -499,17 +499,27 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 	//}
 
 	if (keywords.count("dtype")) {
-		if (!py::isinstance<py::dict>(kwargs["dtype"])) {
-			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary");
+		if (py::isinstance<py::dict>(kwargs["dtype"])) {
+			child_list_t<Value> struct_fields;
+			py::dict dtype_dict = kwargs["dtype"];
+			for (auto &kv : dtype_dict) {
+				struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
+			}
+			auto dtype_struct = Value::STRUCT(move(struct_fields));
+			read_csv.AddNamedParameter("dtypes", move(dtype_struct));
+		} else if (py::isinstance<py::list>(kwargs["dtype"])) {
+			auto dtype_list = TransformPythonValue(py::list(kwargs["dtype"]));
+			D_ASSERT(dtype_list.type().id() == LogicalTypeId::LIST);
+			auto &children = ListValue::GetChildren(dtype_list);
+			for (auto &child : children) {
+				if (child.type().id() != LogicalTypeId::VARCHAR) {
+					throw InvalidInputException("The types provided to 'dtype' have to be strings");
+				}
+			}
+			read_csv.AddNamedParameter("dtypes", move(dtype_list));
+		} else {
+			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
 		}
-
-		child_list_t<Value> struct_fields;
-		py::dict dtype_dict = kwargs["dtype"];
-		for (auto &kv : dtype_dict) {
-			struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
-		}
-		auto dtype_struct = Value::STRUCT(move(struct_fields));
-		read_csv.AddNamedParameter("dtypes", move(dtype_struct));
 	}
 
 	if (keywords.count("na_values")) {

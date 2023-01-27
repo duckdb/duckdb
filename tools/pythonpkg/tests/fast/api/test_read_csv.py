@@ -29,6 +29,17 @@ class TestReadCSV(object):
 		print(res)
 		assert res == ('1', 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
+	def test_dtype_as_list(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv('test/sakila/data/category.csv', dtype=['string'])
+		res = rel.fetchone()
+		print(res)
+		assert res == ('1', 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
+		rel = duckdb_cursor.read_csv('test/sakila/data/category.csv', dtype=['double'])
+		res = rel.fetchone()
+		print(res)
+		assert res == (1.0, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
 	def test_sep(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv('test/sakila/data/category.csv', sep=" ")
 		res = rel.fetchone()
