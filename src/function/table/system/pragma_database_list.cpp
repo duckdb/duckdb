@@ -44,7 +44,8 @@ void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data
 		output.data[1].SetValue(count, Value(data.databases[data.index]->GetName()));
 		Value file_name;
 		if (!data.databases[data.index]->IsSystem()) {
-			file_name = Value(data.databases[data.index]->GetStorageManager().GetDBPath());
+			auto &catalog = data.databases[data.index]->GetCatalog();
+			file_name = catalog.InMemory() ? Value() : Value(catalog.GetDBPath());
 		}
 		output.data[2].SetValue(count, file_name);
 	}

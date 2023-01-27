@@ -227,6 +227,9 @@ public:
 
 	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
 
+	virtual bool InMemory() = 0;
+	virtual string GetDBPath() = 0;
+
 public:
 	template <class T>
 	static T *GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,

@@ -89,6 +89,14 @@ DatabaseSize DCatalog::GetDatabaseSize(ClientContext &context) {
 	return db.GetStorageManager().GetDatabaseSize();
 }
 
+bool DCatalog::InMemory() {
+	return db.GetStorageManager().InMemory();
+}
+
+string DCatalog::GetDBPath() {
+	return db.GetStorageManager().GetDBPath();
+}
+
 void DCatalog::Verify() {
 #ifdef DEBUG
 	schemas->Verify(*this);
