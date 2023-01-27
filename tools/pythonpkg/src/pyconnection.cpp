@@ -26,6 +26,7 @@
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 #include <random>
 
@@ -408,6 +409,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		}
 	}
 
+	// We want to detect if the file can be opened, we set this in the options so we can detect this at bind time
+	// rather than only at execution time
+	if (keywords.count("compression")) {
+		if (!py::isinstance<py::str>(kwargs["compression"])) {
+			throw InvalidInputException("read_csv only accepts 'compression' as a string");
+		}
+		options.SetCompression(py::str(kwargs["compression"]));
+	}
+
 	auto read_csv_p = connection->ReadCSV(name, options);
 	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
 
@@ -415,6 +425,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		// 'options' is only used to initialize the ReadCSV relation
 		// we also need to set this in the arguments passed to the function
 		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.header));
+	}
+
+	if (options.compression != FileCompressionType::AUTO_DETECT) {
+		read_csv.AddNamedParameter("compression", Value(py::str(kwargs["compression"])));
 	}
 
 	bool has_sep = keywords.count("sep");
@@ -463,21 +477,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		if (!py::isinstance<py::str>(kwargs["na_values"])) {
 			throw InvalidInputException("read_csv only accepts 'na_values' as a string");
 		}
-		read_csv.AddNamedParameter("na_str", Value(py::str(kwargs["na_values"])));
+		read_csv.AddNamedParameter("nullstr", Value(py::str(kwargs["na_values"])));
 	}
 
 	if (keywords.count("skiprows")) {
 		if (!py::isinstance<py::int_>(kwargs["skiprows"])) {
 			throw InvalidInputException("read_csv only accepts 'skiprows' as an integer");
 		}
-		read_csv.AddNamedParameter("skip_rows", Value::INTEGER(py::int_(kwargs["skiprows"])));
-	}
-
-	if (keywords.count("compression")) {
-		if (!py::isinstance<py::str>(kwargs["compression"])) {
-			throw InvalidInputException("read_csv only accepts 'compression' as a string");
-		}
-		read_csv.AddNamedParameter("compression", Value(py::str(kwargs["compression"])));
+		read_csv.AddNamedParameter("skip", Value::INTEGER(py::int_(kwargs["skiprows"])));
 	}
 
 	if (keywords.count("quotechar")) {
@@ -498,7 +505,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		if (!py::isinstance<py::str>(kwargs["encoding"])) {
 			throw InvalidInputException("read_csv only accepts 'encoding' as a string");
 		}
-		read_csv.AddNamedParameter("encoding", Value(py::str(kwargs["encoding"])));
+		string encoding = py::str(kwargs["encoding"]);
+		if (encoding != "utf8" && encoding != "utf-8") {
+			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
+		}
 	}
 
 	return make_unique<DuckDBPyRelation>(move(read_csv_p));

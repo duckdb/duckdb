@@ -114,6 +114,10 @@ void BufferedCSVReaderOptions::SetHeader(bool input) {
 	this->has_header = true;
 }
 
+void BufferedCSVReaderOptions::SetCompression(const string &compression) {
+	this->compression = FileCompressionTypeFromString(compression);
+}
+
 void BufferedCSVReaderOptions::SetEscape(const string &input) {
 	this->escape = input;
 	this->has_escape = true;
@@ -254,7 +258,7 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
 	} else if (loption == "compression") {
-		compression = FileCompressionTypeFromString(ParseString(value, loption));
+		SetCompression(ParseString(value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
