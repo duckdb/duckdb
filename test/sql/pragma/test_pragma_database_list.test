@@ -8,16 +8,16 @@ load
 query III
 PRAGMA database_list
 ----
-0	memory	:memory:
+0	memory	NULL
 1	system	NULL
-2	temp	:memory:
+2	temp	NULL
 
 query III
 SELECT * FROM pragma_database_list()
 ----
-0	memory	:memory:
+0	memory	NULL
 1	system	NULL
-2	temp	:memory:
+2	temp	NULL
 
 statement error
 PRAGMA database_list()
