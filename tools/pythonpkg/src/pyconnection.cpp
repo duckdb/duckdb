@@ -24,6 +24,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
@@ -74,6 +75,12 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem",
+	         py::arg("filesystem"))
+	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem",
+	         py::arg("name"))
+	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
+	         "List registered filesystems, including builtin ones")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -158,21 +165,53 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 }
 
-unordered_map<string, Value> TransformPyKeywordArgs(const py::kwargs &kwargs) {
-	unordered_map<string, Value> dict;
-	for (auto &kv : kwargs) {
-		auto key = py::str(kv.first);
-		dict[key] = TransformPythonValue(kv.second);
-	}
-	return dict;
-}
-
-unordered_set<string> SetKeywordArguments(const py::kwargs &kwargs) {
+unordered_set<string> GetKeywordArguments(const py::kwargs &kwargs) {
 	unordered_set<string> keywords;
 	for (auto &kv : kwargs) {
 		keywords.insert(py::str(kv.first));
 	}
 	return keywords;
+}
+
+void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
+	auto &fs = database->GetFileSystem();
+
+	fs.UnregisterSubSystem(name);
+}
+
+void DuckDBPyConnection::RegisterFilesystem(AbstractFileSystem filesystem) {
+	PythonGILWrapper gil_wrapper;
+
+	if (!py::isinstance<AbstractFileSystem>(filesystem)) {
+		throw InvalidInputException("Bad filesystem instance");
+	}
+
+	auto &fs = database->GetFileSystem();
+
+	auto protocol = filesystem.attr("protocol");
+	if (protocol.is_none() || py::str("abstract").equal(protocol)) {
+		throw InvalidInputException("Must provide concrete fsspec implementation");
+	}
+
+	vector<string> protocols;
+	if (py::isinstance<py::str>(protocol)) {
+		protocols.push_back(py::str(protocol));
+	} else {
+		for (const auto &sub_protocol : protocol) {
+			protocols.push_back(py::str(sub_protocol));
+		}
+	}
+
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(std::move(protocols), std::move(filesystem)));
+}
+
+py::list DuckDBPyConnection::ListFilesystems() {
+	auto subsystems = database->GetFileSystem().ListSubSystems();
+	py::list names;
+	for (auto &name : subsystems) {
+		names.append(py::str(name));
+	}
+	return names;
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -380,7 +419,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	auto keywords = SetKeywordArguments(kwargs);
+	auto keywords = GetKeywordArguments(kwargs);
 	BufferedCSVReaderOptions options;
 
 	// First check if the header is explicitly set

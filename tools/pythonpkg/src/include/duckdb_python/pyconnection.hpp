@@ -19,6 +19,7 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
 
 namespace duckdb {
 
@@ -144,6 +145,10 @@ public:
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::object config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
+
+	void RegisterFilesystem(AbstractFileSystem filesystem);
+	void UnregisterFilesystem(const py::str &name);
+	py::list ListFilesystems();
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

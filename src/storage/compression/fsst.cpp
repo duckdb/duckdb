@@ -212,23 +212,26 @@ public:
 		}
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		current_segment = std::move(compressed_segment);
-
-		current_segment->function = function;
-
-		// Reset the buffers and string map
+	void Reset() {
 		index_buffer.clear();
 		current_width = 0;
+		max_compressed_string_length = 0;
+		last_fitting_size = 0;
 
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
+	}
+
+	void CreateEmptySegment(idx_t row_start) {
+		auto &db = checkpointer.GetDatabase();
+		auto &type = checkpointer.GetType();
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		current_segment = std::move(compressed_segment);
+		current_segment->function = function;
+		Reset();
 	}
 
 	void UpdateState(string_t uncompressed_string, unsigned char *compressed_string, size_t compressed_string_len) {
@@ -284,10 +287,14 @@ public:
 		    BitpackingPrimitives::GetRequiredSize(current_string_count + 1, required_minimum_width);
 
 		// TODO switch to a symbol table per RowGroup, saves a bit of space
-		idx_t required_space = sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
-		                       fsst_serialized_symbol_table_size;
+		auto required_size = sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
+		                     fsst_serialized_symbol_table_size;
 
-		return required_space <= Storage::BLOCK_SIZE;
+		if (required_size <= Storage::BLOCK_SIZE) {
+			last_fitting_size = required_size;
+			return true;
+		}
+		return false;
 	}
 
 	void Flush(bool final = false) {
@@ -313,6 +320,10 @@ public:
 		auto total_size = sizeof(fsst_compression_header_t) + compressed_index_buffer_size + current_dictionary.size +
 		                  fsst_serialized_symbol_table_size;
 
+		if (total_size != last_fitting_size) {
+			throw InternalException("FSST string compression failed due to incorrect size calculation");
+		}
+
 		// calculate ptr and offsets
 		auto base_ptr = handle.Ptr();
 		auto header_ptr = (fsst_compression_header_t *)base_ptr;
@@ -333,11 +344,6 @@ public:
 
 		Store<uint32_t>(symbol_table_offset, (data_ptr_t)&header_ptr->fsst_symbol_table_offset);
 		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
-
-		if (symbol_table_offset + fsst_serialized_symbol_table_size >
-		    current_dictionary.end - current_dictionary.size) {
-			throw InternalException("FSST string compression failed due to incorrect size calculation");
-		}
 
 		if (total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
@@ -369,8 +375,9 @@ public:
 	// Buffers and map for current segment
 	std::vector<uint32_t> index_buffer;
 
-	size_t max_compressed_string_length = 0;
-	bitpacking_width_t current_width = 0;
+	size_t max_compressed_string_length;
+	bitpacking_width_t current_width;
+	idx_t last_fitting_size;
 
 	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
