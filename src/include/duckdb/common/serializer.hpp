@@ -111,6 +111,11 @@ public:
 	//! Reads [read_size] bytes into the buffer
 	virtual void ReadData(data_ptr_t buffer, idx_t read_size) = 0;
 
+	//! Gets the context for the deserializer
+	virtual ClientContext &GetContext() {
+		throw InternalException("This deserializer does not have a client-context");
+	};
+
 	template <class T>
 	T Read() {
 		T value;

@@ -756,7 +756,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
-			child_types.push_back(make_pair(left_child_types[i].first, std::move(child_type)));
+			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
 		}
 
 		return LogicalType::STRUCT(std::move(child_types));
@@ -1295,6 +1295,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
 	      dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
 	}
+
 	const EnumDictType &GetEnumDictType() {
 		return dict_type;
 	};
@@ -1338,9 +1339,17 @@ protected:
 		if (dict_type != EnumDictType::VECTOR_DICT) {
 			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
 		}
-		writer.WriteField<uint32_t>(dict_size);
+		// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
+		bool is_catalog_reference = !writer.IsFromCatalog() && catalog_entry;
+		writer.WriteField<bool>(is_catalog_reference);
 		writer.WriteString(enum_name);
-		((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
+		if (writer.IsFromCatalog()) {
+			writer.WriteField<uint32_t>(dict_size);
+			((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
+		} else {
+			writer.WriteString(catalog_entry->catalog->GetName());
+			writer.WriteString(catalog_entry->schema->name);
+		}
 	}
 
 	Vector values_insert_order;
@@ -1374,8 +1383,8 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		}
 	}
 
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(FieldReader &reader, uint32_t size) {
-		auto enum_name = reader.ReadRequired<string>();
+	static shared_ptr<EnumTypeInfoTemplated> Deserialize(FieldReader &reader, uint32_t size, string enum_name) {
+
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.Deserialize(size, reader.GetSource());
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
@@ -1540,20 +1549,33 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		extra_info = UserTypeInfo::Deserialize(reader);
 		break;
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto enum_size = reader.ReadRequired<uint32_t>();
-		auto enum_internal_type = EnumVectorDictType(enum_size);
-		switch (enum_internal_type) {
-		case PhysicalType::UINT8:
-			extra_info = EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+		auto is_catalog_reference = reader.ReadRequired<bool>();
+		auto enum_name = reader.ReadRequired<string>();
+		if (is_catalog_reference) {
+			// this means the enum should already be in the catalog.
+			auto &client_context = reader.GetSource().GetContext();
+			// FIXME have to pass on the catalog name
+			auto catalog_name = reader.ReadRequired<string>();
+			auto schema_name = reader.ReadRequired<string>();
+			auto enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+			extra_info = enum_type.GetAuxInfoShrPtr();
 			break;
-		case PhysicalType::UINT16:
-			extra_info = EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
-			break;
-		case PhysicalType::UINT32:
-			extra_info = EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
-			break;
-		default:
-			throw InternalException("Invalid Physical Type for ENUMs");
+		} else {
+			auto enum_size = reader.ReadRequired<uint32_t>();
+			auto enum_internal_type = EnumVectorDictType(enum_size);
+			switch (enum_internal_type) {
+			case PhysicalType::UINT8:
+				extra_info = EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size, enum_name);
+				break;
+			case PhysicalType::UINT16:
+				extra_info = EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size, enum_name);
+				break;
+			case PhysicalType::UINT32:
+				extra_info = EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size, enum_name);
+				break;
+			default:
+				throw InternalException("Invalid Physical Type for ENUMs");
+			}
 		}
 	} break;
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -1576,8 +1598,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 LogicalType::~LogicalType() {
 }
 
-void LogicalType::Serialize(Serializer &serializer) const {
+void LogicalType::Serialize(Serializer &serializer, bool from_catalog) const {
 	FieldWriter writer(serializer);
+	writer.SetFromCatalog(from_catalog);
 	writer.WriteField<LogicalTypeId>(id_);
 	ExtraTypeInfo::Serialize(type_info_.get(), writer);
 	writer.Finalize();

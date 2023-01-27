@@ -90,7 +90,7 @@ static void test_helper(const V version_compatible_value, const uint64_t sourceV
 	writer.Finalize();
 
 	auto data = serializer.GetData();
-	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+	auto deserializer = BufferentContextDeserializer(*con.context, data.data.get(), data.size);
 	deserializer.SetVersion(deserializer.Read<uint64_t>());
 	INFO("target version: " << deserializer.GetVersion());
 	FieldReader reader(deserializer);

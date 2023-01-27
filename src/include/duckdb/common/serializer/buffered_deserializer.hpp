@@ -34,6 +34,8 @@ public:
 
 public:
 	ClientContext &context;
+
+	ClientContext &GetContext() override;
 };
 
 } // namespace duckdb

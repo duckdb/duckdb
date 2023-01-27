@@ -21,9 +21,10 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 void TypeCatalogEntry::Serialize(Serializer &serializer) {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
+	writer.SetFromCatalog(true);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
-	writer.WriteSerializable(user_type);
+	writer.WriteSerializableType(user_type);
 	writer.Finalize();
 }
 

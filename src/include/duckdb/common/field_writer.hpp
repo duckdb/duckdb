@@ -25,7 +25,7 @@ struct IndexWriteOperation {
 
 class FieldWriter {
 public:
-	DUCKDB_API FieldWriter(Serializer &serializer);
+	DUCKDB_API explicit FieldWriter(Serializer &serializer);
 	DUCKDB_API ~FieldWriter();
 
 public:
@@ -94,6 +94,11 @@ public:
 		element.Serialize(*buffer);
 	}
 
+	void WriteSerializableType(const LogicalType &element) {
+		AddField();
+		element.Serialize(*buffer, from_catalog);
+	}
+
 	template <class T>
 	void WriteSerializableList(const vector<unique_ptr<T>> &elements) {
 		AddField();
@@ -128,6 +133,13 @@ public:
 		return *buffer;
 	}
 
+	void SetFromCatalog(bool from_catalog_p) {
+		from_catalog = from_catalog_p;
+	}
+	bool IsFromCatalog() {
+		return from_catalog;
+	};
+
 private:
 	void AddField() {
 		field_count++;
@@ -145,6 +157,7 @@ private:
 	unique_ptr<BufferedSerializer> buffer;
 	idx_t field_count;
 	bool finalized;
+	bool from_catalog = false;
 };
 
 template <>
@@ -163,6 +176,10 @@ public:
 		return root;
 	}
 
+	ClientContext &GetContext() override {
+		return root.GetContext();
+	}
+
 private:
 	Deserializer &root;
 	idx_t remaining_data;
@@ -177,7 +194,7 @@ struct IndexReadOperation {
 
 class FieldReader {
 public:
-	DUCKDB_API FieldReader(Deserializer &source);
+	DUCKDB_API explicit FieldReader(Deserializer &source);
 	DUCKDB_API ~FieldReader();
 
 public:

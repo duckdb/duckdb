@@ -298,6 +298,11 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+
+	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
+		return type_info_;
+	}
+
 	inline void CopyAuxInfo(const LogicalType& other) {
 		type_info_ = other.type_info_;
 	}
@@ -324,7 +329,7 @@ struct LogicalType {
 	}
 
 	//! Serializes a LogicalType to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API void Serialize(Serializer &serializer, bool from_catalog = false) const;
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
