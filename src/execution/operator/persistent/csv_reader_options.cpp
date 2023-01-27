@@ -270,7 +270,7 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       "\n  header=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       "\n  sample_size=" + std::to_string(sample_chunk_size * sample_chunks) +
-	       "\n  ignore_erros=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
+	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
 }
 
 } // namespace duckdb
