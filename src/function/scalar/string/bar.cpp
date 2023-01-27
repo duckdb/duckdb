@@ -3,30 +3,18 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_operations/quaternary_executor.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/common/unicode_bar.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 
-static string_t BarScalarFunction(double x, double min, double max, double max_width, vector<char> &result) {
-	// U+2588 "█" full
-	constexpr static char FULL_BAR[] = "█";
-	// U+258F "▏" one eighth
-	// U+258E "▎" one quarter
-	// U+258D "▍" three eighths
-	// U+258C "▌" half
-	// U+258B "▋" five eighths
-	// U+258A "▊" three quarters
-	// U+2589 "▉" seven eighths
-	// 7 elements: 1/8, 2/8, 3/8, 4/8, 5/8, 6/8, 7/8
-	constexpr static char FRACTIONAL_BARS[] = "▏▎▍▌▋▊▉";
-	constexpr static idx_t GRADES_IN_FULL_BAR = 8;
-	static const idx_t UNICODE_BAR_CHAR_SIZE = strlen("█");
+static string_t BarScalarFunction(double x, double min, double max, int32_t max_width, vector<char> &result) {
+	const char *FULL_BLOCK = UnicodeBar::FullBlock();
+	const char *const *PARTIAL_BLOCKS = UnicodeBar::PartialBlocks();
+	const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
+	static const idx_t UNICODE_BLOCK_CHAR_SIZE = strlen(FULL_BLOCK);
 
-	if (!Value::IsFinite(max_width)) {
-		throw ValueOutOfRangeException("Max bar width must not be NaN or infinity");
-	}
 	if (max_width < 1) {
 		throw ValueOutOfRangeException("Max bar width must be >= 1");
 	}
@@ -50,17 +38,16 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 
 	result.clear();
 
-	int64_t width_as_int = static_cast<int64_t>(width * GRADES_IN_FULL_BAR);
-	idx_t full_bar_width = (width_as_int / GRADES_IN_FULL_BAR);
-	for (idx_t i = 0; i < full_bar_width; i++) {
-		result.insert(result.end(), FULL_BAR, FULL_BAR + UNICODE_BAR_CHAR_SIZE);
+	int32_t width_as_int = static_cast<int32_t>(width * PARTIAL_BLOCKS_COUNT);
+	idx_t full_blocks_count = (width_as_int / PARTIAL_BLOCKS_COUNT);
+	for (idx_t i = 0; i < full_blocks_count; i++) {
+		result.insert(result.end(), FULL_BLOCK, FULL_BLOCK + UNICODE_BLOCK_CHAR_SIZE);
 	}
 
-	idx_t remaining = width_as_int % GRADES_IN_FULL_BAR;
+	idx_t remaining = width_as_int % PARTIAL_BLOCKS_COUNT;
 
 	if (remaining) {
-		result.insert(result.end(), FRACTIONAL_BARS + (remaining - 1) * UNICODE_BAR_CHAR_SIZE,
-		              FRACTIONAL_BARS + remaining * UNICODE_BAR_CHAR_SIZE);
+		result.insert(result.end(), PARTIAL_BLOCKS[remaining], PARTIAL_BLOCKS[remaining] + UNICODE_BLOCK_CHAR_SIZE);
 	}
 
 	return string_t(result.data(), result.size());
@@ -74,24 +61,29 @@ static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	vector<char> buffer;
 
 	if (args.ColumnCount() == 3) {
-		TernaryExecutor::Execute<double, double, double, string_t>(
-		    x_arg, min_arg, max_arg, result, args.size(), [&](double x, double min, double max) {
-			    return StringVector::AddString(result, BarScalarFunction(x, min, max, 80, buffer));
+		GenericExecutor::ExecuteTernary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
+		                                PrimitiveType<string_t>>(
+		    x_arg, min_arg, max_arg, result, args.size(),
+		    [&](PrimitiveType<double> x, PrimitiveType<double> min, PrimitiveType<double> max) {
+			    return StringVector::AddString(result, BarScalarFunction(x.val, min.val, max.val, 80, buffer));
 		    });
 	} else {
 		auto &width_arg = args.data[3];
-		QuaternaryExecutor::Execute<double, double, double, double, string_t>(
+		GenericExecutor::ExecuteQuaternary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
+		                                   PrimitiveType<int32_t>, PrimitiveType<string_t>>(
 		    x_arg, min_arg, max_arg, width_arg, result, args.size(),
-		    [&](double x, double min, double max, double width) {
-			    return StringVector::AddString(result, BarScalarFunction(x, min, max, width, buffer));
+		    [&](PrimitiveType<double> x, PrimitiveType<double> min, PrimitiveType<double> max,
+		        PrimitiveType<int32_t> width) {
+			    return StringVector::AddString(result, BarScalarFunction(x.val, min.val, max.val, width.val, buffer));
 		    });
 	}
 }
 
 void BarFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet bar("bar");
-	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
-	                               LogicalType::VARCHAR, BarFunction));
+	bar.AddFunction(
+	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::INTEGER},
+	                   LogicalType::VARCHAR, BarFunction));
 	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
 	                               LogicalType::VARCHAR, BarFunction));
 	set.AddFunction(bar);
