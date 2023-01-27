@@ -20,6 +20,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
