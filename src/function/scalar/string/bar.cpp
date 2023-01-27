@@ -9,12 +9,15 @@
 
 namespace duckdb {
 
-static string_t BarScalarFunction(double x, double min, double max, int32_t max_width, vector<char> &result) {
-	const char *FULL_BLOCK = UnicodeBar::FullBlock();
-	const char *const *PARTIAL_BLOCKS = UnicodeBar::PartialBlocks();
-	const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
+static string_t BarScalarFunction(double x, double min, double max, double max_width, vector<char> &result) {
+	static const char *FULL_BLOCK = UnicodeBar::FullBlock();
+	static const char *const *PARTIAL_BLOCKS = UnicodeBar::PartialBlocks();
+	static const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
 	static const idx_t UNICODE_BLOCK_CHAR_SIZE = strlen(FULL_BLOCK);
 
+	if (!Value::IsFinite(max_width)) {
+		throw ValueOutOfRangeException("Max bar width must not be NaN or infinity");
+	}
 	if (max_width < 1) {
 		throw ValueOutOfRangeException("Max bar width must be >= 1");
 	}
@@ -70,10 +73,10 @@ static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	} else {
 		auto &width_arg = args.data[3];
 		GenericExecutor::ExecuteQuaternary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
-		                                   PrimitiveType<int32_t>, PrimitiveType<string_t>>(
+		                                   PrimitiveType<double>, PrimitiveType<string_t>>(
 		    x_arg, min_arg, max_arg, width_arg, result, args.size(),
 		    [&](PrimitiveType<double> x, PrimitiveType<double> min, PrimitiveType<double> max,
-		        PrimitiveType<int32_t> width) {
+		        PrimitiveType<double> width) {
 			    return StringVector::AddString(result, BarScalarFunction(x.val, min.val, max.val, width.val, buffer));
 		    });
 	}
@@ -81,9 +84,8 @@ static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 void BarFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet bar("bar");
-	bar.AddFunction(
-	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::INTEGER},
-	                   LogicalType::VARCHAR, BarFunction));
+	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
+	                               LogicalType::VARCHAR, BarFunction));
 	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
 	                               LogicalType::VARCHAR, BarFunction));
 	set.AddFunction(bar);
