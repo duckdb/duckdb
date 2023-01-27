@@ -20,6 +20,7 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
+#include "duckdb/main/relation/window_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 
@@ -173,6 +174,15 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 	auto res = std::make_shared<OrderRelation>(rel->rel, std::move(res_orders));
 	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t aggregation, list partitions, list bounds,
+                                       std::string join) {
+
+
+	auto res = std::make_shared<WindowRelation>(aggregation->rel, partitions, bounds);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+
 }
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
