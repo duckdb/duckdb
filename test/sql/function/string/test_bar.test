@@ -127,3 +127,56 @@ select bar(10, 10, 10, 10)
 
 statement error
 select bar(1, 0, 10, 0.99)
+
+query I
+select bar(1, 0, 1, 1.125)
+----
+█▏
+
+query I
+select bar(1, 0, 1, 1.25)
+----
+█▎
+
+query I
+select bar(1, 0, 1, 1.375)
+----
+█▍
+
+query I
+select bar(1, 0, 1, 1.5)
+----
+█▌
+
+query I
+select bar(1, 0, 1, 1.625)
+----
+█▋
+
+query I
+select bar(1, 0, 1, 1.75)
+----
+█▊
+
+query I
+select bar(1, 0, 1, 1.875)
+----
+█▉
+
+query I
+select bar(1, 0, 1, 2)
+----
+██
+
+query I
+select bar(1, 0, 1, width) from (values (1), (1.125), (1.375), (1.25), (1.5), (1.625), (1.75), (1.875), (2)) as _(width);
+----
+█
+█▏
+█▎
+█▍
+█▌
+█▋
+█▊
+█▉
+██
