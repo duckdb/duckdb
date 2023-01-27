@@ -266,3 +266,9 @@ test_that("Symmetric difference returns the symmetric difference", {
     expected_result <- data.frame(a=c(2, 6), b=c(4, 8))
     expect_equal(rel_df, expected_result)
 })
+
+test_that("Window function works", {
+    test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
+    rel_df <- duckdb:::rel_to_altrep(test_df_a)
+    #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
+})
