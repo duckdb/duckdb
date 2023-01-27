@@ -93,6 +93,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
+	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
