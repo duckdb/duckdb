@@ -226,6 +226,14 @@ py::object PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }
 
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn,
+                                                          const py::kwargs &kwargs) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ReadCSV(filename, kwargs);
+}
+
 py::list PyConnectionWrapper::FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();

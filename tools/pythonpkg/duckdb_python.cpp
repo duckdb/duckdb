@@ -103,6 +103,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("rollback", &PyConnectionWrapper::Rollback, "Roll back changes performed within a transaction",
 	         py::arg("connection") = py::none())
+	    .def("read_csv", &PyConnectionWrapper::ReadCSV, "Read the CSV file identifier by 'name'", py::arg("name"),
+	         py::arg("connection") = py::none(), py::kw_only {})
 	    .def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
 	         py::arg("table_name"), py::arg("df"), py::arg("connection") = py::none())
 	    .def("register", &PyConnectionWrapper::RegisterPythonObject,

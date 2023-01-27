@@ -88,6 +88,9 @@ public:
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static unique_ptr<DuckDBPyRelation> ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn,
+	                                            const py::kwargs &kwargs);
+
 	static py::list FetchAll(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::dict FetchNumpy(shared_ptr<DuckDBPyConnection> conn = nullptr);
