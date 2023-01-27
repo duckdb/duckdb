@@ -31,6 +31,11 @@ PRAGMA table_info('new_database.new_schema.integers');
 ----
 0	i	INTEGER	0	NULL	0
 
+query I
+SELECT current_database()
+----
+memory
+
 statement ok
 USE "new_database.new_schema"
 
@@ -38,3 +43,8 @@ query ITTTTT nosort table_info
 PRAGMA table_info('integers');
 ----
 0	i	INTEGER	0	NULL	0
+
+query I
+SELECT current_database()
+----
+new_database

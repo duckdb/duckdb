@@ -22,6 +22,12 @@ static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vect
 	result.Reference(val);
 }
 
+// current_database
+static void CurrentDatabaseFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	Value val(DatabaseManager::GetDefaultDatabase(state.GetContext()));
+	result.Reference(val);
+}
+
 // current_schemas
 static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	if (!input.AllConstant()) {
@@ -65,6 +71,7 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction(current_query);
 	set.AddFunction(ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction));
+	set.AddFunction(ScalarFunction("current_database", {}, LogicalType::VARCHAR, CurrentDatabaseFunction));
 	set.AddFunction(
 	    ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction));
 	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent));
