@@ -139,3 +139,16 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned7/part_col=
 1	1	5
 1	3	7
 1	0	9
+
+# Don't care about capitalization
+statement ok
+COPY test TO '__TEST_DIR__/partitioned8' (FORMAT PARQUET, PARTITION_BY pArt_cOl);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned8/part_col=0/*.parquet' ORDER BY value2_cOl;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8

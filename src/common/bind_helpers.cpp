@@ -3,7 +3,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, co
 		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
 	}
 	// list of options: parse the list
-	unordered_map<string, bool> option_map;
+	case_insensitive_map_t<bool> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
 		option_map[set[i].ToString()] = false;
 	}
