@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static string_t BarScalarFunction(double x, double min, double max, double max_width, string result) {
+static string_t BarScalarFunction(double x, double min, double max, double max_width, string &result) {
 	static const char *FULL_BLOCK = UnicodeBar::FullBlock();
 	static const char *const *PARTIAL_BLOCKS = UnicodeBar::PartialBlocks();
 	static const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
