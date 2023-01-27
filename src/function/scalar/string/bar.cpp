@@ -9,11 +9,10 @@
 
 namespace duckdb {
 
-static string_t BarScalarFunction(double x, double min, double max, double max_width, vector<char> &result) {
+static string_t BarScalarFunction(double x, double min, double max, double max_width, string result) {
 	static const char *FULL_BLOCK = UnicodeBar::FullBlock();
 	static const char *const *PARTIAL_BLOCKS = UnicodeBar::PartialBlocks();
 	static const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
-	static const idx_t UNICODE_BLOCK_CHAR_SIZE = strlen(FULL_BLOCK);
 
 	if (!Value::IsFinite(max_width)) {
 		throw ValueOutOfRangeException("Max bar width must not be NaN or infinity");
@@ -44,16 +43,16 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 	int32_t width_as_int = static_cast<int32_t>(width * PARTIAL_BLOCKS_COUNT);
 	idx_t full_blocks_count = (width_as_int / PARTIAL_BLOCKS_COUNT);
 	for (idx_t i = 0; i < full_blocks_count; i++) {
-		result.insert(result.end(), FULL_BLOCK, FULL_BLOCK + UNICODE_BLOCK_CHAR_SIZE);
+		result += FULL_BLOCK;
 	}
 
 	idx_t remaining = width_as_int % PARTIAL_BLOCKS_COUNT;
 
 	if (remaining) {
-		result.insert(result.end(), PARTIAL_BLOCKS[remaining], PARTIAL_BLOCKS[remaining] + UNICODE_BLOCK_CHAR_SIZE);
+		result += PARTIAL_BLOCKS[remaining];
 	}
 
-	return string_t(result.data(), result.size());
+	return string_t(result);
 }
 
 static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -61,7 +60,7 @@ static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &x_arg = args.data[0];
 	auto &min_arg = args.data[1];
 	auto &max_arg = args.data[2];
-	vector<char> buffer;
+	string buffer;
 
 	if (args.ColumnCount() == 3) {
 		GenericExecutor::ExecuteTernary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
