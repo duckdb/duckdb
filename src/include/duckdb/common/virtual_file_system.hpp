@@ -95,8 +95,26 @@ public:
 		sub_systems.push_back(std::move(fs));
 	}
 
+	void UnregisterSubSystem(const string &name) override {
+		for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
+			if (sub_system->get()->GetName() == name) {
+				sub_systems.erase(sub_system);
+				return;
+			}
+		}
+		throw InvalidInputException("Could not find filesystem with name %s", name);
+	}
+
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
 		compressed_fs[compression_type] = std::move(fs);
+	}
+
+	vector<string> ListSubSystems() override {
+		vector<string> names(sub_systems.size());
+		for (idx_t i = 0; i < sub_systems.size(); i++) {
+			names[i] = sub_systems[i]->GetName();
+		}
+		return names;
 	}
 
 	std::string GetName() const override {

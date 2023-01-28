@@ -18,6 +18,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
 
 namespace duckdb {
 
@@ -142,6 +143,10 @@ public:
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 
+	void RegisterFilesystem(AbstractFileSystem filesystem);
+	void UnregisterFilesystem(const py::str &name);
+	py::list ListFilesystems();
+
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 	//! Caches and provides an interface to get frequently used modules+subtypes
@@ -150,9 +155,10 @@ public:
 	static bool IsPandasDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
+	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
+
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
-	unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

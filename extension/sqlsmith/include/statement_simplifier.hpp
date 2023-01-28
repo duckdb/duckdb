@@ -24,6 +24,7 @@ class QueryNode;
 class ParsedExpression;
 class ResultModifier;
 class OrderModifier;
+class UpdateSetInfo;
 
 class StatementSimplifier {
 public:
@@ -69,6 +70,8 @@ private:
 
 	void SimplifyExpression(unique_ptr<ParsedExpression> &expr);
 	void Simplify(CommonTableExpressionMap &cte_map);
+
+	void Simplify(UpdateSetInfo &info);
 };
 
 } // namespace duckdb

@@ -40,7 +40,7 @@ SELECT list_distinct([1, 2], 2)
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT list_distinct(NULL::${type})
@@ -217,18 +217,6 @@ SELECT list_distinct([NULL::${type}])
 []
 
 endloop
-
-# JSON
-
-query I
-SELECT list_distinct(['{a: 1}'::JSON, '{a: 1}'::JSON])
-----
-[{a: 1}]
-
-query I
-SELECT list_distinct([NULL::JSON])
-----
-[]
 
 # enums
 statement ok

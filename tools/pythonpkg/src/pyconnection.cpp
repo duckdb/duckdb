@@ -12,6 +12,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
@@ -21,6 +23,8 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
+#include "duckdb_python/pyfilesystem.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <random>
 
@@ -68,6 +72,12 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem",
+	         py::arg("filesystem"))
+	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem",
+	         py::arg("name"))
+	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
+	         "List registered filesystems, including builtin ones")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -148,6 +158,47 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+}
+
+void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
+	auto &fs = database->GetFileSystem();
+
+	fs.UnregisterSubSystem(name);
+}
+
+void DuckDBPyConnection::RegisterFilesystem(AbstractFileSystem filesystem) {
+	PythonGILWrapper gil_wrapper;
+
+	if (!py::isinstance<AbstractFileSystem>(filesystem)) {
+		throw InvalidInputException("Bad filesystem instance");
+	}
+
+	auto &fs = database->GetFileSystem();
+
+	auto protocol = filesystem.attr("protocol");
+	if (protocol.is_none() || py::str("abstract").equal(protocol)) {
+		throw InvalidInputException("Must provide concrete fsspec implementation");
+	}
+
+	vector<string> protocols;
+	if (py::isinstance<py::str>(protocol)) {
+		protocols.push_back(py::str(protocol));
+	} else {
+		for (const auto &sub_protocol : protocol) {
+			protocols.push_back(py::str(sub_protocol));
+		}
+	}
+
+	fs.RegisterSubSystem(make_unique<PythonFilesystem>(std::move(protocols), std::move(filesystem)));
+}
+
+py::list DuckDBPyConnection::ListFilesystems() {
+	auto subsystems = database->GetFileSystem().ListSubSystems();
+	py::list names;
+	for (auto &name : subsystems) {
+		names.append(py::str(name));
+	}
+	return names;
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -696,8 +747,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
-static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
-                                                   py::object &current_frame) {
+static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                           py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -725,6 +776,14 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
 		table_function->external_dependency =
 		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+	} else if (DuckDBPyRelation::IsRelation(entry)) {
+		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
+		// create a subquery from the underlying relation object
+		auto select = make_unique<SelectStatement>();
+		select->node = pyrel->rel->GetQueryNode();
+
+		auto subquery = make_unique<SubqueryRef>(std::move(select));
+		return std::move(subquery);
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
@@ -734,15 +793,15 @@ static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &tabl
 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, or pyarrow Table, Dataset, "
+		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
 		    "RecordBatchReader, or Scanner",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
-	return table_function;
+	return std::move(table_function);
 }
 
-static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
-                                                    ReplacementScanData *data) {
+static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                            ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
@@ -810,19 +869,9 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 		return;
 	}
 
-	// Get the options we want to set/override
-	auto progress_bar_time_opt = DBConfig::GetOptionByName("progress_bar_time");
-	D_ASSERT(progress_bar_time_opt);
-	auto enable_progress_bar_opt = DBConfig::GetOptionByName("enable_progress_bar");
-	D_ASSERT(enable_progress_bar_opt);
-	auto progress_bar_print_opt = DBConfig::GetOptionByName("enable_progress_bar_print");
-	D_ASSERT(progress_bar_print_opt);
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_progress_bar = true;
 
-	// FIXME: currently we have no way of knowing this was default or explicitly set by the user
-	// FIXME: nasty hardcoded default value check
-	if (progress_bar_time_opt->get_setting(context) == 2000) {
-		progress_bar_time_opt->set_local(context, Value(0));
-	}
 	if (DuckDBPyConnection::IsJupyter()) {
 		// Set the function used to create the display for the progress bar
 		context.config.display_create_func = JupyterProgressBarDisplay::Create;
