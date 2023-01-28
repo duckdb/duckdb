@@ -16,6 +16,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/magic_bytes.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -143,6 +144,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.database_path = database_path;
 	} else {
 		config_ptr->options.database_path.clear();
+	}
+
+	auto file_type = MagicBytes::CheckMagicBytes(config_ptr->file_system.get(), config_ptr->options.database_path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		config_ptr->options.database_path = "sqlite:" + config_ptr->options.database_path;
 	}
 
 	ReplacementOpen *replacement_open = nullptr;

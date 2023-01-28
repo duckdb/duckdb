@@ -17,6 +17,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
 class DatabaseInstance;
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
