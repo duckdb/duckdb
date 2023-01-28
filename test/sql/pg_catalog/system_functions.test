@@ -10,12 +10,12 @@ duckdb
 query I
 SELECT CURRENT_CATALOG
 ----
-duckdb
+memory
 
 query I
 SELECT CURRENT_DATABASE()
 ----
-duckdb
+memory
 
 query I
 SELECT USER
