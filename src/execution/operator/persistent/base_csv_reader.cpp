@@ -551,4 +551,32 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 	parse_chunk.Reset();
 	return true;
 }
+
+void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
+	if ((mode == ParserMode::SNIFFING_DIALECT && !options.has_newline) ||
+	    options.new_line == NewLineIdentifier::NOT_SET) {
+		if (options.new_line == NewLineIdentifier::MIX) {
+			return;
+		}
+		NewLineIdentifier this_line_identifier;
+		if (carry) {
+			if (carry_followed_by_nl) {
+				this_line_identifier = NewLineIdentifier::CARRY_ON;
+			} else {
+				this_line_identifier = NewLineIdentifier::SINGLE;
+			}
+		} else {
+			this_line_identifier = NewLineIdentifier::SINGLE;
+		}
+		if (options.new_line == NewLineIdentifier::NOT_SET) {
+			options.new_line = this_line_identifier;
+			return;
+		}
+		if (options.new_line != this_line_identifier) {
+			options.new_line = NewLineIdentifier::MIX;
+			return;
+		}
+		options.new_line = this_line_identifier;
+	}
+}
 } // namespace duckdb
