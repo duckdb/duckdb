@@ -1,29 +1,29 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/alter_function_info.hpp
+// duckdb/parser/parsed_data/alter_scalar_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/alter_info.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Alter Table
+// Alter Scalar Function
 //===--------------------------------------------------------------------===//
-enum class AlterFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
+enum class AlterScalarFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
 
-struct AlterFunctionInfo : public AlterInfo {
-	AlterFunctionInfo(AlterFunctionType type, AlterEntryData data);
-	virtual ~AlterFunctionInfo() override;
+struct AlterScalarFunctionInfo : public AlterInfo {
+	AlterScalarFunctionInfo(AlterScalarFunctionType type, AlterEntryData data);
+	virtual ~AlterScalarFunctionInfo() override;
 
-	AlterFunctionType alter_function_type;
+	AlterScalarFunctionType alter_scalar_function_type;
 
 public:
 	CatalogType GetCatalogType() const override;
@@ -32,11 +32,11 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// AddFunctionOverloadInfo
+// AddScalarFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
-struct AddFunctionOverloadInfo : public AlterFunctionInfo {
-	AddFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads);
-	~AddFunctionOverloadInfo() override;
+struct AddScalarFunctionOverloadInfo : public AlterScalarFunctionInfo {
+	AddScalarFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads);
+	~AddScalarFunctionOverloadInfo() override;
 
 	ScalarFunctionSet new_overloads;
 
