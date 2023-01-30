@@ -117,6 +117,17 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetNewline(const string &input) {
+	if (input == "\\n" || input == "\\r") {
+		new_line = NewLineIdentifier::SINGLE;
+	} else if (input == "\\r\\n") {
+		new_line = NewLineIdentifier::CARRY_ON;
+	} else {
+		throw InvalidInputException("This is not accepted as a newline: " + input);
+	}
+	has_newline = true;
+}
+
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
@@ -233,6 +244,8 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	} else if (loption == "quote") {
 		quote = ParseString(value, loption);
 		has_quote = true;
+	} else if (loption == "new_line") {
+		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;
