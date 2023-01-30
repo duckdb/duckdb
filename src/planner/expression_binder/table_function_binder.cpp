@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 
