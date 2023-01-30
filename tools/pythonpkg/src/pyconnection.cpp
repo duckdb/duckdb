@@ -430,21 +430,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		bool header_as_int = py::isinstance<py::int_>(header_arg);
 		bool header_as_bool = py::isinstance<py::bool_>(header_arg);
 
-		if (!header_as_int && !header_as_bool) {
-			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
-		}
-
 		if (header_as_bool) {
-			if (py::str(header_arg).is(py::str(Py_True))) {
-				options.SetHeader(true);
-			} else {
-				options.SetHeader(false);
-			}
+			options.SetHeader(py::bool_(header_arg));
 		} else if (header_as_int) {
 			if ((int)py::int_(header_arg) != 0) {
 				throw InvalidInputException("read_csv only accepts 0 if 'header' is given as an integer");
 			}
 			options.SetHeader(true);
+		} else {
+			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
 		}
 	}
 

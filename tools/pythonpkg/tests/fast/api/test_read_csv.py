@@ -65,9 +65,6 @@ class TestReadCSV(object):
 	# uncomment after issue #6011 is fixed
 	#def test_header_false(self, duckdb_cursor):
 	#	rel = duckdb_cursor.read_csv('test/sakila/data/category.csv', header=False)
-	#	res = rel.fetchone()
-	#	print(res)
-	#	assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
 	def test_na_values(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv('test/sakila/data/category.csv', na_values='Action')
