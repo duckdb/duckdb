@@ -555,10 +555,10 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
-	auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 		metadata = LoadMetadata(allocator, *file_handle, *file_opener);
 	} else {
+		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 			metadata = LoadMetadata(allocator, *file_handle, *file_opener);
