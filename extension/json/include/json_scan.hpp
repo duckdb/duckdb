@@ -15,8 +15,6 @@
 
 namespace duckdb {
 
-struct JSONScanLocalState;
-
 enum class JSONScanType : uint8_t {
 	INVALID = 0,
 	//! Read JSON straight to columnar data
@@ -70,11 +68,9 @@ public:
 	bool auto_detect;
 };
 
-struct JSONScanGlobalState : public GlobalTableFunctionState {
+struct JSONScanGlobalState {
 public:
 	JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data);
-	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
-	idx_t MaxThreads() const override;
 
 public:
 	//! Bound data
@@ -116,13 +112,12 @@ public:
 	}
 };
 
-struct JSONScanLocalState : public LocalTableFunctionState {
+struct JSONScanLocalState {
 public:
 	JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate);
-	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                GlobalTableFunctionState *global_state);
+
+public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
-	idx_t GetBatchIndex() const;
 	yyjson_alc *GetAllocator();
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
@@ -169,11 +164,32 @@ private:
 	void ReadNewlineDelimited(idx_t &count);
 };
 
+struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
+public:
+	JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input);
+	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
+	idx_t MaxThreads() const override;
+
+public:
+	JSONScanGlobalState state;
+};
+
+struct JSONLocalTableFunctionState : public LocalTableFunctionState {
+public:
+	JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate);
+	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
+	                                                GlobalTableFunctionState *global_state);
+	idx_t GetBatchIndex() const;
+
+public:
+	JSONScanLocalState state;
+};
+
 struct JSONScan {
 public:
 	static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                               const GlobalTableFunctionState *global_state) {
-		auto &gstate = (JSONScanGlobalState &)*global_state;
+		auto &gstate = ((JSONGlobalTableFunctionState &)*global_state).state;
 		double progress = 0;
 		for (auto &reader : gstate.json_readers) {
 			progress += reader->GetProgress();
@@ -183,7 +199,7 @@ public:
 
 	static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-		auto &lstate = (JSONScanLocalState &)*local_state;
+		auto &lstate = (JSONLocalTableFunctionState &)*local_state;
 		return lstate.GetBatchIndex();
 	}
 

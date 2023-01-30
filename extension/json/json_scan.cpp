@@ -113,28 +113,6 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &b
 	}
 }
 
-unique_ptr<GlobalTableFunctionState> JSONScanGlobalState::Init(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (JSONScanData &)*input.bind_data;
-
-	// Check if we need to do projection pushdown
-	if (bind_data.type == JSONScanType::READ_JSON && input.column_ids.size() != bind_data.names.size()) {
-		D_ASSERT(input.column_ids.size() < bind_data.names.size()); // Can't project to have more columns
-		vector<string> names;
-		names.reserve(input.column_ids.size());
-		for (const auto &id : input.column_ids) {
-			names.push_back(std::move(bind_data.names[id]));
-		}
-		bind_data.names = std::move(names);
-		bind_data.transform_options.error_unknown_key = false;
-	}
-
-	return make_unique<JSONScanGlobalState>(context, bind_data);
-}
-
-idx_t JSONScanGlobalState::MaxThreads() const {
-	return system_threads;
-}
-
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
       json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
@@ -148,10 +126,46 @@ JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalSta
 	buffer_copy_ptr = (const char *)current_buffer_copy.get();
 }
 
-unique_ptr<LocalTableFunctionState> JSONScanLocalState::Init(ExecutionContext &context, TableFunctionInitInput &input,
-                                                             GlobalTableFunctionState *global_state) {
-	auto &gstate = (JSONScanGlobalState &)*global_state;
-	return make_unique<JSONScanLocalState>(context.client, gstate);
+JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
+    : state(context, (JSONScanData &)*input.bind_data) {
+}
+
+unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientContext &context,
+                                                                        TableFunctionInitInput &input) {
+	auto &bind_data = (JSONScanData &)*input.bind_data;
+	auto result = make_unique<JSONGlobalTableFunctionState>(context, input);
+
+	// Check if we need to do projection pushdown
+	if (bind_data.type == JSONScanType::READ_JSON && input.column_ids.size() != bind_data.names.size()) {
+		D_ASSERT(input.column_ids.size() < bind_data.names.size()); // Can't project to have more columns
+		vector<string> names;
+		names.reserve(input.column_ids.size());
+		for (const auto &id : input.column_ids) {
+			names.push_back(std::move(bind_data.names[id]));
+		}
+		bind_data.names = std::move(names);
+		bind_data.transform_options.error_unknown_key = false;
+	}
+	return result;
+}
+
+idx_t JSONGlobalTableFunctionState::MaxThreads() const {
+	return state.system_threads;
+}
+
+JSONLocalTableFunctionState::JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate)
+    : state(context, gstate) {
+}
+
+unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionContext &context,
+                                                                      TableFunctionInitInput &input,
+                                                                      GlobalTableFunctionState *global_state) {
+	auto &gstate = (JSONGlobalTableFunctionState &)*global_state;
+	return make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+}
+
+idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
+	return state.batch_index;
 }
 
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, idx_t &buffer_size) {
@@ -568,10 +582,6 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 		buffer_offset += line_size;
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 	}
-}
-
-idx_t JSONScanLocalState::GetBatchIndex() const {
-	return batch_index;
 }
 
 yyjson_alc *JSONScanLocalState::GetAllocator() {

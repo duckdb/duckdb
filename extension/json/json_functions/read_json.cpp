@@ -38,7 +38,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		} else if (loption == "sample_size") {
 			auto arg = BigIntValue::Get(kv.second);
 			if (arg == -1) {
-				bind_data.sample_size = std::numeric_limits<idx_t>::max();
+				bind_data.sample_size = NumericLimits<idx_t>::Maximum();
 			} else if (arg > 0) {
 				bind_data.sample_size = arg;
 			} else {
@@ -67,9 +67,14 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	return result;
 }
 
+void AutoDetect(ClientContext &context, JSONScanData &bind_data) {
+	//	BufferedJSONReader reader(context, bind_data.options, 0, bind_data.file_paths[0]);
+	//	reader.OpenJSONFile();
+}
+
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &gstate = (JSONScanGlobalState &)*data_p.global_state;
-	auto &lstate = (JSONScanLocalState &)*data_p.local_state;
+	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
+	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
 	D_ASSERT(output.ColumnCount() == gstate.bind_data.names.size());
 
 	// Fetch next lines
@@ -90,8 +95,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 
 TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONFunction, ReadJSONBind, JSONScanGlobalState::Init,
-	                             JSONScanLocalState::Init);
+	TableFunction table_function({parameter}, ReadJSONFunction, ReadJSONBind, JSONGlobalTableFunctionState::Init,
+	                             JSONLocalTableFunctionState::Init);
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;

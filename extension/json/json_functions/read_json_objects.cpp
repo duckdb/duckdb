@@ -14,8 +14,8 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	D_ASSERT(output.ColumnCount() == 1);
 	D_ASSERT(JSONCommon::LogicalTypeIsJSON(output.data[0].GetType()));
-	auto &gstate = (JSONScanGlobalState &)*data_p.global_state;
-	auto &lstate = (JSONScanLocalState &)*data_p.local_state;
+	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
+	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
@@ -38,8 +38,8 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind, JSONScanGlobalState::Init,
-	                             JSONScanLocalState::Init);
+	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind,
+	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = std::move(function_info);
 
