@@ -1,9 +1,8 @@
 include_directories(../../../third_party/httplib/)
 
 # To link out-of-tree extensions into DuckDB and auto-load them on startup, we
-# do some code generation here - extension_oote_headers.hpp    contains the
-# includes of the OOTE header - extension_oote_loader.hpp     contains the call
-# to ExtensionClass::Load() for loading on startup
+# do some code generation here: extension_oote_headers.hpp contains the includes of the OOTE header.
+# extension_oote_loader.hpp contains the call to ExtensionClass::Load() for loading on startup
 
 # extension_oote_headers.hpp
 configure_file(extension_oote_headers.hpp.in
