@@ -151,7 +151,7 @@ void Leaf::Remove(ART &art, row_t row_id) {
 		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.inlined = remaining_row_id;
 		D_ASSERT(art.memory_size >= sizeof(row_t));
-		art.memory_size -= sizeof(row_t);
+		art.memory_size -= 2 * sizeof(row_t);
 		return;
 	}
 
