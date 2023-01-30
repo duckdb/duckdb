@@ -133,8 +133,42 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identified by 'name'", py::arg("name"),
-	         py::kw_only {})
+	    .def("read_csv", &DuckDBPyConnection::ReadCSV, R"END_OF_COMMENT(
+                Read a CSV file
+                
+                :param name:
+                    The name used to identify the CSV file
+                :type name: ``str``
+                :param \**kwargs:
+                    See below
+                
+                :Keyword Arguments:
+                    * *header* (``bool``) --
+                        Whether or not the CSV file contains a header
+                    * *header* (``int``) --
+                        The line at which the header is located (only 0 is supported)
+                    * *compression* (``str``) --
+                        The type of compression that the file is compressed with
+                    * *sep* (``str``) --
+                        The character(s) used to separate the contents of a row
+                    * *delimiter* (``str``) --
+                        The character(s) used to separate the contents of a row
+                    * *dtype* (``dict[str, str])``) --
+                        A mapping of column name to type
+                    * *dtype* (``list[str])``) --
+                        A list containing types, applied from left to right to the columns
+                    * *na_values* (``str``) --
+                        The character(s) used to indicate an entry being NULL
+                    * *skiprows* (``int``) --
+                        The amount of rows to skip (not including the header)
+                    * *quotechar* (``str``) --
+                        The character(s) used to indicate the start and end of a quote
+                    * *escapechar* (``str``) --
+                        The character(s) used to escape a quote character
+                    * *encoding* (``str``) --
+                        The type of encoding that the CSV file is encoded with (only utf-8 is supported)
+			)END_OF_COMMENT",
+	         py::arg("name"), py::kw_only {})
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
