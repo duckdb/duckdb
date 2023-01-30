@@ -610,9 +610,10 @@ function(add_extension_definitions)
 
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
-    if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_INCLUDE_PATH)
-      message("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_INCLUDE_PATH}")
-      include_directories("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_INCLUDE_PATH}")
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH)
+      message("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
+      include_directories("${DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
     else()
       # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
       include_directories("${PROJECT_SOURCE_DIR}/extension/${OOTE_NAME}_clone/src/include")
@@ -732,7 +733,10 @@ function(link_extension_libraries LIBRARY)
 
   # Now link against any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
-    target_link_libraries(${LIBRARY} ${OOTE_NAME}_extension)
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if (${DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      target_link_libraries(${LIBRARY} ${OOTE_NAME}_extension)
+    endif()
   endforeach()
 
 endfunction()
@@ -866,8 +870,9 @@ add_subdirectory(extension)
 
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
-  if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH)
-    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH} extension/${OOTE_NAME})
+  string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+  if (DEFINED DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH)
+    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH} extension/${OOTE_NAME})
   else()
     # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
     add_subdirectory("extension/${OOTE_NAME}_clone/src" extension/${OOTE_NAME})
