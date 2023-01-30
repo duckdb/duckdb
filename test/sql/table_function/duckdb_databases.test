@@ -1,0 +1,24 @@
+# name: test/sql/table_function/duckdb_databases.test
+# description: Test duckdb_databases function
+# group: [table_function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT * FROM duckdb_databases();
+
+query IIII
+SELECT database_name, internal, path, type FROM duckdb_databases() ORDER BY database_name;
+----
+memory	false	NULL	duckdb
+system	true	NULL	duckdb
+temp	true	NULL	duckdb
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_databases.db' AS new_duckdb_database
+
+query IIII
+SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
+----
+new_duckdb_database	false	duckdb_databases.db	duckdb

@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   duckdb_columns.cpp
   duckdb_constraints.cpp
+  duckdb_databases.cpp
   duckdb_dependencies.cpp
   duckdb_extensions.cpp
   duckdb_functions.cpp

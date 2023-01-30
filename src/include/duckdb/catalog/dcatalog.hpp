@@ -21,6 +21,9 @@ public:
 public:
 	bool IsDCatalog() override;
 	void Initialize(bool load_builtin) override;
+	string GetCatalogType() override {
+		return "duckdb";
+	}
 
 	DependencyManager &GetDependencyManager() {
 		return *dependency_manager;
