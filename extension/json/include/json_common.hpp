@@ -98,7 +98,8 @@ public:
 public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_INSITU;
+	static constexpr auto INSITU_READ_FLAG = READ_FLAG | YYJSON_READ_INSITU;
+	static constexpr auto STOP_READ_FLAG = INSITU_READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 
 public:

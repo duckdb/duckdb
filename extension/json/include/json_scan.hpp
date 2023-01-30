@@ -87,7 +87,7 @@ public:
 	vector<unique_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
 	idx_t file_index;
-	idx_t batch_index;
+	atomic<idx_t> batch_index;
 
 	//! Current number of threads active
 	idx_t system_threads;
@@ -147,7 +147,7 @@ private:
 	idx_t buffer_size;
 	idx_t buffer_offset;
 	idx_t prev_buffer_remainder;
-	idx_t lines_or_bytes_in_buffer;
+	idx_t lines_or_objects_in_buffer;
 
 	//! Buffer to reconstruct split objects
 	AllocatedData reconstruct_buffer;

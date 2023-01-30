@@ -103,7 +103,7 @@ public:
 	//! Set line count for a buffer that is done (grabs the lock)
 	void SetBufferLineOrByteCount(idx_t index, idx_t count);
 	//! Throws an error that mentions the file name and line number
-	void ThrowError(idx_t buf_index, idx_t line_or_byte_in_buf, yyjson_read_err &err, const string &extra = "");
+	void ThrowError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err, const string &extra = "");
 
 	double GetProgress() const;
 

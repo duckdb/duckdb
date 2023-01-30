@@ -122,11 +122,12 @@ void BufferedJSONReader::SetBufferLineOrByteCount(idx_t index, idx_t count) {
 	buffer_line_or_byte_counts[index] = count;
 }
 
-void BufferedJSONReader::ThrowError(idx_t buf_index, idx_t line_or_byte_in_buf, yyjson_read_err &err,
+void BufferedJSONReader::ThrowError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err,
                                     const string &extra) {
+	D_ASSERT(options.format == JSONFormat::UNSTRUCTURED || options.format == JSONFormat::NEWLINE_DELIMITED);
 	while (true) {
 		lock_guard<mutex> guard(lock);
-		idx_t line = line_or_byte_in_buf;
+		idx_t line = line_or_object_in_buf;
 		bool can_throw = true;
 		for (idx_t b_idx = 0; b_idx < buf_index; b_idx++) {
 			if (buffer_line_or_byte_counts[b_idx] == -1) {
@@ -139,15 +140,10 @@ void BufferedJSONReader::ThrowError(idx_t buf_index, idx_t line_or_byte_in_buf, 
 		if (!can_throw) {
 			continue;
 		}
+		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
 		// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-		if (options.format == JSONFormat::NEWLINE_DELIMITED) {
-			throw InvalidInputException("Malformed JSON in file \"%s\", line %llu at byte %lld: %s. %s", file_path,
-			                            line + 1, err.pos + 1, err.msg, extra);
-		} else {
-			D_ASSERT(options.format == JSONFormat::UNSTRUCTURED);
-			throw InvalidInputException("Malformed JSON in file \"%s\" at byte %llu: %s. %s", file_path,
-			                            line + err.pos + 1, err.msg, extra);
-		}
+		throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_path,
+		                            err.pos + 1, unit, line + 1, err.msg, extra);
 	}
 }
 

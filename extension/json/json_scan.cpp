@@ -227,7 +227,7 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 		yyjson_read_err err;
 		if (bind_data.type != JSONScanType::READ_JSON_OBJECTS) {
 			// Optimization: if we don't ignore errors, and don't need to return strings, we can parse INSITU
-			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::STOP_READ_FLAG,
+			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::INSITU_READ_FLAG,
 			                                     json_allocator.GetYYJSONAllocator(), &err);
 			idx_t read_size = yyjson_doc_get_read_size(doc);
 			if (read_size > line_size) {
@@ -250,10 +250,10 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 			                                     json_allocator.GetYYJSONAllocator(), &err);
 		}
 		if (err.code != YYJSON_READ_SUCCESS) {
-			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, err);
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
 		}
 	}
-	lines_or_bytes_in_buffer++;
+	lines_or_objects_in_buffer++;
 
 	if (doc) {
 		// Set the JSONLine and trim
@@ -268,7 +268,7 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read) {
 	if (current_reader) {
 		D_ASSERT(current_buffer_handle);
-		current_reader->SetBufferLineOrByteCount(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer);
+		current_reader->SetBufferLineOrByteCount(current_buffer_handle->buffer_index, lines_or_objects_in_buffer);
 	}
 
 	AllocatedData buffer;
@@ -381,7 +381,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, bool &first
 
 	buffer_offset = 0;
 	prev_buffer_remainder = 0;
-	lines_or_bytes_in_buffer = 0;
+	lines_or_objects_in_buffer = 0;
 
 	memset((void *)(buffer_ptr + buffer_size), 0, YYJSON_PADDING_SIZE);
 	if (current_reader->GetOptions().format == JSONFormat::UNSTRUCTURED) {
@@ -399,7 +399,7 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &f
 	idx_t read_size;
 
 	{
-		lock_guard<mutex> guard(current_reader->lock);
+		lock_guard<mutex> reader_guard(current_reader->lock);
 		buffer_index = current_reader->GetBufferIndex();
 
 		read_size = file_handle.GetPositionAndSize(read_position, request_size);
@@ -430,7 +430,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool 
 	idx_t request_size = gstate.buffer_capacity - prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	idx_t read_size;
 	{
-		lock_guard<mutex> guard(gstate.lock);
+		lock_guard<mutex> reader_guard(current_reader->lock);
 		buffer_index = current_reader->GetBufferIndex();
 
 		first_read = file_handle.Remaining() == file_handle.FileSize();
@@ -521,9 +521,9 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 
 			buffer_offset += line_size;
 			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
-			lines_or_bytes_in_buffer += (buffer_ptr + buffer_offset) - obj_start;
+			lines_or_objects_in_buffer++;
 		} else if (error.pos > max_obj_size) {
-			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, error,
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, error,
 			                           "Try increasing \"maximum_object_size\".");
 
 		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END && !is_last) {
@@ -534,7 +534,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 			buffer_offset = buffer_size;
 			break;
 		} else {
-			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_bytes_in_buffer, error);
+			current_reader->ThrowError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, error);
 		}
 		objects[count] = read_doc->root;
 	}
