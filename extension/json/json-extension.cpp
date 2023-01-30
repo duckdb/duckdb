@@ -46,6 +46,9 @@ void JSONExtension::Load(DuckDB &db) {
 		catalog.CreateTableFunction(*con.context, &fun);
 	}
 
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.replacement_scans.emplace_back(JSONFunctions::ReadJSONReplacement);
+
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);

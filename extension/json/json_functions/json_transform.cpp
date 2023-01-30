@@ -8,13 +8,13 @@
 namespace duckdb {
 
 //! Forward declaration for recursion
-static LogicalType StructureToType(yyjson_val *val, ClientContext &context);
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context);
 
-static LogicalType StructureToTypeArray(yyjson_val *arr, ClientContext &context) {
+static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context) {
 	if (yyjson_arr_size(arr) != 1) {
 		throw InvalidInputException("Too many values in array of JSON structure");
 	}
-	return LogicalType::LIST(StructureToType(yyjson_arr_get_first(arr), context));
+	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context));
 }
 
 static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context) {
@@ -29,16 +29,16 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
 		names.insert(key_str);
-		child_types.emplace_back(key_str, StructureToType(val, context));
+		child_types.emplace_back(key_str, StructureStringToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	return LogicalType::STRUCT(child_types);
 }
 
-static LogicalType StructureToType(yyjson_val *val, ClientContext &context) {
+static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context) {
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return StructureToTypeArray(val, context);
+		return StructureStringToTypeArray(val, context);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context);
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
@@ -71,7 +71,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetDataUnsafe(), structure_string.GetSize(), err);
 		}
-		bound_function.return_type = StructureToType(doc->root, context);
+		bound_function.return_type = StructureStringToType(doc->root, context);
 	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }

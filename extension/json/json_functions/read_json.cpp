@@ -1,8 +1,48 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
+#include "json_structure.hpp"
 #include "json_transform.hpp"
 
 namespace duckdb {
+
+void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+                vector<string> &names) {
+	JSONScanGlobalState gstate(context, bind_data);
+	JSONScanLocalState lstate(context, gstate);
+
+	// Read for the specified sample size
+	JSONStructureNode node;
+	idx_t read = 0;
+	while (read < bind_data.sample_size) {
+		auto count = lstate.ReadNext(gstate);
+		if (count == 0) {
+			break;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (lstate.objects[i]) {
+				JSONStructure::ExtractStructure(lstate.objects[i], node);
+			}
+			if (++read == bind_data.sample_size) {
+				break;
+			}
+		}
+	}
+
+	const auto type = JSONStructure::StructureToType(context, node, 1);
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return_types.emplace_back(type);
+		names.emplace_back("json");
+		return;
+	}
+
+	const auto &child_types = StructType::GetChildTypes(type);
+	return_types.reserve(child_types.size());
+	names.reserve(child_types.size());
+	for (auto &child_type : child_types) {
+		return_types.emplace_back(child_type.second);
+		names.emplace_back(child_type.first);
+	}
+}
 
 unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
                                       vector<LogicalType> &return_types, vector<string> &names) {
@@ -55,7 +95,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	}
 
 	if (bind_data.auto_detect) {
-		// TODO: detect the schemaaaaa
+		AutoDetect(context, bind_data, return_types, names);
+		bind_data.names = names;
 	}
 
 	auto &transform_options = bind_data.transform_options;
@@ -65,11 +106,6 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_unknown_key = bind_data.auto_detect; // Might still be set to false if we do proj pushdown
 
 	return result;
-}
-
-void AutoDetect(ClientContext &context, JSONScanData &bind_data) {
-	//	BufferedJSONReader reader(context, bind_data.options, 0, bind_data.file_paths[0]);
-	//	reader.OpenJSONFile();
 }
 
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -121,6 +157,22 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 	TableFunctionSet function_set("read_ndjson");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, false);
+	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	return CreateTableFunctionInfo(function_set);
+}
+
+CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
+	TableFunctionSet function_set("read_json_auto");
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, true);
+	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	return CreateTableFunctionInfo(function_set);
+}
+
+CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
+	TableFunctionSet function_set("read_ndjson_auto");
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, true);
 	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);

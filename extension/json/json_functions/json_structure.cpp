@@ -192,4 +192,52 @@ CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
 	return CreateScalarFunctionInfo(set);
 }
 
+static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node,
+                                        const idx_t max_unnest_level, idx_t current_level) {
+	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
+	const auto &desc = node.descriptions[0];
+	D_ASSERT(desc.children.size() == 1);
+
+	return LogicalType::LIST(
+	    JSONStructure::StructureToType(context, desc.children[0], max_unnest_level, current_level + 1));
+}
+
+static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node,
+                                         const idx_t max_unnest_level, idx_t current_level) {
+	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
+	auto &desc = node.descriptions[0];
+
+	child_list_t<LogicalType> child_types;
+	child_types.reserve(desc.children.size());
+	for (auto &child : desc.children) {
+		D_ASSERT(!child.key.empty());
+		child_types.emplace_back(child.key,
+		                         JSONStructure::StructureToType(context, child, max_unnest_level, current_level + 1));
+	}
+	return LogicalType::STRUCT(child_types);
+}
+
+LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node,
+                                           const idx_t max_unnest_level, idx_t current_level) {
+	if (current_level > max_unnest_level) {
+		return JSONCommon::JSONType();
+	}
+	if (node.descriptions.empty()) {
+		return LogicalTypeId::SQLNULL;
+	}
+	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
+		return JSONCommon::JSONType();
+	}
+	auto &desc = node.descriptions[0];
+	D_ASSERT(desc.type != LogicalTypeId::INVALID);
+	switch (desc.type) {
+	case LogicalTypeId::LIST:
+		return StructureToTypeArray(context, node, max_unnest_level, current_level);
+	case LogicalTypeId::STRUCT:
+		return StructureToTypeObject(context, node, max_unnest_level, current_level);
+	default:
+		return desc.type;
+	}
+}
+
 } // namespace duckdb

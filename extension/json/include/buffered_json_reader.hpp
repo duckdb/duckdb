@@ -10,12 +10,11 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
-
-struct FileHandle;
 
 enum class JSONFormat : uint8_t {
 	//! Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)

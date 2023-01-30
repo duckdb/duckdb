@@ -42,6 +42,8 @@ public:
 struct JSONStructure {
 public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
+	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node,
+	                                   const idx_t max_unnest_level, idx_t current_level = 0);
 };
 
 } // namespace duckdb

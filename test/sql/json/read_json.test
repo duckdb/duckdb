@@ -103,3 +103,22 @@ Home for the Holidays
 The Firm
 Broadcast News
 Raising Arizona
+
+# auto-detect
+query II
+SELECT * FROM read_json_auto('data/json/example_n.ndjson')
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+query II
+SELECT * FROM 'data/json/example_n.ndjson'
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
