@@ -18,6 +18,7 @@
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
+#include "duckdb/main/relation/cross_product_relation.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
@@ -175,41 +176,42 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
+
+[[cpp11::register]] SEXP rapi_rel_join_filter(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                        std::string join) {
 
-	auto join_type = JoinType::INNER;
+	auto join_type = JoinType::ANTI;
 	unique_ptr<ParsedExpression> cond;
 
 	if (join == "anti") {
 		join_type = JoinType::ANTI;
 	} else if (join == "semi") {
 		join_type = JoinType::SEMI;
-	} else if (join == "left") {
+	}
+
+	auto left_proj = ((rel_extptr_t)conds[0]);
+	auto res = std::make_shared<JoinRelation>(left->rel, left_proj->rel, right->rel, join_type);
+	return make_external<RelationWrapper>("duckdb_relation", res);
+}
+
+[[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
+                                       std::string join) {
+
+	auto join_type = JoinType::INNER;
+	unique_ptr<ParsedExpression> cond;
+
+	if (join == "left") {
 		join_type = JoinType::LEFT;
 	} else if (join == "right") {
 		join_type = JoinType::RIGHT;
 	} else if (join == "outer") {
 		join_type = JoinType::OUTER;
 	} else if (join == "cross") {
-		join_type = JoinType::INNER;
-		cond = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_unique<ConstantExpression>(1),
-		                                         make_unique<ConstantExpression>(1));
-		auto res = std::make_shared<JoinRelation>(left->rel, right->rel, move(cond), join_type);
+		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
 		return make_external<RelationWrapper>("duckdb_relation", res);
 	}
 
-	// Semi and anti joins require separate constructor because the condition is in the
-	// the definition of the join.
-	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-		auto left_proj = ((rel_extptr_t)conds[0]);
-		auto res = std::make_shared<JoinRelation>(left->rel, left_proj->rel, right->rel, join_type);
-		return make_external<RelationWrapper>("duckdb_relation", res);
-	}
-
-	if (conds.size() == 0 && join != "cross") { // nop
-		stop("join needs conditions");
-	} else if (conds.size() == 1) {
+	if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
 		vector<unique_ptr<ParsedExpression>> cond_args;

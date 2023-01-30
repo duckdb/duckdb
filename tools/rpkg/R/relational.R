@@ -151,7 +151,7 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
-#' Lazily INNER join two DuckDB relation objects
+#' Lazily join two DuckDB relation objects
 #' @param left the left-hand-side DuckDB relation object
 #' @param right the right-hand-side DuckDB relation object
 #' @param conds a list of DuckDB expressions to use for the join
@@ -169,16 +169,33 @@ rel_order <- rapi_rel_order
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
 #' rel2 <- rel_join(left, right, cond, "cross")
-#' anti_expr <- list(expr_reference("cyl", left))
-#' rel2 <- rel_join(left, right, anti_expr, "anti")
-#' rel2 <- rel_join(left, right, semi_expr, "semi")
 rel_inner_join <- function(left, right, conds) {
   rel_join(left, right, conds, "inner")
 }
 
-rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer", "cross", "anti", "semi")) {
+rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer", "cross")) {
   join <- match.arg(join)
   rapi_rel_join(left, right, conds, join)
+}
+
+#' Lazily ANTI or SEMI join two DuckDB relation objects
+#' @param left the left-hand-side DuckDB relation object
+#' @param right the right-hand-side DuckDB relation object
+#' @param expression a list of DuckDB expressions to use for the join condition
+#' @param join a string describing the join type (either "inner", "left", "right", or "outer")
+#' @return a new `duckdb_relation` object resulting from the join
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' DBI::dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+#' left <- rel_from_df(con, mtcars)
+#' right <- rel_from_df(con, mtcars)
+#' anti_expr <- list(expr_reference("cyl", left))
+#' rel2 <- rel_join(left, right, anti_expr, "anti")
+#' rel2 <- rel_join(left, right, semi_expr, "semi")
+rel_join_filter <- function(left, right, conds, join = c("anti", "semi")) {
+  join <- match.arg(join)
+  rapi_rel_join_filter(left, right, conds, join)
 }
 
 #' UNION ALL on two DuckDB relation objects

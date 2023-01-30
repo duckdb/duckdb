@@ -139,6 +139,13 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_join_filter(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds, std::string join);
+extern "C" SEXP _duckdb_rapi_rel_join_filter(SEXP left, SEXP right, SEXP conds, SEXP join) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_join_filter(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(left), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(right), cpp11::as_cpp<cpp11::decay_t<list>>(conds), cpp11::as_cpp<cpp11::decay_t<std::string>>(join)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds, std::string join);
 extern "C" SEXP _duckdb_rapi_rel_join(SEXP left, SEXP right, SEXP conds, SEXP join) {
   BEGIN_CPP11
@@ -366,6 +373,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_from_altrep_df",     (DL_FUNC) &_duckdb_rapi_rel_from_altrep_df,     1},
     {"_duckdb_rapi_rel_from_df",            (DL_FUNC) &_duckdb_rapi_rel_from_df,            3},
     {"_duckdb_rapi_rel_join",               (DL_FUNC) &_duckdb_rapi_rel_join,               4},
+    {"_duckdb_rapi_rel_join_filter",        (DL_FUNC) &_duckdb_rapi_rel_join_filter,        4},
     {"_duckdb_rapi_rel_limit",              (DL_FUNC) &_duckdb_rapi_rel_limit,              2},
     {"_duckdb_rapi_rel_names",              (DL_FUNC) &_duckdb_rapi_rel_names,              1},
     {"_duckdb_rapi_rel_order",              (DL_FUNC) &_duckdb_rapi_rel_order,              2},

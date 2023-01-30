@@ -11,6 +11,7 @@ add_library_unity(
   filter_relation.cpp
   insert_relation.cpp
   join_relation.cpp
+  join_filter_relation.cpp
   limit_relation.cpp
   order_relation.cpp
   update_relation.cpp
