@@ -37,10 +37,6 @@ struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct PragmaDatabaseList {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaDatabaseSize {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

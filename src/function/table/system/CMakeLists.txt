@@ -16,7 +16,6 @@ add_library_unity(
   duckdb_types.cpp
   duckdb_views.cpp
   pragma_collations.cpp
-  pragma_database_list.cpp
   pragma_database_size.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp

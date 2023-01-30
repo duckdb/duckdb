@@ -14,7 +14,6 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaTableInfo::RegisterFunction(*this);
 	PragmaStorageInfo::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
-	PragmaDatabaseList::RegisterFunction(*this);
 	PragmaLastProfilingOutput::RegisterFunction(*this);
 	PragmaDetailedProfilingOutput::RegisterFunction(*this);
 

@@ -2,6 +2,9 @@
 # description: Test duckdb_databases function
 # group: [table_function]
 
+# explicitly load an in-memory database
+load
+
 statement ok
 PRAGMA enable_verification
 
@@ -22,3 +25,19 @@ query IIII
 SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
 ----
 new_duckdb_database	false	duckdb_databases.db	duckdb
+
+query II nosort show_db
+SELECT database_name FROM duckdb_databases ORDER BY database_name
+----
+
+query II nosort show_db
+SHOW databases
+----
+
+query I
+SELECT datname FROM pg_catalog.pg_database ORDER BY 1
+----
+memory
+new_duckdb_database
+system
+temp

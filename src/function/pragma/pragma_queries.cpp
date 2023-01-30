@@ -29,7 +29,7 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 }
 
 string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM pragma_database_list() ORDER BY name;";
+	return "SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name;";
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
@@ -38,7 +38,7 @@ string PragmaAllProfiling(ClientContext &context, const FunctionParameters &para
 }
 
 string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_database_list() ORDER BY 1;";
+	return "SELECT * FROM pragma_database_list;";
 }
 
 string PragmaCollations(ClientContext &context, const FunctionParameters &parameters) {
