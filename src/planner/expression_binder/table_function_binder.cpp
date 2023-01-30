@@ -7,7 +7,19 @@ namespace duckdb {
 TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr) {
+BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth) {
+
+	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
+	// which we capture and remove later
+	if (lambda_bindings) {
+		auto &colref = (ColumnRefExpression &)expr;
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
+				return (*lambda_bindings)[i].Bind(colref, i, depth);
+			}
+		}
+	}
+
 	auto result_name = StringUtil::Join(expr.column_names, ".");
 	return BindResult(make_unique<BoundConstantExpression>(Value(result_name)));
 }
@@ -17,7 +29,7 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *exp
 	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnReference((ColumnRefExpression &)expr);
+		return BindColumnReference((ColumnRefExpression &)expr, depth);
 	case ExpressionClass::SUBQUERY:
 		throw BinderException("Table function cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
