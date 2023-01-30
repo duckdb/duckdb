@@ -1,0 +1,60 @@
+# name: test/sql/upsert/upsert_order_coverage.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+# Create a table, most columns are indexed on
+statement ok
+create or replace table tbl(
+	i integer UNIQUE,
+	j integer,
+	k integer PRIMARY KEY
+);
+
+statement ok
+insert into tbl values (3,4,2), (5,3,1);
+
+query III
+select * from tbl;
+----
+3	4	2
+5	3	1
+
+# 'k' is violated in row1 and row2, 'i' is violated in row1
+# Since our conflict target is on 'k', and the violations of 'i' are a subset of the violations of 'k'
+# We accept this, and don't throw an error
+statement ok
+insert into tbl(k, i) values (2,3), (4,4), (1,8) on conflict (k) do update set j = excluded.j;
+
+query III
+select * from tbl;
+----
+3	NULL	2
+5	NULL	1
+4	NULL	4
+
+# If this is the other way around, and the violations caused by indexes that are not our conflict target ('i')
+# are not a subset of the violations caused by the index that is our conflict target ('k') then this is an error
+# 'i' is violated in row1 and row2, 'k' is only violated in row1
+statement error
+insert into tbl(i,k) values (3,2), (5,5) on conflict (k) do update set j = 10;
+
+query III
+select * from tbl;
+----
+3	NULL	2
+5	NULL	1
+4	NULL	4
+
+# Only when the non-conflict-target violation shares an insert tuple with a conflict-target violation
+# Do we not throw on it, so this does cause an error, because the conflict of 'k' is not on the same insert tuple as the conflict of 'k'
+statement error
+insert into tbl(i,k) values (3,10), (6,2) on conflict(i) do update set j = 10;
+
+query III
+select * from tbl;
+----
+3	NULL	2
+5	NULL	1
+4	NULL	4

@@ -124,7 +124,7 @@ public:
 	}
 
 	template <class T, typename... ARGS>
-	void ReadList(vector<unique_ptr<T>> &list, ARGS &&...args) {
+	void ReadList(vector<unique_ptr<T>> &list, ARGS &&... args) {
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
 			auto child = T::Deserialize(*this, std::forward<ARGS>(args)...);
@@ -133,7 +133,7 @@ public:
 	}
 
 	template <class T, class RETURN_TYPE = T, typename... ARGS>
-	unique_ptr<RETURN_TYPE> ReadOptional(ARGS &&...args) {
+	unique_ptr<RETURN_TYPE> ReadOptional(ARGS &&... args) {
 		auto has_entry = Read<bool>();
 		if (has_entry) {
 			return T::Deserialize(*this, std::forward<ARGS>(args)...);

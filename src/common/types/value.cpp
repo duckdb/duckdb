@@ -613,24 +613,6 @@ Value Value::BLOB(const string &data) {
 	return result;
 }
 
-Value Value::JSON(const char *val) {
-	auto result = Value(val);
-	result.type_ = LogicalTypeId::JSON;
-	return result;
-}
-
-Value Value::JSON(string_t val) {
-	auto result = Value(val);
-	result.type_ = LogicalTypeId::JSON;
-	return result;
-}
-
-Value Value::JSON(string val) {
-	auto result = Value(std::move(val));
-	result.type_ = LogicalTypeId::JSON;
-	return result;
-}
-
 Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
 	Value result(original_type);

@@ -647,7 +647,6 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::JSON:
 		InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
 		break;
 	case LogicalTypeId::UUID:

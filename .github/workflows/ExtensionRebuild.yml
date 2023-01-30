@@ -53,6 +53,7 @@ jobs:
         fts: 0
         json: 0
         excel: 0
+        sqlsmith: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
@@ -99,6 +100,7 @@ jobs:
           fts: 0
           json: 0
           excel: 0
+          sqlsmith: 0
           treat_warn_as_error: 0
           build_dir: duckdb-old
           post_install: rm build/release/src/libduckdb*
@@ -150,6 +152,7 @@ jobs:
          fts: 0
          json: 0
          excel: 0
+         sqlsmith: 0
          deploy_as: windows_amd64
          deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
@@ -207,6 +210,7 @@ jobs:
         fts: 0
         json: 0
         excel: 0
+        sqlsmith: 0
         run_tests: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4

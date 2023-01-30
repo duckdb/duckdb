@@ -42,6 +42,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	}
 #endif
 
+	op.estimated_cardinality = op.EstimateCardinality(context);
+
 	// Slice types
 	auto types = op.types;
 	const auto output_idx = types.size() - op.expressions.size();

@@ -70,7 +70,6 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::DOUBLE;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
 	case LogicalTypeId::TIME:
@@ -176,7 +175,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		schema_ele.converted_type = ConvertedType::UTF8;
 		schema_ele.__isset.converted_type = true;
 		break;

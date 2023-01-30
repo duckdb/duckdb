@@ -37,7 +37,7 @@ public:
 	void Finalize();
 	Allocator &GetAllocator();
 	bool HasContext();
-	ClientContext &GetContext();
+	DUCKDB_API ClientContext &GetContext();
 
 	void Verify(ExpressionExecutorState &root);
 };
@@ -49,7 +49,7 @@ struct ExecuteFunctionState : public ExpressionState {
 	unique_ptr<FunctionLocalState> local_state;
 
 public:
-	static FunctionLocalState *GetFunctionState(ExpressionState &state) {
+	DUCKDB_API static FunctionLocalState *GetFunctionState(ExpressionState &state) {
 		return ((ExecuteFunctionState &)state).local_state.get();
 	}
 };

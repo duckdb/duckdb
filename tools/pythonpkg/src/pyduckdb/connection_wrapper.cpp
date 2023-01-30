@@ -277,4 +277,23 @@ duckdb::pyarrow::RecordBatchReader PyConnectionWrapper::FetchRecordBatchReader(c
 	return conn->FetchRecordBatchReader(chunk_size);
 }
 
+void PyConnectionWrapper::RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->RegisterFilesystem(std::move(file_system));
+}
+void PyConnectionWrapper::UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->UnregisterFilesystem(name);
+}
+py::list PyConnectionWrapper::ListFilesystems(shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ListFilesystems();
+}
+
 } // namespace duckdb
