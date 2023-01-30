@@ -612,7 +612,6 @@ function(add_extension_definitions)
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
     if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH)
-      message("${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
       include_directories("${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
     else()
       # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
