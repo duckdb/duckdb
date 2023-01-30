@@ -72,7 +72,6 @@ hash_t FunctionExpression::Hash() const {
 	return result;
 }
 
-
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
 	unique_ptr<ParsedExpression> filter_copy;
