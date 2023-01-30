@@ -2,10 +2,6 @@
 # description: Issue #5675: Follow up test to cover issue when the 1+th segment of a rowgroup is flushed with 1 value
 # group: [fsst]
 
-# name: test/tmp.test
-# description: fix for issue #5675
-# group: [test]
-
 load __TEST_DIR__/issue_5675_followup.db
 
 require parquet

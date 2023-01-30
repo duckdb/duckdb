@@ -291,7 +291,7 @@ public:
 
 		// TODO switch to a symbol table per RowGroup, saves a bit of space
 		return sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
-		                     fsst_serialized_symbol_table_size;
+		       fsst_serialized_symbol_table_size;
 	}
 
 	// Checks if there is enough space, if there is, sets last_fitting_size
