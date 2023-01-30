@@ -22,12 +22,13 @@
 namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
-	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str());
+	Connection con(database.GetDatabase());
+	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
 	}
-	Connection con(database.GetDatabase());
+
 	con.BeginTransaction();
 
 	// first deserialize the WAL to look for a checkpoint flag
@@ -68,7 +69,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str(), con.context.get());
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
@@ -270,10 +271,9 @@ void ReplayState::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
-	if (deserialize_only) {
+	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
 		return;
 	}
-
 	catalog.CreateType(context, info.get());
 }
 

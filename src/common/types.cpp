@@ -1343,7 +1343,7 @@ protected:
 		bool is_catalog_reference = !writer.IsFromCatalog() && catalog_entry;
 		writer.WriteField<bool>(is_catalog_reference);
 		writer.WriteString(enum_name);
-		if (writer.IsFromCatalog()) {
+		if (writer.IsFromCatalog() || !catalog_entry) {
 			writer.WriteField<uint32_t>(dict_size);
 			((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
 		} else {

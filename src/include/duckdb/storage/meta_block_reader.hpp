@@ -36,6 +36,8 @@ public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
+	ClientContext &GetContext() override;
+
 private:
 	void ReadNewBlock(block_id_t id);
 };

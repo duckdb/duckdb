@@ -1,5 +1,6 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 #include <cstring>
 
@@ -32,6 +33,16 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	// we have enough left in this block to read from the buffer
 	memcpy(buffer, handle.Ptr() + offset, read_size);
 	offset += read_size;
+}
+
+ClientContext &MetaBlockReader::GetContext() {
+	auto &db = block_manager.buffer_manager.GetDatabase();
+	auto &conn_manager = db.GetConnectionManager();
+	auto client_context = conn_manager.GetConnection(&db);
+	if (!client_context) {
+		throw InternalException("Database Instance without Client Context");
+	}
+	return *client_context;
 }
 
 void MetaBlockReader::ReadNewBlock(block_id_t id) {

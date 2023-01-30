@@ -671,6 +671,19 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
 	return result_type;
 }
 
+bool Catalog::TypeExists(ClientContext &context, const string &catalog_name, const string &schema, const string &name) {
+	CatalogEntry *entry;
+	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, true);
+	if (!entry) {
+		// look in the system catalog
+		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, true);
+		if (!entry) {
+			return false;
+		}
+	}
+	return true;
+}
+
 vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
 	vector<Catalog *> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
