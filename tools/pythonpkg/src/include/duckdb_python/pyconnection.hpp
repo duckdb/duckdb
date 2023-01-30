@@ -92,6 +92,16 @@ public:
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
 	                                         bool filename, bool hive_partitioning, bool union_by_name);
 
+	unique_ptr<DuckDBPyRelation>
+	ReadExcel(const py::object &io, const py::object &sheet_name, const py::object &header, const py::object &names,
+	          const py::object &usecols, const py::object &squeeze, const py::object &dtype, const py::object &engine,
+	          const py::object &converters, const py::object &true_values, const py::object &false_values,
+	          const py::object &skiprows, const py::object &nrows, const py::object &na_values,
+	          const py::object &keep_default_na, const py::object &na_filter, const py::object &verbose,
+	          const py::object &parse_dates, const py::object &date_parser, const py::object &thousands,
+	          const py::object &decimal, const py::object &comment, const py::object &skipfooter,
+	          const py::object &convert_float, const py::object &storage_options);
+
 	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
 	                                          bool file_row_number, bool filename, bool hive_partitioning,
 	                                          bool union_by_name);

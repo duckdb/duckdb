@@ -350,8 +350,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
-	for (idx_t col_idx = 0; col_idx < meta_data->schema.size(); col_idx++) {
-		auto &column = meta_data->schema[col_idx];
+	for (auto &column : meta_data->schema) {
 
 		// file_name, LogicalType::VARCHAR
 		current_chunk.SetValue(0, count, file_path);

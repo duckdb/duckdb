@@ -130,7 +130,18 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
+	    .def("read_excel", &DuckDBPyConnection::ReadExcel, "Create a relation object from an excel file", py::arg("io"),
+	         py::arg("sheet_name") = py::int_(0), py::arg("header") = py::int_(0), py::arg("names") = py::none(),
+	         py::arg("usecols") = py::none(), py::arg("squeeze") = py::none(), py::arg("dtype") = py::none(),
+	         py::arg("engine") = py::none(), py::arg("converters") = py::none(), py::arg("true_values") = py::none(),
+	         py::arg("false_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("nrows") = py::none(),
+	         py::arg("na_values") = py::none(), py::arg("keep_default_na") = py::none(),
+	         py::arg("na_filter") = py::none(), py::arg("verbose") = py::none(),
+	         py::arg("parse_dates") = py::bool_(false), py::arg("date_parser") = py::none(),
+	         py::arg("thousands") = py::none(), py::arg("decimal") = py::str("."), py::arg("comment") = py::none(),
+	         py::arg("skipfooter") = py::int_(0), py::arg("convert_float") = py::none(),
+	         py::arg("storage_options") = py::none())
+	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the DataFrame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"))
@@ -513,6 +524,33 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	vector<Value> params;
 	params.emplace_back(filename);
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadExcel(
+    const py::object &io, const py::object &sheet_name, const py::object &header, const py::object &names,
+    const py::object &usecols, const py::object &squeeze, const py::object &dtype, const py::object &engine,
+    const py::object &converters, const py::object &true_values, const py::object &false_values,
+    const py::object &skiprows, const py::object &nrows, const py::object &na_values, const py::object &keep_default_na,
+    const py::object &na_filter, const py::object &verbose, const py::object &parse_dates,
+    const py::object &date_parser, const py::object &thousands, const py::object &decimal, const py::object &comment,
+    const py::object &skipfooter, const py::object &convert_float, const py::object &storage_options) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.pandas.IsLoaded()) {
+		throw InvalidInputException("This function requires the 'pandas' package");
+	}
+	auto pandas_module = import_cache.pandas();
+	auto read_excel = pandas_module.attr("read_excel");
+	auto df =
+	    read_excel(io, py::arg("sheet_name") = sheet_name, py::arg("header") = header, py::arg("names") = names,
+	               py::arg("usecols") = usecols, py::arg("squeeze") = squeeze, py::arg("dtype") = dtype,
+	               py::arg("engine") = engine, py::arg("converters") = converters, py::arg("true_values") = true_values,
+	               py::arg("false_values") = false_values, py::arg("skiprows") = skiprows, py::arg("nrows") = nrows,
+	               py::arg("na_values") = na_values, py::arg("keep_default_na") = keep_default_na,
+	               py::arg("na_filter") = na_filter, py::arg("verbose") = verbose, py::arg("parse_dates") = parse_dates,
+	               py::arg("date_parser") = date_parser, py::arg("thousands") = thousands, py::arg("decimal") = decimal,
+	               py::arg("comment") = comment, py::arg("skipfooter") = skipfooter,
+	               py::arg("convert_float") = convert_float, py::arg("storage_options") = storage_options);
+	return FromDF(df);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
