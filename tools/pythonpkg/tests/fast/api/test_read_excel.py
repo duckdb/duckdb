@@ -17,6 +17,11 @@ def ExpectedExampleOutput():
     ]
 
 class TestReadExcel(object):
+    def test_call_from_wrapper(self):
+        file_name = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','data','example.xls')
+        res = duckdb.read_excel(file_name).fetchall()
+        assert res == ExpectedExampleOutput()
+
     def test_call_from_connection(self, duckdb_cursor):
         file_name = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','data','example.xls')
         res = duckdb_cursor.read_excel(file_name).fetchall()

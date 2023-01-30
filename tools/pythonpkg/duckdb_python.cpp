@@ -119,6 +119,18 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    .def("table_function", &PyConnectionWrapper::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
 	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
+	    .def("read_excel", &PyConnectionWrapper::ReadExcel, "Create a relation object from an excel file",
+	         py::arg("io"), py::arg("sheet_name") = py::int_(0), py::arg("header") = py::int_(0),
+	         py::arg("names") = py::none(), py::arg("usecols") = py::none(), py::arg("squeeze") = py::none(),
+	         py::arg("dtype") = py::none(), py::arg("engine") = py::none(), py::arg("converters") = py::none(),
+	         py::arg("true_values") = py::none(), py::arg("false_values") = py::none(),
+	         py::arg("skiprows") = py::none(), py::arg("nrows") = py::none(), py::arg("na_values") = py::none(),
+	         py::arg("keep_default_na") = py::none(), py::arg("na_filter") = py::none(),
+	         py::arg("verbose") = py::none(), py::arg("parse_dates") = py::bool_(false),
+	         py::arg("date_parser") = py::none(), py::arg("thousands") = py::none(), py::arg("decimal") = py::str("."),
+	         py::arg("comment") = py::none(), py::arg("skipfooter") = py::int_(0),
+	         py::arg("convert_float") = py::none(), py::arg("storage_options") = py::none(),
+	         py::arg("connection") = py::none())
 	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none())
 	    .def("query", &PyConnectionWrapper::RunQuery,

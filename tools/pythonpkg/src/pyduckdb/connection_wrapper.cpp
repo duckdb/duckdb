@@ -110,6 +110,24 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromCsvAuto(const string &file
 	return conn->FromCsvAuto(filename);
 }
 
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadExcel(
+    const py::object &io, const py::object &sheet_name, const py::object &header, const py::object &names,
+    const py::object &usecols, const py::object &squeeze, const py::object &dtype, const py::object &engine,
+    const py::object &converters, const py::object &true_values, const py::object &false_values,
+    const py::object &skiprows, const py::object &nrows, const py::object &na_values, const py::object &keep_default_na,
+    const py::object &na_filter, const py::object &verbose, const py::object &parse_dates,
+    const py::object &date_parser, const py::object &thousands, const py::object &decimal, const py::object &comment,
+    const py::object &skipfooter, const py::object &convert_float, const py::object &storage_options,
+    shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+
+	return conn->ReadExcel(io, sheet_name, header, names, usecols, squeeze, dtype, engine, converters, true_values,
+	                       false_values, skiprows, nrows, na_values, keep_default_na, na_filter, verbose, parse_dates,
+	                       date_parser, thousands, decimal, comment, skipfooter, convert_float, storage_options);
+}
+
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromParquet(const string &file_glob, bool binary_as_string,
                                                               bool file_row_number, bool filename,
                                                               bool hive_partitioning, bool union_by_name,
