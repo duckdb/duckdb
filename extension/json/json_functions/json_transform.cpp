@@ -239,11 +239,12 @@ static void TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	}
 }
 
-static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict);
+static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+                      const JSONTransformOptions &options);
 
 void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
-                                    const bool strict) {
+                                    const JSONTransformOptions &options) {
 	D_ASSERT(alc);
 	D_ASSERT(names.size() == result_vectors.size());
 	const idx_t column_count = names.size();
@@ -267,28 +268,31 @@ void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 			found_key_count = 0;
 			memset(found_keys, false, column_count);
 			yyjson_obj_foreach(objects[i], idx, max, key, val) {
-				auto it = key_map.find({yyjson_get_str(key), yyjson_get_len(key)});
+				auto key_ptr = yyjson_get_str(key);
+				auto key_len = yyjson_get_len(key);
+				auto it = key_map.find({key_ptr, key_len});
 				if (it != key_map.end()) {
 					const auto &col_idx = it->second;
-					if (strict && found_keys[col_idx]) {
+					if (options.error_duplicate_key && found_keys[col_idx]) {
 						JSONCommon::ThrowValFormatError(
-						    "Duplicate key \"" + GetString(key).GetString() + "\" in object %s", objects[i]);
+						    "Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s", objects[i]);
 					}
 					nested_vals[col_idx][i] = val;
 					found_keys[col_idx] = true;
 					if (++found_key_count == column_count) {
 						break;
 					}
+				} else if (options.error_unknown_key) {
+					JSONCommon::ThrowValFormatError("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
+					                                objects[i]);
 				}
 			}
-			// TODO: if we auto-detected the schema but the object has more keys than 'column_count', throw an error
-			//  auto-detect is not implemented yet, though.
 			if (found_key_count != column_count) {
-				// If strict, we throw an error if one of the keys was not found.
+				// If 'error_missing_key, we throw an error if one of the keys was not found.
 				// If not, we set the nested val to null so the recursion doesn't break
 				for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 					if (!found_keys[col_idx]) {
-						if (strict) {
+						if (options.error_missing_key) {
 							JSONCommon::ThrowValFormatError("Object %s does not have key \"" + names[col_idx] + "\"",
 							                                objects[i]);
 						} else {
@@ -306,12 +310,12 @@ void JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, strict);
+		Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options);
 	}
 }
 
 static void TransformObject(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                            const LogicalType &type, bool strict) {
+                            const LogicalType &type, const JSONTransformOptions &options) {
 	// Get child vectors and names
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
@@ -323,10 +327,11 @@ static void TransformObject(yyjson_val *objects[], yyjson_alc *alc, Vector &resu
 		child_vectors.push_back(child_vs[child_i].get());
 	}
 
-	JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, strict);
+	JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options);
 }
 
-static void TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict) {
+static void TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                           const JSONTransformOptions &options) {
 	// Initialize list vector
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
@@ -362,50 +367,51 @@ static void TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	}
 	D_ASSERT(list_i == offset);
 	// Transform array values
-	Transform(nested_vals, alc, ListVector::GetEntry(result), offset, strict);
+	Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
 }
 
-static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count, bool strict) {
+static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+                      const JSONTransformOptions &options) {
 	auto result_type = result.GetType();
 	switch (result_type.id()) {
 	case LogicalTypeId::SQLNULL:
 		return;
 	case LogicalTypeId::BOOLEAN:
-		return TransformNumerical<bool>(vals, result, count, strict);
+		return TransformNumerical<bool>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::TINYINT:
-		return TransformNumerical<int8_t>(vals, result, count, strict);
+		return TransformNumerical<int8_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::SMALLINT:
-		return TransformNumerical<int16_t>(vals, result, count, strict);
+		return TransformNumerical<int16_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::INTEGER:
-		return TransformNumerical<int32_t>(vals, result, count, strict);
+		return TransformNumerical<int32_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::BIGINT:
-		return TransformNumerical<int64_t>(vals, result, count, strict);
+		return TransformNumerical<int64_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::UTINYINT:
-		return TransformNumerical<uint8_t>(vals, result, count, strict);
+		return TransformNumerical<uint8_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::USMALLINT:
-		return TransformNumerical<uint16_t>(vals, result, count, strict);
+		return TransformNumerical<uint16_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::UINTEGER:
-		return TransformNumerical<uint32_t>(vals, result, count, strict);
+		return TransformNumerical<uint32_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::UBIGINT:
-		return TransformNumerical<uint64_t>(vals, result, count, strict);
+		return TransformNumerical<uint64_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::HUGEINT:
-		return TransformNumerical<hugeint_t>(vals, result, count, strict);
+		return TransformNumerical<hugeint_t>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::FLOAT:
-		return TransformNumerical<float>(vals, result, count, strict);
+		return TransformNumerical<float>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::DOUBLE:
-		return TransformNumerical<double>(vals, result, count, strict);
+		return TransformNumerical<double>(vals, result, count, options.strict_cast);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(result_type);
 		auto scale = DecimalType::GetScale(result_type);
 		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
-			return TransformDecimal<int16_t>(vals, result, count, width, scale, strict);
+			return TransformDecimal<int16_t>(vals, result, count, width, scale, options.strict_cast);
 		case PhysicalType::INT32:
-			return TransformDecimal<int32_t>(vals, result, count, width, scale, strict);
+			return TransformDecimal<int32_t>(vals, result, count, width, scale, options.strict_cast);
 		case PhysicalType::INT64:
-			return TransformDecimal<int64_t>(vals, result, count, width, scale, strict);
+			return TransformDecimal<int64_t>(vals, result, count, width, scale, options.strict_cast);
 		case PhysicalType::INT128:
-			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, strict);
+			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, options.strict_cast);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}
@@ -422,14 +428,14 @@ static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-		return TransformFromString(vals, result, count, result_type, strict);
+		return TransformFromString(vals, result, count, result_type, options.strict_cast);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObject(vals, alc, result, count, result_type, strict);
+		return TransformObject(vals, alc, result, count, result_type, options);
 	case LogicalTypeId::LIST:
-		return TransformArray(vals, alc, result, count, strict);
+		return TransformArray(vals, alc, result, count, options);
 	default:
 		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
 	}
@@ -461,7 +467,9 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	Transform(vals, alc, result, count, strict);
+	const JSONTransformOptions options {strict, strict, strict, false};
+
+	Transform(vals, alc, result, count, options);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

@@ -11,6 +11,7 @@
 #include "buffered_json_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "json_transform.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,8 @@ public:
 	bool ignore_errors = false;
 	//! Maximum JSON object size (defaults to 1MB)
 	idx_t maximum_object_size = 1048576;
+	//! Options when transforming the JSON to columnar data
+	JSONTransformOptions transform_options;
 
 	//! Whether we auto-detect a schema
 	bool auto_detect = false;

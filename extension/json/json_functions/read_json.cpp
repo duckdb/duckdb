@@ -58,6 +58,12 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		// TODO: detect the schemaaaaa
 	}
 
+	auto &transform_options = bind_data.transform_options;
+	transform_options.strict_cast = !bind_data.ignore_errors;
+	transform_options.error_duplicate_key = !bind_data.ignore_errors;
+	transform_options.error_missing_key = false;
+	transform_options.error_unknown_key = bind_data.auto_detect; // Might still be set to false if we do proj pushdown
+
 	return result;
 }
 
@@ -78,7 +84,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	// TODO: if errors occur during transformation, we don't have line number information
 	JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names, result_vectors,
-	                               !gstate.bind_data.ignore_errors);
+	                               gstate.bind_data.transform_options);
 	output.SetCardinality(count);
 }
 

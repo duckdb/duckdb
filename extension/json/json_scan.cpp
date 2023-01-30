@@ -125,6 +125,7 @@ unique_ptr<GlobalTableFunctionState> JSONScanGlobalState::Init(ClientContext &co
 			names.push_back(std::move(bind_data.names[id]));
 		}
 		bind_data.names = std::move(names);
+		bind_data.transform_options.error_unknown_key = false;
 	}
 
 	return make_unique<JSONScanGlobalState>(context, bind_data);
@@ -227,7 +228,7 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 		yyjson_read_err err;
 		if (bind_data.type != JSONScanType::READ_JSON_OBJECTS) {
 			// Optimization: if we don't ignore errors, and don't need to return strings, we can parse INSITU
-			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::INSITU_READ_FLAG,
+			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::STOP_READ_FLAG,
 			                                     json_allocator.GetYYJSONAllocator(), &err);
 			idx_t read_size = yyjson_doc_get_read_size(doc);
 			if (read_size > line_size) {

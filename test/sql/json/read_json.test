@@ -48,13 +48,17 @@ NULL	NULL
 5	Raising Arizona
 
 # some of these objects don't have "name"
-statement error
+query II
 SELECT * FROM read_json('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
-Invalid Input Error: Object {"id":2} does not have key "name"
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
 
 query II
-SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, ignore_errors=true)
+SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 1	O Brother, Where Art Thou?
 2	NULL
