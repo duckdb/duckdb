@@ -11,6 +11,6 @@ ${OOTE_LOADER_BODY}
     return false;
 }
 
-vector<string> OOTE_EXTENSIONS = {${OOTE_NAME_VECTOR_INITIALIZER}};
+vector<string> OOT_EXTENSIONS = {${OOTE_NAME_VECTOR_INITIALIZER}};
 
 }
