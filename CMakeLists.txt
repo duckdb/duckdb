@@ -756,7 +756,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   # loadable extension binaries can be built two ways:
   # 1. EXTENSION_STATIC_BUILD=1
   #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
-  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the loadable
   #    extension binaries
   # 2. EXTENSION_STATIC_BUILD=0
   #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
@@ -798,10 +798,10 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     endif()
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
-            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+            "${PROJECT_BINARY_DIR}/${OUTPUT_DIRECTORY}")
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
-            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+            "${PROJECT_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
   if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
@@ -900,5 +900,12 @@ if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
     # the build path seems to get ignored on windows in just the right way. no idea why.
     get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
     add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
+  endforeach()
+endif()
+
+
+if(NOT "${DUCKDB_OOTE_EXTENSION_NAMES}" STREQUAL "")
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOTE_EXTENSION_NAMES)
+    add_subdirectory(${DUCKDB_OOTE_EXTENSION_${OOTE_NAME}_PATH} "extension/${OOTE_NAME}")
   endforeach()
 endif()

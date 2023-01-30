@@ -82,9 +82,9 @@
 #include "inet-extension.hpp"
 #endif
 
-#ifdef DUCKDB_OUT_OF_TREE
-#include DUCKDB_EXTENSION_HEADER
-#endif
+// Load the generated header file containing our list of extension headers
+#include "extension_oote_headers.hpp"
+#include "extension_oote_loader.hpp"
 
 namespace duckdb {
 
@@ -127,10 +127,9 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 		LoadExtensionInternal(db, ext, true);
 	}
 
-
-#ifdef DUCKDB_OUT_OF_TREE
-    LoadExtensionInternal(db, STRINGIFY(DUCKDB_EXTENSION_NAME), true);
-#endif
+    for (auto &ext : OOTE_EXTENSIONS) {
+        LoadExtensionInternal(db, ext, true);
+    }
 }
 
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
@@ -239,14 +238,10 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else {
-		// unknown extension
-#ifdef DUCKDB_OUT_OF_TREE
-        // This may be an out-of-tree extension that is linked into duckdb
-        if (extension == STRINGIFY(DUCKDB_EXTENSION_NAME)) {
-            db.LoadExtension<DUCKDB_EXTENSION_CLASS>();
+        if (TryLoadLinkedExtension(db, extension)) {
             return ExtensionLoadResult::LOADED_EXTENSION;
         }
-#endif
+
 		return ExtensionLoadResult::EXTENSION_UNKNOWN;
 	}
 	return ExtensionLoadResult::LOADED_EXTENSION;
