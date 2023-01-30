@@ -1,5 +1,3 @@
-skip_if_not_installed("non_existent_extension")
-
 library("DBI")
 library("testthat")
 
@@ -22,8 +20,8 @@ test_that("we won't crash when creating a relation from odd things", {
 })
 
 test_that("we can round-trip a data frame", {
-  expect_equivalent(mtcars, as.data.frame(rel_from_df(con, mtcars)))
-  expect_equivalent(iris, as.data.frame(rel_from_df(con, iris)))
+  expect_equivalent(mtcars, as.data.frame.duckdb_relation(rel_from_df(con, mtcars)))
+  expect_equivalent(iris, as.data.frame.duckdb_relation(rel_from_df(con, iris)))
 })
 
 
@@ -71,7 +69,7 @@ test_that("we can cast R strings to DuckDB strings", {
   test_string_vec <- c(vapply(1:n, gen_rand_string, "character", max_len), NA, NA, NA, NA, NA, NA, NA, NA) # batman
 
   df <- data.frame(s = test_string_vec, stringsAsFactors = FALSE)
-  expect_equivalent(df, as.data.frame(rel_from_df(con, df)))
+  expect_equivalent(df, as.data.frame.duckdb_relation(rel_from_df(con, df)))
 
   res <- rel_from_df(con, df) |> rel_sql("SELECT s::string FROM _")
   expect_equivalent(df, res)
@@ -82,7 +80,7 @@ test_that("we can cast R strings to DuckDB strings", {
   # many rounds yay
   df2 <- df
   for (i in 1:10) {
-    df2 <- as.data.frame(rel_from_df(con, df2))
+    df2 <- as.data.frame.duckdb_relation(rel_from_df(con, df2))
     expect_equivalent(df, df2)
   }
 
