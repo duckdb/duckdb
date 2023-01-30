@@ -60,20 +60,20 @@ public:
 private:
 	//! Find delim joins that contain an UNNEST
 	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
-	//! Rewrite a delim join that contain an UNNEST
+	//! Rewrite a delim join that contains an UNNEST
 	void RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
-	//! Update the bindings of the sequence of LOGICAL_PROJECTION(s)
+	//! Update the bindings of the RHS sequence of LOGICAL_PROJECTION(s)
 	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
 	                       UnnestRewriterPlanUpdater &updater);
-	//! Update the binding of the BOUND_UNNEST expression of the LOGICAL_UNNEST
-	void UpdateBoundUnnestBinding(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> *candidate);
+	//! Update the bindings of the BOUND_UNNEST expression of the LOGICAL_UNNEST
+	void UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> *candidate);
 
 	//! Store all delim columns of the delim join
 	void GetDelimColumns(LogicalOperator &op);
-	//! Store all lhs expressions of the LOGICAL_PROJECTION as BOUND_COLUMN_REF
+	//! Store all LHS expressions of the LOGICAL_PROJECTION
 	void GetLHSExpressions(LogicalOperator &op);
 
-	//! Keep track of these columns to find the correct UNNEST column
+	//! Keep track of the delim columns to find the correct UNNEST column
 	vector<ColumnBinding> delim_columns;
 	//! Store the column bindings of the LHS child of the LOGICAL_DELIM_JOIN
 	vector<LHSBinding> lhs_bindings;
