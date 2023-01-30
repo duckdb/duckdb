@@ -5,9 +5,6 @@
 
 namespace duckdb {
 
-//! Forward declaration for recursion
-static inline void ExtractStructureInternal(yyjson_val *val, JSONStructureNode &node);
-
 static inline bool IsNumeric(LogicalTypeId type) {
 	return type == LogicalTypeId::DOUBLE || type == LogicalTypeId::UBIGINT || type == LogicalTypeId::BIGINT;
 }
@@ -26,7 +23,7 @@ JSONStructureNode::JSONStructureNode() {
 JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p)
     : key(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p)) {
 	D_ASSERT(yyjson_is_str(key_p));
-	ExtractStructureInternal(val_p, *this);
+	JSONStructure::ExtractStructure(val_p, *this);
 }
 
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(LogicalTypeId type) {
@@ -60,21 +57,18 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val) {
 	D_ASSERT(yyjson_is_str(key));
 	// Check if there is already a child with the same key
-	const auto key_ptr = unsafe_yyjson_get_str(key);
-	const auto key_len = unsafe_yyjson_get_len(key);
-	for (auto &child : children) {
-		const auto &child_key = child.key;
-		if (child_key.length() != key_len) {
-			continue;
-		}
-		if (duckdb::FastMemcmp(key_ptr, child_key.c_str(), key_len) == 0) {
-			ExtractStructureInternal(val, child);
-			return child;
-		}
+	idx_t child_idx;
+	JSONKey new_obj_key {unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key)};
+	auto it = key_map.find(new_obj_key);
+	if (it == key_map.end()) { // Didn't find, create a new child
+		child_idx = children.size();
+		key_map.emplace(new_obj_key, child_idx);
+		children.emplace_back(key, val);
+	} else { // Found it
+		child_idx = it->second;
+		JSONStructure::ExtractStructure(val, children[child_idx]);
 	}
-	// Didn't find, create a new child
-	children.emplace_back(key, val);
-	return children.back();
+	return children[child_idx];
 }
 
 static inline void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node) {
@@ -85,7 +79,7 @@ static inline void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &nod
 	size_t idx, max;
 	yyjson_val *val;
 	yyjson_arr_foreach(arr, idx, max, val) {
-		ExtractStructureInternal(val, child);
+		JSONStructure::ExtractStructure(val, child);
 	}
 }
 
@@ -99,11 +93,11 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 	size_t idx, max;
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
-		auto insert_result = obj_keys.insert({unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key)});
+		auto key_ptr = unsafe_yyjson_get_str(key);
+		auto key_len = unsafe_yyjson_get_len(key);
+		auto insert_result = obj_keys.insert({key_ptr, key_len});
 		if (!insert_result.second) {
-			JSONCommon::ThrowValFormatError(
-			    "Duplicate key \"" + string(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key)) + "\" in object %s",
-			    obj);
+			JSONCommon::ThrowValFormatError("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s", obj);
 		}
 		description.GetOrCreateChild(key, val);
 	}
@@ -114,7 +108,7 @@ static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node)
 	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId<yyjson_val>(val));
 }
 
-static inline void ExtractStructureInternal(yyjson_val *val, JSONStructureNode &node) {
+void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node) {
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		return ExtractStructureArray(val, node);
@@ -125,9 +119,9 @@ static inline void ExtractStructureInternal(yyjson_val *val, JSONStructureNode &
 	}
 }
 
-JSONStructureNode JSONStructure::ExtractStructure(yyjson_val *val) {
+JSONStructureNode ExtractStructureInternal(yyjson_val *val) {
 	JSONStructureNode node;
-	ExtractStructureInternal(val, node);
+	JSONStructure::ExtractStructure(val, node);
 	return node;
 }
 
@@ -179,7 +173,7 @@ static inline yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yy
 
 static inline string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &result) {
 	return JSONCommon::WriteVal<yyjson_mut_val>(
-	    ConvertStructure(JSONStructure::ExtractStructure(val), yyjson_mut_doc_new(alc)), alc);
+	    ConvertStructure(ExtractStructureInternal(val), yyjson_mut_doc_new(alc)), alc);
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {

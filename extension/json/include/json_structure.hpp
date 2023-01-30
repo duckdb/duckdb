@@ -35,12 +35,13 @@ public:
 
 public:
 	LogicalTypeId type = LogicalTypeId::INVALID;
+	json_key_map_t<idx_t> key_map;
 	vector<JSONStructureNode> children;
 };
 
 struct JSONStructure {
 public:
-	static JSONStructureNode ExtractStructure(yyjson_val *val);
+	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
 };
 
 } // namespace duckdb
