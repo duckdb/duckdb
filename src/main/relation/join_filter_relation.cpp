@@ -63,15 +63,10 @@ unique_ptr<QueryNode> JoinFilterRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> JoinFilterRelation::GetTableRef() {
-	auto join_ref = make_unique<JoinRef>(JoinRefType::REGULAR);
-	join_ref->left = left->GetTableRef();
-	join_ref->right = right->GetTableRef();
-//	if (left_expr) {
-//		join_ref->condition = ->Copy();
-//	}
-	join_ref->using_columns = using_columns;
-	join_ref->type = join_type;
-	return std::move(join_ref);
+	// only return left table ref, as no right values are returned
+	// as part of an anti or semi join
+	auto result = left->GetTableRef();
+	return std::move(result);
 }
 
 const vector<ColumnDefinition> &JoinFilterRelation::Columns() {
@@ -80,12 +75,14 @@ const vector<ColumnDefinition> &JoinFilterRelation::Columns() {
 
 string JoinFilterRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	str += "Join " + JoinTypeToString(join_type);
-	if (condition) {
-		str += " " + condition->GetName();
+	str += "SELECT " + left->ToString(depth + 1);
+	str += " WHERE ";
+	str += " " + left_expr->ToString(depth + 1);
+	if (join_type == JoinType::ANTI) {
+		str += " NOT ";
 	}
-
-	return str + "\n" + left->ToString(depth + 1) + "\n" + right->ToString(depth + 1);
+	str += " IN ( " + right->ToString(depth + 1);
+	return str;
 }
 
 } // namespace duckdb
