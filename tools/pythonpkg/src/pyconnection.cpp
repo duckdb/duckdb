@@ -133,7 +133,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identifier by 'name'", py::arg("name"),
+	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identified by 'name'", py::arg("name"),
 	         py::kw_only {})
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())

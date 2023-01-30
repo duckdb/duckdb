@@ -132,9 +132,6 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 }
 
 void BufferedCSVReaderOptions::SetQuote(const string &quote) {
-	if (quote.empty()) {
-		return;
-	}
 	this->quote = quote;
 	this->has_quote = true;
 }
