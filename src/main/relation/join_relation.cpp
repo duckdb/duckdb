@@ -51,37 +51,6 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> lef
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-		result->from_table = left->GetTableRef();
-		D_ASSERT(right->type == RelationType::PROJECTION_RELATION);
-		D_ASSERT(left_expr->type == RelationType::PROJECTION_RELATION);
-		auto right_projection = std::dynamic_pointer_cast<ProjectionRelation>(right);
-		auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_expr);
-		if (right_projection->expressions.size() != left_projection->expressions.size()) {
-			throw Exception(JoinTypeToString(join_type) +
-			                " JOIN requires projections to have the same number of expressions");
-		}
-		auto where_child = make_unique<SubqueryExpression>();
-		auto select_statement = make_unique<SelectStatement>();
-		select_statement->node = right->GetQueryNode();
-		where_child->subquery = std::move(select_statement);
-		where_child->subquery_type = SubqueryType::ANY;
-		if (left_projection->expressions.size() > 1) {
-			throw Exception("Cannot project more than one expression from left. Wrap all elements in a list []");
-		}
-		where_child->child = left_projection->expressions.at(0)->Copy();
-		where_child->comparison_type = ExpressionType::COMPARE_EQUAL;
-		// wrap anti joins in extra operator_not expression
-		if (join_type == JoinType::ANTI) {
-			auto where_clause = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT);
-			where_clause->children.push_back(std::move(where_child));
-			result->where_clause = std::move(where_clause);
-		} else {
-			result->where_clause = std::move(where_child);
-		}
-		return result;
-	}
-
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
