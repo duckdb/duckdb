@@ -127,8 +127,7 @@ public:
 			grouping_types = payload_types;
 			grouping_types.push_back(LogicalType::HASH);
 
-			// TODO: The planner seems to ignore propagating cardinality for window...
-			ResizeGroupingData(op.children[0]->estimated_cardinality);
+			ResizeGroupingData(op.estimated_cardinality);
 		}
 	}
 
@@ -171,7 +170,7 @@ private:
 
 void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	//	Is the average partition size too large?
-	const auto partition_size = (idx_t(1) << 17);
+	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
 	while (new_bits < 10 && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {

@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -46,20 +48,20 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
 	return result;
 }
 
-void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, bool is_append, DataChunk &chunk,
-                                      vector<string> &err_msgs) {
-	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk,
+                                      ConflictManager &conflict_manager) {
+	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
+	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
+	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);
 	if (!index) {
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
 	}
-	if (is_append) {
-		index->VerifyAppendForeignKey(chunk, err_msgs.data());
-	} else {
-		index->VerifyDeleteForeignKey(chunk, err_msgs.data());
-	}
+	conflict_manager.SetIndexCount(1);
+
+	index->LookupValues(chunk, conflict_manager);
 }
 
 vector<column_t> TableIndexList::GetRequiredColumns() {

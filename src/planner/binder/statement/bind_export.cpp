@@ -85,6 +85,15 @@ void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 	tables = ordered;
 }
 
+string CreateFileName(const string &id_suffix, TableCatalogEntry *table, const string &extension) {
+	auto name = SanitizeExportIdentifier(table->name);
+	if (table->schema->name == DEFAULT_SCHEMA) {
+		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
+	}
+	auto schema = SanitizeExportIdentifier(table->schema->name);
+	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -135,20 +144,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		idx_t id = 0;
 		while (true) {
 			string id_suffix = id == 0 ? string() : "_" + to_string(id);
-			if (table->schema->name == DEFAULT_SCHEMA) {
-				info->file_path = fs.JoinPath(stmt.info->file_path,
-				                              StringUtil::Format("%s%s.%s", SanitizeExportIdentifier(table->name),
-				                                                 id_suffix, copy_function->function.extension));
-			} else {
-				info->file_path =
-				    fs.JoinPath(stmt.info->file_path,
-				                StringUtil::Format("%s_%s%s.%s", SanitizeExportIdentifier(table->schema->name),
-				                                   SanitizeExportIdentifier(table->name), id_suffix,
-				                                   copy_function->function.extension));
-			}
-			if (table_name_index.find(info->file_path) == table_name_index.end()) {
+			auto name = CreateFileName(id_suffix, table, copy_function->function.extension);
+			auto directory = stmt.info->file_path;
+			auto full_path = fs.JoinPath(directory, name);
+			info->file_path = full_path;
+			auto insert_result = table_name_index.insert(info->file_path);
+			if (insert_result.second == true) {
 				// this name was not yet taken: take it
-				table_name_index.insert(info->file_path);
 				break;
 			}
 			id++;
@@ -166,6 +168,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
+
 		exported_data.file_path = info->file_path;
 
 		ExportedTableInfo table_info;
