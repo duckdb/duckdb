@@ -123,8 +123,8 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 
 	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
-	string& custom_endpoint = ClientConfig::GetConfig(context).custom_extension_repo;
-	string& endpoint = custom_endpoint != "" ? custom_endpoint : default_endpoint;
+	string &custom_endpoint = ClientConfig::GetConfig(context).custom_extension_repo;
+	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
 	string url_template = endpoint + versioned_path;
 
 	if (is_http_url) {
