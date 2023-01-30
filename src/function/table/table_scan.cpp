@@ -14,6 +14,7 @@
 #include "duckdb/transaction/dtransaction.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 

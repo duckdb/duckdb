@@ -15,6 +15,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/transaction/dtransaction.hpp"
 
 namespace duckdb {
 

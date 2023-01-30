@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"

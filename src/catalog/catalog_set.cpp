@@ -11,6 +11,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 

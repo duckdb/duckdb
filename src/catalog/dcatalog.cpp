@@ -2,6 +2,11 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/dschema_catalog_entry.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
+#include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

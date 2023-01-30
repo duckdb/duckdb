@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 
 namespace duckdb {
 

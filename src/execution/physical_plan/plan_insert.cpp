@@ -6,6 +6,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/catalog/dcatalog.hpp"
 
 namespace duckdb {
 

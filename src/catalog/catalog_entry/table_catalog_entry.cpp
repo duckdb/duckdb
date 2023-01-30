@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 #include <sstream>
 

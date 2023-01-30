@@ -1,4 +1,6 @@
 #include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
