@@ -88,8 +88,13 @@ public:
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn,
-	                                            const py::kwargs &kwargs);
+	static unique_ptr<DuckDBPyRelation>
+	ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
+	        const py::object &compression = py::none(), const py::object &sep = py::none(),
+	        const py::object &delimiter = py::none(), const py::object &dtype = py::none(),
+	        const py::object &na_values = py::none(), const py::object &skiprows = py::none(),
+	        const py::object &quotechar = py::none(), const py::object &escapechar = py::none(),
+	        const py::object &encoding = py::none());
 
 	static py::list FetchAll(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
