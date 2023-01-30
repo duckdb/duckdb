@@ -18,6 +18,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include <cmath>
 
@@ -1074,7 +1075,7 @@ public:
 		for (uint32_t i = 0; i < child_types_size; i++) {
 			auto name = source.Read<string>();
 			auto type = LogicalType::Deserialize(source);
-			child_list.push_back(make_pair(std::move(name), std::move(type)));
+			child_list.emplace_back(std::move(name), std::move(type));
 		}
 		return make_shared<StructTypeInfo>(std::move(child_list));
 	}
@@ -1193,8 +1194,8 @@ LogicalType LogicalType::MAP(LogicalType child) {
 
 LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_list_t<LogicalType> child_types;
-	child_types.push_back({"key", std::move(key)});
-	child_types.push_back({"value", std::move(value)});
+	child_types.emplace_back("key", std::move(key));
+	child_types.emplace_back("value", std::move(value));
 	return LogicalType::MAP(LogicalType::STRUCT(std::move(child_types)));
 }
 
@@ -1213,7 +1214,7 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
-	D_ASSERT(members.size() > 0);
+	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::TINYINT});
@@ -1347,7 +1348,6 @@ protected:
 			writer.WriteField<uint32_t>(dict_size);
 			((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
 		} else {
-			writer.WriteString(catalog_entry->catalog->GetName());
 			writer.WriteString(catalog_entry->schema->name);
 		}
 	}
@@ -1555,7 +1555,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			// this means the enum should already be in the catalog.
 			auto &client_context = reader.GetSource().GetContext();
 			// FIXME have to pass on the catalog name
-			auto catalog_name = reader.ReadRequired<string>();
+			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
 			auto schema_name = reader.ReadRequired<string>();
 			auto enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
 			extra_info = enum_type.GetAuxInfoShrPtr();
