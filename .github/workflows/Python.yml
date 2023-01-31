@@ -51,12 +51,16 @@ jobs:
       with:
         key: ${{ github.job }}
 
-    - name: Build
+    - name: Build source dist
       shell: bash
+      working-directory: tools/pythonpkg
       run: |
-        cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+    - name: Build
+      shell: bash
+      working-directory: tools/pythonpkg
+      run: |
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
@@ -344,7 +348,8 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install numpy pytest pandas mypy psutil
+        working-directory: tools/pythonpkg
+        run: pip install -r requirements-dev.txt
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main

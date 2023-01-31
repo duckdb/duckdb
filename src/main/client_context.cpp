@@ -665,6 +665,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+		case StatementType::COPY_STATEMENT:
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {

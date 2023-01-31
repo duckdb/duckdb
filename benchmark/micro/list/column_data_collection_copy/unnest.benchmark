@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/column_data_collection_copy/unnest.benchmark
+# description: Benchmark code paths that use the column data collection copy for an unnest query
+# group: [column_data_collection_copy]
+
+name Column Data Collection Copy Unnest
+group micro
+subgroup list
+
+load
+CREATE TABLE stage AS SELECT range AS len FROM range(500);
+CREATE TABLE tbl AS SELECT range AS i FROM range(50);
+ALTER TABLE tbl ADD COLUMN l INTEGER[];
+UPDATE tbl SET l = (SELECT LIST(len + i) FROM stage);
+
+run
+SELECT * FROM tbl, (SELECT i, UNNEST(l) FROM tbl);
