@@ -88,6 +88,8 @@ public:
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns,
+	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static unique_ptr<DuckDBPyRelation>
 	ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
 	        const py::object &compression = py::none(), const py::object &sep = py::none(),

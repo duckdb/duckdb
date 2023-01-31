@@ -14,7 +14,7 @@ namespace duckdb {
 
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
                                  vector<ColumnDefinition> columns_p, string alias_p)
-    : TableFunctionRelation(context, "read_csv", {Value(move(csv_file_p))}), alias(std::move(alias_p)),
+    : TableFunctionRelation(context, "read_csv", {Value(move(csv_file_p))}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(false) {
 
 	if (alias.empty()) {
@@ -33,7 +33,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
                                  BufferedCSVReaderOptions options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file_p)}), alias(std::move(alias_p)),
+    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file_p)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(true), csv_file(std::move(csv_file_p)) {
 
 	if (alias.empty()) {
@@ -49,11 +49,6 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	}
 
 	AddNamedParameter("auto_detect", Value::BOOLEAN(true));
-}
-
-// Called from TableFunctionRelation constructor, at which point we can't initialize the columns for this yet
-void ReadCSVRelation::InitializeColumns() {
-	return;
 }
 
 string ReadCSVRelation::GetAlias() {

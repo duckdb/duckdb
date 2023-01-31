@@ -226,6 +226,15 @@ py::object PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }
 
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filename, const py::object &columns,
+                                                           shared_ptr<DuckDBPyConnection> conn) {
+
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ReadJSON(filename, columns);
+}
+
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(const string &filename, shared_ptr<DuckDBPyConnection> conn,
                                                           const py::object &header, const py::object &compression,
                                                           const py::object &sep, const py::object &delimiter,

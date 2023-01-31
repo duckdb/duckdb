@@ -71,6 +71,8 @@ public:
 	        const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
 	        const py::object &parallel = py::none());
 
+	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns);
+
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);

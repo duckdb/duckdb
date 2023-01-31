@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
+#include "extension/json/include/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 #include <random>
 
@@ -138,6 +140,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
 	         py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
 	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none())
+	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Read the JSON file identified by 'name'", py::arg("name"),
+	         py::arg("columns"))
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
@@ -416,6 +420,41 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return shared_from_this();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+
+	if (!py::isinstance<py::dict>(columns)) {
+		throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
+	}
+
+	vector<ColumnDefinition> column_definitions;
+	py::dict columns_dict = columns;
+	for (auto &kv : columns_dict) {
+		auto &name = kv.first;
+		auto &type = kv.second;
+		if (!py::isinstance<py::str>(name)) {
+			string actual_type = py::str(name.get_type());
+			throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
+		}
+		if (!py::isinstance<py::str>(type)) {
+			string actual_type = py::str(name.get_type());
+			throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
+		}
+		// FIXME: this does not support user-defined types
+		auto ltype = StringUtil::Lower(py::str(type));
+		auto logical_type_id = DefaultTypeGenerator::GetDefaultType(ltype);
+		if (logical_type_id == LogicalTypeId::INVALID) {
+			throw InvalidInputException("No type with the name '%s' exists", ltype);
+		}
+		column_definitions.push_back(ColumnDefinition(py::str(name), logical_type_id));
+	}
+
+	auto read_json_relation = make_unique<ReadJSONRelation>(connection->context, name, move(column_definitions));
+	return make_unique<DuckDBPyRelation>(move(read_json_relation));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, const py::object &header,
