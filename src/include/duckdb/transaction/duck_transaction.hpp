@@ -15,7 +15,7 @@ namespace duckdb {
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
-					transaction_t transaction_id);
+	                transaction_t transaction_id);
 	~DuckTransaction();
 
 	//! The start timestamp of this transaction

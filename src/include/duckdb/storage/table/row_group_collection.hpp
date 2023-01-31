@@ -52,8 +52,8 @@ public:
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
 	bool Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
-			  const std::function<bool(DataChunk &chunk)> &fun);
-	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk & chunk)> &fun);
+	          const std::function<bool(DataChunk &chunk)> &fun);
+	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);

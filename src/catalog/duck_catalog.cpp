@@ -81,7 +81,7 @@ void DuckCatalog::ScanSchemas(std::function<void(CatalogEntry *)> callback) {
 }
 
 SchemaCatalogEntry *DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
-										   QueryErrorContext error_context) {
+                                           QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry && !if_exists) {

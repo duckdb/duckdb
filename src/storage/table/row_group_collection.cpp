@@ -152,7 +152,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 }
 
 bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
-							  const std::function<bool(DataChunk &chunk)> &fun) {
+                              const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		scan_types.push_back(types[column_ids[i]]);

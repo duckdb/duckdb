@@ -198,8 +198,8 @@ void LocalTableStorage::FlushToDisk() {
 }
 
 bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
-										TableIndexList &index_list, const vector<LogicalType> &table_types,
-										row_t &start_row) {
+                                        TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                        row_t &start_row) {
 	// only need to scan for index append
 	// figure out which columns we need to scan for the set of indexes
 	auto columns = index_list.GetRequiredColumns();
@@ -224,8 +224,8 @@ bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCo
 	return success;
 }
 
-void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
-										bool append_to_table) {
+void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
+                                        idx_t append_count, bool append_to_table) {
 	bool constraint_violated = false;
 	if (append_to_table) {
 		table->InitializeAppend(transaction, append_state, append_count);

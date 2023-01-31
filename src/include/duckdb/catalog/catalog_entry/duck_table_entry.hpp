@@ -17,7 +17,7 @@ class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
-				   std::shared_ptr<DataTable> inherited_storage = nullptr);
+	               std::shared_ptr<DataTable> inherited_storage = nullptr);
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;

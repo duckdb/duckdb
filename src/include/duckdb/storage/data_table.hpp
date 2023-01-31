@@ -72,7 +72,7 @@ public:
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
 	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-						TableFilterSet *table_filters = nullptr);
+	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
@@ -86,8 +86,8 @@ public:
 	void Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids, const Vector &row_ids,
-			   idx_t fetch_count, ColumnFetchState &state);
+	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
 	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);

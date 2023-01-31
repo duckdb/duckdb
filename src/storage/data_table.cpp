@@ -193,7 +193,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 }
 
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-							   TableFilterSet *table_filters) {
+                               TableFilterSet *table_filters) {
 	InitializeScan(state, column_ids, table_filters);
 	auto &local_storage = LocalStorage::Get(transaction);
 	local_storage.InitializeScan(this, state.local_state, table_filters);
@@ -255,7 +255,7 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
-					  const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+                      const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 

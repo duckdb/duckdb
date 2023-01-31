@@ -71,7 +71,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog *catalog, string name_p, bool is_intern
 }
 
 CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-												OnCreateConflict on_conflict, DependencyList dependencies) {
+                                                OnCreateConflict on_conflict, DependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -168,7 +168,7 @@ CatalogEntry *DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, Cr
 }
 
 CatalogEntry *DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
-										OnCreateConflict on_conflict) {
+                                        OnCreateConflict on_conflict) {
 	DependencyList dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
@@ -188,8 +188,7 @@ CatalogEntry *DuckSchemaEntry::CreateView(CatalogTransaction transaction, Create
 	return AddEntry(transaction, std::move(view), info->on_conflict);
 }
 
-CatalogEntry *DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info,
-										   TableCatalogEntry *table) {
+CatalogEntry *DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
 	auto index = make_unique<DuckIndexEntry>(catalog, this, info);
@@ -214,8 +213,7 @@ CatalogEntry *DuckSchemaEntry::CreateCopyFunction(CatalogTransaction transaction
 	return AddEntry(transaction, std::move(copy_function), info->on_conflict);
 }
 
-CatalogEntry *DuckSchemaEntry::CreatePragmaFunction(CatalogTransaction transaction,
-													CreatePragmaFunctionInfo *info) {
+CatalogEntry *DuckSchemaEntry::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
 	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
 	pragma_function->internal = info->internal;
 	return AddEntry(transaction, std::move(pragma_function), info->on_conflict);
@@ -238,7 +236,7 @@ void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
-						   const std::function<void(CatalogEntry *)> &callback) {
+                           const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(GetCatalogTransaction(context), callback);
 }
@@ -282,7 +280,7 @@ CatalogEntry *DuckSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogT
 }
 
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
-													 const string &name) {
+                                                     const string &name) {
 	return GetCatalogSet(type).SimilarEntry(transaction, name);
 }
 
