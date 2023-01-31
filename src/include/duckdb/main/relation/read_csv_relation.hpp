@@ -24,7 +24,6 @@ public:
 
 	string alias;
 	bool auto_detect;
-	string csv_file;
 
 public:
 	string GetAlias() override;
