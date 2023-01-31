@@ -4,7 +4,7 @@
 # # stubgen override
 # to help the sanity of maintainers.
 # stubgen override - missing import of Set
-from typing import Any, ClassVar, Set
+from typing import Any, ClassVar, Set, Optional
 
 from typing import overload
 import pandas
@@ -66,6 +66,21 @@ class DuckDBPyConnection:
     def fetchone(self) -> object: ...
     def from_arrow(self, arrow_object: object) -> DuckDBPyRelation: ...
     def from_csv_auto(self, file_name: str) -> DuckDBPyRelation: ...
+    def read_csv(
+        self,
+        filename: str,
+        header: Optional[bool | int] = None,
+        compression: Optional[str] = None,
+        sep: Optional[str] = None,
+        delimiter: Optional[str] = None,
+        dtype: Optional[dict[str, str] | list[str]] = None,
+        na_values: Optional[str] = None,
+        skiprows: Optional[int] = None,
+        quotechar: Optional[str] = None,
+        escapechar: Optional[str] = None,
+        encoding: Optional[str] = None,
+		parallel: Optional[bool] = None,
+    ) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload
     def from_parquet(self, file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
@@ -259,6 +274,21 @@ def limit(df: pandas.DataFrame, n: int, connection: DuckDBPyConnection = ...) ->
 def order(df: pandas.DataFrame, order_expr: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def project(df: pandas.DataFrame, project_expr: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def write_csv(df: pandas.DataFrame, file_name: str, connection: DuckDBPyConnection = ...) -> None: ...
+def read_csv(
+    filename: str,
+    header: Optional[bool | int] = None,
+    compression: Optional[str] = None,
+    sep: Optional[str] = None,
+    delimiter: Optional[str] = None,
+    dtype: Optional[dict[str, str] | list[str]] = None,
+    na_values: Optional[str] = None,
+    skiprows: Optional[int] = None,
+    quotechar: Optional[str] = None,
+    escapechar: Optional[str] = None,
+    encoding: Optional[str] = None,
+	parallel: Optional[bool] = None,
+    connection: DuckDBPyConnection = ...
+) -> DuckDBPyRelation: ...
 
 def append(table_name: str, df: pandas.DataFrame, connection: DuckDBPyConnection = ...) -> DuckDBPyConnection: ...
 def arrow(chunk_size: int = ..., connection: DuckDBPyConnection = ...) -> pyarrow.lib.Table: ...

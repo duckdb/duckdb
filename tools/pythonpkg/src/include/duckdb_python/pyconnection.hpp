@@ -18,6 +18,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 
 namespace duckdb {
@@ -61,6 +62,14 @@ public:
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
+
+	unique_ptr<DuckDBPyRelation>
+	ReadCSV(const string &filename, const py::object &header = py::none(), const py::object &compression = py::none(),
+	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
+	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
+	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
+	        const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
+	        const py::object &parallel = py::none());
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
