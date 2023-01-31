@@ -2,8 +2,8 @@
 # description: Test duckdb_databases function
 # group: [table_function]
 
-# explicitly load an in-memory database
-load
+# avoid loading a storage database because it changes the initial database name
+require noforcestorage
 
 statement ok
 PRAGMA enable_verification

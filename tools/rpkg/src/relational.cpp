@@ -26,7 +26,6 @@
 using namespace duckdb;
 using namespace cpp11;
 
-
 template <typename T, typename... ARGS>
 external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	auto extptr = external_pointer<T>(new T(std::forward<ARGS>(args)...));

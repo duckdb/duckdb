@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table_p, vector<column_t> column_ids,
-                                         unique_ptr<CreateIndexInfo> info,
+PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table_p,
+                                         const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
                                          vector<unique_ptr<Expression>> unbound_expressions,
                                          idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),

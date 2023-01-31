@@ -141,7 +141,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// estimated_size, LogicalType::BIGINT
 		Value card_val =
 		    storage_info.cardinality == DConstants::INVALID_INDEX ? Value() : Value::BIGINT(storage_info.cardinality);
-		output.SetValue(col++, count, std::move(card_val));
+		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
