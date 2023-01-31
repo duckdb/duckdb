@@ -22,6 +22,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 #include <cmath>
 
@@ -1563,7 +1564,26 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			// FIXME have to pass on the catalog name
 			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
 			auto schema_name = reader.ReadRequired<string>();
-			auto enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+			bool found_enum = false;
+			LogicalType enum_type;
+			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
+				enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+				found_enum = true;
+			} else {
+				// Look into set catalog paths
+				auto &catalog_paths = client_context.client_data->catalog_search_path->GetSetPaths();
+				for (auto &path : catalog_paths) {
+					if (Catalog::TypeExists(client_context, path.catalog, path.schema, enum_name)) {
+						enum_type = Catalog::GetType(client_context, path.catalog, path.schema, enum_name);
+						found_enum = true;
+						break;
+					}
+				}
+			}
+			if (!found_enum) {
+				// capture error
+				enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+			}
 			extra_info = enum_type.GetAuxInfoShrPtr();
 			break;
 		} else {
