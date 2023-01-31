@@ -48,25 +48,25 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info);
+	DUCKDB_API TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info);
 
 public:
-	bool HasGeneratedColumns() const;
+	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	const ColumnDefinition &GetColumn(const string &name);
+	DUCKDB_API const ColumnDefinition &GetColumn(const string &name);
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
-	const ColumnDefinition &GetColumn(LogicalIndex idx);
+	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx);
 	//! Returns a list of types of the table, excluding generated columns
-	vector<LogicalType> GetTypes();
+	DUCKDB_API vector<LogicalType> GetTypes();
 	//! Returns a list of the columns of the table
-	const ColumnList &GetColumns() const;
+	DUCKDB_API const ColumnList &GetColumns() const;
 	//! Returns a mutable list of the columns of the table
-	ColumnList &GetColumnsMutable();
+	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
 	virtual DataTable *GetStoragePtr();
@@ -74,8 +74,8 @@ public:
 	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
 	//! Returns a list of the constraints of the table
-	const vector<unique_ptr<Constraint>> &GetConstraints();
-	string ToSQL() override;
+	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints();
+	DUCKDB_API string ToSQL() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
@@ -89,7 +89,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
+	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
