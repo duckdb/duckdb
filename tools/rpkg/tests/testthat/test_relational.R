@@ -300,7 +300,7 @@ test_that("rel aggregate with groups and aggregate function works", {
 test_that("Window function works", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    sum <- duckdb::expr_reference("a")
+    sum <- duckdb:::expr_reference("a")
     partitions <- list(duckdb:::expr_reference("b"))
     window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, sum, partitions, list())
     res = duckdb:::rel_to_altrep(window_function)

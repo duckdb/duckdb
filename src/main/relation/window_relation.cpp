@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-WindowRelation::WindowRelation(shared_ptr<Relation> rel, unique_ptr<ParsedExpression> child_, vector<ColumnRefExpression> partitions_)
+WindowRelation::WindowRelation(shared_ptr<Relation> rel, unique_ptr<ColumnRefExpression> child_, vector<ColumnRefExpression> partitions_)
     : Relation(rel->context, RelationType::PROJECTION_RELATION) {
 //	vector<ColumnDefinition> dummy_columns;
 	child = std::move(child_);
@@ -35,7 +35,7 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 // select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
 	auto window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, "", schema_name, "sum");
-	window_expr->children.push_back(std::move(child));
+	window_expr->children.push_back(make_unique<ColumnRefExpression>(child->GetColumnName(), child->GetTableName()));
 	for (auto &partition : this->partitions) {
 		auto yea = make_unique<ColumnRefExpression>(partition.GetColumnName(), partition.GetTableName());
 		window_expr->partitions.push_back(std::move(yea));

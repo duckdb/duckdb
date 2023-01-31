@@ -182,7 +182,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	for (expr_extptr_t column_name : partitions) {
 		res_partitions.emplace_back(ColumnRefExpression(column_name->GetName(), table_alias));
 	}
-	auto col2 = col->Copy();
+	auto col2 = make_unique<ColumnRefExpression>(col->GetName(), table_alias);
 	auto res = std::make_shared<WindowRelation>(rel->rel, std::move(col2), res_partitions);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 
