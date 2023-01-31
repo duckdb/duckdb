@@ -39,14 +39,8 @@ public:
 public:
 	//! Read into the FileBuffer from the specified location.
 	void Read(FileHandle &handle, uint64_t location);
-	//! Read into the FileBuffer from the specified location. Automatically verifies the checksum, and throws an
-	//! exception if the checksum does not match correctly.
-	virtual void ReadAndChecksum(FileHandle &handle, uint64_t location);
 	//! Write the contents of the FileBuffer to the specified location.
 	void Write(FileHandle &handle, uint64_t location);
-	//! Write the contents of the FileBuffer to the specified location. Automatically adds a checksum of the contents of
-	//! the filebuffer in front of the written data.
-	virtual void ChecksumAndWrite(FileHandle &handle, uint64_t location);
 
 	void Clear();
 
@@ -56,6 +50,9 @@ public:
 
 	uint64_t AllocSize() const {
 		return internal_size;
+	}
+	data_ptr_t InternalBuffer() {
+		return internal_buffer;
 	}
 
 	struct MemoryRequirement {
@@ -72,16 +69,6 @@ protected:
 	uint64_t internal_size;
 
 	void ReallocBuffer(size_t malloc_size);
-
-private:
-	//! The buffer that was actually malloc'd, i.e. the pointer that must be freed when the FileBuffer is destroyed
-	data_ptr_t malloced_buffer;
-	uint64_t malloced_size;
-
-protected:
-	uint64_t GetMallocedSize() {
-		return malloced_size;
-	}
 	void Init();
 };
 
