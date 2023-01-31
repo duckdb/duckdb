@@ -67,9 +67,9 @@ class TestReadCSV(object):
 		print(res)
 		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
-	# uncomment after issue #6011 is fixed
-	#def test_header_false(self, duckdb_cursor):
-	#	rel = duckdb_cursor.read_csv(TestFile('category.csv'), header=False)
+	@pytest.mark.skip(reason="Issue #6011 needs to be fixed first, header=False doesn't work correctly")
+	def test_header_false(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), header=False)
 
 	def test_na_values(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv(TestFile('category.csv'), na_values='Action')
@@ -100,6 +100,12 @@ class TestReadCSV(object):
 		print(res)
 		assert res == ('345', 'TEST6', '"text""2""text"')
 
-	def test_encoding(self, duckdb_cursor):
+	def test_encoding_wrong(self, duckdb_cursor):
 		with pytest.raises(duckdb.BinderException, match="Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'"):
 			rel = duckdb_cursor.read_csv(TestFile('quote_escape.csv'), encoding=";")
+
+	def test_encoding_correct(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('quote_escape.csv'), encoding="UTF-8")
+		res = rel.limit(1,1).fetchone()
+		print(res)
+		assert res == (345, 'TEST6', 'text"2"text')

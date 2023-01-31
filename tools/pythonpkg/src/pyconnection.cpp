@@ -134,11 +134,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identified by 'name'", py::arg("name"),
-	         // py::kw_only {},
-	         py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
-	         py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
-	         py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	         py::arg("encoding") = py::none())
+	         py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
+	         py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
+	         py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
+	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none())
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
@@ -556,8 +555,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		if (!py::isinstance<py::str>(encoding)) {
 			throw InvalidInputException("read_csv only accepts 'encoding' as a string");
 		}
-		string encoding = py::str(encoding);
-		if (encoding != "utf8" && encoding != "utf-8") {
+		string encoding_str = StringUtil::Lower(py::str(encoding));
+		if (encoding_str != "utf8" && encoding_str != "utf-8") {
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
 	}
