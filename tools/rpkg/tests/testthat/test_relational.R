@@ -1,5 +1,3 @@
-skip_if_not_installed("non_existent_extension")
-
 library("DBI")
 library("testthat")
 
