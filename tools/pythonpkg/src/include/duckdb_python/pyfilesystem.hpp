@@ -22,6 +22,10 @@ public:
 class PythonFileHandle : public FileHandle {
 public:
 	PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle);
+	~PythonFileHandle() {
+		PythonGILWrapper gil;
+		handle.dec_ref();
+	}
 
 	void Close() override {
 		PythonGILWrapper gil;
