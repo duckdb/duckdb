@@ -7,6 +7,7 @@ namespace duckdb {
 
 void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
                 vector<string> &names) {
+	bind_data.type = JSONScanType::SAMPLE; // Set to sample
 	JSONScanGlobalState gstate(context, bind_data);
 	JSONScanLocalState lstate(context, gstate);
 
@@ -26,8 +27,11 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 				break;
 			}
 		}
+		// TODO: identify string types
 	}
+	bind_data.type = JSONScanType::READ_JSON; // Restore scan type
 
+	// TODO: add unnest level as a param to read_json_auto
 	const auto type = JSONStructure::StructureToType(context, node, 1);
 	if (type.id() != LogicalTypeId::STRUCT) {
 		return_types.emplace_back(type);
@@ -42,6 +46,14 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 		return_types.emplace_back(child_type.second);
 		names.emplace_back(child_type.first);
 	}
+
+	// TODO: if it's not a plain file source we need to copy the buffers and store them in the reader
+	for (auto &reader : gstate.json_readers) {
+		if (reader->IsOpen()) {
+			reader->Reset();
+		}
+	}
+	bind_data.stored_readers = std::move(gstate.json_readers);
 }
 
 unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
@@ -103,7 +115,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.strict_cast = !bind_data.ignore_errors;
 	transform_options.error_duplicate_key = !bind_data.ignore_errors;
 	transform_options.error_missing_key = false;
-	transform_options.error_unknown_key = bind_data.auto_detect; // Might still be set to false if we do proj pushdown
+	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
 
 	return result;
 }

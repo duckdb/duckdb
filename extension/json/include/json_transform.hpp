@@ -13,6 +13,7 @@
 namespace duckdb {
 
 struct JSONTransformOptions {
+public:
 	//! Throws an error if the cast doesn't work (instead of NULL-ing it)
 	bool strict_cast;
 	//! Throws an error if there is a duplicate key (instead of ignoring it)
@@ -21,6 +22,10 @@ struct JSONTransformOptions {
 	bool error_missing_key;
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key;
+
+public:
+	void Serialize(FieldWriter &writer);
+	void Deserialize(FieldReader &reader);
 };
 
 struct JSONTransform {

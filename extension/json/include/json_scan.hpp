@@ -21,6 +21,8 @@ enum class JSONScanType : uint8_t {
 	READ_JSON = 1,
 	//! Read JSON objects as strings
 	READ_JSON_OBJECTS = 2,
+	//! Sample run for schema detection
+	SAMPLE = 3,
 };
 
 struct JSONScanData : public TableFunctionData {
@@ -43,7 +45,7 @@ public:
 
 	//! Whether or not we should ignore malformed JSON (default to NULL)
 	bool ignore_errors = false;
-	//! Maximum JSON object size (defaults to 1MB)
+	//! Maximum JSON object size (defaults to 1MB minimum)
 	idx_t maximum_object_size = 1048576;
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
@@ -54,6 +56,9 @@ public:
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
 	//! Column names (in order)
 	vector<string> names;
+
+	//! Stored readers for when we're detecting the schema
+	vector<unique_ptr<BufferedJSONReader>> stored_readers;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
@@ -154,9 +159,10 @@ private:
 	const char *buffer_copy_ptr;
 
 private:
-	bool ReadNextBuffer(JSONScanGlobalState &gstate, bool &first_read);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, bool &first_read, idx_t &buffer_index);
+	bool ReadNextBuffer(JSONScanGlobalState &gstate);
+	void ReadNextBuffer(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
@@ -206,7 +212,6 @@ public:
 	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 		auto &bind_data = (JSONScanData &)*bind_data_p;
 		bind_data.Serialize(writer);
-		bind_data.options.Serialize(writer);
 	}
 
 	static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,

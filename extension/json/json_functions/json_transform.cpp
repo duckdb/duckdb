@@ -7,6 +7,20 @@
 
 namespace duckdb {
 
+void JSONTransformOptions::Serialize(FieldWriter &writer) {
+	writer.WriteField(strict_cast);
+	writer.WriteField(error_duplicate_key);
+	writer.WriteField(error_missing_key);
+	writer.WriteField(error_unknown_key);
+}
+
+void JSONTransformOptions::Deserialize(FieldReader &reader) {
+	strict_cast = reader.ReadRequired<bool>();
+	error_duplicate_key = reader.ReadRequired<bool>();
+	error_missing_key = reader.ReadRequired<bool>();
+	error_unknown_key = reader.ReadRequired<bool>();
+}
+
 //! Forward declaration for recursion
 static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context);
 

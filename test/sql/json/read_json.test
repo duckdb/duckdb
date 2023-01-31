@@ -122,3 +122,14 @@ SELECT * FROM 'data/json/example_n.ndjson'
 3	The Firm
 4	Broadcast News
 5	Raising Arizona
+
+require httpfs
+
+query II
+select * from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson');
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
