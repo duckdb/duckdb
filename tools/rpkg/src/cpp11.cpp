@@ -139,6 +139,13 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, duckdb::expr_extptr_t col, list partitions, list bounds);
+extern "C" SEXP _duckdb_rapi_rel_window_aggregation(SEXP rel, SEXP col, SEXP partitions, SEXP bounds) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_window_aggregation(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(col), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<list>>(bounds)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds, std::string join);
 extern "C" SEXP _duckdb_rapi_rel_join(SEXP left, SEXP right, SEXP conds, SEXP join) {
   BEGIN_CPP11
@@ -379,6 +386,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_to_df",              (DL_FUNC) &_duckdb_rapi_rel_to_df,              1},
     {"_duckdb_rapi_rel_tostring",           (DL_FUNC) &_duckdb_rapi_rel_tostring,           1},
     {"_duckdb_rapi_rel_union_all",          (DL_FUNC) &_duckdb_rapi_rel_union_all,          2},
+    {"_duckdb_rapi_rel_window_aggregation", (DL_FUNC) &_duckdb_rapi_rel_window_aggregation, 4},
     {"_duckdb_rapi_release",                (DL_FUNC) &_duckdb_rapi_release,                1},
     {"_duckdb_rapi_shutdown",               (DL_FUNC) &_duckdb_rapi_shutdown,               1},
     {"_duckdb_rapi_startup",                (DL_FUNC) &_duckdb_rapi_startup,                3},

@@ -101,7 +101,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
-	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
+	new_window->filter_expr = filter_expr ? filter_expr->Copy() :  	nullptr;
 
 	new_window->start = start;
 	new_window->end = end;

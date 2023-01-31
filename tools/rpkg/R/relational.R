@@ -151,6 +151,19 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
+#' Lazily perform a window aggregation on a DuckDB relation object
+#' @param rel the DuckDB relation object
+#' @param paritions a list of DuckDB expressions to order by
+#' @return the now aggregated `duckdb_relation` object
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+#' partition <- list(duckdb:::expr_reference("b"))
+#' window_function <- duckdb:::rel_window_aggregation(rel_a, partition)
+#' res = duckdb:::rel_to_altrep(window_function)
+rel_window <- rapi_rel_window_aggregation
+
 #' Lazily INNER join two DuckDB relation objects
 #' @param left the left-hand-side DuckDB relation object
 #' @param right the right-hand-side DuckDB relation object

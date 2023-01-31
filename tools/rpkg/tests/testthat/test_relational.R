@@ -285,21 +285,29 @@ test_that("rel aggregate with groups and aggregate function works", {
    expect_equal(rel_df, expected_result)
 })
 
-test_that("Window function works", {
-    # select j, i, sum(i) over () from a order by 1,2
-    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
-    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
-    #                    DF          GROUP BY CLAUSE        aggregation function.
-    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
-    window_rel <- duckdb:::rel_window("aggregation_function", "partitions", "bounds")
-#     widow_rel <- duckdb:::rel_window(window_function, table, order by clause);
-    rel_df <- duckdb:::rel_to_altrep(test_df_a)
-    #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
-})
-
 # test_that("Window function works", {
 #     # select j, i, sum(i) over () from a order by 1,2
-#     test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
+#     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
+#     aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+#     #                    DF          GROUP BY CLAUSE        aggregation function.
+#     res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+#     window_rel <- duckdb:::rel_window("aggregation_function", "partitions", "bounds")
+# #     widow_rel <- duckdb:::rel_window(window_function, table, order by clause);
 #     rel_df <- duckdb:::rel_to_altrep(test_df_a)
 #     #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
 # })
+
+test_that("Window function works", {
+#     select j, i, sum(i) over (partition by j) from a order by 1,2
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    sum <- duckdb::expr_reference("a")
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, sum, partitions, list())
+    res = duckdb:::rel_to_altrep(window_function)
+
+
+    # select j, i, sum(i) over () from a order by 1,2
+#     test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
+#     rel_df <- duckdb:::rel_to_altrep(test_df_a)
+    #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
+})

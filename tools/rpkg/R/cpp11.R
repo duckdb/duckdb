@@ -72,6 +72,10 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
+rapi_rel_window_aggregation <- function(rel, col, partitions, bounds) {
+  .Call(`_duckdb_rapi_rel_window_aggregation`, rel, col, partitions, bounds)
+}
+
 rapi_rel_join <- function(left, right, conds, join) {
   .Call(`_duckdb_rapi_rel_join`, left, right, conds, join)
 }

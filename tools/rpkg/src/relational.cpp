@@ -176,11 +176,14 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t aggregation, list partitions, list bounds,
-                                       std::string join) {
-
-
-	auto res = std::make_shared<WindowRelation>(aggregation->rel, partitions, bounds);
+[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, duckdb::expr_extptr_t col, list partitions, list bounds) {
+	vector<ColumnRefExpression> res_partitions;
+	auto table_alias = rel->rel->GetAlias();
+	for (expr_extptr_t column_name : partitions) {
+		res_partitions.emplace_back(ColumnRefExpression(column_name->GetName(), table_alias));
+	}
+	auto col2 = col->Copy();
+	auto res = std::make_shared<WindowRelation>(rel->rel, std::move(col2), res_partitions);
 	return make_external<RelationWrapper>("duckdb_relation", res);
 
 }

@@ -9,35 +9,52 @@
 
 namespace duckdb {
 
-WindowRelation::WindowRelation(shared_ptr<AggregateRelation> aggr)
-    : Relation(aggr->context, RelationType::PROJECTION_RELATION) {
-	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+WindowRelation::WindowRelation(shared_ptr<Relation> rel, unique_ptr<ParsedExpression> child_, vector<ColumnRefExpression> partitions_)
+    : Relation(rel->context, RelationType::PROJECTION_RELATION) {
+//	vector<ColumnDefinition> dummy_columns;
+	child = std::move(child_);
 	type = RelationType::WINDOW_RELATION;
+	for (auto p : partitions_) {
+		partitions.emplace_back(p);
+	}
+	from_table = rel;
+	context.GetContext()->TryBindRelation(*this, this->columns);
+//	partitions = partitions_;
+//	partitions = partitions;
+//	bounds = bounds;
 //	window->children??
 	// window->partitions??
 	// window->orders??
 	// push back children
 	// add partitions if necessary
 	// add orders
-	// Look at WindowExpression::Copy();
 }
 
 unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
+//	select j, i, sum(i) over (partition by j) from a order by 1,2
+// select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
 	auto window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, "", schema_name, "sum");
-	for (auto &child : this->children) {
-		window_expr->children.push_back(child->Copy());
+	window_expr->children.push_back(std::move(child));
+	for (auto &partition : this->partitions) {
+		auto yea = make_unique<ColumnRefExpression>(partition.GetColumnName(), partition.GetTableName());
+		window_expr->partitions.push_back(std::move(yea));
 	}
-	// window_expr->children
-	// window_expr->partitions ??
-	// window_expr->orders ??
+
+	// need to add support for more function names
+	window_expr->function_name = "sum";
+
+	// need to add window expression ranges
+	window_expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	window_expr->end = WindowBoundary::CURRENT_ROW_RANGE;
 	// window_expr->filter_expr ??
 	// window_expr->start_expr
 	// window_expr->end_expr
 	// window_expr->offset_expr
 	// window_expr->default_expr.
+	result->select_list.push_back(make_unique<StarExpression>());
 	result->select_list.push_back(std::move(window_expr));
+	result->from_table = from_table->GetTableRef();
 	return std::move(result);
 }
 
@@ -50,11 +67,11 @@ const vector<ColumnDefinition> &WindowRelation::Columns() {
 }
 
 string WindowRelation::ToString(idx_t depth) {
-	return "";
+	return "Window relation to string";
 }
 
 string WindowRelation::GetAlias() {
-	return "";
+	return "window relation alias";
 }
 
 } // namespace duckdb

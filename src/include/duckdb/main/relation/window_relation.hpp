@@ -15,15 +15,17 @@ namespace duckdb {
 
 class WindowRelation : public Relation {
 public:
-	WindowRelation(shared_ptr<AggregateRelation> aggr);
+	WindowRelation(shared_ptr<Relation> table, unique_ptr<ParsedExpression> child_, vector<ColumnRefExpression> partitions_);
 
 	string schema_name;
 	string function_name;
 
+	shared_ptr<Relation> from_table;
+
 	vector<ColumnDefinition> columns;
 
-	vector<std::shared_ptr<ParsedExpression>> children;
-	vector<std::shared_ptr<Relation>> partitions;
+	unique_ptr<ParsedExpression> child;
+	vector<ColumnRefExpression> partitions;
 
 	vector<std::shared_ptr<Relation>> orders;
 	unique_ptr<ParsedExpression> filter_expr;
