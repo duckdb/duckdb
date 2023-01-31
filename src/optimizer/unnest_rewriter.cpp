@@ -46,16 +46,17 @@ unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator>
 
 	// rewrite the plan and update the bindings
 	for (auto &candidate : candidates) {
-		// rearrange the logical operators
-		RewriteCandidate(candidate);
-		// update the bindings of the BOUND_UNNEST expression
-		UpdateBoundUnnestBindings(updater, candidate);
-		// update the sequence of LOGICAL_PROJECTION(s)
-		UpdateRHSBindings(&op, candidate, updater);
 
-		// reset
-		delim_columns.clear();
-		lhs_bindings.clear();
+		// rearrange the logical operators
+		if (RewriteCandidate(candidate)) {
+			// update the bindings of the BOUND_UNNEST expression
+			UpdateBoundUnnestBindings(updater, candidate);
+			// update the sequence of LOGICAL_PROJECTION(s)
+			UpdateRHSBindings(&op, candidate, updater);
+			// reset
+			delim_columns.clear();
+			lhs_bindings.clear();
+		}
 	}
 
 	return op;
@@ -108,15 +109,15 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	return;
 }
 
-void UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
+bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 	if (topmost_op.type != LogicalOperatorType::LOGICAL_PROJECTION &&
 	    topmost_op.type != LogicalOperatorType::LOGICAL_WINDOW &&
 	    topmost_op.type != LogicalOperatorType::LOGICAL_FILTER &&
-	    topmost_op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		throw InternalException("Error in UnnestRewriter: unknown parent for LOGICAL_DELIM_JOIN: \"%s\"",
-		                        LogicalOperatorToString((*candidate)->type));
+	    topmost_op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
+	    topmost_op.type != LogicalOperatorType::LOGICAL_UNNEST) {
+		return false;
 	}
 
 	// get the LOGICAL_DELIM_JOIN, which is a child of the candidate
@@ -150,6 +151,7 @@ void UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 
 	// replace the LOGICAL_DELIM_JOIN with its RHS child operator
 	topmost_op.children[0] = std::move(*path_to_unnest.front());
+	return true;
 }
 
 void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
