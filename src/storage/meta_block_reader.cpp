@@ -1,6 +1,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <cstring>
 
