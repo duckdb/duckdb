@@ -24,7 +24,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_data.hpp'
+#include "duckdb/main/client_data.hpp"
 
 #include <cmath>
 
