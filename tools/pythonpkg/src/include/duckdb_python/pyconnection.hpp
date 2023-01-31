@@ -68,7 +68,8 @@ public:
 	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
 	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
 	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
-	        const py::object &escapechar = py::none(), const py::object &encoding = py::none());
+	        const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
+	        const py::object &parallel = py::none());
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 

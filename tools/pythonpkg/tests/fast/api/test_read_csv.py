@@ -109,3 +109,15 @@ class TestReadCSV(object):
 		res = rel.limit(1,1).fetchone()
 		print(res)
 		assert res == (345, 'TEST6', 'text"2"text')
+
+	def test_parallel_true(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=True)
+		res = rel.fetchone()
+		print(res)
+		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
+	def test_parallel_true(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=False)
+		res = rel.fetchone()
+		print(res)
+		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))

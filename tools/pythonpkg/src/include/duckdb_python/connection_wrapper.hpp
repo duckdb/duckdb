@@ -94,7 +94,7 @@ public:
 	        const py::object &delimiter = py::none(), const py::object &dtype = py::none(),
 	        const py::object &na_values = py::none(), const py::object &skiprows = py::none(),
 	        const py::object &quotechar = py::none(), const py::object &escapechar = py::none(),
-	        const py::object &encoding = py::none());
+	        const py::object &encoding = py::none(), const py::object &parallel = py::none());
 
 	static py::list FetchAll(shared_ptr<DuckDBPyConnection> conn = nullptr);
 

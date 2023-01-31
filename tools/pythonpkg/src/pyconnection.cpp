@@ -137,7 +137,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
 	         py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
 	         py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
-	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none())
+	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none())
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
@@ -423,7 +423,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
                                                          const py::object &delimiter, const py::object &dtype,
                                                          const py::object &na_values, const py::object &skiprows,
                                                          const py::object &quotechar, const py::object &escapechar,
-                                                         const py::object &encoding) {
+                                                         const py::object &encoding, const py::object &parallel) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -535,6 +535,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 			throw InvalidInputException("read_csv only accepts 'skiprows' as an integer");
 		}
 		read_csv.AddNamedParameter("skip", Value::INTEGER(py::int_(skiprows)));
+	}
+
+	if (!py::none().is(parallel)) {
+		if (!py::isinstance<py::bool_>(parallel)) {
+			throw InvalidInputException("read_csv only accepts 'parallel' as a boolean");
+		}
+		read_csv.AddNamedParameter("parallel", Value::BOOLEAN(py::bool_(parallel)));
 	}
 
 	if (!py::none().is(quotechar)) {

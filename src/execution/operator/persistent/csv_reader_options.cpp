@@ -123,6 +123,11 @@ void BufferedCSVReaderOptions::SetEscape(const string &input) {
 	this->has_escape = true;
 }
 
+void BufferedCSVReaderOptions::SetParallel(bool use_parallel) {
+	this->has_parallel = true;
+	this->use_parallel = use_parallel;
+}
+
 void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
@@ -170,6 +175,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 	}
 	if (loption == "auto_detect") {
 		auto_detect = ParseBoolean(value, loption);
+	} else if (loption == "parallel") {
+		SetParallel(ParseBoolean(value, loption));
 	} else if (loption == "sample_size") {
 		int64_t sample_size = ParseInteger(value, loption);
 		if (sample_size < 1 && sample_size != -1) {
