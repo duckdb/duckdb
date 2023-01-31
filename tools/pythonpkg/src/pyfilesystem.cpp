@@ -31,7 +31,8 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 		throw InvalidInputException("%s: unsupported file flags", GetName());
 	}
 
-	const auto &handle = filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s));
+	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
+	const auto &handle = filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s), py::arg("seekable") = true);
 	return make_unique<PythonFileHandle>(*this, path, handle);
 }
 
