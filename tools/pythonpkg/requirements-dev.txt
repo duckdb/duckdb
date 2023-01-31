@@ -4,6 +4,7 @@ setuptools_scm>=6.3
 setuptools>=58
 pytest
 pandas
+xlrd
 pyarrow
 mypy
 psutil>=5.9.0
