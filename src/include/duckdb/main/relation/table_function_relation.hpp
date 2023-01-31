@@ -27,12 +27,14 @@ public:
 	shared_ptr<Relation> input_relation;
 
 public:
+	virtual void InitializeColumns();
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 	string GetAlias() override;
+	void AddNamedParameter(const string &name, Value argument);
 };
 
 } // namespace duckdb
