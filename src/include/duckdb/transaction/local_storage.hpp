@@ -86,10 +86,10 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DTransaction &transaction, TableAppendState &append_state, idx_t append_count,
-	                     bool append_to_table);
-	bool AppendToIndexes(DTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
-	                     const vector<LogicalType> &table_types, row_t &start_row);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
+						 bool append_to_table);
+	bool AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
+						 const vector<LogicalType> &table_types, row_t &start_row);
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter *CreateOptimisticWriter();
@@ -122,9 +122,9 @@ public:
 	};
 
 public:
-	explicit LocalStorage(ClientContext &context, DTransaction &transaction);
+	explicit LocalStorage(ClientContext &context, DuckTransaction &transaction);
 
-	static LocalStorage &Get(DTransaction &transaction);
+	static LocalStorage &Get(DuckTransaction &transaction);
 	static LocalStorage &Get(ClientContext &context, AttachedDatabase &db);
 	static LocalStorage &Get(ClientContext &context, Catalog &catalog);
 
@@ -154,7 +154,7 @@ public:
 	void Update(DataTable *table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, DTransaction &transaction);
+	void Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction);
 	//! Rollback the local storage
 	void Rollback();
 
@@ -178,7 +178,7 @@ public:
 
 private:
 	ClientContext &context;
-	DTransaction &transaction;
+	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 
 	void Flush(DataTable &table, LocalTableStorage &storage);

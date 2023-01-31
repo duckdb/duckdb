@@ -1,7 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -54,7 +54,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	// scan all the schemas and collect them
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 	if (catalog.IsDCatalog()) {
-		auto &dcatalog = (DCatalog &)catalog;
+		auto &dcatalog = (DuckCatalog &)catalog;
 		auto &dependency_manager = dcatalog.GetDependencyManager();
 		dependency_manager.Scan([&](CatalogEntry *obj, CatalogEntry *dependent, DependencyType type) {
 			DependencyInformation info;

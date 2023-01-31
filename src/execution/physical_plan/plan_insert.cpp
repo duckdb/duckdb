@@ -6,7 +6,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
@@ -45,8 +45,8 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
-unique_ptr<PhysicalOperator> DCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
-                                                  unique_ptr<PhysicalOperator> plan) {
+unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
+                                                     unique_ptr<PhysicalOperator> plan) {
 	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
 	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();

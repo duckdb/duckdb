@@ -1,7 +1,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -11,7 +11,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
@@ -117,7 +117,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
 	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
 	auto &state = (TableScanLocalState &)*data_p.local_state;
-	auto &transaction = DTransaction::Get(context, *bind_data.table->catalog);
+	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	do {
 		if (bind_data.is_create_index) {
@@ -233,7 +233,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
 	auto &state = (IndexScanGlobalState &)*data_p.global_state;
-	auto &transaction = DTransaction::Get(context, *bind_data.table->catalog);
+	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	if (!state.finished) {
@@ -430,7 +430,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}
 
-	auto result = make_unique<TableScanBindData>((DTableCatalogEntry *)catalog_entry);
+	auto result = make_unique<TableScanBindData>((DuckTableEntry *)catalog_entry);
 	result->is_index_scan = is_index_scan;
 	result->is_create_index = is_create_index;
 	result->result_ids = std::move(result_ids);

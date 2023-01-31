@@ -1,14 +1,14 @@
-#include "duckdb/catalog/catalog_entry/dindex_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
-DIndexCatalogEntry::DIndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
+DuckIndexEntry::DuckIndexEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
     : IndexCatalogEntry(catalog, schema, info) {
 }
 
-DIndexCatalogEntry::~DIndexCatalogEntry() {
+DuckIndexEntry::~DuckIndexEntry() {
 	// remove the associated index from the info
 	if (!info || !index) {
 		return;
@@ -16,11 +16,11 @@ DIndexCatalogEntry::~DIndexCatalogEntry() {
 	info->indexes.RemoveIndex(index);
 }
 
-string DIndexCatalogEntry::GetSchemaName() {
+string DuckIndexEntry::GetSchemaName() {
 	return info->schema;
 }
 
-string DIndexCatalogEntry::GetTableName() {
+string DuckIndexEntry::GetTableName() {
 	return info->table;
 }
 

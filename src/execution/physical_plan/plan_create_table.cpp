@@ -10,12 +10,12 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-                                                         unique_ptr<PhysicalOperator> plan) {
+unique_ptr<PhysicalOperator> DuckCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+                                                            unique_ptr<PhysicalOperator> plan) {
 	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
 	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();

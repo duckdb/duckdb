@@ -13,11 +13,11 @@
 namespace duckdb {
 
 //! An index catalog entry
-class DIndexCatalogEntry : public IndexCatalogEntry {
+class DuckIndexEntry : public IndexCatalogEntry {
 public:
 	//! Create an IndexCatalogEntry and initialize storage for it
-	DIndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
-	~DIndexCatalogEntry();
+	DuckIndexEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
+	~DuckIndexEntry();
 
 	shared_ptr<DataTableInfo> info;
 

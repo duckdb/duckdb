@@ -1,4 +1,4 @@
-#include "duckdb/transaction/dtransaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/exception.hpp"
@@ -7,7 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -16,13 +16,13 @@
 namespace duckdb {
 
 struct CheckpointLock {
-	explicit CheckpointLock(DTransactionManager &manager) : manager(manager), is_locked(false) {
+	explicit CheckpointLock(DuckTransactionManager &manager) : manager(manager), is_locked(false) {
 	}
 	~CheckpointLock() {
 		Unlock();
 	}
 
-	DTransactionManager &manager;
+	DuckTransactionManager &manager;
 	bool is_locked;
 
 	void Lock() {
@@ -40,7 +40,7 @@ struct CheckpointLock {
 	}
 };
 
-DTransactionManager::DTransactionManager(AttachedDatabase &db)
+DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db)
     : TransactionManager(db), thread_is_checkpointing(false) {
 	// start timestamp starts at two
 	current_start_timestamp = 2;
@@ -53,18 +53,18 @@ DTransactionManager::DTransactionManager(AttachedDatabase &db)
 	lowest_active_start = MAX_TRANSACTION_ID;
 }
 
-DTransactionManager::~DTransactionManager() {
+DuckTransactionManager::~DuckTransactionManager() {
 }
 
-DTransactionManager &DTransactionManager::Get(AttachedDatabase &db) {
+DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	auto &transaction_manager = TransactionManager::Get(db);
 	if (!transaction_manager.IsDTransactionManager()) {
-		throw InternalException("Calling DTransactionManager::Get on non-DuckDB transaction manager");
+		throw InternalException("Calling DuckTransactionManager::Get on non-DuckDB transaction manager");
 	}
-	return (DTransactionManager &)transaction_manager;
+	return (DuckTransactionManager &)transaction_manager;
 }
 
-Transaction *DTransactionManager::StartTransaction(ClientContext &context) {
+Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
@@ -81,7 +81,7 @@ Transaction *DTransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto transaction = make_unique<DTransaction>(*this, context, start_time, transaction_id);
+	auto transaction = make_unique<DuckTransaction>(*this, context, start_time, transaction_id);
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -98,7 +98,7 @@ struct ClientLockWrapper {
 	unique_ptr<lock_guard<mutex>> connection_lock;
 };
 
-void DTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
+void DuckTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
 	auto &connection_manager = ConnectionManager::Get(context);
 	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
 	auto connection_list = connection_manager.GetConnectionList();
@@ -111,7 +111,7 @@ void DTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, C
 	}
 }
 
-void DTransactionManager::Checkpoint(ClientContext &context, bool force) {
+void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
 		return;
@@ -132,7 +132,7 @@ void DTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	vector<ClientLockWrapper> client_locks;
 	LockClients(client_locks, context);
 
-	auto current = &DTransaction::Get(context, db);
+	auto current = &DuckTransaction::Get(context, db);
 	lock.lock();
 	if (current->ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
@@ -164,7 +164,7 @@ void DTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	storage_manager.CreateCheckpoint();
 }
 
-bool DTransactionManager::CanCheckpoint(DTransaction *current) {
+bool DuckTransactionManager::CanCheckpoint(DuckTransaction *current) {
 	if (db.IsSystem()) {
 		return false;
 	}
@@ -183,8 +183,8 @@ bool DTransactionManager::CanCheckpoint(DTransaction *current) {
 	return true;
 }
 
-string DTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
-	auto transaction = (DTransaction *)transaction_p;
+string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
+	auto transaction = (DuckTransaction *)transaction_p;
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
 	CheckpointLock checkpoint_lock(*this);
@@ -238,8 +238,8 @@ string DTransactionManager::CommitTransaction(ClientContext &context, Transactio
 	return error;
 }
 
-void DTransactionManager::RollbackTransaction(Transaction *transaction_p) {
-	auto transaction = (DTransaction *)transaction_p;
+void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
+	auto transaction = (DuckTransaction *)transaction_p;
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
@@ -251,7 +251,7 @@ void DTransactionManager::RollbackTransaction(Transaction *transaction_p) {
 	RemoveTransaction(transaction);
 }
 
-void DTransactionManager::RemoveTransaction(DTransaction *transaction) noexcept {
+void DuckTransactionManager::RemoveTransaction(DuckTransaction *transaction) noexcept {
 	// remove the transaction from the list of active transactions
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions

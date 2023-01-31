@@ -1,6 +1,6 @@
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/catalog/catalog_entry/dschema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -10,15 +10,15 @@
 
 namespace duckdb {
 
-DCatalog::DCatalog(AttachedDatabase &db)
+DuckCatalog::DuckCatalog(AttachedDatabase &db)
     : Catalog(db), dependency_manager(make_unique<DependencyManager>(*this)),
       schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))) {
 }
 
-DCatalog::~DCatalog() {
+DuckCatalog::~DuckCatalog() {
 }
 
-void DCatalog::Initialize(bool load_builtin) {
+void DuckCatalog::Initialize(bool load_builtin) {
 	// first initialize the base system catalogs
 	// these are never written to the WAL
 	// we start these at 1 because deleted entries default to 0
@@ -39,17 +39,17 @@ void DCatalog::Initialize(bool load_builtin) {
 	Verify();
 }
 
-bool DCatalog::IsDCatalog() {
+bool DuckCatalog::IsDCatalog() {
 	return true;
 }
 
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-CatalogEntry *DCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
+CatalogEntry *DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
 	D_ASSERT(!info->schema.empty());
 	DependencyList dependencies;
-	auto entry = make_unique<DSchemaCatalogEntry>(this, info->schema, info->internal);
+	auto entry = make_unique<DuckSchemaEntry>(this, info->schema, info->internal);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info->schema, std::move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
@@ -62,7 +62,7 @@ CatalogEntry *DCatalog::CreateSchema(CatalogTransaction transaction, CreateSchem
 	return result;
 }
 
-void DCatalog::DropSchema(ClientContext &context, DropInfo *info) {
+void DuckCatalog::DropSchema(ClientContext &context, DropInfo *info) {
 	D_ASSERT(!info->name.empty());
 	ModifyCatalog();
 	if (!schemas->DropEntry(GetCatalogTransaction(context), info->name, info->cascade)) {
@@ -72,16 +72,16 @@ void DCatalog::DropSchema(ClientContext &context, DropInfo *info) {
 	}
 }
 
-void DCatalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
+void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
 	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry *entry) { callback(entry); });
 }
 
-void DCatalog::ScanSchemas(std::function<void(CatalogEntry *)> callback) {
+void DuckCatalog::ScanSchemas(std::function<void(CatalogEntry *)> callback) {
 	schemas->Scan([&](CatalogEntry *entry) { callback(entry); });
 }
 
-SchemaCatalogEntry *DCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
-                                        QueryErrorContext error_context) {
+SchemaCatalogEntry *DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
+										   QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry && !if_exists) {
@@ -90,19 +90,19 @@ SchemaCatalogEntry *DCatalog::GetSchema(CatalogTransaction transaction, const st
 	return (SchemaCatalogEntry *)entry;
 }
 
-DatabaseSize DCatalog::GetDatabaseSize(ClientContext &context) {
+DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {
 	return db.GetStorageManager().GetDatabaseSize();
 }
 
-bool DCatalog::InMemory() {
+bool DuckCatalog::InMemory() {
 	return db.GetStorageManager().InMemory();
 }
 
-string DCatalog::GetDBPath() {
+string DuckCatalog::GetDBPath() {
 	return db.GetStorageManager().GetDBPath();
 }
 
-void DCatalog::Verify() {
+void DuckCatalog::Verify() {
 #ifdef DEBUG
 	schemas->Verify(*this);
 #endif

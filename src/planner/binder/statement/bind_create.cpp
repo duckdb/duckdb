@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -38,7 +38,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
@@ -415,8 +415,8 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	return false;
 }
 
-unique_ptr<LogicalOperator> DCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
-                                                      unique_ptr<LogicalOperator> plan) {
+unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+                                                         TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &base = (CreateIndexInfo &)*stmt.info;
 

@@ -11,14 +11,14 @@
 #include "duckdb/common/common.hpp"
 
 namespace duckdb {
-class DTransaction;
+class DuckTransaction;
 class Transaction;
 
 struct TransactionData {
-	TransactionData(DTransaction &transaction_p);
+	TransactionData(DuckTransaction &transaction_p);
 	TransactionData(transaction_t transaction_id_p, transaction_t start_time_p);
 
-	DTransaction *transaction;
+	DuckTransaction *transaction;
 	transaction_t transaction_id;
 	transaction_t start_time;
 };

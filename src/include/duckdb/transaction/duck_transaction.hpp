@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/transaction/dtransaction.hpp
+// duckdb/transaction/duck_transaction.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-class DTransaction : public Transaction {
+class DuckTransaction : public Transaction {
 public:
-	DTransaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
-	             transaction_t transaction_id);
-	~DTransaction();
+	DuckTransaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
+					transaction_t transaction_id);
+	~DuckTransaction();
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -30,8 +30,8 @@ public:
 	transaction_t highest_active_query;
 
 public:
-	static DTransaction &Get(ClientContext &context, AttachedDatabase &db);
-	static DTransaction &Get(ClientContext &context, Catalog &catalog);
+	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
+	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);

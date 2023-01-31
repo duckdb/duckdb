@@ -17,7 +17,7 @@
 #include <fstream>
 
 namespace duckdb {
-class DTableCatalogEntry;
+class DuckTableEntry;
 
 //! Physical CREATE (UNIQUE) INDEX statement
 class PhysicalCreateIndex : public PhysicalOperator {
@@ -27,7 +27,7 @@ public:
 	                    idx_t estimated_cardinality);
 
 	//! The table to create the index for
-	DTableCatalogEntry &table;
+	DuckTableEntry &table;
 	//! The list of column IDs required for the index
 	vector<column_t> storage_ids;
 	//! Info for index creation

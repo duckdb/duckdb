@@ -1,8 +1,8 @@
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
 
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/dindex_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -14,7 +14,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry 
                                          vector<unique_ptr<Expression>> unbound_expressions,
                                          idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
-      table((DTableCatalogEntry &)table_p), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
+      table((DuckTableEntry &)table_p), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
 	D_ASSERT(table_p.IsDTable());
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
@@ -135,7 +135,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	}
 
 	auto &schema = *table.schema;
-	auto index_entry = (DIndexCatalogEntry *)schema.CreateIndex(context, info.get(), &table);
+	auto index_entry = (DuckIndexEntry *)schema.CreateIndex(context, info.get(), &table);
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return SinkFinalizeType::READY;

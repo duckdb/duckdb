@@ -11,10 +11,10 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/transaction/dtransaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -461,7 +461,7 @@ void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataC
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = DTransactionManager::Get(db);
+	auto &transaction_manager = DuckTransactionManager::Get(db);
 
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();

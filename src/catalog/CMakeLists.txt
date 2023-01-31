@@ -9,7 +9,7 @@ add_library_unity(
   catalog_search_path.cpp
   catalog_set.cpp
   catalog_transaction.cpp
-  dcatalog.cpp
+  duck_catalog.cpp
   dependency_list.cpp
   dependency_manager.cpp
   similar_catalog_entry.cpp)

@@ -1,4 +1,4 @@
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -19,39 +19,39 @@
 
 namespace duckdb {
 
-TransactionData::TransactionData(DTransaction &transaction_p) // NOLINT
+TransactionData::TransactionData(DuckTransaction &transaction_p) // NOLINT
     : transaction(&transaction_p), transaction_id(transaction_p.transaction_id), start_time(transaction_p.start_time) {
 }
 TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
     : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
-DTransaction::DTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                           transaction_t transaction_id)
+DuckTransaction::DuckTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
+							  transaction_t transaction_id)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       highest_active_query(0), undo_buffer(context_p), storage(make_unique<LocalStorage>(context_p, *this)) {
 }
 
-DTransaction::~DTransaction() {
+DuckTransaction::~DuckTransaction() {
 }
 
-DTransaction &DTransaction::Get(ClientContext &context, AttachedDatabase &db) {
-	return DTransaction::Get(context, db.GetCatalog());
+DuckTransaction &DuckTransaction::Get(ClientContext &context, AttachedDatabase &db) {
+	return DuckTransaction::Get(context, db.GetCatalog());
 }
 
-DTransaction &DTransaction::Get(ClientContext &context, Catalog &catalog) {
+DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) {
 	auto &transaction = Transaction::Get(context, catalog);
 	if (!transaction.IsDTransaction()) {
 		throw InternalException("DTransaction::Get called on non-DuckDB transaction");
 	}
-	return (DTransaction &)transaction;
+	return (DuckTransaction &)transaction;
 }
 
-LocalStorage &DTransaction::GetLocalStorage() {
+LocalStorage &DuckTransaction::GetLocalStorage() {
 	return *storage;
 }
 
-void DTransaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, idx_t extra_data_size) {
+void DuckTransaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, idx_t extra_data_size) {
 	idx_t alloc_size = sizeof(CatalogEntry *);
 	if (extra_data_size > 0) {
 		alloc_size += extra_data_size + sizeof(idx_t);
@@ -70,7 +70,7 @@ void DTransaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, 
 	}
 }
 
-void DTransaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
+void DuckTransaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
 	auto delete_info =
 	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
@@ -80,14 +80,14 @@ void DTransaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t ro
 	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
 }
 
-void DTransaction::PushAppend(DataTable *table, idx_t start_row, idx_t row_count) {
+void DuckTransaction::PushAppend(DataTable *table, idx_t start_row, idx_t row_count) {
 	auto append_info = (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	append_info->table = table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
 }
 
-UpdateInfo *DTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
+UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	auto update_info = (UpdateInfo *)undo_buffer.CreateEntry(
 	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	update_info->max = STANDARD_VECTOR_SIZE;
@@ -97,16 +97,16 @@ UpdateInfo *DTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	return update_info;
 }
 
-bool DTransaction::ChangesMade() {
+bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
 
-bool DTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
+bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
 	auto &storage_manager = db.GetStorageManager();
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
-string DTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
+string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
@@ -143,12 +143,12 @@ string DTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool 
 	}
 }
 
-void DTransaction::Rollback() noexcept {
+void DuckTransaction::Rollback() noexcept {
 	storage->Rollback();
 	undo_buffer.Rollback();
 }
 
-void DTransaction::Cleanup() {
+void DuckTransaction::Cleanup() {
 	undo_buffer.Cleanup();
 }
 

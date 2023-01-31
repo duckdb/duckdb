@@ -1,8 +1,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/transaction/dtransaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
@@ -15,8 +15,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		storage = make_unique<SingleFileStorageManager>(*this, ":memory:", false);
 	}
-	catalog = make_unique<DCatalog>(*this);
-	transaction_manager = make_unique<DTransactionManager>(*this);
+	catalog = make_unique<DuckCatalog>(*this);
+	transaction_manager = make_unique<DuckTransactionManager>(*this);
 	internal = true;
 }
 
@@ -27,8 +27,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
 	storage =
 	    make_unique<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
-	catalog = make_unique<DCatalog>(*this);
-	transaction_manager = make_unique<DTransactionManager>(*this);
+	catalog = make_unique<DuckCatalog>(*this);
+	transaction_manager = make_unique<DuckTransactionManager>(*this);
 	internal = true;
 }
 

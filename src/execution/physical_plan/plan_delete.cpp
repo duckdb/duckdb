@@ -1,14 +1,14 @@
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
-                                                  unique_ptr<PhysicalOperator> plan) {
+unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+                                                     unique_ptr<PhysicalOperator> plan) {
 	// get the index of the row_id column
 	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 

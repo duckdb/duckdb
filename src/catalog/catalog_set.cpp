@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -41,7 +41,7 @@ private:
 };
 
 CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
-    : catalog((DCatalog &)catalog_p), defaults(std::move(defaults)) {
+    : catalog((DuckCatalog &)catalog_p), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDCatalog());
 }
 CatalogSet::~CatalogSet() {
@@ -143,7 +143,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	PutEntry(std::move(entry_index), std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
 		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 	return true;
@@ -263,7 +263,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
 		dtransaction.PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	}
 
@@ -286,7 +286,7 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 
 	// check any dependencies of this object
 	D_ASSERT(entry.catalog->IsDCatalog());
-	((DCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, &entry, cascade);
+	((DuckCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, &entry, cascade);
 
 	// dropper destructor is called here
 	// the destructor makes sure to return the value to the previous state
@@ -309,7 +309,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DTransaction &)*transaction.transaction;
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
 		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 }
@@ -336,7 +336,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
-DCatalog &CatalogSet::GetCatalog() {
+DuckCatalog &CatalogSet::GetCatalog() {
 	return catalog;
 }
 
@@ -349,7 +349,7 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
 			D_ASSERT(catalog_entry->catalog->IsDCatalog());
-			((DCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(catalog_entry);
+			((DuckCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(catalog_entry);
 		}
 		auto parent = catalog_entry->parent;
 		parent->child = std::move(catalog_entry->child);

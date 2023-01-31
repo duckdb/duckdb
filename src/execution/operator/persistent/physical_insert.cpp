@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -15,7 +15,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -79,7 +79,7 @@ public:
 	}
 
 	mutex lock;
-	DTableCatalogEntry *table;
+	DuckTableEntry *table;
 	idx_t insert_count;
 	bool initialized;
 	LocalAppendState append_state;
@@ -110,11 +110,11 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
 		result->table =
-		    (DTableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDTable());
-		result->table = (DTableCatalogEntry *)insert_table;
+		result->table = (DuckTableEntry *)insert_table;
 	}
 	return std::move(result);
 }
@@ -311,7 +311,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// then we scan the existing table for the conflicting tuples, using the rowids
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		auto fetch_state = make_unique<ColumnFetchState>();
-		auto &transaction = DTransaction::Get(context.client, *table->catalog);
+		auto &transaction = DuckTransaction::Get(context.client, *table->catalog);
 		data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
 	}
 
@@ -422,7 +422,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		auto table = gstate.table;
 		auto &storage = table->GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = DTransaction::Get(context.client, *table->catalog);
+		auto &transaction = DuckTransaction::Get(context.client, *table->catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			storage.LocalAppend(gstate.append_state, *table, context.client, insert_chunk);
 			return true;

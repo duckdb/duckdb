@@ -28,7 +28,7 @@ class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
-class DTransaction;
+class DuckTransaction;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -125,7 +125,7 @@ public:
 	const vector<column_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
-	bool Scan(DTransaction &transaction, DataChunk &result);
+	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 
 private:

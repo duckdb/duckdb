@@ -11,11 +11,11 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,7 @@ static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData *bind_dat
 		return false;
 	}
 	auto table = bind_data->table;
-	auto &transaction = DTransaction::Get(context, *table->catalog);
+	auto &transaction = DuckTransaction::Get(context, *table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 	if (local_storage.Find(table->GetStoragePtr())) {
 		// transaction local appends: skip index join

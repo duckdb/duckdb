@@ -151,8 +151,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
-bool RowGroupCollection::Scan(DTransaction &transaction, const vector<column_t> &column_ids,
-                              const std::function<bool(DataChunk &chunk)> &fun) {
+bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
+							  const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		scan_types.push_back(types[column_ids[i]]);
@@ -177,7 +177,7 @@ bool RowGroupCollection::Scan(DTransaction &transaction, const vector<column_t> 
 	}
 }
 
-bool RowGroupCollection::Scan(DTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
+bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<column_t> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {

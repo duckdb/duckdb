@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/transaction/dtransaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -12,7 +12,7 @@ CatalogTransaction::CatalogTransaction(Catalog &catalog, ClientContext &context)
 		this->transaction_id = transaction_t(-1);
 		this->start_time = transaction_t(-1);
 	} else {
-		auto &dtransaction = (DTransaction &)transaction;
+		auto &dtransaction = (DuckTransaction &)transaction;
 		this->transaction_id = dtransaction.transaction_id;
 		this->start_time = dtransaction.start_time;
 	}

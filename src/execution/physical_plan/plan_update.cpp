@@ -2,12 +2,12 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/catalog/dcatalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
-                                                  unique_ptr<PhysicalOperator> plan) {
+unique_ptr<PhysicalOperator> DuckCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
+                                                     unique_ptr<PhysicalOperator> plan) {
 	auto update =
 	    make_unique<PhysicalUpdate>(op.types, *op.table, op.table->GetStorage(), op.columns, std::move(op.expressions),
 	                                std::move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
