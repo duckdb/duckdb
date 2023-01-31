@@ -34,7 +34,7 @@ struct CopyInfo : public ParseInfo {
 	//! The file path to copy to/from
 	string file_path;
 	//! Set of (key, value) options
-	unordered_map<string, vector<Value>> options;
+	case_insensitive_map_t<vector<Value>> options;
 
 public:
 	unique_ptr<CopyInfo> Copy() const {

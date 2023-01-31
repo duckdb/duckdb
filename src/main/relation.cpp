@@ -242,8 +242,8 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 	}
 }
 
-void Relation::WriteCSV(const string &csv_file) {
-	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
+void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
+	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file, move(options));
 	auto res = write_csv->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to write '" + csv_file + "': ";

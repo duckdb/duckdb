@@ -207,6 +207,10 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
+	void ToCSV(const string &filename, const py::object &sep, const py::object &na_rep, const py::object &header,
+	           const py::object &quotechar, const py::object &escapechar, const py::object &date_format,
+	           const py::object &timestamp_format, const py::object &quoting, const py::object &encoding,
+	           const py::object &compression);
 	void WriteCsv(const string &file);
 
 	static void WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn = nullptr);

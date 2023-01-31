@@ -529,6 +529,93 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
 
+void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, const py::object &na_rep,
+                             const py::object &header, const py::object &quotechar, const py::object &escapechar,
+                             const py::object &date_format, const py::object &timestamp_format,
+                             const py::object &quoting, const py::object &encoding, const py::object &compression) {
+	case_insensitive_map_t<vector<Value>> options;
+
+	if (!py::none().is(sep)) {
+		if (!py::isinstance<py::str>(sep)) {
+			throw InvalidInputException("to_csv only accepts 'sep' as a string");
+		}
+		options["delimiter"] = {Value(py::str(sep))};
+	}
+
+	if (!py::none().is(na_rep)) {
+		if (!py::isinstance<py::str>(na_rep)) {
+			throw InvalidInputException("to_csv only accepts 'na_rep' as a string");
+		}
+		options["null"] = {Value(py::str(na_rep))};
+	}
+
+	if (!py::none().is(header)) {
+		if (!py::isinstance<py::bool_>(header)) {
+			throw InvalidInputException("to_csv only accepts 'header' as a boolean");
+		}
+		options["header"] = {Value::BOOLEAN(py::bool_(header))};
+	}
+
+	if (!py::none().is(quotechar)) {
+		if (!py::isinstance<py::str>(quotechar)) {
+			throw InvalidInputException("to_csv only accepts 'quotechar' as a string");
+		}
+		options["quote"] = {Value(py::str(quotechar))};
+	}
+
+	if (!py::none().is(escapechar)) {
+		if (!py::isinstance<py::str>(escapechar)) {
+			throw InvalidInputException("to_csv only accepts 'escapechar' as a string");
+		}
+		options["escape"] = {Value(py::str(escapechar))};
+	}
+
+	if (!py::none().is(date_format)) {
+		if (!py::isinstance<py::str>(date_format)) {
+			throw InvalidInputException("to_csv only accepts 'date_format' as a string");
+		}
+		options["dateformat"] = {Value(py::str(date_format))};
+	}
+
+	if (!py::none().is(timestamp_format)) {
+		if (!py::isinstance<py::str>(timestamp_format)) {
+			throw InvalidInputException("to_csv only accepts 'timestamp_format' as a string");
+		}
+		options["timestampformat"] = {Value(py::str(timestamp_format))};
+	}
+
+	if (!py::none().is(quoting)) {
+		if (!py::isinstance<py::str>(quoting)) {
+			throw InvalidInputException("to_csv only accepts 'quoting' as a string");
+		}
+		string quoting_option = StringUtil::Lower(py::str(quoting));
+		if (quoting_option != "force" && quoting_option != "all") {
+			throw InvalidInputException(
+			    "to_csv 'quoting' supported options are ALL or FORCE (both set FORCE_QUOTE=True)");
+		}
+		options["force_quote"] = {Value::BOOLEAN(true)};
+	}
+
+	if (!py::none().is(encoding)) {
+		if (!py::isinstance<py::str>(encoding)) {
+			throw InvalidInputException("to_csv only accepts 'encoding' as a string");
+		}
+		string encoding_option = StringUtil::Lower(py::str(encoding));
+		if (encoding_option != "utf-8" && encoding_option != "utf8") {
+			throw InvalidInputException("The only supported encoding option is 'UTF8");
+		}
+	}
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			throw InvalidInputException("to_csv only accepts 'compression' as a string");
+		}
+		options["compression"] = {Value(py::str(compression))};
+	}
+
+	rel->WriteCSV(filename, move(options));
+}
+
 void DuckDBPyRelation::WriteCsv(const string &file) {
 	rel->WriteCSV(file);
 }

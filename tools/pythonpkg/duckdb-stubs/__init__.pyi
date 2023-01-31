@@ -154,6 +154,20 @@ class DuckDBPyRelation:
     def value_counts(self, value_counts_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
     def var(self, var_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
     def write_csv(self, file_name: str) -> None: ...
+    def to_csv(
+        self,
+        file_name: str,
+        sep: str,
+        na_rep: str,
+        header: bool,
+        quotechar: str,
+        escapechar: str,
+        date_format: str,
+        timestamp_format: str,
+        quoting: str,
+        encoding: str,
+        compression: str
+    ) -> None: ...
     def __len__(self) -> int: ...
     @property
     def alias(self) -> str: ...
