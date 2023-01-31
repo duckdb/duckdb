@@ -9,7 +9,7 @@
 namespace duckdb {
 
 TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table((DuckTableEntry &)table_p) {
-	D_ASSERT(table_p.IsDTable());
+	D_ASSERT(table_p.IsDuckTable());
 }
 
 TableDataWriter::~TableDataWriter() {

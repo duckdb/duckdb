@@ -15,7 +15,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry 
                                          idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table((DuckTableEntry &)table_p), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
-	D_ASSERT(table_p.IsDTable());
+	D_ASSERT(table_p.IsDuckTable());
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);

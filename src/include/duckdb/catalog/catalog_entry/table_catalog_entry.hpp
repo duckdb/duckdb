@@ -94,7 +94,7 @@ public:
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
 
-	virtual bool IsDTable() {
+	virtual bool IsDuckTable() {
 		return false;
 	}
 

@@ -270,7 +270,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
-		D_ASSERT(insert_table->IsDTable());
+		D_ASSERT(insert_table->IsDuckTable());
 		result->table = (DuckTableEntry *)insert_table;
 	}
 	return std::move(result);

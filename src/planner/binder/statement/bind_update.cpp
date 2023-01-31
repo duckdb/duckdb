@@ -77,7 +77,7 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 
 static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
                                   LogicalUpdate &update) {
-	if (!table.IsDTable()) {
+	if (!table.IsDuckTable()) {
 		return;
 	}
 	// check the constraints and indexes of the table to see if we need to project any additional columns

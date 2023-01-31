@@ -19,7 +19,7 @@ public:
 	~DuckCatalog();
 
 public:
-	bool IsDCatalog() override;
+	bool IsDuckCatalog() override;
 	void Initialize(bool load_builtin) override;
 	string GetCatalogType() override {
 		return "duckdb";

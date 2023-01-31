@@ -54,7 +54,7 @@ public:
 	//! Whether or not the transaction has made any modifications to the database so far
 	DUCKDB_API bool IsReadOnly();
 
-	virtual bool IsDTransaction() const {
+	virtual bool IsDuckTransaction() const {
 		return false;
 	}
 };

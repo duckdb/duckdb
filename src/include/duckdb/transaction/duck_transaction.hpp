@@ -53,7 +53,7 @@ public:
 	void PushAppend(DataTable *table, idx_t row_start, idx_t row_count);
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
 
-	bool IsDTransaction() const override {
+	bool IsDuckTransaction() const override {
 		return true;
 	}
 

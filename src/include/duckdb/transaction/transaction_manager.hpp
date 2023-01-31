@@ -42,7 +42,7 @@ public:
 
 	static TransactionManager &Get(AttachedDatabase &db);
 
-	virtual bool IsDTransactionManager() {
+	virtual bool IsDuckTransactionManager() {
 		return false;
 	}
 

@@ -85,7 +85,7 @@ public:
 	DUCKDB_API AttachedDatabase &GetAttached();
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
-	virtual bool IsDCatalog() {
+	virtual bool IsDuckCatalog() {
 		return false;
 	}
 	virtual void Initialize(bool load_builtin) = 0;

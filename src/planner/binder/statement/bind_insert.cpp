@@ -189,7 +189,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		insert.action_type = OnConflictAction::THROW;
 		return;
 	}
-	if (!table.IsDTable()) {
+	if (!table.IsDuckTable()) {
 		throw BinderException("ON CONFLICT clause is not yet supported for non-DuckDB tables");
 	}
 	D_ASSERT(stmt.table_ref->type == TableReferenceType::BASE_TABLE);

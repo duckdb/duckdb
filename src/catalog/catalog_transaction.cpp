@@ -8,7 +8,7 @@ namespace duckdb {
 CatalogTransaction::CatalogTransaction(Catalog &catalog, ClientContext &context) {
 	auto &transaction = Transaction::Get(context, catalog);
 	this->db = &DatabaseInstance::GetDatabase(context);
-	if (!transaction.IsDTransaction()) {
+	if (!transaction.IsDuckTransaction()) {
 		this->transaction_id = transaction_t(-1);
 		this->start_time = transaction_t(-1);
 	} else {

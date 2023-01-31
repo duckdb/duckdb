@@ -58,7 +58,7 @@ DuckTransactionManager::~DuckTransactionManager() {
 
 DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	auto &transaction_manager = TransactionManager::Get(db);
-	if (!transaction_manager.IsDTransactionManager()) {
+	if (!transaction_manager.IsDuckTransactionManager()) {
 		throw InternalException("Calling DuckTransactionManager::Get on non-DuckDB transaction manager");
 	}
 	return (DuckTransactionManager &)transaction_manager;

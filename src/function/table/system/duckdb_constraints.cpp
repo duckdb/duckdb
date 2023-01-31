@@ -139,7 +139,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 		auto &table = (TableCatalogEntry &)*entry;
 		auto &constraints = table.GetConstraints();
-		bool is_dtable = table.IsDTable();
+		bool is_duck_table = table.IsDuckTable();
 		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
 			auto &constraint = constraints[data.constraint_offset];
 			// return values:
@@ -159,7 +159,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				constraint_type = "NOT NULL";
 				break;
 			case ConstraintType::FOREIGN_KEY: {
-				if (!is_dtable) {
+				if (!is_duck_table) {
 					continue;
 				}
 				auto &bound_constraints = table.GetBoundConstraints();
@@ -192,7 +192,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			// constraint_index, BIGINT
 			UniqueKeyInfo uk_info;
 
-			if (is_dtable) {
+			if (is_duck_table) {
 				auto &bound_constraint = (BoundConstraint &)*table.GetBoundConstraints()[data.constraint_offset];
 				switch (bound_constraint.type) {
 				case ConstraintType::UNIQUE: {
@@ -248,7 +248,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, expression_text);
 
 			vector<LogicalIndex> column_index_list;
-			if (is_dtable) {
+			if (is_duck_table) {
 				auto &bound_constraint = (BoundConstraint &)*table.GetBoundConstraints()[data.constraint_offset];
 				switch (bound_constraint.type) {
 				case ConstraintType::CHECK: {

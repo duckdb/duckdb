@@ -53,9 +53,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 
 	// scan all the schemas and collect them
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
-	if (catalog.IsDCatalog()) {
-		auto &dcatalog = (DuckCatalog &)catalog;
-		auto &dependency_manager = dcatalog.GetDependencyManager();
+	if (catalog.IsDuckCatalog()) {
+		auto &duck_catalog = (DuckCatalog &)catalog;
+		auto &dependency_manager = duck_catalog.GetDependencyManager();
 		dependency_manager.Scan([&](CatalogEntry *obj, CatalogEntry *dependent, DependencyType type) {
 			DependencyInformation info;
 			info.object = obj;

@@ -39,7 +39,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	Verify();
 }
 
-bool DuckCatalog::IsDCatalog() {
+bool DuckCatalog::IsDuckCatalog() {
 	return true;
 }
 

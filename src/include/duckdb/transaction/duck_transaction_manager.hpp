@@ -41,7 +41,7 @@ public:
 		return lowest_active_start;
 	}
 
-	bool IsDTransactionManager() override {
+	bool IsDuckTransactionManager() override {
 		return true;
 	}
 

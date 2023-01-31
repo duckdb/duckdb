@@ -42,7 +42,7 @@ private:
 
 CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
     : catalog((DuckCatalog &)catalog_p), defaults(std::move(defaults)) {
-	D_ASSERT(catalog_p.IsDCatalog());
+	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {
 }
@@ -285,7 +285,7 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	entry_index.GetEntry()->deleted = true;
 
 	// check any dependencies of this object
-	D_ASSERT(entry.catalog->IsDCatalog());
+	D_ASSERT(entry.catalog->IsDuckCatalog());
 	((DuckCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, &entry, cascade);
 
 	// dropper destructor is called here
@@ -348,7 +348,7 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
-			D_ASSERT(catalog_entry->catalog->IsDCatalog());
+			D_ASSERT(catalog_entry->catalog->IsDuckCatalog());
 			((DuckCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(catalog_entry);
 		}
 		auto parent = catalog_entry->parent;

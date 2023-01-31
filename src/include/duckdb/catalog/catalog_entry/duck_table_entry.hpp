@@ -42,7 +42,7 @@ public:
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
-	bool IsDTable() override {
+	bool IsDuckTable() override {
 		return true;
 	}
 

@@ -41,8 +41,8 @@ DuckTransaction &DuckTransaction::Get(ClientContext &context, AttachedDatabase &
 
 DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) {
 	auto &transaction = Transaction::Get(context, catalog);
-	if (!transaction.IsDTransaction()) {
-		throw InternalException("DTransaction::Get called on non-DuckDB transaction");
+	if (!transaction.IsDuckTransaction()) {
+		throw InternalException("DuckTransaction::Get called on non-DuckDB transaction");
 	}
 	return (DuckTransaction &)transaction;
 }
