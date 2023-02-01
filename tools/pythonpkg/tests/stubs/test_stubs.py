@@ -11,7 +11,7 @@ def test_generated_stubs():
 	stubtest.test_stubs(stubtest.parse_options(['duckdb', '--mypy-config-file', MYPY_INI_PATH]))
 
 	broken_stubs = [
-		error
+		error.get_description()
 		for error in stubtest.test_module('duckdb')
 		if not any(skip in error.get_description() for skip in skip_stubs_errors)
 	]

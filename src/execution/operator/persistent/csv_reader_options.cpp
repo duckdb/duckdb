@@ -117,6 +117,17 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetNewline(const string &input) {
+	if (input == "\\n" || input == "\\r") {
+		new_line = NewLineIdentifier::SINGLE;
+	} else if (input == "\\r\\n") {
+		new_line = NewLineIdentifier::CARRY_ON;
+	} else {
+		throw InvalidInputException("This is not accepted as a newline: " + input);
+	}
+	has_newline = true;
+}
+
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
@@ -193,6 +204,11 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		if (buffer_size == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
+	} else if (loption == "decimal_separator") {
+		decimal_separator = ParseString(value, loption);
+		if (decimal_separator != "." && decimal_separator != ",") {
+			throw BinderException("Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','");
+		}
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -228,6 +244,8 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	} else if (loption == "quote") {
 		quote = ParseString(value, loption);
 		has_quote = true;
+	} else if (loption == "new_line") {
+		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;

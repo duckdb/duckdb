@@ -31,6 +31,7 @@ enum class PandasType : uint8_t {
 	UINT_32,   //! uint32, uintc,
 	INT_64,    //! int64, int0, int_, intp, matrix
 	UINT_64,   //! uint64, uint, uint0, uintp
+	FLOAT_16,  //! float16, half
 	FLOAT_32,  //! float32, single
 	FLOAT_64,  //! float64, float_, double
 	OBJECT,    //! object
