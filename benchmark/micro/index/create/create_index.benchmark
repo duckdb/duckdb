@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/create_index.benchmark
+# name: benchmark/micro/index/create/create_index.benchmark
 # description: Create index on 10000000 integer tuples
-# group: [index]
+# group: [create]
 
 name Create Index
 group index

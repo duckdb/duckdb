@@ -35,7 +35,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                       info->constraint_type, table.storage->db);
+		                                       info->constraint_type, table.storage->db, true);
 		break;
 	}
 	default:
@@ -52,7 +52,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	switch (info->index_type) {
 	case IndexType::ART: {
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(*table.storage), unbound_expressions,
-		                                      info->constraint_type, table.storage->db);
+		                                      info->constraint_type, table.storage->db, false);
 		break;
 	}
 	default:
@@ -81,16 +81,12 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 
 	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
-	                            table.storage->db);
+	                            table.storage->db, false);
 	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART
-	{
-		IndexLock local_lock;
-		lstate.local_index->InitializeLock(local_lock);
-		if (!lstate.local_index->MergeIndexes(local_lock, art.get())) {
-			throw ConstraintException("Data contains duplicates on indexed column(s)");
-		}
+	if (!lstate.local_index->MergeIndexes(art.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -102,7 +98,9 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 
 	// merge the local index into the global index
-	gstate.global_index->MergeIndexes(lstate.local_index.get());
+	if (!gstate.global_index->MergeIndexes(lstate.local_index.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -111,9 +109,13 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	// here, we just set the resulting global index as the newly created index of the table
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
-
 	if (!table.storage->IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
+
+	state.global_index->Verify();
+	if (state.global_index->track_memory) {
+		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
 
 	auto &schema = *table.schema;
