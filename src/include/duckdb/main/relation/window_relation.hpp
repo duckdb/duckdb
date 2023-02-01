@@ -10,12 +10,20 @@
 
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
 class WindowRelation : public Relation {
 public:
-	WindowRelation(shared_ptr<Relation> table, unique_ptr<ColumnRefExpression> child_, vector<ColumnRefExpression> partitions_);
+	WindowRelation(shared_ptr<Relation> rel, vector<unique_ptr<ParsedExpression>> children_,
+					vector<unique_ptr<ParsedExpression>> partitions_,
+					vector<unique_ptr<OrderByNode>> orders_,
+	                unique_ptr<ParsedExpression> filter_expr_,
+					WindowBoundary start_,
+					WindowBoundary end_,
+					vector<unique_ptr<ParsedExpression>> start_end_offset_default
+	);
 
 	string schema_name;
 	string function_name;
@@ -24,17 +32,23 @@ public:
 
 	vector<ColumnDefinition> columns;
 
-	unique_ptr<ColumnRefExpression> child;
-	vector<ColumnRefExpression> partitions;
+	vector<unique_ptr<ParsedExpression>> children;
+	vector<unique_ptr<ParsedExpression>> partitions;
 
-	vector<std::shared_ptr<Relation>> orders;
+	vector<unique_ptr<OrderByNode>> orders;
 	unique_ptr<ParsedExpression> filter_expr;
 
-	unique_ptr<Relation> start_expr;
-	unique_ptr<Relation> end_expr;
+	//! The window boundaries
+	WindowBoundary start = WindowBoundary::INVALID;
+	WindowBoundary end = WindowBoundary::INVALID;
+
+	unique_ptr<ParsedExpression> start_expr;
+	unique_ptr<ParsedExpression> end_expr;
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<Relation> offset_expr;
-	unique_ptr<Relation> default_expr;
+	unique_ptr<ParsedExpression> offset_expr;
+	unique_ptr<ParsedExpression> default_expr;
+
+	vector<unique_ptr<ParsedExpression>> table_ref_children;
 
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
