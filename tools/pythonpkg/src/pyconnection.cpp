@@ -132,18 +132,20 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("query", &DuckDBPyConnection::RunQuery,
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
-	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identified by 'name'", py::arg("name"),
-	         py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
-	         py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
-	         py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
-	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none())
-	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
-	         py::arg("df") = py::none())
+	         py::arg("query"), py::arg("alias") = "query_relation");
+
+	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
+	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
+	             py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
+	             py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
+	             py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
+	             py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(),
+	             py::arg("parallel") = py::none());
+
+	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
+	      py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"))
-	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
-	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
@@ -567,7 +569,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		}
 	}
 
-	return make_unique<DuckDBPyRelation>(move(read_csv_p));
+	return make_unique<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
@@ -672,15 +674,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	rel->rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
 	return rel;
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	vector<Value> params;
-	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,

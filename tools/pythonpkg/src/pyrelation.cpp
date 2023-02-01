@@ -55,7 +55,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromCsvAuto(filename);
+	return conn->ReadCSV(filename);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,

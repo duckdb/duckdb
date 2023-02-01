@@ -107,7 +107,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromCsvAuto(const string &file
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromCsvAuto(filename);
+	return conn->ReadCSV(filename);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromParquet(const string &file_glob, bool binary_as_string,
