@@ -65,10 +65,9 @@ class DuckDBPyConnection:
     def fetchnumpy(self) -> dict: ...
     def fetchone(self) -> object: ...
     def from_arrow(self, arrow_object: object) -> DuckDBPyRelation: ...
-    def from_csv_auto(self, file_name: str) -> DuckDBPyRelation: ...
     def read_csv(
         self,
-        filename: str,
+        name: str,
         header: Optional[bool | int] = None,
         compression: Optional[str] = None,
         sep: Optional[str] = None,
@@ -79,7 +78,34 @@ class DuckDBPyConnection:
         quotechar: Optional[str] = None,
         escapechar: Optional[str] = None,
         encoding: Optional[str] = None,
-		parallel: Optional[bool] = None,
+        parallel: Optional[bool] = None,
+        date_format: Optional[str] = None,
+        timestamp_format: Optional[str] = None,
+        sample_size: Optional[int] = None,
+        all_varchar: Optional[bool] = None,
+        normalize_names: Optional[bool] = None,
+        filename: Optional[bool] = None,
+    ) -> DuckDBPyRelation: ...
+    def from_csv_auto(
+        self,
+        name: str,
+        header: Optional[bool | int] = None,
+        compression: Optional[str] = None,
+        sep: Optional[str] = None,
+        delimiter: Optional[str] = None,
+        dtype: Optional[dict[str, str] | list[str]] = None,
+        na_values: Optional[str] = None,
+        skiprows: Optional[int] = None,
+        quotechar: Optional[str] = None,
+        escapechar: Optional[str] = None,
+        encoding: Optional[str] = None,
+        parallel: Optional[bool] = None,
+        date_format: Optional[str] = None,
+        timestamp_format: Optional[str] = None,
+        sample_size: Optional[int] = None,
+        all_varchar: Optional[bool] = None,
+        normalize_names: Optional[bool] = None,
+        filename: Optional[bool] = None,
     ) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload
@@ -275,7 +301,7 @@ def order(df: pandas.DataFrame, order_expr: str, connection: DuckDBPyConnection 
 def project(df: pandas.DataFrame, project_expr: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def write_csv(df: pandas.DataFrame, file_name: str, connection: DuckDBPyConnection = ...) -> None: ...
 def read_csv(
-    filename: str,
+    name: str,
     header: Optional[bool | int] = None,
     compression: Optional[str] = None,
     sep: Optional[str] = None,
@@ -286,7 +312,34 @@ def read_csv(
     quotechar: Optional[str] = None,
     escapechar: Optional[str] = None,
     encoding: Optional[str] = None,
-	parallel: Optional[bool] = None,
+    parallel: Optional[bool] = None,
+    date_format: Optional[str] = None,
+    timestamp_format: Optional[str] = None,
+    sample_size: Optional[int] = None,
+    all_varchar: Optional[bool] = None,
+    normalize_names: Optional[bool] = None,
+    filename: Optional[bool] = None,
+    connection: DuckDBPyConnection = ...
+) -> DuckDBPyRelation: ...
+def from_csv_auto(
+    name: str,
+    header: Optional[bool | int] = None,
+    compression: Optional[str] = None,
+    sep: Optional[str] = None,
+    delimiter: Optional[str] = None,
+    dtype: Optional[dict[str, str] | list[str]] = None,
+    na_values: Optional[str] = None,
+    skiprows: Optional[int] = None,
+    quotechar: Optional[str] = None,
+    escapechar: Optional[str] = None,
+    encoding: Optional[str] = None,
+    parallel: Optional[bool] = None,
+    date_format: Optional[str] = None,
+    timestamp_format: Optional[str] = None,
+    sample_size: Optional[int] = None,
+    all_varchar: Optional[bool] = None,
+    normalize_names: Optional[bool] = None,
+    filename: Optional[bool] = None,
     connection: DuckDBPyConnection = ...
 ) -> DuckDBPyRelation: ...
 
@@ -310,7 +363,6 @@ def fetchmany(size: int = ..., connection: DuckDBPyConnection = ...) -> list: ..
 def fetchnumpy(connection: DuckDBPyConnection = ...) -> dict: ...
 def fetchone(connection: DuckDBPyConnection = ...) -> object: ...
 def from_arrow(arrow_object: object, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
-def from_csv_auto(file_name: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def from_df(df: pandas.DataFrame = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 @overload
 def from_parquet(file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
