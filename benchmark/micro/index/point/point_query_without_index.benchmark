@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/point_query_without_index.benchmark
+# name: benchmark/micro/index/point/point_query_without_index.benchmark
 # description: Point query without index on randomly ordered data
-# group: [index]
+# group: [point]
 
 name Point Query (No Index, Random Data)
 group index

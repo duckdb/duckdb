@@ -61,12 +61,19 @@ public:
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
+	//! Returns the currently allocated memory
 	idx_t GetUsedMemory() {
 		return current_memory;
 	}
+	//! Returns the maximum available memory
 	idx_t GetMaxMemory() {
 		return maximum_memory;
 	}
+
+	//! Increases the currently allocated memory, but the actual allocation does not go through the buffer manager
+	void IncreaseUsedMemory(idx_t size);
+	//! Decrease the currently allocated memory, but the actual deallocation does not go through the buffer manager
+	void DecreaseUsedMemory(idx_t size);
 
 	const string &GetTemporaryDirectory() {
 		return temp_directory;
