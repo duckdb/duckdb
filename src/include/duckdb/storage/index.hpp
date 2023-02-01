@@ -118,6 +118,7 @@ public:
 	}
 	//! Serializes the index and returns the pair of block_id offset positions
 	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
+	BlockPointer GetBlockPointer();
 
 	//! Returns block/offset of where index was most recently serialized.
 	BlockPointer GetSerializedDataPointer() const {

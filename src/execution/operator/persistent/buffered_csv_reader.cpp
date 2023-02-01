@@ -482,6 +482,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 					} else if ((more_values || single_column_before) && rows_consistent) {
 						sniff_info.skip_rows = start_row;
 						sniff_info.num_cols = num_cols;
+						sniff_info.new_line = options.new_line;
 						best_consistent_rows = consistent_rows;
 						best_num_cols = num_cols;
 
@@ -497,6 +498,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 						if (!same_quote_is_candidate) {
 							sniff_info.skip_rows = start_row;
 							sniff_info.num_cols = num_cols;
+							sniff_info.new_line = options.new_line;
 							info_candidates.push_back(sniff_info);
 						}
 					}
@@ -1264,6 +1266,7 @@ add_row : {
 		// \r newline, go to special state that parses an optional \n afterwards
 		goto carriage_return;
 	} else {
+		SetNewLineDelimiter();
 		// \n newline, move to value start
 		if (finished_chunk) {
 			return true;
@@ -1342,6 +1345,7 @@ carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position] == '\n') {
+		SetNewLineDelimiter(true, true);
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start = ++position;
@@ -1349,6 +1353,8 @@ carriage_return:
 			// file ends right after delimiter, go to final state
 			goto final_state;
 		}
+	} else {
+		SetNewLineDelimiter(true, false);
 	}
 	if (finished_chunk) {
 		return true;

@@ -34,6 +34,13 @@ struct TryCastErrorMessage {
 	}
 };
 
+struct TryCastErrorMessageCommaSeparated {
+	template <class SRC, class DST>
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
+		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+	}
+};
+
 template <class SRC, class DST>
 static string CastExceptionText(SRC input) {
 	if (std::is_same<SRC, string_t>()) {
@@ -434,6 +441,16 @@ template <>
 DUCKDB_API bool TryCast::Operation(string_t input, float &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, double &result, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, float &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message,
+                                                             bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message,
+                                                             bool strict);
 
 //===--------------------------------------------------------------------===//
 // Date Casts

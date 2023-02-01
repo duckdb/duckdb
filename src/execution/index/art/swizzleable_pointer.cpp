@@ -11,8 +11,8 @@ SwizzleablePointer::~SwizzleablePointer() {
 
 SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
 	idx_t block_id = reader.Read<block_id_t>();
-	idx_t offset = reader.Read<uint32_t>();
-	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
+	uint32_t offset = reader.Read<uint32_t>();
+	if (block_id == DConstants::INVALID_INDEX || offset == (uint32_t)DConstants::INVALID_INDEX) {
 		pointer = 0;
 		return;
 	}

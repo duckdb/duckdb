@@ -28,7 +28,7 @@ select f(x:=(select 1 a));
 2
 
 query I
-select f(x:=a) from(select 41)t(a);
+select f(x:=a) from (select 41) t(a);
 ----
 42
 
@@ -69,3 +69,28 @@ statement error
 select my_macro2(5);
 ----
 Catalog Error: Table with name integers does not exist!
+
+statement ok
+Create table t1 (a int, b int);
+
+statement ok
+Create table t2 (c int, d int);
+
+statement ok
+CREATE OR REPLACE MACRO eq(x := NULL, y := NULL) AS x = y
+
+statement ok
+INSERT INTO t1 VALUES (1, 1), (1, 2), (2, 2), (3, 4);
+
+statement ok
+INSERT INTO t2 VALUES (4, 1), (2, 10), (6, 2), (2, 6);
+
+statement ok
+SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(x := t1_alias.a, y := t2_alias.c))
+
+# no default parameters with incorrect names
+statement error
+SELECT * FROM t1 as t1_alias inner join (select * from t2) as t2_alias ON (eq(a := t1_alias.a, c := t2_alias.c))
+----
+Binder Error
+

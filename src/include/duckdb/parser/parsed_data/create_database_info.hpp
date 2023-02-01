@@ -32,7 +32,7 @@ public:
 		result->extension_name = extension_name;
 		result->name = name;
 		result->path = path;
-		return move(result);
+		return unique_ptr<CreateInfo>(result.release());
 	}
 
 	static unique_ptr<CreateDatabaseInfo> Deserialize(Deserializer &deserializer) {
