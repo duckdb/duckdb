@@ -121,3 +121,65 @@ class TestReadCSV(object):
 		res = rel.fetchone()
 		print(res)
 		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
+	def test_date_format_as_datetime(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), date_format='%m/%d/%Y')
+		res = rel.fetchone()
+		print(res)
+		assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.datetime(2000, 1, 1, 0, 0), datetime.datetime(2000, 1, 1, 12, 12))
+
+	def test_date_format_as_date(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), date_format='%Y-%m-%d')
+		res = rel.fetchone()
+		print(res)
+		assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), datetime.datetime(2000, 1, 1, 12, 12))
+
+	def test_timestamp_format(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), timestamp_format='%m/%d/%Y')
+		res = rel.fetchone()
+		print(res)
+		assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), '2000-01-01 12:12:00')
+
+	def test_sample_size_incorrect(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=1)
+		with pytest.raises(duckdb.InvalidInputException):
+			# The sniffer couldn't detect that this column contains non-integer values
+			res = rel.fetchone()
+
+	def test_sample_size_correct(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
+		res = rel.fetchone()
+		print(res)
+		assert res == ('1', '1', '1')
+
+	def test_all_varchar(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), all_varchar=True)
+		res = rel.fetchone()
+		print(res)
+		assert res == ('1', 'Action', '2006-02-15 04:46:27')
+
+	def test_normalize_names(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), normalize_names=False)
+		df = rel.df()
+		column_names = list(df.columns.values)
+		# The names are not normalized, so they are capitalized
+		assert 'CATEGORY_ID' in column_names
+
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), normalize_names=True)
+		df = rel.df()
+		column_names = list(df.columns.values)
+		# The capitalized names are normalized to lowercase instead
+		assert 'CATEGORY_ID' not in column_names
+
+	def test_filename(self, duckdb_cursor):
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), filename=False)
+		df = rel.df()
+		column_names = list(df.columns.values)
+		# The filename is not included in the returned columns
+		assert 'filename' not in column_names
+
+		rel = duckdb_cursor.read_csv(TestFile('category.csv'), filename=True)
+		df = rel.df()
+		column_names = list(df.columns.values)
+		# The filename is included in the returned columns
+		assert 'filename' in column_names
