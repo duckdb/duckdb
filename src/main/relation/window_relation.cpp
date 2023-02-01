@@ -6,6 +6,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/transform/expression/transform_function"
 
 namespace duckdb {
 
@@ -67,13 +68,11 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 //	select j, i, sum(i) over (partition by j) from a order by 1,2
 // select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
+	ExpressionType window_type = WindowToExpressionType(window_function);
 	// depending of the name of the function, it's either an aggregate or one of
 	// no schema name needed (I think??)
 	// WINDOW_ROW_NUMBER, WINDOW_FIRST_VALUE, WINDOW_LAST_VALUE, WINDOW_NTH_VALUE, WINDOW_RANK, WINDOW_RANK_DENSE, WINDOW_PERCENT_RANK, WINDOW_CUME_DIST, WINDOW_LEAD, WINDOW_LAG, WINDOW_NTILE
-	auto window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, "", "", window_function);
-	if (window_function == "row_number") {
-		window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, "", "", window_function);
-	}
+	auto window_expr = make_unique<WindowExpression>(window_type, "", "", window_function);
 
 	for (auto &child : children) {
 		window_expr->children.push_back(child->Copy());

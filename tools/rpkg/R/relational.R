@@ -162,7 +162,12 @@ rel_order <- rapi_rel_order
 #' partition <- list(duckdb:::expr_reference("b"))
 #' window_function <- duckdb:::rel_window_aggregation(rel_a, partition)
 #' res = duckdb:::rel_to_altrep(window_function)
-rel_window <- rapi_rel_window_aggregation
+window_functions <- c("rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
+
+rel_window <-function(rel, window_function = window_functions, children, window_alias, partitions, orders, bounds, start_end_offset_default) {
+    window_function <- match.arg(window_function)
+    rapi_rel_window_aggregation(rel, window_function, children, )
+}
 
 #' Lazily INNER join two DuckDB relation objects
 #' @param left the left-hand-side DuckDB relation object
