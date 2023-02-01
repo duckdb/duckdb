@@ -85,10 +85,8 @@ public:
 	}
 
 	//! Construct a managed buffer.
-	//! The block_id is just used for internal tracking. It doesn't map to any actual
-	//! BlockManager.
-	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
-	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
+	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER);
 
 	DUCKDB_API void ReserveMemory(idx_t size);
 	DUCKDB_API void FreeReservedMemory(idx_t size);

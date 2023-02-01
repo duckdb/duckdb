@@ -1,6 +1,7 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -142,7 +143,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path
 
 		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 		// now write the header to the file
-		header_buffer.ChecksumAndWrite(*handle, 0);
+		ChecksumAndWrite(header_buffer, 0);
 		header_buffer.Clear();
 
 		// write the database headers
@@ -155,14 +156,14 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path
 		h1.free_list = INVALID_BLOCK;
 		h1.block_count = 0;
 		SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
-		header_buffer.ChecksumAndWrite(*handle, Storage::FILE_HEADER_SIZE);
+		ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
 		// header 2
 		h2.iteration = 0;
 		h2.meta_block = INVALID_BLOCK;
 		h2.free_list = INVALID_BLOCK;
 		h2.block_count = 0;
 		SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-		header_buffer.ChecksumAndWrite(*handle, Storage::FILE_HEADER_SIZE * 2);
+		ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2);
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
 		// we start with h2 as active_header, this way our initial write will be in h1
@@ -172,14 +173,14 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path
 	} else {
 		MainHeader::CheckMagicBytes(*handle);
 		// otherwise, we check the metadata of the file
-		header_buffer.ReadAndChecksum(*handle, 0);
+		ReadAndChecksum(header_buffer, 0);
 		DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
 
 		// read the database headers from disk
 		DatabaseHeader h1, h2;
-		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE);
+		ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 		h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE * 2);
+		ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2);
 		h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 		// check the header with the highest iteration count
 		if (h1.iteration > h2.iteration) {
@@ -193,6 +194,27 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path
 		}
 		LoadFreeList();
 	}
+}
+
+void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location) const {
+	// read the buffer from disk
+	block.Read(*handle, location);
+	// compute the checksum
+	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
+	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+	// verify the checksum
+	if (stored_checksum != computed_checksum) {
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
+		                  computed_checksum, stored_checksum);
+	}
+}
+
+void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location) const {
+	// compute the checksum and write it to the start of the buffer (if not temp buffer)
+	uint64_t checksum = Checksum(block.buffer, block.size);
+	Store<uint64_t>(checksum, block.InternalBuffer());
+	// now write the buffer
+	block.Write(*handle, location);
 }
 
 void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
@@ -317,12 +339,12 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	block.ReadAndChecksum(*handle, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
+	ReadAndChecksum(block, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	buffer.ChecksumAndWrite(*handle, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
+	ChecksumAndWrite(buffer, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
 }
 
 vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
@@ -431,8 +453,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	Store<DatabaseHeader>(header, header_buffer.buffer);
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
-	header_buffer.ChecksumAndWrite(*handle,
-	                               active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
+	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
