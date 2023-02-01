@@ -59,6 +59,9 @@ private:
 
 	void Initialize(DatabaseHeader &header);
 
+	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
+	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
+
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<block_id_t> GetFreeListBlocks();
 
