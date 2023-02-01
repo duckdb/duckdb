@@ -11,9 +11,6 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect
 	JSONScanGlobalState gstate(context, bind_data);
 	JSONScanLocalState lstate(context, gstate);
-
-	// TODO: add unnest level as a param to read_json_auto, hardcode at 1 for now
-	idx_t max_depth = 1;
 	ArenaAllocator allocator(BufferAllocator::Get(context));
 
 	// Read for the specified sample size
@@ -38,12 +35,12 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 		if (!node.ContainsVarchar()) {
 			continue;
 		}
-		node.InitializeCandidateTypes(max_depth);
+		node.InitializeCandidateTypes(bind_data.max_depth);
 		node.RefineCandidateTypes(lstate.objects, i, string_vector, allocator);
 	}
 	bind_data.type = original_scan_type;
 
-	const auto type = JSONStructure::StructureToType(context, node, max_depth);
+	const auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
 	if (type.id() != LogicalTypeId::STRUCT) {
 		return_types.emplace_back(type);
 		names.emplace_back("json");
@@ -107,6 +104,13 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				throw BinderException(
 				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file");
 			}
+		} else if (loption == "maximum_depth") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				bind_data.max_depth = NumericLimits<idx_t>::Maximum();
+			} else {
+				bind_data.max_depth = arg;
+			}
 		}
 	}
 
@@ -168,6 +172,12 @@ TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanI
 	return table_function;
 }
 
+TableFunction GetReadJSONAutoTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
+	auto table_function = GetReadJSONTableFunction(list_parameter, std::move(function_info));
+	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+	return table_function;
+}
+
 CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 	TableFunctionSet function_set("read_json");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, false);
@@ -187,16 +197,16 @@ CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
 	TableFunctionSet function_set("read_json_auto");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, true);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
 	TableFunctionSet function_set("read_ndjson_auto");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, true);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 

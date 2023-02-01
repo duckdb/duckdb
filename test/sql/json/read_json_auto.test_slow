@@ -1,0 +1,103 @@
+# name: test/sql/json/read_json_auto.test_slow
+# description: Read json files - schema detection
+# group: [json]
+
+require json
+
+# some arrow tests (python/pyarrow/tests/test_json.py) on their github
+# these are very similar to the pandas tests, so let's not copy those
+# instead of adding all of these files to data/test we just create them on the fly here
+# whenever we add a '' at the end it's just to check we skip the newline at the end that's sometimes there
+statement ok
+copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (quote '');
+
+query II
+select * from '__TEST_DIR__/my_file.json'
+----
+1	2
+
+statement ok
+copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query I
+select * from '__TEST_DIR__/my_file.json'
+----
+1
+2
+3
+
+statement ok
+copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query III
+select * from '__TEST_DIR__/my_file.json'
+----
+1	2	3
+4	5	6
+
+statement ok
+copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query IIII
+select * from '__TEST_DIR__/my_file.json'
+----
+1.0	2	3	false
+4.0	-5	foo	true
+
+# mixed types that cannot be resolved, defaults to JSON (column 3)
+statement ok
+copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query IIIII
+select * from '__TEST_DIR__/my_file.json'
+----
+1.0	2	NULL	NULL	NULL
+NULL	-5	foo	NULL	true
+4.5	NULL	nan	NULL	false
+
+# mixed types are resolved to DOUBLE here
+statement ok
+copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query II
+select typeof(a), a from '__TEST_DIR__/my_file.json'
+----
+DOUBLE	1.0
+DOUBLE	1.45
+DOUBLE	-23.456
+DOUBLE	NULL
+
+statement ok
+copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+
+query II
+select * from '__TEST_DIR__/my_file.json'
+----
+bar	0
+baz	1
+
+require httpfs
+
+statement ok
+pragma threads=1
+
+# this is one big object - yyjson uses it as a benchmark
+query II
+select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304);
+----
+VARCHAR	STRUCT(type JSON, properties JSON, geometry JSON)[]
+
+# let's crank up maximum_depth and see if we can fully unnest this big object
+query II
+select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=7);
+----
+VARCHAR	STRUCT(type VARCHAR, properties STRUCT(name VARCHAR), geometry STRUCT(type VARCHAR, coordinates DOUBLE[][][]))[]
+
+# ^ fully unnested, no more JSON type in there
+
+# the "coordinates" array in "features.geometry" is huge, let's just check the length - not all the values
+query IIIII
+select type, features[1].type, features[1].properties.name, features[1].geometry.type, length(features[1].geometry.coordinates)
+from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=7);
+----
+FeatureCollection	Feature	Canada	Polygon	480

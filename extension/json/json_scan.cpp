@@ -91,6 +91,7 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteField<bool>(auto_detect);
 	writer.WriteField<idx_t>(sample_size);
 	writer.WriteList<string>(names);
+	writer.WriteField<idx_t>(max_depth);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -103,6 +104,7 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	auto_detect = reader.ReadRequired<bool>();
 	sample_size = reader.ReadRequired<idx_t>();
 	names = reader.ReadRequiredList<string>();
+	max_depth = reader.ReadRequired<idx_t>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
@@ -337,6 +339,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Try the next reader
 		current_reader = gstate.json_readers[gstate.file_index].get();
 		if (current_reader->IsOpen()) {
+			if (current_reader->GetOptions().format == JSONFormat::UNSTRUCTURED) {
+				// Can only be open from schema detection
+				batch_index = gstate.batch_index++;
+				gstate.file_index++;
+			}
 			continue; // It's open, this thread joins the scan
 		}
 

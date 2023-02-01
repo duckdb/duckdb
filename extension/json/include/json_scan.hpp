@@ -56,6 +56,8 @@ public:
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
 	//! Column names (in order)
 	vector<string> names;
+	//! Max depth we go to detect nested JSON schema (defaults to 2)
+	idx_t max_depth = 2;
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;
