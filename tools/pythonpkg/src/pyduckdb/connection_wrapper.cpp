@@ -102,14 +102,6 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromDF(const DataFrame &value,
 	return conn->FromDF(value);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromCsvAuto(const string &filename,
-                                                              shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->ReadCSV(filename);
-}
-
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromParquet(const string &file_glob, bool binary_as_string,
                                                               bool file_row_number, bool filename,
                                                               bool hive_partitioning, bool union_by_name,

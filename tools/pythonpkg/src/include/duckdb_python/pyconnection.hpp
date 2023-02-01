@@ -96,8 +96,6 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
 
-	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
-
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
 	                                         bool filename, bool hive_partitioning, bool union_by_name);
 
