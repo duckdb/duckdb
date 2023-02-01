@@ -444,7 +444,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 			}
 			options.SetHeader(true);
 		} else {
-			dprintf(2, "HEADER TYPE IS %s\n", string(py::str(header.get_type())).c_str());
 			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
 		}
 	}
