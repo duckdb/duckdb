@@ -67,6 +67,19 @@ struct BinaryLambdaWrapperWithNulls {
 	}
 };
 
+// template <class OP>
+// struct BinaryStringOperatorWrapper {
+// 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+// 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+// 		auto vector = (Vector *)dataptr;
+// 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right, *vector);
+// 	}
+
+// 	static bool AddsNulls() {
+// 		return false;
+// 	}
+// };
+
 struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>

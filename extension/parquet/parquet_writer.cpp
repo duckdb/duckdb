@@ -69,8 +69,9 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::ENUM:
-	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIT:
 		return Type::BYTE_ARRAY;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:

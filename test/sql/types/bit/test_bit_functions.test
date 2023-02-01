@@ -12,13 +12,13 @@ CREATE TABLE bits (b bit);
 statement ok
 INSERT INTO bits VALUES('101001111'), ('00111'),  ('100101010110000000000001'), ('111111010100')
 
-# insert invalid bit string
+# # insert invalid bit string
 statement error
 INSERT INTO bits VALUES('0110108');
 ----
 Conversion Error: Invalid character encountered in string -> bit conversion: '8'
 
-# **** BIT_LENGTH ****
+# # **** BIT_LENGTH ****
 query I
 SELECT bit_length('1010111111101010011101011'::BIT)
 ----
@@ -56,7 +56,7 @@ SELECT octet_length(b) FROM bits;
 3
 2
 
-# **** GET_BIT ****
+# # **** GET_BIT ****
 query I
 SELECT get_bit('101010101010101010'::BIT, 6)
 ----

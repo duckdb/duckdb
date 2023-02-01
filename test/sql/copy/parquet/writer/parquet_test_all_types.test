@@ -22,11 +22,14 @@ COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
 # hugeint is stored as double -> we have to cast
 query I nosort alltypes
 SELECT * REPLACE (
-	hugeint::DOUBLE AS hugeint
+	hugeint::DOUBLE AS hugeint,
 )
 FROM all_types
 ----
 
 query I nosort alltypes
-SELECT * FROM '__TEST_DIR__/all_types.parquet'
+SELECT * REPLACE (
+	bit::BIT AS bit
+)
+FROM '__TEST_DIR__/all_types.parquet'
 ----

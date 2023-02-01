@@ -4,6 +4,13 @@
 
 namespace duckdb {
 
+void Bit::SetEmptyBitString(string_t &target, string_t &input) {
+	char *res_buf = target.GetDataWriteable();
+	const char *buf = input.GetDataUnsafe();
+	bzero(res_buf, input.GetSize());
+	res_buf[0] = buf[0];
+}
+
 idx_t Bit::BitLength(string_t bits) {
 	return ((bits.GetSize() - 1) * 8) - GetPadding(bits);
 }
@@ -145,6 +152,21 @@ idx_t Bit::GetBit(string_t bit_string, idx_t n) {
 	return (byte & 1 ? 1 : 0);
 }
 
+void Bit::SetBit(const string_t &bit_string, idx_t n, idx_t new_value, string_t &result) {
+	char *result_buf = result.GetDataWriteable();
+	const char *buf = bit_string.GetDataUnsafe();
+	n += GetPadding(bit_string);
+
+	memcpy(result_buf, buf, bit_string.GetSize());
+	char shift_byte = 1 << (7 - (n % 8));
+	if (new_value == 0) {
+		shift_byte = ~shift_byte;
+		result_buf[(n / 8) + 1] = buf[(n / 8) + 1] & shift_byte;
+	} else {
+		result_buf[(n / 8) + 1] = buf[(n / 8) + 1] | shift_byte;
+	}
+}
+
 void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	char *buf = bit_string.GetDataWriteable();
 	n += GetPadding(bit_string);
@@ -158,14 +180,13 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	}
 }
 
-inline idx_t Bit::GetPadding(string_t &bit_string) {
+inline idx_t Bit::GetPadding(const string_t &bit_string) {
 	auto data = (const_data_ptr_t)bit_string.GetDataUnsafe();
 	return data[0];
 }
 
 // **** BITWISE OPERATORS ****
-string_t Bit::RightShift(const string_t &bit_string, const idx_t &shift) {
-	string_t result(bit_string.GetSize());
+void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
 	const char *buf = bit_string.GetDataUnsafe();
 	res_buf[0] = buf[0];
@@ -177,85 +198,74 @@ string_t Bit::RightShift(const string_t &bit_string, const idx_t &shift) {
 			Bit::SetBit(result, i, bit);
 		}
 	}
-	return result;
 }
 
-string_t Bit::LeftShift(const string_t &bit_string, const idx_t &shift) {
-	string_t result(bit_string.GetSize());
+void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
 	const char *buf = bit_string.GetDataUnsafe();
 	res_buf[0] = buf[0];
-	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
-		if (i < (Bit::BitLength(result) - shift)) {
+	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
+		if (i < (Bit::BitLength(bit_string) - shift)) {
 			idx_t bit = Bit::GetBit(bit_string, shift + i);
 			Bit::SetBit(result, i, bit);
 		} else {
 			Bit::SetBit(result, i, 0);
 		}
 	}
-	return result;
 }
 
-string_t string_t::operator&(const string_t &rhs) const {
-	if (Bit::BitLength(*this) != Bit::BitLength(rhs)) {
+void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
+	if (Bit::BitLength(lhs) != Bit::BitLength(rhs)) {
 		throw InvalidInputException("Cannot AND bit strings of different sizes");
 	}
 
-	string_t result(this->GetSize());
 	char *buf = result.GetDataWriteable();
 	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = this->GetDataUnsafe();
+	const char *l_buf = lhs.GetDataUnsafe();
 
 	buf[0] = l_buf[0];
-	for (idx_t i = 1; i < this->GetSize(); i++) {
+	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] & r_buf[i];
 	}
-	return result;
 }
 
-string_t string_t::operator|(const string_t &rhs) const {
-	if (Bit::BitLength(*this) != Bit::BitLength(rhs)) {
+void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) {
+	if (Bit::BitLength(lhs) != Bit::BitLength(rhs)) {
 		throw InvalidInputException("Cannot OR bit strings of different sizes");
 	}
 
-	string_t result(this->GetSize());
 	char *buf = result.GetDataWriteable();
 	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = this->GetDataUnsafe();
+	const char *l_buf = lhs.GetDataUnsafe();
 
 	buf[0] = l_buf[0];
-	for (idx_t i = 1; i < this->GetSize(); i++) {
+	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] | r_buf[i];
 	}
-	return result;
 }
 
-string_t string_t::operator^(const string_t &rhs) const {
-	if (Bit::BitLength(*this) != Bit::BitLength(rhs)) {
+void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result) {
+	if (Bit::BitLength(lhs) != Bit::BitLength(rhs)) {
 		throw InvalidInputException("Cannot XOR bit strings of different sizes");
 	}
 
-	string_t result(this->GetSize());
 	char *buf = result.GetDataWriteable();
 	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = this->GetDataUnsafe();
+	const char *l_buf = lhs.GetDataUnsafe();
 
 	buf[0] = l_buf[0];
-	for (idx_t i = 1; i < this->GetSize(); i++) {
+	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] ^ r_buf[i];
 	}
-	return result;
 }
 
-string_t string_t::operator~() const {
-	string_t result(this->GetSize());
+void Bit::BitwiseNot(const string_t &input, string_t &result) {
 	char *result_buf = result.GetDataWriteable();
-	const char *buf = this->GetDataUnsafe();
+	const char *buf = input.GetDataUnsafe();
 
 	result_buf[0] = buf[0];
-	for (idx_t i = 1; i < this->GetSize(); i++) {
+	for (idx_t i = 1; i < input.GetSize(); i++) {
 		result_buf[i] = ~buf[i];
 	}
-	return result;
 }
 } // namespace duckdb
