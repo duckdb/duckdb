@@ -28,7 +28,6 @@ public:
 
 public:
 	string GetAlias() override;
-	void InitializeColumns() override;
 };
 
 } // namespace duckdb
