@@ -10,10 +10,10 @@
 
 namespace duckdb {
 
-JoinFilterRelation::JoinFilterRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_expr, shared_ptr<Relation> right_proj,
-                           JoinType type)
-    : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_proj)),
-      left_expr(std::move(left_expr)), using_columns(), join_type(type) {
+JoinFilterRelation::JoinFilterRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr,
+                                       shared_ptr<Relation> right, JoinType type)
+    : Relation(left->context, RelationType::JOIN_RELATION), left(left), right(right), left_expr(left_expr),
+      join_type(type) {
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI) {
 		throw Exception("join type is not 'semi' or 'anti'. Received " + JoinTypeToString(join_type));
 	}
@@ -24,7 +24,6 @@ JoinFilterRelation::JoinFilterRelation(shared_ptr<Relation> left_p, shared_ptr<R
 		throw Exception(JoinTypeToString(join_type) + " requires a projection for the right relation. Received " +
 		                RelationTypeToString(right->type));
 	}
-	condition = nullptr;
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
@@ -38,7 +37,7 @@ unique_ptr<QueryNode> JoinFilterRelation::GetQueryNode() {
 	auto left_projection = std::dynamic_pointer_cast<ProjectionRelation>(left_expr);
 	if (right_projection->expressions.size() != left_projection->expressions.size()) {
 		throw Exception(JoinTypeToString(join_type) +
-						" JOIN requires projections to have the same number of expressions");
+		                " JOIN requires projections to have the same number of expressions");
 	}
 	auto where_child = make_unique<SubqueryExpression>();
 	auto select_statement = make_unique<SelectStatement>();
@@ -58,15 +57,14 @@ unique_ptr<QueryNode> JoinFilterRelation::GetQueryNode() {
 	} else {
 		result->where_clause = std::move(where_child);
 	}
-	return std::move(result);
-
+	return result;
 }
 
 unique_ptr<TableRef> JoinFilterRelation::GetTableRef() {
 	// only return left table ref, as no right values are returned
 	// as part of an anti or semi join
 	auto result = left->GetTableRef();
-	return std::move(result);
+	return result;
 }
 
 const vector<ColumnDefinition> &JoinFilterRelation::Columns() {
