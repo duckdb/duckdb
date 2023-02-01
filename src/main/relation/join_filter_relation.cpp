@@ -1,5 +1,4 @@
 #include "duckdb/main/relation/join_filter_relation.hpp"
-
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"

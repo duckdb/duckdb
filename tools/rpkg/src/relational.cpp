@@ -179,7 +179,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 [[cpp11::register]] SEXP rapi_rel_join_filter(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                               std::string join) {
-
 	auto join_type = JoinType::ANTI;
 	unique_ptr<ParsedExpression> cond;
 
@@ -188,7 +187,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	} else if (join == "semi") {
 		join_type = JoinType::SEMI;
 	}
-
+	if (conds.size() != 1) {
+		throw Exception("Must supply exactly one expression for relational join");
+	}
 	auto left_proj = ((rel_extptr_t)conds[0]);
 	auto res = std::make_shared<JoinFilterRelation>(left->rel, left_proj->rel, right->rel, join_type);
 	return make_external<RelationWrapper>("duckdb_relation", res);
