@@ -16,7 +16,10 @@ namespace duckdb {
 
 class WindowRelation : public Relation {
 public:
-	WindowRelation(shared_ptr<Relation> rel, vector<unique_ptr<ParsedExpression>> children_,
+	WindowRelation(shared_ptr<Relation> rel,
+	               std::string window_function,
+	               vector<unique_ptr<ParsedExpression>> children_,
+	                std::string window_alias_name,
 					vector<unique_ptr<ParsedExpression>> partitions_,
 					vector<unique_ptr<OrderByNode>> orders_,
 	                unique_ptr<ParsedExpression> filter_expr_,
@@ -25,8 +28,8 @@ public:
 					vector<unique_ptr<ParsedExpression>> start_end_offset_default
 	);
 
-	string schema_name;
-	string function_name;
+	string alias;
+	string window_function;
 
 	shared_ptr<Relation> from_table;
 

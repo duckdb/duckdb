@@ -23,9 +23,6 @@ select *, sum(a) over (Partition by b) from integers order by a;
 7	4	15
 8	4	15
 
-
-mode skip
-
 statement ok
 CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)
 

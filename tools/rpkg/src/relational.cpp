@@ -178,7 +178,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel,
+                                                     std::string window_function,
                                                      list children,
+                                                     std::string window_alias,
                                                      list partitions, list orders,
                                                      list bounds,
                                                      list start_end_offset_default) {
@@ -189,7 +191,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	WindowBoundary start_ = WindowBoundary::UNBOUNDED_PRECEDING;
 	WindowBoundary end_ = WindowBoundary::CURRENT_ROW_RANGE;
 	vector<unique_ptr<ParsedExpression>> start_end_offset_default_;
-	auto table_alias = rel->rel->GetAlias();
 	for (expr_extptr_t child : children) {
 		children_.emplace_back(child->Copy());
 	}
@@ -198,7 +199,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	auto res = std::make_shared<WindowRelation>(rel->rel,
+	                                            window_function,
 	                                            std::move(children_),
+	                                            window_alias,
 	                                            std::move(partitions_),
 	                                            std::move(orders_),
 	                                            nullptr,

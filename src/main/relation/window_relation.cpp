@@ -10,7 +10,9 @@
 namespace duckdb {
 
 WindowRelation::WindowRelation(shared_ptr<Relation> rel,
+                               std::string window_function_,
                                vector<unique_ptr<ParsedExpression>> children_,
+                               std::string window_alias_name,
                                vector<unique_ptr<ParsedExpression>> partitions_,
                                vector<unique_ptr<OrderByNode>> orders_, unique_ptr<ParsedExpression> filter_expr_,
                                WindowBoundary start_,
@@ -28,7 +30,8 @@ WindowRelation::WindowRelation(shared_ptr<Relation> rel,
 	for (auto &o : orders_) {
 		orders.emplace_back(make_unique<OrderByNode>(o->type, o->null_order, o->expression->Copy()));
 	}
-	function_name = "sum";
+	window_function = window_function_;
+	alias = window_alias_name;
 	from_table = rel;
 
 	filter_expr = filter_expr_ ? filter_expr_->Copy() : nullptr;
@@ -64,7 +67,14 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 //	select j, i, sum(i) over (partition by j) from a order by 1,2
 // select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
-	auto window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, "", schema_name, "sum");
+	// depending of the name of the function, it's either an aggregate or one of
+	// no schema name needed (I think??)
+	// WINDOW_ROW_NUMBER, WINDOW_FIRST_VALUE, WINDOW_LAST_VALUE, WINDOW_NTH_VALUE, WINDOW_RANK, WINDOW_RANK_DENSE, WINDOW_PERCENT_RANK, WINDOW_CUME_DIST, WINDOW_LEAD, WINDOW_LAG, WINDOW_NTILE
+	auto window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, "", "", window_function);
+	if (window_function == "row_number") {
+		window_expr = make_unique<WindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, "", "", window_function);
+	}
+
 	for (auto &child : children) {
 		window_expr->children.push_back(child->Copy());
 	}
@@ -73,7 +83,7 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 	}
 
 	// need to add support for more function names
-	window_expr->function_name = "sum";
+	window_expr->function_name = window_function;
 
 	// need to add window expression ranges
 	window_expr->start = start;
@@ -88,7 +98,7 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 	window_expr->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	window_expr->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	window_expr->default_expr = default_expr ? default_expr->Copy() : nullptr;
-	window_expr->alias = "ALIAS";
+	window_expr->alias = alias;
 
 	result->select_list.push_back(make_unique<StarExpression>());
 	result->select_list.push_back(std::move(window_expr));
@@ -118,6 +128,7 @@ string WindowRelation::ToString(idx_t depth) {
 }
 
 string WindowRelation::GetAlias() {
+	// set the alias, otherwise you end up with a really long alias name.
 	return "WINDOW_ALIAS";
 }
 
