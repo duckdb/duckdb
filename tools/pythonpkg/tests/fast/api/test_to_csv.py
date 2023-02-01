@@ -3,6 +3,7 @@ import tempfile
 import os
 import pandas as pd
 import tempfile
+import pandas._testing as tm
 
 class TestToCSV(object):
     def test_basic_to_csv(self):
@@ -68,4 +69,19 @@ class TestToCSV(object):
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, header=True, quotechar='"', escapechar='!')
         csv_rel = duckdb.read_csv(temp_file_name, quotechar='"', escapechar='!')
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_datetime(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(tm.getTimeSeriesData())
+        dt_index = df.index
+        df = pd.DataFrame(
+            {"A": dt_index, "B": dt_index.shift(1)}, index=dt_index
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, date_format="%Y%m%d")
+
+        csv_rel = duckdb.read_csv(temp_file_name, date_format="%Y%m%d")
+        print(csv_rel)
+
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
