@@ -14,7 +14,7 @@ namespace duckdb {
 
 class JoinFilterRelation : public Relation {
 public:
-	DUCKDB_API JoinFilterRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr, shared_ptr<Relation> right,
+	DUCKDB_API JoinFilterRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_expr, shared_ptr<Relation> right_p,
 	                              JoinType type);
 
 	shared_ptr<Relation> left;

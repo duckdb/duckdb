@@ -220,12 +220,12 @@ test_that("semi join returns only one row per match", {
 
 # Currently fails, need to be able to wrap the projection expressions in a list.
 # test_that("semi join can match two or more expressions in the IN clause", {
-#     left <- duckdb:::rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 7)))
-#     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(4, 5, 8), right_b=c(1, 6, 7)))
-#     right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a"), expr_reference("right_b")))
-#     left_projection <- duckdb:::rel_project(left, list(expr_reference("left_a"), expr_reference("left_b")))
+#     left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 7)))
+#     right <- rel_from_df(con, data.frame(right_a=c(4, 5, 8), right_b=c(1, 6, 7)))
+#     right_projection <- rel_project(right, list(expr_reference("right_a"), expr_reference("right_b")))
+#     left_projection <- rel_project(left, list(expr_reference("left_a"), expr_reference("left_b")))
 #     # rel2 = select * from left where left_projection in (select right_projection from right);
-#     rel2 <- duckdb:::rel_join(left, right_projection, list(left_projection), "semi")
+#     rel2 <- rel_join(left, right_projection, list(left_projection), "semi")
 #     rel_df <- rel_to_altrep(rel2)
 #     dim(rel_df)
 #     expected_result <- data.frame(left_a=c(4), left_b=c(1))

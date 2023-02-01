@@ -9,9 +9,9 @@
 
 namespace duckdb {
 
-JoinFilterRelation::JoinFilterRelation(shared_ptr<Relation> left, shared_ptr<Relation> left_expr,
-                                       shared_ptr<Relation> right, JoinType type)
-    : Relation(left->context, RelationType::JOIN_RELATION), left(std::move(left)), right(std::move(right)),
+JoinFilterRelation::JoinFilterRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> left_expr,
+                                       shared_ptr<Relation> right_p, JoinType type)
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       left_expr(std::move(left_expr)), join_type(type) {
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI) {
 		throw Exception("join type is not 'semi' or 'anti'. Received " + JoinTypeToString(join_type));
