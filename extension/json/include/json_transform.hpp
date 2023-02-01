@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include "duckdb/function/scalar/strftime.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
+
+struct DateFormatMap;
 
 struct JSONTransformOptions {
 public:
@@ -22,10 +25,26 @@ public:
 	bool error_missing_key;
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key;
+	//! Date format used for parsing
+	DateFormatMap *date_format_map;
 
 public:
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
+};
+
+struct TryParseDate {
+	template <class T>
+	static inline bool Operation(StrpTimeFormat &format, const string_t &input, T &result, string &error_message) {
+		return format.TryParseDate(input, result, error_message);
+	}
+};
+
+struct TryParseTimeStamp {
+	template <class T>
+	static inline bool Operation(StrpTimeFormat &format, const string_t &input, T &result, string &error_message) {
+		return format.TryParseTimestamp(input, result, error_message);
+	}
 };
 
 struct JSONTransform {

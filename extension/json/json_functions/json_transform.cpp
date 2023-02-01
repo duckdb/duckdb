@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
+#include "json_scan.hpp"
 
 namespace duckdb {
 
@@ -236,14 +237,68 @@ void JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 	}
 }
 
-static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &target,
-                                const bool strict) {
+static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, const bool strict) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
-	JSONTransform::GetStringVector(vals, count, target, string_vector, strict);
+	JSONTransform::GetStringVector(vals, count, result.GetType(), string_vector, strict);
 
 	string error_message;
 	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &error_message, strict) && strict) {
 		throw InvalidInputException(error_message);
+	}
+}
+
+template <class OP, class T>
+static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &format, const idx_t count, Vector &result,
+                                      string &error_message, const bool strict) {
+	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &source_validity = FlatVector::Validity(string_vector);
+
+	auto target_vals = FlatVector::GetData<T>(result);
+	auto &target_validity = FlatVector::Validity(result);
+
+	bool success = true;
+	if (source_validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			success = success && OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			if (source_validity.RowIsValid(i)) {
+				success =
+				    success && OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message);
+			} else {
+				target_validity.SetInvalid(i);
+			}
+		}
+	}
+	return success;
+}
+
+static void TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, const idx_t count,
+                                          const JSONTransformOptions &options) {
+	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	JSONTransform::GetStringVector(vals, count, result.GetType(), string_vector, options.strict_cast);
+
+	const auto &result_type = result.GetType().id();
+	auto &format = options.date_format_map->GetFormat(result_type);
+
+	bool success;
+	string error_message;
+	switch (result_type) {
+	case LogicalTypeId::DATE:
+		success = TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, error_message,
+		                                                          options.strict_cast);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		success = TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result,
+		                                                                    error_message, options.strict_cast);
+		break;
+	default:
+		throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(result.GetType().id()));
+	}
+
+	if (!success) {
+		throw CastException(error_message);
 	}
 }
 
@@ -392,6 +447,11 @@ static void TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                       const JSONTransformOptions &options) {
 	auto result_type = result.GetType();
+	if (options.date_format_map && (result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE)) {
+		TransformFromStringWithFormat(vals, result, count, options);
+		return;
+	}
+
 	switch (result_type.id()) {
 	case LogicalTypeId::SQLNULL:
 		return;
@@ -447,7 +507,7 @@ static void Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-		return TransformFromString(vals, result, count, result_type, options.strict_cast);
+		return TransformFromString(vals, result, count, options.strict_cast);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
@@ -486,7 +546,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	const JSONTransformOptions options {strict, strict, strict, false};
+	const JSONTransformOptions options {strict, strict, strict, false, nullptr};
 
 	Transform(vals, alc, result, count, options);
 

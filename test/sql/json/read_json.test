@@ -183,8 +183,6 @@ d5c52052-5f8e-473f-bc8d-176342643ef5	UUID
 ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
 63928b16-1814-436f-8b30-b3c40cc31d51	UUID
 
-# TODO: detect date/time/etc.
-
 require httpfs
 
 query II

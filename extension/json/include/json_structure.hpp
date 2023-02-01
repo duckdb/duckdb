@@ -13,12 +13,8 @@
 namespace duckdb {
 
 struct JSONStructureDescription;
-
-struct LogicalTypeIdHash {
-	inline std::size_t operator()(const LogicalTypeId &id) const {
-		return (size_t)id;
-	}
-};
+struct DateFormatMap;
+struct StrpTimeFormat;
 
 struct JSONStructureNode {
 public:
@@ -29,14 +25,19 @@ public:
 
 	bool ContainsVarchar() const;
 	void InitializeCandidateTypes(const idx_t max_depth, idx_t depth = 0);
-	void RefineCandidateTypes(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator);
+	void RefineCandidateTypes(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                          DateFormatMap &date_format_map);
 
 private:
-	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator);
-	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator);
-	void RefineCandidateTypesString(yyjson_val *vals[], idx_t count, Vector &string_vector);
-	void EliminateCandidateTypes(idx_t count, Vector &string_vector);
-	void EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector);
+	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                               DateFormatMap &date_format_map);
+	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                                DateFormatMap &date_format_map);
+	void RefineCandidateTypesString(yyjson_val *vals[], idx_t count, Vector &string_vector,
+	                                DateFormatMap &date_format_map);
+	void EliminateCandidateTypes(idx_t count, Vector &string_vector, DateFormatMap &date_format_map);
+	void EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
+	                               vector<StrpTimeFormat> &formats);
 
 public:
 	string key;
@@ -60,8 +61,6 @@ public:
 
 	//! Candidate types (if auto-detecting and type == LogicalTypeId::VARCHAR)
 	vector<LogicalTypeId> candidate_types;
-	//! Format candidates (if auto-detecting)
-	unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> format_templates;
 };
 
 struct JSONStructure {

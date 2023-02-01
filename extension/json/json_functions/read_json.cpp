@@ -13,6 +13,16 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 	JSONScanLocalState lstate(context, gstate);
 	ArenaAllocator allocator(BufferAllocator::Get(context));
 
+	static const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> FORMAT_TEMPLATES = {
+	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
+	    {LogicalTypeId::TIMESTAMP,
+	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
+	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
+	};
+
+	// Populate possible date/timestamp formats, assume this is consistent across columns
+	bind_data.date_format_map.Initialize(FORMAT_TEMPLATES);
+
 	// Read for the specified sample size
 	JSONStructureNode node;
 	Vector string_vector(LogicalType::VARCHAR);
@@ -36,9 +46,10 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 			continue;
 		}
 		node.InitializeCandidateTypes(bind_data.max_depth);
-		node.RefineCandidateTypes(lstate.objects, i, string_vector, allocator);
+		node.RefineCandidateTypes(lstate.objects, i, string_vector, allocator, bind_data.date_format_map);
 	}
 	bind_data.type = original_scan_type;
+	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
 	const auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
 	if (type.id() != LogicalTypeId::STRUCT) {

@@ -10,6 +10,7 @@
 
 #include "buffered_json_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "json_transform.hpp"
 
@@ -23,6 +24,44 @@ enum class JSONScanType : uint8_t {
 	READ_JSON_OBJECTS = 2,
 	//! Sample run for schema detection
 	SAMPLE = 3,
+};
+
+//! Even though LogicalTypeId is just a uint8_t, this is still needed ...
+struct LogicalTypeIdHash {
+	inline std::size_t operator()(const LogicalTypeId &id) const {
+		return (size_t)id;
+	}
+};
+
+struct DateFormatMap {
+public:
+	void Initialize(const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> &format_templates) {
+		for (const auto &entry : format_templates) {
+			auto &formats = candidate_formats.emplace(entry.first, vector<StrpTimeFormat>()).first->second;
+			formats.reserve(entry.second.size());
+			for (const auto &format : entry.second) {
+				formats.emplace_back();
+				formats.back().format_specifier = format;
+				StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+			}
+		}
+	}
+
+	bool HasFormats(LogicalTypeId type) const {
+		return candidate_formats.find(type) != candidate_formats.end();
+	}
+
+	vector<StrpTimeFormat> &GetCandidateFormats(LogicalTypeId type) {
+		D_ASSERT(HasFormats(type));
+		return candidate_formats[type];
+	}
+
+	StrpTimeFormat &GetFormat(LogicalTypeId type) {
+		return candidate_formats[type].back();
+	}
+
+private:
+	unordered_map<LogicalTypeId, vector<StrpTimeFormat>, LogicalTypeIdHash> candidate_formats;
 };
 
 struct JSONScanData : public TableFunctionData {
@@ -61,6 +100,8 @@ public:
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;
+	//! Candidate date formats
+	DateFormatMap date_format_map;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {

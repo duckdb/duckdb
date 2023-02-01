@@ -76,10 +76,41 @@ select * from '__TEST_DIR__/my_file.json'
 bar	0
 baz	1
 
-require httpfs
+# test all supported date formats
+
+foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-pragma threads=1
+copy (
+    with cte as (select strftime('1996/03/27'::DATE, ${date_format}) as d)
+    select to_json(cte) from cte
+) to '__TEST_DIR__/my_file.json' (quote '');
+
+query I
+select * from '__TEST_DIR__/my_file.json'
+----
+1996-03-27
+
+endloop
+
+# test all supported timestamp formats (hacky way to do foreach parameters that need spaces in them)
+
+foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
+
+statement ok
+copy (
+    with cte as (select strftime('1996-03-27 07:42:33'::TIMESTAMP, ${a} ${b} ${c}) as d)
+    select to_json(cte) from cte
+) to '__TEST_DIR__/my_file.json' (quote '');
+
+query I
+select * from '__TEST_DIR__/my_file.json'
+----
+1996-03-27 07:42:33
+
+endloop
+
+require httpfs
 
 # this is one big object - yyjson uses it as a benchmark
 query II
