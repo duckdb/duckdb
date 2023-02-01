@@ -216,9 +216,9 @@ void JSONStructureNode::EliminateCandidateTypes(idx_t count, Vector &string_vect
 
 void JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
-	const auto type = result_vector.GetType().id();
-	auto &description = descriptions[0];
-	auto &formats = description.format_templates[type];
+	//	const auto type = result_vector.GetType().id();
+	//	auto &description = descriptions[0];
+	//	auto &formats = description.format_templates[type];
 	// TODO: cycle through formats
 }
 

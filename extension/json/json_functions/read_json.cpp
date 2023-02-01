@@ -8,7 +8,7 @@ namespace duckdb {
 void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
                 vector<string> &names) {
 	auto original_scan_type = bind_data.type;
-	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect
+	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect, we restore it later
 	JSONScanGlobalState gstate(context, bind_data);
 	JSONScanLocalState lstate(context, gstate);
 	ArenaAllocator allocator(BufferAllocator::Get(context));
@@ -32,7 +32,7 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 				break;
 			}
 		}
-		if (!node.ContainsVarchar()) {
+		if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 			continue;
 		}
 		node.InitializeCandidateTypes(bind_data.max_depth);

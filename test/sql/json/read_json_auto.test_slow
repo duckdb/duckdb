@@ -83,7 +83,7 @@ pragma threads=1
 
 # this is one big object - yyjson uses it as a benchmark
 query II
-select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304);
+select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=2);
 ----
 VARCHAR	STRUCT(type JSON, properties JSON, geometry JSON)[]
 
