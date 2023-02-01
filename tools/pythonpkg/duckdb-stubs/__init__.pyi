@@ -197,17 +197,17 @@ class DuckDBPyRelation:
     def write_csv(self, file_name: str) -> None: ...
     def to_csv(
         self,
-        file_name: str,
-        sep: str,
-        na_rep: str,
-        header: bool,
-        quotechar: str,
-        escapechar: str,
-        date_format: str,
-        timestamp_format: str,
-        quoting: str,
-        encoding: str,
-        compression: str
+        file_name: Optional[str],
+        sep: Optional[str],
+        na_rep: Optional[str],
+        header: Optional[bool],
+        quotechar: Optional[str],
+        escapechar: Optional[str],
+        date_format: Optional[str],
+        timestamp_format: Optional[str],
+        quoting: Optional[str | int],
+        encoding: Optional[str],
+        compression: Optional[str]
     ) -> None: ...
     def __len__(self) -> int: ...
     @property

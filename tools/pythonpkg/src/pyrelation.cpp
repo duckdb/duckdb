@@ -577,15 +577,25 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 	}
 
 	if (!py::none().is(quoting)) {
-		if (!py::isinstance<py::str>(quoting)) {
-			throw InvalidInputException("to_csv only accepts 'quoting' as a string");
-		}
-		string quoting_option = StringUtil::Lower(py::str(quoting));
-		if (quoting_option != "force" && quoting_option != "all") {
+		// TODO: add list of strings as valid option
+		if (py::isinstance<py::str>(quoting)) {
+			string quoting_option = StringUtil::Lower(py::str(quoting));
+			if (quoting_option != "force" && quoting_option != "all") {
+				throw InvalidInputException(
+				    "to_csv 'quoting' supported options are ALL or FORCE (both set FORCE_QUOTE=True)");
+			}
+		} else if (py::isinstance<py::int_>(quoting)) {
+			int64_t quoting_value = py::int_(quoting);
+			// csv.QUOTE_ALL expands to 1
+			static constexpr int64_t QUOTE_ALL = 1;
+			if (quoting_value != QUOTE_ALL) {
+				throw InvalidInputException("Only csv.QUOTE_ALL is a supported option for 'quoting' currently");
+			}
+		} else {
 			throw InvalidInputException(
-			    "to_csv 'quoting' supported options are ALL or FORCE (both set FORCE_QUOTE=True)");
+			    "to_csv only accepts 'quoting' as a string or a constant from the 'csv' package");
 		}
-		options["force_quote"] = {Value::BOOLEAN(true)};
+		options["force_quote"] = {Value("*")};
 	}
 
 	if (!py::none().is(encoding)) {

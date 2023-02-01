@@ -4,6 +4,9 @@ import os
 import pandas as pd
 import tempfile
 import pandas._testing as tm
+import datetime
+import csv
+import pytest
 
 class TestToCSV(object):
     def test_basic_to_csv(self):
@@ -71,7 +74,7 @@ class TestToCSV(object):
         csv_rel = duckdb.read_csv(temp_file_name, quotechar='"', escapechar='!')
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
-    def test_to_csv_datetime(self):
+    def test_to_csv_date_format(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pd.DataFrame(tm.getTimeSeriesData())
         dt_index = df.index
@@ -82,6 +85,80 @@ class TestToCSV(object):
         rel.to_csv(temp_file_name, date_format="%Y%m%d")
 
         csv_rel = duckdb.read_csv(temp_file_name, date_format="%Y%m%d")
-        print(csv_rel)
 
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_timestamp_format(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
+        df = pd.DataFrame(
+            {'0': pd.Series(data=data, dtype='object')}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, timestamp_format='%m/%d/%Y')
+
+        csv_rel = duckdb.read_csv(temp_file_name, timestamp_format='%m/%d/%Y')
+
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_quoting_off(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, quoting=None)
+
+        csv_rel = duckdb.read_csv(temp_file_name)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_quoting_on(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, quoting="force")
+
+        csv_rel = duckdb.read_csv(temp_file_name)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_quoting_quote_all(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, quoting=csv.QUOTE_ALL)
+
+        csv_rel = duckdb.read_csv(temp_file_name)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_encoding_incorrect(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: The only supported encoding option is 'UTF8"):
+            rel.to_csv(temp_file_name, encoding="nope")
+
+    def test_to_csv_encoding_correct(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, encoding="UTF-8")
+        csv_rel = duckdb.read_csv(temp_file_name)
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_compression_gzip(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {'a': ['string1', 'string2', 'string3']}
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, compression="gzip")
+        csv_rel = duckdb.read_csv(temp_file_name, compression="gzip")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
