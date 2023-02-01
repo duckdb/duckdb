@@ -31,6 +31,8 @@ public:
 struct JSONTransform {
 	static void TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count, const vector<string> &names,
 	                            const vector<Vector *> &result_vectors, const JSONTransformOptions &options);
+	static void GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target, Vector &string_vector,
+	                            const bool strict);
 };
 
 } // namespace duckdb

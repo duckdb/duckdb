@@ -219,9 +219,8 @@ static void TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 	}
 }
 
-static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &target,
-                                const bool strict) {
-	Vector string_vector(LogicalTypeId::VARCHAR, count);
+void JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target,
+                                    Vector &string_vector, const bool strict) {
 	auto data = (string_t *)FlatVector::GetData(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
 
@@ -235,6 +234,12 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 			data[i] = GetString(val);
 		}
 	}
+}
+
+static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, const LogicalType &target,
+                                const bool strict) {
+	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	JSONTransform::GetStringVector(vals, count, target, string_vector, strict);
 
 	string error_message;
 	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &error_message, strict) && strict) {

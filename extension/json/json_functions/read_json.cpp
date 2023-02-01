@@ -7,19 +7,27 @@ namespace duckdb {
 
 void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
                 vector<string> &names) {
-	bind_data.type = JSONScanType::SAMPLE; // Set to sample
+	auto original_scan_type = bind_data.type;
+	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect
 	JSONScanGlobalState gstate(context, bind_data);
 	JSONScanLocalState lstate(context, gstate);
 
+	// TODO: add unnest level as a param to read_json_auto, hardcode at 1 for now
+	idx_t max_depth = 1;
+	ArenaAllocator allocator(BufferAllocator::Get(context));
+
 	// Read for the specified sample size
 	JSONStructureNode node;
+	Vector string_vector(LogicalType::VARCHAR);
 	idx_t read = 0;
 	while (read < bind_data.sample_size) {
+		allocator.Reset();
 		auto count = lstate.ReadNext(gstate);
 		if (count == 0) {
 			break;
 		}
-		for (idx_t i = 0; i < count; i++) {
+		idx_t i;
+		for (i = 0; i < count; i++) {
 			if (lstate.objects[i]) {
 				JSONStructure::ExtractStructure(lstate.objects[i], node);
 			}
@@ -27,12 +35,15 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 				break;
 			}
 		}
-		// TODO: identify string types
+		if (!node.ContainsVarchar()) {
+			continue;
+		}
+		node.InitializeCandidateTypes(max_depth);
+		node.RefineCandidateTypes(lstate.objects, i, string_vector, allocator);
 	}
-	bind_data.type = JSONScanType::READ_JSON; // Restore scan type
+	bind_data.type = original_scan_type;
 
-	// TODO: add unnest level as a param to read_json_auto
-	const auto type = JSONStructure::StructureToType(context, node, 1);
+	const auto type = JSONStructure::StructureToType(context, node, max_depth);
 	if (type.id() != LogicalTypeId::STRUCT) {
 		return_types.emplace_back(type);
 		names.emplace_back("json");
@@ -47,7 +58,6 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 		names.emplace_back(child_type.first);
 	}
 
-	// TODO: if it's not a plain file source we need to copy the buffers and store them in the reader
 	for (auto &reader : gstate.json_readers) {
 		if (reader->IsOpen()) {
 			reader->Reset();
