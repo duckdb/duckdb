@@ -5,6 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+SELECT ('0101011'::BIT)
+----
+0101011
+
+# test alias bitstring
+query I
+SELECT ('0101011'::BITSTRING)
+----
+0101011
+
 statement ok
 CREATE TABLE bits (b bit);
 
@@ -37,7 +48,7 @@ SELECT * FROM bits WHERE b = '111';
 ----
 111
 
-# insert invalid bit strings
+# invalid bit strings
 statement error
 INSERT INTO bits VALUES('101211010')
 ----
@@ -47,6 +58,11 @@ statement error
 INSERT INTO bits VALUES('1A10')
 ----
 Conversion Error: Invalid character encountered in string -> bit conversion: 'A'
+
+statement error
+SELECT ('0101011'::BIT(10))
+----
+Parser Error: Type BIT does not support any modifiers!
 
 # bit null test and empty values
 query I

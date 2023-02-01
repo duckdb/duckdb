@@ -1336,7 +1336,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::TIME_TZ:
 		return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-	// case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
