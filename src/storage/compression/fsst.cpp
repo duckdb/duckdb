@@ -235,10 +235,11 @@ public:
 	}
 
 	void UpdateState(string_t uncompressed_string, unsigned char *compressed_string, size_t compressed_string_len) {
-
 		if (!HasEnoughSpace(compressed_string_len)) {
 			Flush();
-			D_ASSERT(HasEnoughSpace(compressed_string_len));
+			if (!HasEnoughSpace(compressed_string_len)) {
+				throw InternalException("FSST string compression failed due to insufficient space in empty block");
+			};
 		}
 
 		UncompressedStringStorage::UpdateStringStats(current_segment->stats, uncompressed_string);
@@ -261,7 +262,9 @@ public:
 	void AddNull() {
 		if (!HasEnoughSpace(0)) {
 			Flush();
-			D_ASSERT(HasEnoughSpace(0));
+			if (!HasEnoughSpace(0)) {
+				throw InternalException("FSST string compression failed due to insufficient space in empty block");
+			};
 		}
 		index_buffer.push_back(0);
 		current_segment->count++;
@@ -272,7 +275,7 @@ public:
 		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
 	}
 
-	bool HasEnoughSpace(size_t string_len) {
+	size_t GetRequiredSize(size_t string_len) {
 		bitpacking_width_t required_minimum_width;
 		if (string_len > max_compressed_string_length) {
 			required_minimum_width = BitpackingPrimitives::MinimumBitWidth(string_len);
@@ -287,8 +290,13 @@ public:
 		    BitpackingPrimitives::GetRequiredSize(current_string_count + 1, required_minimum_width);
 
 		// TODO switch to a symbol table per RowGroup, saves a bit of space
-		auto required_size = sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
-		                     fsst_serialized_symbol_table_size;
+		return sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
+		       fsst_serialized_symbol_table_size;
+	}
+
+	// Checks if there is enough space, if there is, sets last_fitting_size
+	bool HasEnoughSpace(size_t string_len) {
+		auto required_size = GetRequiredSize(string_len);
 
 		if (required_size <= Storage::BLOCK_SIZE) {
 			last_fitting_size = required_size;

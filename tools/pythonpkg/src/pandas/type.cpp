@@ -37,6 +37,8 @@ PandasType ConvertPandasType(const py::object &col_type) {
 		return PandasType::INT_32;
 	} else if (col_type_str == "int64" || col_type_str == "Int64") {
 		return PandasType::INT_64;
+	} else if (col_type_str == "float16" || col_type_str == "Float16") {
+		return PandasType::FLOAT_16;
 	} else if (col_type_str == "float32" || col_type_str == "Float32") {
 		return PandasType::FLOAT_32;
 	} else if (col_type_str == "float64" || col_type_str == "Float64") {
@@ -79,6 +81,8 @@ LogicalType PandasToLogicalType(const PandasType &col_type) {
 		return LogicalType::BIGINT;
 	case PandasType::UINT_64:
 		return LogicalType::UBIGINT;
+	case PandasType::FLOAT_16:
+		return LogicalType::FLOAT;
 	case PandasType::FLOAT_32:
 		return LogicalType::FLOAT;
 	case PandasType::FLOAT_64:
