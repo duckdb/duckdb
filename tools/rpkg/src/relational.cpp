@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
@@ -176,14 +177,34 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, duckdb::expr_extptr_t col, list partitions, list bounds) {
-	vector<ColumnRefExpression> res_partitions;
+[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel,
+                                                     list children,
+                                                     list partitions, list orders,
+                                                     list bounds,
+                                                     list start_end_offset_default) {
+	auto children_ = vector<unique_ptr<ParsedExpression>>();
+	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
+	auto orders_ = vector<unique_ptr<OrderByNode>>();
+	unique_ptr<ParsedExpression> filter_expr_ = nullptr;
+	WindowBoundary start_ = WindowBoundary::UNBOUNDED_PRECEDING;
+	WindowBoundary end_ = WindowBoundary::CURRENT_ROW_RANGE;
+	vector<unique_ptr<ParsedExpression>> start_end_offset_default_;
 	auto table_alias = rel->rel->GetAlias();
-	for (expr_extptr_t column_name : partitions) {
-		res_partitions.emplace_back(ColumnRefExpression(column_name->GetName(), table_alias));
+	for (expr_extptr_t child : children) {
+		children_.emplace_back(child->Copy());
 	}
-	auto col2 = make_unique<ColumnRefExpression>(col->GetName(), table_alias);
-	auto res = std::make_shared<WindowRelation>(rel->rel, std::move(col2), res_partitions);
+	for (expr_extptr_t partition : partitions) {
+		partitions_.emplace_back(partition->Copy());
+	}
+
+	auto res = std::make_shared<WindowRelation>(rel->rel,
+	                                            std::move(children_),
+	                                            std::move(partitions_),
+	                                            std::move(orders_),
+	                                            nullptr,
+	                                            start_,
+	                                            end_,
+	                                            std::move(start_end_offset_default_));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 
 }

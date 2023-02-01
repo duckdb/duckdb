@@ -300,14 +300,11 @@ test_that("rel aggregate with groups and aggregate function works", {
 test_that("Window function works", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    sum <- duckdb:::expr_reference("a")
+    sum <- list(duckdb:::expr_reference("a"))
     partitions <- list(duckdb:::expr_reference("b"))
-    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, sum, partitions, list())
-    res = duckdb:::rel_to_altrep(window_function)
-
-
-    # select j, i, sum(i) over () from a order by 1,2
-#     test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
-#     rel_df <- duckdb:::rel_to_altrep(test_df_a)
-    #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, sum, partitions, list(), list(), list())
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), ALIAS=c(3, 3, 7, 7, 11, 11, 15, 15))
+    res = duckdb:::rel_to_altrep(order_over_window)
 })
