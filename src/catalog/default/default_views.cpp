@@ -63,7 +63,7 @@ static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const s
 			result->temporary = true;
 			result->internal = true;
 
-			return CreateViewInfo::FromSelect(context, move(result));
+			return CreateViewInfo::FromSelect(context, std::move(result));
 		}
 	}
 	return nullptr;

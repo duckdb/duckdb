@@ -501,7 +501,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, move(plan));
+		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

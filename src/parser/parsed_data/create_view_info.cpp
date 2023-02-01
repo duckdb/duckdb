@@ -70,7 +70,7 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, un
 	auto binder = Binder::CreateBinder(context);
 	binder->BindCreateViewInfo(*info);
 
-	return move(info);
+	return info;
 }
 
 unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context, const string &sql) {
