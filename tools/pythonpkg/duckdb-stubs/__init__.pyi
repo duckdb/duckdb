@@ -194,8 +194,21 @@ class DuckDBPyRelation:
     def unique(self, unique_aggr: str) -> DuckDBPyRelation: ...
     def value_counts(self, value_counts_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
     def var(self, var_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
-    def write_csv(self, file_name: str) -> None: ...
     def to_csv(
+        self,
+        file_name: Optional[str],
+        sep: Optional[str],
+        na_rep: Optional[str],
+        header: Optional[bool],
+        quotechar: Optional[str],
+        escapechar: Optional[str],
+        date_format: Optional[str],
+        timestamp_format: Optional[str],
+        quoting: Optional[str | int],
+        encoding: Optional[str],
+        compression: Optional[str]
+    ) -> None: ...
+    def write_csv(
         self,
         file_name: Optional[str],
         sep: Optional[str],

@@ -618,15 +618,11 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 	rel->WriteCSV(filename, move(options));
 }
 
-void DuckDBPyRelation::WriteCsv(const string &file) {
-	rel->WriteCSV(file);
-}
-
 void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromDF(df)->WriteCsv(file);
+	return conn->FromDF(df)->ToCSV(file);
 }
 
 // should this return a rel with the new view?
