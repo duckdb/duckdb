@@ -1723,38 +1723,6 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
-idx_t GetConsecutiveChildList(Vector &list, idx_t count, Vector &result) {
-	auto list_data = FlatVector::GetData<list_entry_t>(list);
-	auto &validity = FlatVector::Validity(list);
-	bool consecutive_flat_list = true;
-	idx_t child_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(i)) {
-			continue;
-		}
-		if (list_data[i].offset != child_count) {
-			consecutive_flat_list = false;
-		}
-		child_count += list_data[i].length;
-	}
-	if (!consecutive_flat_list) {
-		SelectionVector child_sel(child_count);
-		idx_t entry = 0;
-		for (idx_t i = 0; i < count; i++) {
-			if (!validity.RowIsValid(i)) {
-				continue;
-			}
-			for (idx_t k = 0; k < list_data[i].length; k++) {
-				child_sel.set_index(entry++, list_data[i].offset + k);
-			}
-		}
-
-		result.Slice(child_sel, child_count);
-		result.Flatten(child_count);
-	}
-	return child_count;
-}
-
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = (ListColumnWriterState &)state_p;
 
@@ -1808,8 +1776,8 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	idx_t child_count = GetConsecutiveChildList(vector, count, child_list);
-	child_writer->Prepare(*state.child_state, &state_p, child_list, child_count);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
@@ -1822,8 +1790,8 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	idx_t child_count = GetConsecutiveChildList(vector, count, child_list);
-	child_writer->Write(*state.child_state, child_list, child_count);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {

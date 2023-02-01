@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -19,6 +20,16 @@
 #include <algorithm>
 
 namespace duckdb {
+
+static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
+	vector<idx_t> ret;
+	for (idx_t i = 0; i < vec.size(); i++) {
+		if (vec[i]) {
+			ret.push_back(i);
+		}
+	}
+	return ret;
+}
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
@@ -40,8 +51,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
+	bool allow_overwrite = false;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
+	vector<idx_t> partition_cols;
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
@@ -53,8 +66,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			user_set_use_tmp_file = true;
 			continue;
 		}
+		if (loption == "allow_overwrite") {
+			allow_overwrite = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			continue;
+		}
+
 		if (loption == "per_thread_output") {
 			per_thread_output = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			continue;
+		}
+		if (loption == "partition_by") {
+			auto converted = ConvertVectorToValue(std::move(option.second));
+			partition_cols = ColumnListToIndices(ParseColumnList(converted, select_node.names, loption));
 			continue;
 		}
 		stmt.info->options[option.first] = option.second;
@@ -62,10 +85,16 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
 	}
+	if (user_set_use_tmp_file && !partition_cols.empty()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
+	}
+	if (per_thread_output && !partition_cols.empty()) {
+		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+	}
 	bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
 	bool is_stdout = stmt.info->file_path == "/dev/stdout";
 	if (!user_set_use_tmp_file) {
-		use_tmp_file = is_file_and_exists && !per_thread_output && !is_stdout;
+		use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
 	}
 
 	auto function_data =
@@ -74,7 +103,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
+	copy->allow_overwrite = allow_overwrite;
 	copy->per_thread_output = per_thread_output;
+	copy->per_thread_output = per_thread_output;
+	copy->partition_output = !partition_cols.empty();
+	copy->partition_columns = std::move(partition_cols);
+	copy->names = select_node.names;
+	copy->expected_types = select_node.types;
 
 	copy->AddChild(std::move(select_node.plan));
 

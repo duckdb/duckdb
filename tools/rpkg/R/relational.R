@@ -122,7 +122,7 @@ rel_project <- rapi_rel_project
 #' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, "CREATE MACRO gt(a, b) AS a > b")
+#' DBI::dbExecute(con, "CREATE OR REPLACE MACRO gt(a, b) AS a > b")
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_filter(rel, list(expr_function("gt", list(expr_reference("cyl"), expr_constant("6")))))
 rel_filter <- rapi_rel_filter
@@ -155,16 +155,27 @@ rel_order <- rapi_rel_order
 #' @param left the left-hand-side DuckDB relation object
 #' @param right the right-hand-side DuckDB relation object
 #' @param conds a list of DuckDB expressions to use for the join
+#' @param join a string describing the join type (either "inner", "left", "right", or "outer")
 #' @return a new `duckdb_relation` object resulting from the join
 #' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, "CREATE MACRO eq(a, b) AS a = b")
+#' DBI::dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
 #' left <- rel_from_df(con, mtcars)
 #' right <- rel_from_df(con, mtcars)
 #' cond <- list(expr_function("eq", list(expr_reference("cyl", left), expr_reference("cyl", right))))
-#' rel2 <- rel_inner_join(left, right, cond)
-rel_inner_join <- rapi_rel_inner_join
+#' rel2 <- rel_join(left, right, cond, "inner")
+#' rel2 <- rel_join(left, right, cond, "right")
+#' rel2 <- rel_join(left, right, cond, "left")
+#' rel2 <- rel_join(left, right, cond, "outer")
+rel_inner_join <- function(left, right, conds) {
+  rel_join(left, right, conds, "inner")
+}
+
+rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer")) {
+  join <- match.arg(join)
+  rapi_rel_join(left, right, conds, join)
+}
 
 #' UNION ALL on two DuckDB relation objects
 #' @param rel_a a DuckDB relation object

@@ -1,6 +1,7 @@
 #include "duckdb/common/types/partitioned_column_data.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -18,6 +19,8 @@ unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
 		return make_unique<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
+	case PartitionedColumnDataType::HIVE:
+		return make_unique<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}
@@ -141,10 +144,12 @@ void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &s
 void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
+
 	if (partitions.empty()) {
 		// This is the first merge, we just copy them over
 		partitions = std::move(other.partitions);
 	} else {
+		D_ASSERT(partitions.size() == other.partitions.size());
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {
 			partitions[i]->Combine(*other.partitions[i]);
