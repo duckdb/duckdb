@@ -51,7 +51,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                       info->constraint_type, storage.db);
+		                                       info->constraint_type, storage.db, true);
 		break;
 	}
 	default:
@@ -68,7 +68,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                      info->constraint_type, storage.db);
+		                                      info->constraint_type, storage.db, false);
 		break;
 	}
 	default:
@@ -96,18 +96,14 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
 	auto &storage = table.GetStorage();
-	auto art =
-	    make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
-	                     lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db);
+	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
+	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
+	                            storage.db, false);
 	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
 
 	// merge into the local ART
-	{
-		IndexLock local_lock;
-		lstate.local_index->InitializeLock(local_lock);
-		if (!lstate.local_index->MergeIndexes(local_lock, art.get())) {
-			throw ConstraintException("Data contains duplicates on indexed column(s)");
-		}
+	if (!lstate.local_index->MergeIndexes(art.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -119,7 +115,9 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
 
 	// merge the local index into the global index
-	gstate.global_index->MergeIndexes(lstate.local_index.get());
+	if (!gstate.global_index->MergeIndexes(lstate.local_index.get())) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -128,10 +126,14 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	// here, we just set the resulting global index as the newly created index of the table
 
 	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
-
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
+
+	state.global_index->Verify();
+	if (state.global_index->track_memory) {
+		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
 
 	auto &schema = *table.schema;

@@ -8,10 +8,12 @@
 
 namespace duckdb {
 
-Index::Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids_p,
-             const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type_p)
+Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
+             const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
+             IndexConstraintType constraint_type_p, bool track_memory)
 
-    : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p) {
+    : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
+      db(db), buffer_manager(BufferManager::GetBufferManager(db)), memory_size(0), track_memory(track_memory) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -23,6 +25,8 @@ Index::Index(IndexType type, TableIOManager &table_io_manager, const vector<colu
 	for (auto &bound_expr : bound_expressions) {
 		executor.AddExpression(*bound_expr);
 	}
+
+	// create the column id set
 	for (auto column_id : column_ids) {
 		column_id_set.insert(column_id);
 	}
