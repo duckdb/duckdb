@@ -1,0 +1,12 @@
+# name: test/sql/copy/parquet/test_parquet_duplicate_columns.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 1 as a, 2 as a) TO '__TEST_DIR__/dupe_cols.parquet';
+
+query II
+SELECT a, a_1 FROM '__TEST_DIR__/dupe_cols.parquet';
+----
+1	2
