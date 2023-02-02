@@ -1,5 +1,6 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -7,7 +8,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table) : table(table) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table((DuckTableEntry &)table_p) {
+	D_ASSERT(table_p.IsDuckTable());
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -15,11 +17,11 @@ TableDataWriter::~TableDataWriter() {
 
 void TableDataWriter::WriteTableData() {
 	// start scanning the table and append the data to the uncompressed segments
-	table.storage->Checkpoint(*this);
+	table.GetStorage().Checkpoint(*this);
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns.GetColumn(LogicalIndex(i)).CompressionType();
+	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {

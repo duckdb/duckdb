@@ -28,7 +28,7 @@ public:
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 };
 
-enum class PartitionedColumnDataType : uint8_t { RADIX, INVALID };
+enum class PartitionedColumnDataType : uint8_t { RADIX, HIVE, INVALID };
 
 //! Shared allocators for parallel partitioning
 struct PartitionAllocators {

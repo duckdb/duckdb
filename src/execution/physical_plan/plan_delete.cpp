@@ -1,10 +1,22 @@
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
+
+unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+                                                     unique_ptr<PhysicalOperator> plan) {
+	// get the index of the row_id column
+	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
+
+	auto del = make_unique<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
+	                                       op.estimated_cardinality, op.return_chunk);
+	del->children.push_back(std::move(plan));
+	return std::move(del);
+}
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
@@ -13,14 +25,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	// get the index of the row_id column
-	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
-
 	dependencies.AddDependency(op.table);
-	auto del = make_unique<PhysicalDelete>(op.types, *op.table, *op.table->storage, bound_ref.index,
-	                                       op.estimated_cardinality, op.return_chunk);
-	del->children.push_back(std::move(plan));
-	return std::move(del);
+	return op.table->catalog->PlanDelete(context, op, std::move(plan));
 }
 
 } // namespace duckdb

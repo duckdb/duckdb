@@ -11,9 +11,10 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -460,7 +461,8 @@ void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataC
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = TransactionManager::Get(db);
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();
 	TransactionData data(lowest_active_id, lowest_active_start);
@@ -844,7 +846,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnLis
 //===--------------------------------------------------------------------===//
 // GetStorageInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result) {
+void RowGroup::GetStorageInfo(idx_t row_group_index, TableStorageInfo &result) {
 	for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
 		columns[col_idx]->GetStorageInfo(row_group_index, {col_idx}, result);
 	}
