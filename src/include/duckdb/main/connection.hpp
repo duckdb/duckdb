@@ -30,6 +30,7 @@ class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
 class SelectStatement;
+struct BufferedCSVReaderOptions;
 
 typedef void (*warning_callback)(std::string);
 
@@ -127,8 +128,10 @@ public:
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);
 	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
+
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, BufferedCSVReaderOptions &options);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	//! Reads Parquet file
