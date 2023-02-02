@@ -72,8 +72,7 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 		if (db->IsSystem() || db->IsTemporary()) {
 			continue;
 		}
-		auto &storage = db->GetStorageManager();
-		auto ds = storage.GetDatabaseSize();
+		auto ds = db->GetCatalog().GetDatabaseSize(context);
 		idx_t col = 0;
 		output.data[col++].SetValue(row, Value(db->GetName()));
 		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
@@ -81,7 +80,8 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 		output.data[col++].SetValue(row, Value::BIGINT(ds.total_blocks));
 		output.data[col++].SetValue(row, Value::BIGINT(ds.used_blocks));
 		output.data[col++].SetValue(row, Value::BIGINT(ds.free_blocks));
-		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
+		output.data[col++].SetValue(
+		    row, ds.wal_size == idx_t(-1) ? Value() : Value(StringUtil::BytesToHumanReadableString(ds.wal_size)));
 		output.data[col++].SetValue(row, data.memory_usage);
 		output.data[col++].SetValue(row, data.memory_limit);
 		row++;

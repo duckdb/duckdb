@@ -12,11 +12,11 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "duckdb/storage/storage_info.hpp"
-
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -38,8 +38,8 @@ class TransactionManager;
 class ReplayState {
 public:
 	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), catalog(Catalog::GetCatalog(context, INVALID_CATALOG)), source(source),
-	      current_table(nullptr), deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
+	    : db(db), context(context), catalog(db.GetCatalog()), source(source), current_table(nullptr),
+	      deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
 	}
 
 	AttachedDatabase &db;

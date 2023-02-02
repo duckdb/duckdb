@@ -10,7 +10,8 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
@@ -100,10 +101,10 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto &transaction = Transaction::Get(context.client, *bind_tbl.table->catalog);
+	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
 	auto &state = (IndexJoinOperatorState &)state_p;
 
-	auto tbl = bind_tbl.table->storage.get();
+	auto &tbl = bind_tbl.table->GetStorage();
 	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
 
@@ -129,7 +130,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 		state.rhs_chunk.Reset();
 		state.fetch_state = make_unique<ColumnFetchState>();
 		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
-		tbl->Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
+		tbl.Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}
 
 	//! Now we actually produce our result chunk

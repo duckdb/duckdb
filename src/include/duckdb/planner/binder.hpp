@@ -35,6 +35,10 @@ class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 
+class ColumnList;
+class ExternalDependency;
+class TableFunction;
+
 struct CreateInfo;
 struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;
@@ -160,8 +164,8 @@ public:
 	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
 	                                          vector<PhysicalIndex> &columns);
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
-	                                TableCatalogEntry *table);
-	void BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt);
+	                                TableCatalogEntry &table);
+	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,
@@ -208,7 +212,7 @@ private:
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
-	void BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
+	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
 	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,

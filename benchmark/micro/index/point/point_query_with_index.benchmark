@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/point_query_with_index.benchmark
+# name: benchmark/micro/index/point/point_query_with_index.benchmark
 # description: Point query with an index on randomly ordered data
-# group: [index]
+# group: [point]
 
 name Point Query (Index)
 group index

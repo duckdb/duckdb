@@ -56,11 +56,12 @@ AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, c
 		if (db->IsSystem()) {
 			continue;
 		}
-		auto &storage = db->GetStorageManager();
-		if (storage.InMemory()) {
+		auto &catalog = Catalog::GetCatalog(*db);
+		if (catalog.InMemory()) {
 			continue;
 		}
-		if (StringUtil::CIEquals(path, storage.GetDBPath())) {
+		auto db_path = catalog.GetDBPath();
+		if (StringUtil::CIEquals(path, db_path)) {
 			return db;
 		}
 	}
