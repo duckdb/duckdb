@@ -981,6 +981,19 @@ select * from mytable;
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}''')
 
+     test('''create table mytable as select * from
+read_json_auto('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''id|name
+1|O Brother, Where Art Thou?
+2|Home for the Holidays
+3|The Firm
+4|Broadcast News
+5|Raising Arizona''')
+
      test('''
      COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');
      ''',
