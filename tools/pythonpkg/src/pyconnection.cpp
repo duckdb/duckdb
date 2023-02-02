@@ -77,8 +77,6 @@ bool DuckDBPyConnection::IsJupyter() {
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
-	    .def("extension_loaded", &DuckDBPyConnection::ExtensionLoaded,
-	         "Check if a given extension is (statically) loaded", py::arg("name"))
 	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem",
 	         py::arg("filesystem"))
 	    .def("unregister_filesystem", &DuckDBPyConnection::UnregisterFilesystem, "Unregister a filesystem",
@@ -427,14 +425,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return shared_from_this();
-}
-
-bool DuckDBPyConnection::ExtensionLoaded(const string &name) {
-	if (name != "json") {
-		throw NotImplementedException("Only 'json' is supported currently");
-	}
-	auto result = ExtensionHelper::LoadExtension(*database, name);
-	return result == ExtensionLoadResult::LOADED_EXTENSION;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,

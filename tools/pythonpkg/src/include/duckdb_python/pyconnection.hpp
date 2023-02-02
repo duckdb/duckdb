@@ -49,7 +49,6 @@ public:
 	}
 
 public:
-	bool ExtensionLoaded(const string &name);
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 

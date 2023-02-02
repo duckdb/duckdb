@@ -3,13 +3,6 @@
 
 namespace duckdb {
 
-bool PyConnectionWrapper::ExtensionLoaded(const string &name, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->ExtensionLoaded(name);
-}
-
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const string &query, py::object params,
                                                                 shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {

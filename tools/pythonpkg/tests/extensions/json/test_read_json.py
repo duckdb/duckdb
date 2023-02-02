@@ -9,7 +9,6 @@ def TestFile(name):
     filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data',name)
     return filename
 
-@pytest.mark.skipif(duckdb.extension_loaded('json') == False, reason="JSON extension is not loaded")
 class TestReadJSON(object):
     def test_read_json_columns(self):
         rel = duckdb.read_json(TestFile('example.json'), columns={'id':'integer', 'name':'varchar'})

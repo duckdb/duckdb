@@ -64,8 +64,6 @@ static py::object PyTokenize(const string &query) {
 static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("cursor", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	      py::arg("connection") = py::none())
-	    .def("extension_loaded", &PyConnectionWrapper::ExtensionLoaded,
-	         "Check if a given extension is (statically) loaded", py::arg("name"), py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	         py::arg("connection") = py::none())
 	    .def("execute", &PyConnectionWrapper::Execute,
