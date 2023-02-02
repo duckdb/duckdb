@@ -196,11 +196,10 @@ void JSONStructureNode::EliminateCandidateTypes(idx_t count, Vector &string_vect
 		Vector result_vector(type, count);
 		if (date_format_map.HasFormats(type)) {
 			auto &formats = date_format_map.GetCandidateFormats(type);
-			EliminateCandidateFormats(count, string_vector, result_vector, formats);
-			if (formats.empty()) {
-				candidate_types.pop_back();
-			} else {
+			if (EliminateCandidateFormats(count, string_vector, result_vector, formats)) {
 				return;
+			} else {
+				candidate_types.pop_back();
 			}
 		} else {
 			string error_message;
@@ -238,15 +237,13 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 	return true;
 }
 
-void JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
+bool JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
                                                   vector<StrpTimeFormat> &formats) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	const auto type = result_vector.GetType().id();
-	while (true) {
-		if (formats.empty()) {
-			return;
-		}
-		auto &format = formats.back();
+	for (idx_t i = formats.size(); i != 0; i--) {
+		idx_t actual_index = i - 1;
+		auto &format = formats[actual_index];
 		bool success;
 		switch (type) {
 		case LogicalTypeId::DATE:
@@ -259,10 +256,13 @@ void JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_ve
 			throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(type));
 		}
 		if (success) {
-			return;
+			while (formats.size() > i) {
+				formats.pop_back();
+			}
+			return true;
 		}
-		formats.pop_back();
 	}
+	return false;
 }
 
 JSONStructureDescription::JSONStructureDescription(LogicalTypeId type_p) : type(type_p) {

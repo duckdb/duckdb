@@ -249,7 +249,7 @@ static void TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 
 template <class OP, class T>
 static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &format, const idx_t count, Vector &result,
-                                      string &error_message, const bool strict) {
+                                      string &error_message) {
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
 
@@ -289,18 +289,17 @@ static void TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 	string error_message;
 	switch (result_type) {
 	case LogicalTypeId::DATE:
-		success = TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, error_message,
-		                                                          options.strict_cast);
+		success = TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, error_message);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		success = TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result,
-		                                                                    error_message, options.strict_cast);
+		                                                                    error_message);
 		break;
 	default:
 		throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(result.GetType().id()));
 	}
 
-	if (!success) {
+	if (options.strict_cast && !success) {
 		throw CastException(error_message);
 	}
 }
