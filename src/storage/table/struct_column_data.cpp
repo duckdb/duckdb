@@ -286,7 +286,7 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 	}
 }
 
-void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
+void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	col_path.push_back(0);
 	validity.GetStorageInfo(row_group_index, col_path, result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

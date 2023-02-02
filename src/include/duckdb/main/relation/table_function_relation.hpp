@@ -28,7 +28,6 @@ public:
 	shared_ptr<Relation> input_relation;
 
 public:
-	void InitializeColumns();
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;
 
@@ -38,8 +37,11 @@ public:
 	void AddNamedParameter(const string &name, Value argument);
 
 private:
-	//! Whether or not to automatically initialize the columns
-	bool auto_initialize = true;
+	void InitializeColumns();
+
+private:
+	//! Whether or not to auto initialize the columns on construction
+	bool auto_initialize;
 };
 
 } // namespace duckdb

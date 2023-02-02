@@ -368,8 +368,9 @@ Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 		return env.Null();
 	}
 	Napi::Function rs_callback = info[0].As<Napi::Function>();
-	auto rs = duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs_" + (replacement_scan_count++), 0, 1,
-	                                         nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
+	auto rs =
+	    duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs_" + std::to_string(replacement_scan_count++),
+	                                   0, 1, nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
 	rs.Unref(env);
 
 	Schedule(info.Env(), duckdb::make_unique<RegisterRsTask>(*this, rs, deferred));

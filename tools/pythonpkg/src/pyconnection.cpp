@@ -135,19 +135,23 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("read_csv", &DuckDBPyConnection::ReadCSV, "Read the CSV file identified by 'name'", py::arg("name"),
-	         py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
-	         py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
-	         py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
-	         py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none())
 	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Read the JSON file identified by 'name'", py::arg("name"),
-	         py::arg("columns"))
-	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
-	         py::arg("df") = py::none())
+	         py::arg("columns"));
+
+	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
+	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
+	             py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
+	             py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
+	             py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
+	             py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
+	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
+	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
+	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+
+	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
+	      py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"))
-	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
-	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
@@ -457,12 +461,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	return make_unique<DuckDBPyRelation>(move(read_json_relation));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, const py::object &header,
-                                                         const py::object &compression, const py::object &sep,
-                                                         const py::object &delimiter, const py::object &dtype,
-                                                         const py::object &na_values, const py::object &skiprows,
-                                                         const py::object &quotechar, const py::object &escapechar,
-                                                         const py::object &encoding, const py::object &parallel) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
+    const string &name, const py::object &header, const py::object &compression, const py::object &sep,
+    const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
+    const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
+    const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
+    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -483,7 +487,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 			}
 			options.SetHeader(true);
 		} else {
-			dprintf(2, "HEADER TYPE IS %s\n", string(py::str(header.get_type())).c_str());
 			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
 		}
 	}
@@ -607,7 +610,49 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const string &name, con
 		}
 	}
 
-	return make_unique<DuckDBPyRelation>(move(read_csv_p));
+	if (!py::none().is(date_format)) {
+		if (!py::isinstance<py::str>(date_format)) {
+			throw InvalidInputException("read_csv only accepts 'date_format' as a string");
+		}
+		read_csv.AddNamedParameter("dateformat", Value(py::str(date_format)));
+	}
+
+	if (!py::none().is(timestamp_format)) {
+		if (!py::isinstance<py::str>(timestamp_format)) {
+			throw InvalidInputException("read_csv only accepts 'timestamp_format' as a string");
+		}
+		read_csv.AddNamedParameter("timestampformat", Value(py::str(timestamp_format)));
+	}
+
+	if (!py::none().is(sample_size)) {
+		if (!py::isinstance<py::int_>(sample_size)) {
+			throw InvalidInputException("read_csv only accepts 'sample_size' as an integer");
+		}
+		read_csv.AddNamedParameter("sample_size", Value::INTEGER(py::int_(sample_size)));
+	}
+
+	if (!py::none().is(all_varchar)) {
+		if (!py::isinstance<py::bool_>(all_varchar)) {
+			throw InvalidInputException("read_csv only accepts 'all_varchar' as a boolean");
+		}
+		read_csv.AddNamedParameter("all_varchar", Value::INTEGER(py::bool_(all_varchar)));
+	}
+
+	if (!py::none().is(normalize_names)) {
+		if (!py::isinstance<py::bool_>(normalize_names)) {
+			throw InvalidInputException("read_csv only accepts 'normalize_names' as a boolean");
+		}
+		read_csv.AddNamedParameter("normalize_names", Value::INTEGER(py::bool_(normalize_names)));
+	}
+
+	if (!py::none().is(filename)) {
+		if (!py::isinstance<py::bool_>(filename)) {
+			throw InvalidInputException("read_csv only accepts 'filename' as a boolean");
+		}
+		read_csv.AddNamedParameter("filename", Value::INTEGER(py::bool_(filename)));
+	}
+
+	return make_unique<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
@@ -712,15 +757,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	rel->rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
 	return rel;
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	vector<Value> params;
-	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,

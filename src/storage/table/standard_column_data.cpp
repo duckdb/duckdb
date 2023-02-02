@@ -212,7 +212,7 @@ void StandardColumnData::DeserializeColumn(Deserializer &source) {
 	validity.DeserializeColumn(source);
 }
 
-void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
+void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	ColumnData::GetStorageInfo(row_group_index, col_path, result);
 	col_path.push_back(0);
 	validity.GetStorageInfo(row_group_index, std::move(col_path), result);

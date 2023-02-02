@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -56,13 +57,6 @@ void BaseCSVData::Finalize() {
 			SubstringDetection(options.escape, options.null_str, "ESCAPE", "NULL");
 		}
 	}
-}
-
-static Value ConvertVectorToValue(vector<Value> set) {
-	if (set.empty()) {
-		return Value::EMPTYLIST(LogicalType::BOOLEAN);
-	}
-	return Value::LIST(std::move(set));
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
