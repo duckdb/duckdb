@@ -131,6 +131,7 @@ public:
 	void WriteSetTable(string &schema, string &table);
 
 	void WriteAlter(AlterInfo &info);
+	void WriteAlter(data_ptr_t ptr, idx_t data_size);
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);

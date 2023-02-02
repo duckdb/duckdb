@@ -44,11 +44,17 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
-			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source);
-			// write the alter table in the log
-			table_entry->CommitAlter(*info);
-			log->WriteAlter(*info);
+			BufferedDeserializer type_source(extra_data, extra_data_size);
+			type_source.Read<AlterType>();
+			auto alt_tbl_type = type_source.Read<AlterTableType>();
+			if (alt_tbl_type == AlterTableType::REMOVE_COLUMN || alt_tbl_type == AlterTableType::ALTER_COLUMN_TYPE) {
+				BufferedDeserializer source(extra_data, extra_data_size);
+				auto info = AlterInfo::Deserialize(source);
+				// write the alter table in the log
+				table_entry->CommitAlter(*info);
+			}
+
+			log->WriteAlter(extra_data, extra_data_size);
 		} else {
 			// CREATE TABLE statement
 			log->WriteCreateTable((TableCatalogEntry *)parent);
