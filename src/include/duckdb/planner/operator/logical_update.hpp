@@ -9,15 +9,13 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
 class LogicalUpdate : public LogicalOperator {
 public:
-	explicit LogicalUpdate(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
-	}
+	explicit LogicalUpdate(TableCatalogEntry *table);
 
 	//! The base table to update
 	TableCatalogEntry *table;
@@ -35,19 +33,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:
-	vector<ColumnBinding> GetColumnBindings() override {
-		if (return_chunk) {
-			return GenerateColumnBindings(table_index, table->GetTypes().size());
-		}
-		return {ColumnBinding(0, 0)};
-	}
-
-	void ResolveTypes() override {
-		if (return_chunk) {
-			types = table->GetTypes();
-		} else {
-			types.emplace_back(LogicalType::BIGINT);
-		}
-	}
+	vector<ColumnBinding> GetColumnBindings() override;
+	void ResolveTypes() override;
 };
 } // namespace duckdb

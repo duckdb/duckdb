@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -54,8 +55,9 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 	for (auto i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
 		bool move_to_ordered = true;
-		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
-			auto &cond = table_entry->constraints[j];
+		auto &constraints = table_entry->GetConstraints();
+		for (idx_t j = 0; j < constraints.size(); j++) {
+			auto &cond = constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
 				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
@@ -161,7 +163,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->table = table->name;
 
 		// We can not export generated columns
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			info->select_list.push_back(col.GetName());
 		}
 

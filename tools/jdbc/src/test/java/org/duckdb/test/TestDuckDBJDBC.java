@@ -495,6 +495,48 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_list_metadata() throws Exception {
+		try (
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery("SELECT generate_series(2) as list");
+		) {
+			ResultSetMetaData meta = rs.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "list");
+			assertEquals(meta.getColumnTypeName(1), "BIGINT[]");
+			assertEquals(meta.getColumnType(1), Types.ARRAY);
+		}
+	}
+
+	public static void test_struct_metadata() throws Exception {
+		try (
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery("SELECT {'i': 42, 'j': 'a'} as struct")
+		) {
+			ResultSetMetaData meta = rs.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "struct");
+			assertEquals(meta.getColumnTypeName(1), "STRUCT(i INTEGER, j VARCHAR)");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+		}
+	}
+
+	public static void test_map_metadata() throws Exception {
+		try (
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery("SELECT map([1,2],['a','b']) as map")
+		) {
+			ResultSetMetaData meta = rs.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "map");
+			assertEquals(meta.getColumnTypeName(1), "MAP(INTEGER, VARCHAR)");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+		}
+	}
+
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

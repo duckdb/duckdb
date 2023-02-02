@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/wide_range_query_without_index.benchmark
+# name: benchmark/micro/index/range/wide_range_query_without_index.benchmark
 # description: Wide (non-selective) range query without index
-# group: [index]
+# group: [range]
 
 name Big Range Query (No Index)
 group index

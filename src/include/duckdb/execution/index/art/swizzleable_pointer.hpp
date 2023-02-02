@@ -27,6 +27,8 @@ public:
 	//! Transforms from Node* to uint64_t
 	SwizzleablePointer &operator=(const Node *ptr);
 
+	//! Checks if pointer is swizzled
+	bool IsSwizzled();
 	//! Unswizzle the pointer (if possible)
 	Node *Unswizzle(ART &art);
 
@@ -34,7 +36,7 @@ public:
 		return pointer;
 	}
 
-	//! Deletes the underlying object (if necessary) and set the pointer to null_ptr
+	//! Deletes the underlying object (if necessary) and set the pointer to nullptr
 	void Reset();
 
 private:
@@ -42,10 +44,8 @@ private:
 
 	friend bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr);
 
-	//! Extracts block info from swizzled pointer
+	//! Extracts the block info from swizzled pointer
 	BlockPointer GetSwizzledBlockInfo();
-	//! Checks if pointer is swizzled
-	bool IsSwizzled();
 };
 
 } // namespace duckdb

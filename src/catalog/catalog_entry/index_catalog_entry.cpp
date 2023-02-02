@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 
@@ -10,17 +9,9 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->temporary = info->temporary;
 }
 
-IndexCatalogEntry::~IndexCatalogEntry() {
-	// remove the associated index from the info
-	if (!info || !index) {
-		return;
-	}
-	info->indexes.RemoveIndex(index);
-}
-
 string IndexCatalogEntry::ToSQL() {
 	if (sql.empty()) {
-		throw InternalException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
+		return sql;
 	}
 	if (sql[sql.size() - 1] != ';') {
 		sql += ";";
@@ -33,8 +24,8 @@ void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 	// schema name, table name, index name, sql, index type, index constraint type, expression list.
 	// column_ids, unbound_expression
 	FieldWriter writer(serializer);
-	writer.WriteString(info->schema);
-	writer.WriteString(info->table);
+	writer.WriteString(GetSchemaName());
+	writer.WriteString(GetTableName());
 	writer.WriteString(name);
 	writer.WriteString(sql);
 	writer.WriteField(index->type);

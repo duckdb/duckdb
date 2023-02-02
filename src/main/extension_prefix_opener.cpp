@@ -12,6 +12,13 @@ struct ExtensionPrefixOpenData : public ReplacementOpenData {
 	string extension;
 	string path;
 	unique_ptr<ReplacementOpenData> data;
+
+	bool HasStorageExtension() override {
+		return data->HasStorageExtension();
+	}
+	unique_ptr<StorageExtension> GetStorageExtension(AttachInfo &info) override {
+		return data->GetStorageExtension(info);
+	}
 };
 
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
@@ -22,6 +29,7 @@ static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, 
 	}
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);
 	if (extension_data) {
+		config.options.database_path = StringUtil::Replace(config.options.database_path, extension + ":", "");
 		return make_unique<ExtensionPrefixOpenData>(extension, path, std::move(extension_data));
 	}
 	return nullptr;

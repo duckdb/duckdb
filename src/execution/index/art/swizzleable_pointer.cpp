@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
+
 namespace duckdb {
 SwizzleablePointer::~SwizzleablePointer() {
 	if (pointer) {
@@ -11,8 +13,8 @@ SwizzleablePointer::~SwizzleablePointer() {
 
 SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
 	idx_t block_id = reader.Read<block_id_t>();
-	idx_t offset = reader.Read<uint32_t>();
-	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
+	uint32_t offset = reader.Read<uint32_t>();
+	if (block_id == DConstants::INVALID_INDEX || offset == (uint32_t)DConstants::INVALID_INDEX) {
 		pointer = 0;
 		return;
 	}
@@ -78,6 +80,7 @@ Node *SwizzleablePointer::Unswizzle(ART &art) {
 		// first we unset the bae
 		auto block_info = GetSwizzledBlockInfo();
 		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
+		art.Verify();
 	}
 	return (Node *)pointer;
 }

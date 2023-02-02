@@ -54,14 +54,12 @@ public:
 	//! Constructs an ART containing the bound expressions, which are resolved during index construction
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
+	    AttachedDatabase &db, bool track_memory, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
 	//! Root of the tree
 	Node *tree;
-	//! Attached database
-	AttachedDatabase &db;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -90,9 +88,10 @@ public:
 	void VerifyDeleteForeignKey(DataChunk &chunk) override;
 	//! Delete entries in the index
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
-	//! Insert data into the index.
+	//! Insert data into the index
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
+	//! Construct an ART from a vector of sorted keys
 	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
@@ -106,11 +105,16 @@ public:
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
+
+	//! Generate a string containing all the expressions and their respective values that violate a constraint
+	string GenerateErrorKeyName(DataChunk &input, idx_t row);
+	//! Generate the matching error message for a constraint violation
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+
 	//! Returns the string representation of an ART
 	string ToString() override;
-
-	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+	//! Verifies that the memory_size value of the ART matches its actual size
+	void Verify() override;
 
 private:
 	//! Insert a row id into a leaf node
@@ -132,12 +136,6 @@ private:
 	                vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
-
-private:
-	//! The estimated ART memory consumption
-	idx_t estimated_art_size;
-	//! The estimated memory consumption of a single key
-	idx_t estimated_key_size;
 };
 
 } // namespace duckdb
