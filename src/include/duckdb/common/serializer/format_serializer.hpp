@@ -17,16 +17,11 @@
 
 namespace duckdb {
 
-// A FormatSerializer is a higher-level class that wraps a BinaryWriter to assist in serializing
-// more advanced and nested structures
 class FormatSerializer; // Forward declare
 
 // Type trait helpers for anything implementing a `void FormatSerialize(FormatSerializer &FormatSerializer)`
 template <class...>
 using void_t = void; // Backport to c++11
-
-template <typename T> // Backport to c++11
-struct dependent_false : std::false_type {};
 
 template <typename SELF, typename = void_t<>>
 struct has_serialize : std::false_type {};
