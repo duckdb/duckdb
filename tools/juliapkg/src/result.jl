@@ -468,7 +468,7 @@ function get_conversion_function(logical_type::LogicalType)::Function
     type = get_type_id(logical_type)
     if type == DUCKDB_TYPE_VARCHAR
         return convert_string
-    elseif type == DUCKDB_TYPE_BLOB
+    elseif type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
         return convert_blob
     elseif type == DUCKDB_TYPE_DATE
         return convert_date
@@ -504,7 +504,7 @@ end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
     type = get_type_id(logical_type)
-    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB
+    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
         return convert_vector_string
     elseif type == DUCKDB_TYPE_LIST
         return convert_vector_list

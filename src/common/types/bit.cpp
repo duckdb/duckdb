@@ -7,7 +7,7 @@ namespace duckdb {
 void Bit::SetEmptyBitString(string_t &target, string_t &input) {
 	char *res_buf = target.GetDataWriteable();
 	const char *buf = input.GetDataUnsafe();
-	bzero(res_buf, input.GetSize());
+	memset(res_buf, 0, input.GetSize());
 	res_buf[0] = buf[0];
 }
 
@@ -78,6 +78,13 @@ void Bit::ToString(string_t bits, char *output) {
 			output[output_idx++] = data[byte_idx] & (1 << (7 - bit_idx)) ? '1' : '0';
 		}
 	}
+}
+
+string Bit::ToString(string_t str) {
+	auto len = BitLength(str);
+	auto buffer = std::unique_ptr<char[]>(new char[len]);
+	ToString(str, buffer.get());
+	return string(buffer.get(), len);
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {

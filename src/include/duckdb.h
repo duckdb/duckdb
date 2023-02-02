@@ -121,6 +121,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UUID,
 	// union type, only useful as logical type
 	DUCKDB_TYPE_UNION,
+	// duckdb_bit
+	DUCKDB_TYPE_BIT,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01

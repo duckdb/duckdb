@@ -31,6 +31,7 @@ public:
 	//! Converts bits to a string, writing the output to the designated output string.
 	//! The string needs to have space for at least GetStringSize(bits) bytes.
 	DUCKDB_API static void ToString(string_t bits, char *output);
+	DUCKDB_API static string ToString(string_t str);
 	//! Returns the bit size of a string -> bit conversion
 	DUCKDB_API static bool TryGetBitStringSize(string_t str, idx_t &result_size, string *error_message);
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT

@@ -98,7 +98,7 @@ static void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector 
 		    Bit::BitwiseAnd(rhs, lhs, target);
 		    return target;
 	    });
-};
+}
 
 void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
@@ -129,7 +129,7 @@ static void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &
 		    Bit::BitwiseOr(rhs, lhs, target);
 		    return target;
 	    });
-};
+}
 
 void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
@@ -159,7 +159,7 @@ static void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector 
 		    Bit::BitwiseXor(rhs, lhs, target);
 		    return target;
 	    });
-};
+}
 
 void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("xor");
@@ -188,7 +188,7 @@ static void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector 
 		Bit::BitwiseNot(input, target);
 		return target;
 	});
-};
+}
 
 void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("~");
@@ -343,7 +343,7 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 		    Bit::SetBit(input, n, new_value, target);
 		    return target;
 	    });
-};
+}
 
 void SetBitFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("set_bit", {LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER},
