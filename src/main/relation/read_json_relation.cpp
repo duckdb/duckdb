@@ -1,14 +1,26 @@
-#include "relation/read_json_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "json_scan.hpp"
-
+#endif
 namespace duckdb {
+
+shared_ptr<Relation> ReadJSONRelation::CreateRelation(const shared_ptr<ClientContext> &context, string json_file,
+                                                      vector<ColumnDefinition> columns, named_parameter_map_t options,
+                                                      string alias) {
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+	return make_shared<ReadJSONRelation>(connection->context, name, move(column_definitions), move(options), alias);
+#else
+	return nullptr;
+#endif
+}
 
 ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, string json_file_p,
                                    vector<ColumnDefinition> columns_p, named_parameter_map_t options, string alias_p)
     : TableFunctionRelation(context, "read_json", {Value(json_file_p)}, move(options), nullptr, false),
       json_file(std::move(json_file_p)), alias(std::move(alias_p)) {
 
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 	if (alias.empty()) {
 		alias = StringUtil::Split(json_file, ".")[0];
 	}
@@ -46,6 +58,7 @@ ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, str
 
 		AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 	}
+#endif
 }
 
 string ReadJSONRelation::GetAlias() {

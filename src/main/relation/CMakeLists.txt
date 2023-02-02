@@ -17,6 +17,7 @@ add_library_unity(
   projection_relation.cpp
   query_relation.cpp
   read_csv_relation.cpp
+  read_json_relation.cpp
   setop_relation.cpp
   subquery_relation.cpp
   table_function_relation.cpp

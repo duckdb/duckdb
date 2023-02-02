@@ -6,7 +6,6 @@ include_directories(yyjson/include)
 include_directories(include)
 add_subdirectory(yyjson)
 add_subdirectory(json_functions)
-add_subdirectory(relation)
 
 set(JSON_EXTENSION_FILES
     buffered_json_reader.cpp
@@ -26,7 +25,6 @@ set(JSON_EXTENSION_FILES
     json_functions/json_valid.cpp
     json_functions/read_json.cpp
     json_functions/read_json_objects.cpp
-    relation/read_json_relation.cpp
     ${YYJSON_OBJECT_FILES})
 
 add_library(json_extension STATIC ${JSON_EXTENSION_FILES})
