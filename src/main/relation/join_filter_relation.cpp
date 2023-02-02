@@ -56,7 +56,7 @@ unique_ptr<QueryNode> JoinFilterRelation::GetQueryNode() {
 	} else {
 		result->where_clause = std::move(where_child);
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> JoinFilterRelation::GetTableRef() {
