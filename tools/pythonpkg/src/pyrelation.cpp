@@ -521,6 +521,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
 
+void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {
+	case_insensitive_map_t<vector<Value>> options;
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			throw InvalidInputException("to_csv only accepts 'compression' as a string");
+		}
+		options["compression"] = {Value(py::str(compression))};
+	}
+
+	rel->WriteParquet(filename, move(options));
+}
+
 void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, const py::object &na_rep,
                              const py::object &header, const py::object &quotechar, const py::object &escapechar,
                              const py::object &date_format, const py::object &timestamp_format,

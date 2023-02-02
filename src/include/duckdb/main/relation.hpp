@@ -127,6 +127,8 @@ public:
 
 	//! Write a relation to a CSV file
 	DUCKDB_API void WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Value>> options = {});
+	//! Write a relation to a Parquet file
+	DUCKDB_API void WriteParquet(const string &parquet_file, case_insensitive_map_t<vector<Value>> options = {});
 
 	//! Update a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Update(const string &update, const string &condition = string());

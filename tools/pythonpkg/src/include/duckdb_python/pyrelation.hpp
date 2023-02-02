@@ -204,6 +204,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
+	void ToParquet(const string &filename, const py::object &compression = py::none());
+
 	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
 	           const py::object &header = py::none(), const py::object &quotechar = py::none(),
 	           const py::object &escapechar = py::none(), const py::object &date_format = py::none(),

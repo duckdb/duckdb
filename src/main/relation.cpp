@@ -16,6 +16,7 @@
 #include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/relation/write_csv_relation.hpp"
+#include "duckdb/main/relation/write_parquet_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -247,6 +248,15 @@ void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Va
 	auto res = write_csv->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to write '" + csv_file + "': ";
+		res->ThrowError(prepended_message);
+	}
+}
+
+void Relation::WriteParquet(const string &parquet_file, case_insensitive_map_t<vector<Value>> options) {
+	auto write_parquet = make_shared<WriteParquetRelation>(shared_from_this(), parquet_file, move(options));
+	auto res = write_parquet->Execute();
+	if (res->HasError()) {
+		const string prepended_message = "Failed to write '" + parquet_file + "': ";
 		res->ThrowError(prepended_message);
 	}
 }

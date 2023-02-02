@@ -31,6 +31,10 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	m.def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
 	    .def("close", &DuckDBPyRelation::Close, "Closes the result");
 
+	DefineMethod({"to_parquet", "write_parquet"}, m, &DuckDBPyRelation::ToParquet,
+	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
+	             py::arg("compression") = py::none());
+
 	DefineMethod(
 	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
 	    py::arg("file_name"), py::kw_only(), py::arg("sep") = py::none(), py::arg("na_rep") = py::none(),
