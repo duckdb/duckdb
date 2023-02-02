@@ -107,7 +107,6 @@ test_that("the altrep-conversion for relations works", {
   expect_equal(iris, df)
 })
 
-
 test_that("the altrep-conversion for relations work for weirdo types", {
   test_df <- data.frame(col_date=as.Date("2019-11-26"), col_ts=as.POSIXct("2019-11-26 21:11Z", "UTC"), col_factor=factor(c("a")))
   rel <- rel_from_df(con, test_df)
@@ -115,7 +114,6 @@ test_that("the altrep-conversion for relations work for weirdo types", {
   expect_false(df_is_materialized(df))
   expect_equal(test_df, df)
 })
-
 
 test_that("we can get the relation object back from an altrep df", {
   iris$Species <- as.character(iris$Species)
@@ -234,7 +232,6 @@ test_that("A union with different column types throws an error", {
      rel <- rel_union_all(test_df_a1, test_df_a2)
      expect_error(rapi_rel_to_df(rel), "Invalid Error: Result mismatch in query!")
 })
-
 
 test_that("Set Intersect returns set intersection", {
     test_df_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
