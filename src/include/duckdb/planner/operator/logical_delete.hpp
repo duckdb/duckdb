@@ -8,18 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
 class LogicalDelete : public LogicalOperator {
 public:
-	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
-	      return_chunk(false) {
-	}
+	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index);
 
 	TableCatalogEntry *table;
 	idx_t table_index;
@@ -32,19 +28,7 @@ public:
 	vector<idx_t> GetTableIndex() const override;
 
 protected:
-	vector<ColumnBinding> GetColumnBindings() override {
-		if (return_chunk) {
-			return GenerateColumnBindings(table_index, table->GetTypes().size());
-		}
-		return {ColumnBinding(0, 0)};
-	}
-
-	void ResolveTypes() override {
-		if (return_chunk) {
-			types = table->GetTypes();
-		} else {
-			types.emplace_back(LogicalType::BIGINT);
-		}
-	}
+	vector<ColumnBinding> GetColumnBindings() override;
+	void ResolveTypes() override;
 };
 } // namespace duckdb

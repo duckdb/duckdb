@@ -375,7 +375,7 @@ void ListColumnData::DeserializeColumn(Deserializer &source) {
 	child_column->DeserializeColumn(source);
 }
 
-void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
+void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	col_path.push_back(0);
 	validity.GetStorageInfo(row_group_index, col_path, result);
 	col_path.back() = 1;

@@ -85,8 +85,8 @@ else:
     source_list = [os.path.relpath(x, basedir) if os.path.isabs(x) else os.path.join('src', x) for x in source_list]
     include_list = [os.path.join('src', 'duckdb', x) for x in include_list]
     libraries = []
-    windows_options = []
-    cflags = []
+    windows_options = ['/GR']
+    cflags = ['-frtti']
 
 def sanitize_path(x):
     return x.replace('\\', '/')
