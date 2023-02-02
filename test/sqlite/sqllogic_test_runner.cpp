@@ -209,10 +209,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 
-#ifdef DUCKDB_OUT_OF_TREE
-	db->LoadExtension<duckdb::DUCKDB_EXTENSION_CLASS>();
-#endif
-
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
 		// tokenize the current line
