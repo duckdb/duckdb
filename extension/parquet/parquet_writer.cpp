@@ -211,6 +211,34 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	}
 }
 
+vector<string> GetUniqueNames(const vector<string> &original_names) {
+	unordered_set<string> name_set;
+	vector<string> unique_names;
+	unique_names.reserve(original_names.size());
+
+	for (auto &name : original_names) {
+		auto insert_result = name_set.insert(name);
+		if (insert_result.second == false) {
+			// Could not be inserted, name already exists
+			idx_t postfix = 1;
+			string postfixed_name;
+			while (true) {
+				postfixed_name = StringUtil::Format("%s_%d", name, postfix);
+				auto res = name_set.insert(postfixed_name);
+				if (!res.second) {
+					postfix++;
+					continue;
+				}
+				break;
+			}
+			unique_names.push_back(postfixed_name);
+		} else {
+			unique_names.push_back(name);
+		}
+	}
+	return unique_names;
+}
+
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
@@ -237,10 +265,12 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
+	auto unique_names = GetUniqueNames(column_names);
+
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             column_names[i], schema_path));
+		                                                             unique_names[i], schema_path));
 	}
 }
 
