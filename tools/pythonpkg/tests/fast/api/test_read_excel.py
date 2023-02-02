@@ -1,6 +1,8 @@
 import pytest
 import duckdb
 pandas = pytest.importorskip("pandas", minversion="1.5.3")
+# To parse the excel files, pandas uses 'xlrd'
+excel = pytest.importorskip("xlrd")
 import os
 
 def ExpectedExampleOutput():
