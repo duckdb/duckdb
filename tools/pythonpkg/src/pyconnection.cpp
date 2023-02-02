@@ -7,7 +7,9 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #include "extension/json/include/relation/read_json_relation.hpp"
+#endif
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -437,16 +439,9 @@ bool DuckDBPyConnection::ExtensionLoaded(const string &name) {
 	return result == ExtensionLoadResult::LOADED_EXTENSION;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,
-                                                          const py::object &sample_size,
-                                                          const py::object &maximum_depth) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	//#if JSON_STATICALLY_LOADED == false
-	//	throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
-	//#endif
-
+unique_ptr<DuckDBPyRelation> ReadJSONInternal(unique_ptr<Connection> &connection, const string &name,
+                                              const py::object &columns, const py::object &sample_size,
+                                              const py::object &maximum_depth) {
 	vector<ColumnDefinition> column_definitions;
 	if (!py::none().is(columns)) {
 		if (!py::isinstance<py::dict>(columns)) {
@@ -489,6 +484,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	auto read_json_relation =
 	    make_unique<ReadJSONRelation>(connection->context, name, move(column_definitions), move(options));
 	return make_unique<DuckDBPyRelation>(move(read_json_relation));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,
+                                                          const py::object &sample_size,
+                                                          const py::object &maximum_depth) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+	return ReadJSONInternal(connection, name, columns, sample_size, maximum_depth);
+#else
+	throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
+#endif
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(

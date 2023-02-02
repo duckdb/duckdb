@@ -1,4 +1,9 @@
 #include "duckdb/main/relation/table_function_relation.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
