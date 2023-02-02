@@ -1,3 +1,5 @@
+#pragma once
+
 #include "duckdb/main/relation/table_function_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
