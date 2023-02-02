@@ -259,15 +259,18 @@ static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &for
 	bool success = true;
 	if (source_validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			success = success && OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message);
+			if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message)) {
+				target_validity.SetInvalid(i);
+				success = false;
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			if (source_validity.RowIsValid(i)) {
-				success =
-				    success && OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message);
-			} else {
+			if (!source_validity.RowIsValid(i)) {
 				target_validity.SetInvalid(i);
+			} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], error_message)) {
+				target_validity.SetInvalid(i);
+				success = false;
 			}
 		}
 	}
