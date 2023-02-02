@@ -1,6 +1,6 @@
-# name: benchmark/micro/index/range_query_without_index.benchmark
+# name: benchmark/micro/index/range/range_query_without_index.benchmark
 # description: Range query without index
-# group: [index]
+# group: [range]
 
 name Range Query (No Index)
 group index
