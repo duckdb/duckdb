@@ -25,6 +25,7 @@ class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
 class TableDataWriter;
+class TableStorageInfo;
 struct TransactionData;
 
 struct DataTableInfo;
@@ -123,7 +124,7 @@ public:
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
 	                                          ColumnData *parent);
 
-	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
+	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,

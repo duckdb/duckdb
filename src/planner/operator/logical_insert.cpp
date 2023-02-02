@@ -5,6 +5,11 @@
 
 namespace duckdb {
 
+LogicalInsert::LogicalInsert(TableCatalogEntry *table, idx_t table_index)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false),
+      action_type(OnConflictAction::THROW) {
+}
+
 void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(insert_values.size());
 	for (auto &entry : insert_values) {
@@ -62,6 +67,21 @@ idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
 
 vector<idx_t> LogicalInsert::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+vector<ColumnBinding> LogicalInsert::GetColumnBindings() {
+	if (return_chunk) {
+		return GenerateColumnBindings(table_index, table->GetTypes().size());
+	}
+	return {ColumnBinding(0, 0)};
+}
+
+void LogicalInsert::ResolveTypes() {
+	if (return_chunk) {
+		types = table->GetTypes();
+	} else {
+		types.emplace_back(LogicalType::BIGINT);
+	}
 }
 
 } // namespace duckdb

@@ -14,6 +14,7 @@
 
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
@@ -436,7 +437,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
+void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	D_ASSERT(!col_path.empty());
 
 	// convert the column path to a string
@@ -453,42 +454,30 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 	idx_t segment_idx = 0;
 	auto segment = (ColumnSegment *)data.GetRootSegment();
 	while (segment) {
-		vector<Value> column_info;
-		// row_group_id
-		column_info.push_back(Value::BIGINT(row_group_index));
-		// column_id
-		column_info.push_back(Value::BIGINT(col_path[0]));
-		// column_path
-		column_info.emplace_back(col_path_str);
-		// segment_id
-		column_info.push_back(Value::BIGINT(segment_idx));
-		// segment_type
-		column_info.emplace_back(type.ToString());
-		// start
-		column_info.push_back(Value::BIGINT(segment->start));
-		// count
-		column_info.push_back(Value::BIGINT(segment->count));
-		// compression
-		column_info.emplace_back(CompressionTypeToString(segment->function->type));
-		// stats
-		column_info.emplace_back(segment->stats.statistics ? segment->stats.statistics->ToString()
-		                                                   : string("No Stats"));
-		// has_updates
-		column_info.push_back(Value::BOOLEAN(updates ? true : false));
+		ColumnSegmentInfo column_info;
+		column_info.row_group_index = row_group_index;
+		;
+		column_info.column_id = col_path[0];
+		column_info.column_path = col_path_str;
+		column_info.segment_idx = segment_idx;
+		column_info.segment_type = type.ToString();
+		column_info.segment_start = segment->start;
+		column_info.segment_count = segment->count;
+		column_info.compression_type = CompressionTypeToString(segment->function->type);
+		column_info.segment_stats =
+		    segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats");
+		column_info.has_updates = updates ? true : false;
 		// persistent
 		// block_id
 		// block_offset
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			column_info.push_back(Value::BOOLEAN(true));
-			column_info.push_back(Value::BIGINT(segment->GetBlockId()));
-			column_info.push_back(Value::BIGINT(segment->GetBlockOffset()));
+			column_info.persistent = true;
+			column_info.block_id = segment->GetBlockId();
+			column_info.block_offset = segment->GetBlockOffset();
 		} else {
-			column_info.push_back(Value::BOOLEAN(false));
-			column_info.emplace_back();
-			column_info.emplace_back();
+			column_info.persistent = false;
 		}
-
-		result.push_back(std::move(column_info));
+		result.column_segments.push_back(std::move(column_info));
 
 		segment_idx++;
 		segment = (ColumnSegment *)segment->Next();

@@ -17,6 +17,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
 class DatabaseInstance;
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -25,7 +26,11 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, string path, bool read_only, bool create_new, bool use_direct_io);
+	SingleFileBlockManager(AttachedDatabase &db, string path, bool read_only, bool use_direct_io);
+
+	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
+	void CreateNewDatabase();
+	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;

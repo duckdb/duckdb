@@ -151,6 +151,7 @@ void GroupedAggregateHashTable::VerifyInternal() {
 			count++;
 		}
 	}
+	(void)count;
 	D_ASSERT(count == entries);
 }
 

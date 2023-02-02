@@ -19,7 +19,7 @@ public:
 	class ColumnListIterator;
 
 public:
-	ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();

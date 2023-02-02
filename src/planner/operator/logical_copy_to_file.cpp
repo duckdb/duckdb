@@ -6,10 +6,14 @@
 
 namespace duckdb {
 
+// Warning: some fields here were added while this code appears untested
+// -> copy test in test/api/test_plan_serialization.cpp was commented out as WIP
 void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField(use_tmp_file);
+	writer.WriteField(allow_overwrite);
 	writer.WriteField(per_thread_output);
+	writer.WriteList<idx_t>(partition_columns);
 
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
@@ -25,7 +29,9 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
+	auto allow_overwrite = reader.ReadRequired<bool>();
 	auto per_thread_output = reader.ReadRequired<bool>();
+	auto partition_columns = reader.ReadRequiredList<idx_t>();
 
 	auto copy_func_name = reader.ReadRequired<string>();
 
@@ -50,7 +56,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto result = make_unique<LogicalCopyToFile>(copy_func, std::move(bind_data));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
+	result->allow_overwrite = allow_overwrite;
 	result->per_thread_output = per_thread_output;
+	result->partition_columns = std::move(partition_columns);
 	return std::move(result);
 }
 

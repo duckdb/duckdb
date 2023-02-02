@@ -1,7 +1,9 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -13,8 +15,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		storage = make_unique<SingleFileStorageManager>(*this, ":memory:", false);
 	}
-	catalog = make_unique<Catalog>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
+	catalog = make_unique<DuckCatalog>(*this);
+	transaction_manager = make_unique<DuckTransactionManager>(*this);
 	internal = true;
 }
 
@@ -25,8 +27,25 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
 	storage =
 	    make_unique<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
-	catalog = make_unique<Catalog>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
+	catalog = make_unique<DuckCatalog>(*this);
+	transaction_manager = make_unique<DuckTransactionManager>(*this);
+	internal = true;
+}
+
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
+                                   string name_p, AttachInfo &info, AccessMode access_mode)
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, std::move(name_p)), db(db),
+      type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+                                                : AttachedDatabaseType::READ_WRITE_DATABASE) {
+	catalog = storage_extension.attach(*this, name, info, access_mode);
+	if (!catalog) {
+		throw InternalException("AttachedDatabase - attach function did not return a catalog");
+	}
+	transaction_manager = storage_extension.create_transaction_manager(*this, *catalog);
+	if (!transaction_manager) {
+		throw InternalException(
+		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
+	}
 	internal = true;
 }
 
@@ -34,7 +53,7 @@ AttachedDatabase::~AttachedDatabase() {
 	if (Exception::UncaughtException()) {
 		return;
 	}
-	if (IsSystem()) {
+	if (!storage) {
 		return;
 	}
 
@@ -76,12 +95,14 @@ void AttachedDatabase::Initialize() {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
+	}
+	if (storage) {
 		storage->Initialize();
 	}
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
-	if (IsSystem()) {
+	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");
 	}
 	return *storage;
