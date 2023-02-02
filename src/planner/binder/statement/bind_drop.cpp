@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 
 namespace duckdb {
 
@@ -43,10 +44,27 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		stmt.info->schema = entry->schema->name;
 		break;
 	}
-	case CatalogType::DATABASE_ENTRY:
-		// attaching and detaching is read-only
-		stmt.info->catalog = SYSTEM_CATALOG;
+	case CatalogType::DATABASE_ENTRY: {
+		// allow extensions to handle drop database impl
+		auto &base = (DropInfo &)*stmt.info;
+		string database_name = base.name;
+
+		auto &config = DBConfig::GetConfig(context);
+		for (auto &extension : config.drop_database_extensions) {
+			auto drop_database_function_ref = extension.function(context, database_name, extension.data.get());
+			if (drop_database_function_ref) {
+				auto bound_drop_database_func = Bind(*drop_database_function_ref);
+				result.plan = CreatePlan(*bound_drop_database_func);
+				break;
+			}
+		}
+		if (!result.plan) {
+			// use DuckDB default impl
+			// attaching and detaching is read-only
+			stmt.info->catalog = SYSTEM_CATALOG;
+		}
 		break;
+	}
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
 	}
