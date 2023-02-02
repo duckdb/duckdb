@@ -231,7 +231,7 @@ benchmark:
 
 amaldebug:
 	mkdir -p build/amaldebug && \
-	python scripts/amalgamation.py && \
+	python3 scripts/amalgamation.py && \
 	cd build/amaldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
@@ -249,7 +249,7 @@ tidy-fix:
 	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	python scripts/amalgamation.py --compile
+	python3 scripts/amalgamation.py --compile
 
 format-check:
 	python3 scripts/format.py --all --check

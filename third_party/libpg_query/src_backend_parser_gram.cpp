@@ -17415,6 +17415,7 @@ YYLTYPE yylloc;
   yystate = 0;
   yyerrstatus = 0;
   yynerrs = 0;
+  (void)yynerrs;
   yychar = YYEMPTY;		/* Cause a token to be read.  */
 
   /* Initialize stack pointers.

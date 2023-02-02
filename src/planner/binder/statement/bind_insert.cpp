@@ -119,7 +119,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 			throw BinderException("Expression in the DO UPDATE SET clause can not be a subquery");
 		}
 
-		insert->expressions.push_back(move(bound_expr));
+		insert->expressions.push_back(std::move(bound_expr));
 	}
 
 	// Figure out which columns are indexed on
