@@ -74,7 +74,9 @@ public:
 	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
 	        const py::object &filename = py::none());
 
-	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns);
+	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
+	                                      const py::object &sample_size = py::none(),
+	                                      const py::object &maximum_depth = py::none());
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 

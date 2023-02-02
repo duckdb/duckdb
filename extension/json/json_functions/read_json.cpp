@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
-                vector<string> &names) {
+void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+                          vector<string> &names) {
 	auto original_scan_type = bind_data.type;
 	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect, we restore it later
 	JSONScanGlobalState gstate(context, bind_data);
@@ -74,13 +74,10 @@ void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalT
 	bind_data.stored_readers = std::move(gstate.json_readers);
 }
 
-unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
-                                      vector<LogicalType> &return_types, vector<string> &names) {
-	// First bind default params
-	auto result = JSONScanData::Bind(context, input);
-	auto &bind_data = (JSONScanData &)*result;
-
-	for (auto &kv : input.named_parameters) {
+void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_data,
+                                  const named_parameter_map_t &named_parameters, vector<string> &names,
+                                  vector<LogicalType> &return_types) {
+	for (auto &kv : named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
@@ -124,6 +121,15 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			}
 		}
 	}
+}
+
+unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
+                                      vector<LogicalType> &return_types, vector<string> &names) {
+	// First bind default params
+	auto result = JSONScanData::Bind(context, input);
+	auto &bind_data = (JSONScanData &)*result;
+
+	JSONScan::InitializeBindData(context, bind_data, input.named_parameters, names, return_types);
 
 	if (!bind_data.names.empty()) {
 		bind_data.auto_detect = false; // override auto-detect when columns are specified
@@ -132,7 +138,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	}
 
 	if (bind_data.auto_detect) {
-		AutoDetect(context, bind_data, return_types, names);
+		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		bind_data.names = names;
 	}
 

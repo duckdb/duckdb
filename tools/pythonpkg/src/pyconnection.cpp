@@ -135,8 +135,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Read the JSON file identified by 'name'", py::arg("name"),
-	         py::arg("columns"));
+	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
+	         py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
+	         py::arg("maximum_depth") = py::none());
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -426,38 +427,57 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,
+                                                          const py::object &sample_size,
+                                                          const py::object &maximum_depth) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-
-	if (!py::isinstance<py::dict>(columns)) {
-		throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
-	}
+	//#if JSON_STATICALLY_LOADED == false
+	//	throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
+	//#endif
 
 	vector<ColumnDefinition> column_definitions;
-	py::dict columns_dict = columns;
-	for (auto &kv : columns_dict) {
-		auto &name = kv.first;
-		auto &type = kv.second;
-		if (!py::isinstance<py::str>(name)) {
-			string actual_type = py::str(name.get_type());
-			throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
+	if (!py::none().is(columns)) {
+		if (!py::isinstance<py::dict>(columns)) {
+			throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
 		}
-		if (!py::isinstance<py::str>(type)) {
-			string actual_type = py::str(name.get_type());
-			throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
+		py::dict columns_dict = columns;
+		for (auto &kv : columns_dict) {
+			auto &name = kv.first;
+			auto &type = kv.second;
+			if (!py::isinstance<py::str>(name)) {
+				string actual_type = py::str(name.get_type());
+				throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
+			}
+			if (!py::isinstance<py::str>(type)) {
+				string actual_type = py::str(name.get_type());
+				throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
+			}
+			// FIXME: this does not support user-defined types
+			auto ltype = StringUtil::Lower(py::str(type));
+			auto logical_type_id = DefaultTypeGenerator::GetDefaultType(ltype);
+			if (logical_type_id == LogicalTypeId::INVALID) {
+				throw InvalidInputException("No type with the name '%s' exists", ltype);
+			}
+			column_definitions.push_back(ColumnDefinition(py::str(name), logical_type_id));
 		}
-		// FIXME: this does not support user-defined types
-		auto ltype = StringUtil::Lower(py::str(type));
-		auto logical_type_id = DefaultTypeGenerator::GetDefaultType(ltype);
-		if (logical_type_id == LogicalTypeId::INVALID) {
-			throw InvalidInputException("No type with the name '%s' exists", ltype);
-		}
-		column_definitions.push_back(ColumnDefinition(py::str(name), logical_type_id));
 	}
 
-	auto read_json_relation = make_unique<ReadJSONRelation>(connection->context, name, move(column_definitions));
+	named_parameter_map_t options;
+
+	if (!py::none().is(sample_size)) {
+		if (!py::isinstance<py::int_>(sample_size)) {
+			string actual_type = py::str(sample_size.get_type());
+			throw InvalidInputException("read_json only accepts 'sample_size' as an integer, not '%s'", actual_type);
+		}
+		options["sample_size"] = Value::INTEGER(py::int_(sample_size));
+	}
+
+	// TODO: add 'maximum_depth' option
+
+	auto read_json_relation =
+	    make_unique<ReadJSONRelation>(connection->context, name, move(column_definitions), move(options));
 	return make_unique<DuckDBPyRelation>(move(read_json_relation));
 }
 

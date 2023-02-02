@@ -5,7 +5,7 @@ namespace duckdb {
 class ReadJSONRelation : public TableFunctionRelation {
 public:
 	ReadJSONRelation(const shared_ptr<ClientContext> &context, string json_file, vector<ColumnDefinition> columns,
-	                 string alias = "");
+	                 named_parameter_map_t options, string alias = "");
 	string json_file;
 	string alias;
 
