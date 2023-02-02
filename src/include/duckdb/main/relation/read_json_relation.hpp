@@ -11,18 +11,13 @@ namespace duckdb {
 
 class ReadJSONRelation : public TableFunctionRelation {
 public:
-	static shared_ptr<Relation> CreateRelation(const shared_ptr<ClientContext> &context, string json_file,
-	                                           vector<ColumnDefinition> columns, named_parameter_map_t options,
-	                                           string alias = "");
+	ReadJSONRelation(const shared_ptr<ClientContext> &context, string json_file, named_parameter_map_t options,
+	                 string alias = "");
 	string json_file;
 	string alias;
 
 public:
 	string GetAlias() override;
-
-private:
-	ReadJSONRelation(const shared_ptr<ClientContext> &context, string json_file, vector<ColumnDefinition> columns,
-	                 named_parameter_map_t options, string alias = "");
 };
 
 } // namespace duckdb

@@ -443,12 +443,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	vector<ColumnDefinition> column_definitions;
+
+	named_parameter_map_t options;
+
 	if (!py::none().is(columns)) {
 		if (!py::isinstance<py::dict>(columns)) {
 			throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
 		}
 		py::dict columns_dict = columns;
+		child_list_t<Value> struct_fields;
+
 		for (auto &kv : columns_dict) {
 			auto &name = kv.first;
 			auto &type = kv.second;
@@ -460,17 +464,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 				string actual_type = py::str(name.get_type());
 				throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
 			}
-			// FIXME: this does not support user-defined types
-			auto ltype = StringUtil::Lower(py::str(type));
-			auto logical_type_id = DefaultTypeGenerator::GetDefaultType(ltype);
-			if (logical_type_id == LogicalTypeId::INVALID) {
-				throw InvalidInputException("No type with the name '%s' exists", ltype);
-			}
-			column_definitions.push_back(ColumnDefinition(py::str(name), logical_type_id));
+			struct_fields.push_back(make_pair(py::str(name), Value(py::str(type))));
 		}
+		auto dtype_struct = Value::STRUCT(move(struct_fields));
+		options["columns"] = move(dtype_struct);
 	}
-
-	named_parameter_map_t options;
 
 	if (!py::none().is(sample_size)) {
 		if (!py::isinstance<py::int_>(sample_size)) {
@@ -482,8 +480,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 
 	// TODO: add 'maximum_depth' option
 
-	auto read_json_relation =
-	    ReadJSONRelation::CreateRelation(connection->context, name, move(column_definitions), move(options));
+	if (!options.count("columns")) {
+		options["auto_detect"] = Value::BOOLEAN(true);
+	}
+
+	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, move(options));
 	if (read_json_relation == nullptr) {
 		throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
 	}
