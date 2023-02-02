@@ -8,6 +8,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -154,7 +156,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table->columns.Logical()) {
+		for (auto &col : table->GetColumns().Logical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = col.Name();
@@ -162,7 +164,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table->columns.Logical()) {
+		for (auto &col : table->GetColumns().Logical()) {
 			expected_names.push_back(col.Name());
 		}
 	}

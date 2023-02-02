@@ -6,6 +6,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
@@ -44,17 +45,10 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
-	unique_ptr<PhysicalOperator> plan;
-	if (!op.children.empty()) {
-		D_ASSERT(op.children.size() == 1);
-		plan = CreatePlan(*op.children[0]);
-	}
-	dependencies.AddDependency(op.table);
-
-	D_ASSERT(plan);
-	bool parallel_streaming_insert = !PreserveInsertionOrder(*plan);
-	bool use_batch_index = UseBatchIndex(*plan);
+unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
+                                                     unique_ptr<PhysicalOperator> plan) {
+	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
+	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (op.return_chunk) {
 		// not supported for RETURNING (yet?)
@@ -84,6 +78,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 	D_ASSERT(plan);
 	insert->children.push_back(std::move(plan));
 	return insert;
+}
+
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
+	unique_ptr<PhysicalOperator> plan;
+	if (!op.children.empty()) {
+		D_ASSERT(op.children.size() == 1);
+		plan = CreatePlan(*op.children[0]);
+	}
+	dependencies.AddDependency(op.table);
+	return op.table->catalog->PlanInsert(context, op, std::move(plan));
 }
 
 } // namespace duckdb

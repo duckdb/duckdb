@@ -4,7 +4,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
@@ -197,7 +197,7 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
-bool LocalTableStorage::AppendToIndexes(Transaction &transaction, RowGroupCollection &source,
+bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                         TableIndexList &index_list, const vector<LogicalType> &table_types,
                                         row_t &start_row) {
 	// only need to scan for index append
@@ -224,8 +224,8 @@ bool LocalTableStorage::AppendToIndexes(Transaction &transaction, RowGroupCollec
 	return success;
 }
 
-void LocalTableStorage::AppendToIndexes(Transaction &transaction, TableAppendState &append_state, idx_t append_count,
-                                        bool append_to_table) {
+void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
+                                        idx_t append_count, bool append_to_table) {
 	bool constraint_violated = false;
 	if (append_to_table) {
 		table->InitializeAppend(transaction, append_state, append_count);
@@ -355,16 +355,16 @@ void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStora
 //===--------------------------------------------------------------------===//
 // LocalStorage
 //===--------------------------------------------------------------------===//
-LocalStorage::LocalStorage(ClientContext &context, Transaction &transaction)
+LocalStorage::LocalStorage(ClientContext &context, DuckTransaction &transaction)
     : context(context), transaction(transaction) {
 }
 
-LocalStorage &LocalStorage::Get(Transaction &transaction) {
+LocalStorage &LocalStorage::Get(DuckTransaction &transaction) {
 	return transaction.GetLocalStorage();
 }
 
 LocalStorage &LocalStorage::Get(ClientContext &context, AttachedDatabase &db) {
-	return Transaction::Get(context, db).GetLocalStorage();
+	return DuckTransaction::Get(context, db).GetLocalStorage();
 }
 
 LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
@@ -515,7 +515,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	transaction.PushAppend(&table, append_state.row_start, append_count);
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &transaction) {
+void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
 	// commit local storage
 	// iterate over all entries in the table storage map and commit them
 	// after this, the local storage is no longer required and can be cleared
