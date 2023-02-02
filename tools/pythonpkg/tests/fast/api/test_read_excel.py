@@ -1,6 +1,6 @@
 import pytest
 import duckdb
-pandas = pytest.importorskip("pandas")
+pandas = pytest.importorskip("pandas", minversion="1.5.3")
 import os
 
 def ExpectedExampleOutput():
