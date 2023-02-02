@@ -10,6 +10,8 @@ public:
 	PyConnectionWrapper() = delete;
 
 public:
+	static bool ExtensionLoaded(const string &name, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list(),
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
