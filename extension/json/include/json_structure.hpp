@@ -13,6 +13,8 @@
 namespace duckdb {
 
 struct JSONStructureDescription;
+struct DateFormatMap;
+struct StrpTimeFormat;
 
 struct JSONStructureNode {
 public:
@@ -20,6 +22,22 @@ public:
 	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p);
 
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
+
+	bool ContainsVarchar() const;
+	void InitializeCandidateTypes(const idx_t max_depth, idx_t depth = 0);
+	void RefineCandidateTypes(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                          DateFormatMap &date_format_map);
+
+private:
+	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                               DateFormatMap &date_format_map);
+	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t count, Vector &string_vector, ArenaAllocator &allocator,
+	                                DateFormatMap &date_format_map);
+	void RefineCandidateTypesString(yyjson_val *vals[], idx_t count, Vector &string_vector,
+	                                DateFormatMap &date_format_map);
+	void EliminateCandidateTypes(idx_t count, Vector &string_vector, DateFormatMap &date_format_map);
+	void EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
+	                               vector<StrpTimeFormat> &formats);
 
 public:
 	string key;
@@ -34,14 +52,22 @@ public:
 	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val);
 
 public:
+	//! Type of this description
 	LogicalTypeId type = LogicalTypeId::INVALID;
+
+	//! Map to children and children
 	json_key_map_t<idx_t> key_map;
 	vector<JSONStructureNode> children;
+
+	//! Candidate types (if auto-detecting and type == LogicalTypeId::VARCHAR)
+	vector<LogicalTypeId> candidate_types;
 };
 
 struct JSONStructure {
 public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
+	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
+	                                   idx_t depth = 0);
 };
 
 } // namespace duckdb

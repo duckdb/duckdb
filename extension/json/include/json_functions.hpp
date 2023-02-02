@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class TableRef;
+struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
 
@@ -62,6 +64,8 @@ class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
+	                                                ReplacementScanData *data);
 	static void RegisterCastFunctions(CastFunctionSet &casts);
 
 private:

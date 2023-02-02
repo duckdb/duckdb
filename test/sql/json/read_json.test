@@ -103,3 +103,93 @@ Home for the Holidays
 The Firm
 Broadcast News
 Raising Arizona
+
+# auto-detect
+query II
+SELECT * FROM read_json_auto('data/json/example_n.ndjson')
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+query II
+SELECT * FROM 'data/json/example_n.ndjson'
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# we can detect lists too, default depth is 2
+query III
+SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
+----
+1	VARCHAR[]	O
+1	VARCHAR[]	Brother,
+1	VARCHAR[]	Where
+1	VARCHAR[]	Art
+1	VARCHAR[]	Thou?
+2	VARCHAR[]	Home
+2	VARCHAR[]	for
+2	VARCHAR[]	the
+2	VARCHAR[]	Holidays
+3	VARCHAR[]	The
+3	VARCHAR[]	Firm
+4	VARCHAR[]	Broadcast
+4	VARCHAR[]	News
+5	VARCHAR[]	Raising
+5	VARCHAR[]	Arizona
+
+# with depth 1 we don't bother detecting inside of the list - defaults to JSON
+query III
+SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
+----
+1	JSON[]	O
+1	JSON[]	Brother,
+1	JSON[]	Where
+1	JSON[]	Art
+1	JSON[]	Thou?
+2	JSON[]	Home
+2	JSON[]	for
+2	JSON[]	the
+2	JSON[]	Holidays
+3	JSON[]	The
+3	JSON[]	Firm
+4	JSON[]	Broadcast
+4	JSON[]	News
+5	JSON[]	Raising
+5	JSON[]	Arizona
+
+# with depth 1 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
+query II
+SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
+----
+JSON	JSON
+JSON	JSON
+JSON	JSON
+JSON	JSON
+JSON	JSON
+
+# we can detect UUID's
+query II
+SELECT id, typeof(id) FROM 'data/json/with_uuid.json'
+----
+bbd05ae7-76e5-4f1a-a31f-247408251fc9	UUID
+d5c52052-5f8e-473f-bc8d-176342643ef5	UUID
+3b6a6de3-0732-4591-93ed-8df6091eb00d	UUID
+ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
+63928b16-1814-436f-8b30-b3c40cc31d51	UUID
+
+require httpfs
+
+query II
+select * from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson');
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
