@@ -8,6 +8,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -824,6 +825,28 @@ enum class ExtraTypeInfoType : uint8_t {
 	USER_TYPE_INFO = 7,
 	AGGREGATE_STATE_TYPE_INFO = 8
 };
+const char *ToString(ExtraTypeInfoType value) {
+	switch (value) {
+	case ExtraTypeInfoType::INVALID_TYPE_INFO:
+		return "INVALID_TYPE_INFO";
+	case ExtraTypeInfoType::GENERIC_TYPE_INFO:
+		return "GENERIC_TYPE_INFO";
+	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+		return "DECIMAL_TYPE_INFO";
+	case ExtraTypeInfoType::STRING_TYPE_INFO:
+		return "STRING_TYPE_INFO";
+	case ExtraTypeInfoType::LIST_TYPE_INFO:
+		return "LIST_TYPE_INFO";
+	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+		return "STRUCT_TYPE_INFO";
+	case ExtraTypeInfoType::ENUM_TYPE_INFO:
+		return "ENUM_TYPE_INFO";
+	case ExtraTypeInfoType::USER_TYPE_INFO:
+		return "USER_TYPE_INFO";
+	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
+		return "AGGREGATE_STATE_TYPE_INFO";
+	}
+}
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -867,6 +890,8 @@ public:
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
 
 protected:
 	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
@@ -929,6 +954,12 @@ public:
 		writer.WriteField<uint8_t>(scale);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("width", width);
+		serializer.WriteProperty("scale", scale);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
@@ -986,6 +1017,11 @@ public:
 		return make_shared<StringTypeInfo>(std::move(collation));
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("collation", collation);
+	}
+
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		// collation info has no impact on equality
@@ -1025,6 +1061,11 @@ struct ListTypeInfo : public ExtraTypeInfo {
 public:
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteSerializable(child_type);
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("child_type", child_type);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
@@ -1071,6 +1112,11 @@ public:
 		}
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("child_types", child_types);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		child_list_t<LogicalType> child_list;
 		auto child_types_size = reader.ReadRequired<uint32_t>();
@@ -1106,6 +1152,13 @@ public:
 		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
 			state_type.bound_argument_types[i].Serialize(serializer);
 		}
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("function_name", state_type.function_name);
+		serializer.WriteProperty("return_type", state_type.return_type);
+		serializer.WriteProperty("bound_argument_types", state_type.bound_argument_types);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
@@ -1264,6 +1317,11 @@ public:
 		writer.WriteString(user_type_name);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("user_type_name", user_type_name);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(std::move(enum_name));
@@ -1335,6 +1393,13 @@ protected:
 		writer.WriteField<uint32_t>(dict_size);
 		writer.WriteString(enum_name);
 		((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("dict_size", dict_size);
+		serializer.WriteProperty("enum_name", enum_name);
+		((Vector &)values_insert_order).FormatSerialize(serializer, dict_size);
 	}
 };
 
@@ -1489,6 +1554,11 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 		writer.WriteString(info->alias);
 	}
 }
+void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("alias", alias);
+}
+
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
 	shared_ptr<ExtraTypeInfo> extra_info;
@@ -1569,6 +1639,11 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	reader.Finalize();
 
 	return LogicalType(id, std::move(info));
+}
+
+void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("id", id_, duckdb::LogicalTypeIdToString);
+	serializer.WriteProperty("type_info", type_info_.get());
 }
 
 bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {

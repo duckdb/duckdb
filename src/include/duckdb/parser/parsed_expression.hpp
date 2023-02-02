@@ -13,6 +13,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -59,6 +60,8 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

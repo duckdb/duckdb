@@ -122,4 +122,17 @@ void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
 }
 
+void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("function_name", function_name);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("children", children);
+	serializer.WriteProperty("filter", filter);
+	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
+	serializer.WriteProperty("distinct", distinct);
+	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty("export_state", export_state);
+	serializer.WriteProperty("catalog", catalog);
+}
+
 } // namespace duckdb

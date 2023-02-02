@@ -29,6 +29,14 @@ void BaseTableRef::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog_name);
 }
 
+void BaseTableRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("schema_name", schema_name);
+	serializer.WriteProperty("table_name", table_name);
+	serializer.WriteProperty("column_name_alias", column_name_alias);
+	serializer.WriteProperty("catalog_name", catalog_name);
+}
+
 unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<BaseTableRef>();
 

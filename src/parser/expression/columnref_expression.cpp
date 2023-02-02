@@ -100,4 +100,9 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType typ
 	return std::move(expression);
 }
 
+void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("column_names", column_names);
+}
+
 } // namespace duckdb

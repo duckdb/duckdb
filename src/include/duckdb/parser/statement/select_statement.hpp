@@ -42,5 +42,7 @@ public:
 	static unique_ptr<SelectStatement> Deserialize(Deserializer &source);
 	//! Whether or not the statements are equivalent
 	bool Equals(const SQLStatement *other) const;
+
+	void FormatSerialize(FormatSerializer &serializer) const;
 };
 } // namespace duckdb

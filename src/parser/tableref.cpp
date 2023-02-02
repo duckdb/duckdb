@@ -52,6 +52,33 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
+const char *ToString(TableReferenceType value) {
+	switch (value) {
+	case TableReferenceType::INVALID:
+		return "INVALID";
+	case TableReferenceType::BASE_TABLE:
+		return "BASE_TABLE";
+	case TableReferenceType::SUBQUERY:
+		return "SUBQUERY";
+	case TableReferenceType::JOIN:
+		return "JOIN";
+	case TableReferenceType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case TableReferenceType::EXPRESSION_LIST:
+		return "EXPRESSION_LIST";
+	case TableReferenceType::CTE:
+		return "CTE";
+	case TableReferenceType::EMPTY:
+		return "EMPTY";
+	}
+}
+
+void TableRef::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("alias", alias);
+	serializer.WriteProperty("sample", sample);
+}
+
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 

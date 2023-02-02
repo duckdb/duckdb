@@ -41,4 +41,10 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, 
 	return make_unique<LambdaExpression>(std::move(lhs), std::move(expr));
 }
 
+void LambdaExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("lhs", *lhs);
+	serializer.WriteProperty("expr", *expr);
+}
+
 } // namespace duckdb

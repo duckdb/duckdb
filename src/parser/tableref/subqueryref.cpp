@@ -35,6 +35,12 @@ void SubqueryRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(column_name_alias);
 }
 
+void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("subquery", subquery);
+	serializer.WriteProperty("column_name_alias", column_name_alias);
+}
+
 unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader) {
 	auto subquery = reader.ReadRequiredSerializable<SelectStatement>();
 	auto result = make_unique<SubqueryRef>(std::move(subquery));

@@ -81,4 +81,26 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
+const char *ToString(SetOperationType value) {
+	switch (value) {
+	case SetOperationType::NONE:
+		return "NONE";
+	case SetOperationType::UNION:
+		return "UNION";
+	case SetOperationType::EXCEPT:
+		return "EXCEPT";
+	case SetOperationType::INTERSECT:
+		return "INTERSECT";
+	case SetOperationType::UNION_BY_NAME:
+		return "UNION_BY_NAME";
+	}
+}
+
+void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) const {
+	QueryNode::FormatSerialize(serializer);
+	serializer.WriteProperty("set_op_type", setop_type, duckdb::ToString);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+}
+
 } // namespace duckdb

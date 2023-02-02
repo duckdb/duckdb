@@ -192,6 +192,30 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(qualify);
 }
 
+const char *ToString(AggregateHandling value) {
+	switch (value) {
+	case AggregateHandling::STANDARD_HANDLING:
+		return "STANDARD_HANDLING";
+	case AggregateHandling::NO_AGGREGATES_ALLOWED:
+		return "NO_AGGREGATES_ALLOWED";
+	case AggregateHandling::FORCE_AGGREGATES:
+		return "FORCE_AGGREGATES";
+	}
+}
+
+void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
+	QueryNode::FormatSerialize(serializer);
+	serializer.WriteProperty("select_list", select_list);
+	serializer.WriteProperty("from_table", from_table);
+	serializer.WriteProperty("where_clause", where_clause);
+	serializer.WriteProperty("group_expressions", groups.group_expressions);
+	serializer.WriteProperty("group_sets", groups.grouping_sets);
+	serializer.WriteProperty("aggregate_handling", aggregate_handling, duckdb::ToString);
+	serializer.WriteProperty("having", having);
+	serializer.WriteProperty("sample", sample);
+	serializer.WriteProperty("qualify", qualify);
+}
+
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 	auto result = make_unique<SelectNode>();
 	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>();

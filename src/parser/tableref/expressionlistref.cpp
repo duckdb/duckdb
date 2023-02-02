@@ -73,6 +73,13 @@ void ExpressionListRef::Serialize(FieldWriter &writer) const {
 	}
 }
 
+void ExpressionListRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("expected_names", expected_names);
+	serializer.WriteProperty("expected_types", expected_types);
+	serializer.WriteProperty("values", values);
+}
+
 unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<ExpressionListRef>();
 	// value list

@@ -107,6 +107,12 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
+void ParsedExpression::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("class", GetExpressionClass(), duckdb::ExpressionClassToString);
+	serializer.WriteProperty("type", type, duckdb::ExpressionTypeToString);
+	serializer.WriteProperty("alias", alias);
+}
+
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto expression_class = reader.ReadRequired<ExpressionClass>();

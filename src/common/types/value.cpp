@@ -1693,6 +1693,62 @@ Value Value::Deserialize(Deserializer &main_source) {
 	return new_value;
 }
 
+void Value::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type_);
+	serializer.WriteProperty("is_null", is_null);
+	if (!IsNull()) {
+		switch (type_.InternalType()) {
+		case PhysicalType::BOOL:
+			serializer.WriteProperty("value", value_.boolean);
+			break;
+		case PhysicalType::INT8:
+			serializer.WriteProperty("value", value_.tinyint);
+			break;
+		case PhysicalType::INT16:
+			serializer.WriteProperty("value", value_.smallint);
+			break;
+		case PhysicalType::INT32:
+			serializer.WriteProperty("value", value_.integer);
+			break;
+		case PhysicalType::INT64:
+			serializer.WriteProperty("value", value_.bigint);
+			break;
+		case PhysicalType::UINT8:
+			serializer.WriteProperty("value", value_.utinyint);
+			break;
+		case PhysicalType::UINT16:
+			serializer.WriteProperty("value", value_.usmallint);
+			break;
+		case PhysicalType::UINT32:
+			serializer.WriteProperty("value", value_.uinteger);
+			break;
+		case PhysicalType::UINT64:
+			serializer.WriteProperty("value", value_.ubigint);
+			break;
+		case PhysicalType::INT128:
+			serializer.WriteProperty("value", value_.hugeint);
+			break;
+		case PhysicalType::FLOAT:
+			serializer.WriteProperty("value", value_.float_);
+			break;
+		case PhysicalType::DOUBLE:
+			serializer.WriteProperty("value", value_.double_);
+			break;
+		case PhysicalType::INTERVAL:
+			serializer.WriteProperty("value", value_.interval);
+			break;
+		case PhysicalType::VARCHAR:
+			serializer.WriteProperty("value", str_value);
+			break;
+		default: {
+			Vector v(*this);
+			v.FormatSerialize(serializer, 1);
+			break;
+		}
+		}
+	}
+}
+
 void Value::Print() const {
 	Printer::Print(ToString());
 }

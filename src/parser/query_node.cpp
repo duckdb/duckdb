@@ -8,6 +8,19 @@
 
 namespace duckdb {
 
+const char *ToString(QueryNodeType value) {
+	switch (value) {
+	case SELECT_NODE:
+		return "SELECT_NODE";
+	case SET_OPERATION_NODE:
+		return "SET_OPERATION_NODE";
+	case BOUND_SUBQUERY_NODE:
+		return "BOUND_SUBQUERY_NODE";
+	case RECURSIVE_CTE_NODE:
+		return "RECURSIVE_CTE_NODE";
+	}
+}
+
 CommonTableExpressionMap::CommonTableExpressionMap() {
 }
 
@@ -63,6 +76,10 @@ string CommonTableExpressionMap::ToString() const {
 		first_cte = false;
 	}
 	return result;
+}
+
+void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("map", map);
 }
 
 string QueryNode::ResultModifiersToString() const {
@@ -164,6 +181,13 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	}
 	Serialize(writer);
 	writer.Finalize();
+}
+
+// Children should call the base method before their own.
+void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("modifiers", modifiers);
+	serializer.WriteProperty("cte_map", cte_map);
 }
 
 unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {

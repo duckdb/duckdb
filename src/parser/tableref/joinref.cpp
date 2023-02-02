@@ -82,6 +82,29 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(using_columns);
 }
 
+const char *ToString(JoinRefType value) {
+	switch (value) {
+	case JoinRefType::REGULAR:
+		return "REGULAR";
+	case JoinRefType::NATURAL:
+		return "NATURAL";
+	case JoinRefType::CROSS:
+		return "CROSS";
+	case JoinRefType::POSITIONAL:
+		return "POSITIONAL";
+	}
+}
+
+void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+	serializer.WriteProperty("condition", condition);
+	serializer.WriteProperty("join_type", type, JoinTypeToString);
+	serializer.WriteProperty("ref_type", ref_type, duckdb::ToString);
+	serializer.WriteProperty("using_columns", using_columns);
+}
+
 unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
 	result->left = reader.ReadRequiredSerializable<TableRef>();

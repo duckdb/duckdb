@@ -10,6 +10,7 @@ add_library_unity(
   json_create.cpp
   json_type.cpp
   json_valid.cpp
+  json_serialize_sql.cpp
   read_json_objects.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_json_functions>

@@ -25,6 +25,13 @@ void SampleOptions::Serialize(Serializer &serializer) {
 	writer.Finalize();
 }
 
+void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("sample_size", sample_size);
+	serializer.WriteProperty("is_percentage", is_percentage);
+	serializer.WriteProperty("method", method, SampleMethodToString);
+	serializer.WriteProperty("seed", seed);
+}
+
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
 	auto result = make_unique<SampleOptions>();
 

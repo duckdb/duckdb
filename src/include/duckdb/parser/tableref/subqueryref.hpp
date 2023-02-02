@@ -32,5 +32,7 @@ public:
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a SubqueryRef
 	static unique_ptr<TableRef> Deserialize(FieldReader &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 } // namespace duckdb

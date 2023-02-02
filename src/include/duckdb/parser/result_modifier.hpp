@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 class FieldWriter;
@@ -23,6 +24,8 @@ enum ResultModifierType : uint8_t {
 	DISTINCT_MODIFIER = 3,
 	LIMIT_PERCENT_MODIFIER = 4
 };
+
+const char *ToString(ResultModifierType value);
 
 //! A ResultModifier
 class ResultModifier {
@@ -46,6 +49,8 @@ public:
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a ResultModifier
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
 };
 
 //! Single node in ORDER BY statement
@@ -65,6 +70,8 @@ public:
 	void Serialize(Serializer &serializer) const;
 	string ToString() const;
 	static OrderByNode Deserialize(Deserializer &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
 };
 
 class LimitModifier : public ResultModifier {
@@ -82,6 +89,8 @@ public:
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 
 class OrderModifier : public ResultModifier {
@@ -97,6 +106,8 @@ public:
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 
 class DistinctModifier : public ResultModifier {
@@ -112,6 +123,8 @@ public:
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -129,6 +142,8 @@ public:
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 
 } // namespace duckdb

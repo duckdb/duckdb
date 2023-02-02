@@ -139,6 +139,47 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 }
 
+const char *ToString(WindowBoundary value) {
+	switch (value) {
+	case WindowBoundary::INVALID:
+		return "INVALID";
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		return "UNBOUNDED_PRECEDING";
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		return "UNBOUNDED_FOLLOWING";
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		return "CURRENT_ROW_RANGE";
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		return "CURRENT_ROW_ROWS";
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		return "EXPR_PRECEDING_ROWS";
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		return "EXPR_FOLLOWING_ROWS";
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+		return "EXPR_PRECEDING_RANGE";
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		return "EXPR_FOLLOWING_RANGE";
+	}
+}
+
+void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("function_name", function_name);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("children", children);
+	serializer.WriteProperty("partitions", partitions);
+	serializer.WriteProperty("orders", orders);
+	serializer.WriteProperty("start", start, duckdb::ToString);
+	serializer.WriteProperty("end", end, duckdb::ToString);
+	serializer.WriteProperty("start_expr", start_expr);
+	serializer.WriteProperty("end_expr", end_expr);
+	serializer.WriteProperty("offset_expr", offset_expr);
+	serializer.WriteProperty("default_expr", default_expr);
+	serializer.WriteProperty("ignore_nulls", ignore_nulls);
+	serializer.WriteProperty("filter_expr", filter_expr);
+	serializer.WriteProperty("catalog", catalog);
+}
+
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();

@@ -32,6 +32,10 @@ public:
 	void Serialize(FieldWriter &writer) const override {
 		throw InternalException("Cannot serialize bound subquery node");
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		throw InternalException("Cannot serialize bound subquery node");
+	}
 };
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {

@@ -29,6 +29,7 @@ struct SampleOptions {
 	void Serialize(Serializer &serializer);
 	static unique_ptr<SampleOptions> Deserialize(Deserializer &source);
 	static bool Equals(SampleOptions *a, SampleOptions *b);
+	void FormatSerialize(FormatSerializer &serializer) const;
 };
 
 } // namespace duckdb

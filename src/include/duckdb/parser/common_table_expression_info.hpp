@@ -17,6 +17,11 @@ class SelectStatement;
 struct CommonTableExpressionInfo {
 	vector<string> aliases;
 	unique_ptr<SelectStatement> query;
+
+	void FormatSerialize(FormatSerializer &serializer) const {
+		serializer.WriteProperty("aliases", aliases);
+		serializer.WriteProperty("query", query);
+	}
 };
 
 } // namespace duckdb

@@ -72,4 +72,26 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
+const char *ToString(SubqueryType value) {
+	switch (value) {
+	case SubqueryType::INVALID:
+		return "INVALID";
+	case SubqueryType::SCALAR:
+		return "SCALAR";
+	case SubqueryType::EXISTS:
+		return "EXISTS";
+	case SubqueryType::NOT_EXISTS:
+		return "NOT_EXISTS";
+	case SubqueryType::ANY:
+		return "ANY";
+	}
+}
+
+void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("subquery_type", subquery_type, duckdb::ToString);
+	serializer.WriteProperty("child", child);
+	serializer.WriteProperty("comparison_type", comparison_type, duckdb::ExpressionTypeToString);
+}
+
 } // namespace duckdb

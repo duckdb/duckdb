@@ -42,4 +42,10 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType ty
 	return make_unique<ComparisonExpression>(type, std::move(left_child), std::move(right_child));
 }
 
+void ComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+}
+
 } // namespace duckdb

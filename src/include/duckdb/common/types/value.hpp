@@ -220,6 +220,7 @@ public:
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
 	//! Deserializes a Value from a blob
 	DUCKDB_API static Value Deserialize(Deserializer &source);
 

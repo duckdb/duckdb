@@ -128,4 +128,13 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	return std::move(copy);
 }
 
+void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("relation_name", relation_name);
+	serializer.WriteProperty("exclude_list", exclude_list);
+	serializer.WriteProperty("replace_list", replace_list);
+	serializer.WriteProperty("columns", columns);
+	serializer.WriteProperty("regex", regex);
+}
+
 } // namespace duckdb

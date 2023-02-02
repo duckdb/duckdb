@@ -55,4 +55,9 @@ unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
+void OperatorExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("children", children);
+}
+
 } // namespace duckdb

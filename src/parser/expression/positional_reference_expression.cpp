@@ -40,4 +40,9 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Expressi
 	return std::move(expression);
 }
 
+void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("index", index);
+}
+
 } // namespace duckdb

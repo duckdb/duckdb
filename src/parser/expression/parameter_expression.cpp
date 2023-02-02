@@ -41,4 +41,9 @@ unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType typ
 	return std::move(expression);
 }
 
+void ParameterExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("parameter_nr", parameter_nr);
+}
+
 } // namespace duckdb

@@ -38,4 +38,9 @@ unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type
 	return make_unique<ConstantExpression>(std::move(value));
 }
 
+void ConstantExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("value", value);
+}
+
 } // namespace duckdb

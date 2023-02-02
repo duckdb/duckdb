@@ -16,6 +16,11 @@ namespace duckdb {
 struct CaseCheck {
 	unique_ptr<ParsedExpression> when_expr;
 	unique_ptr<ParsedExpression> then_expr;
+
+	void FormatSerialize(FormatSerializer &serializer) const {
+		serializer.WriteProperty("when_expr", when_expr);
+		serializer.WriteProperty("then_expr", then_expr);
+	}
 };
 
 //! The CaseExpression represents a CASE expression in the query
@@ -35,6 +40,7 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
 
 public:
 	template <class T, class BASE>

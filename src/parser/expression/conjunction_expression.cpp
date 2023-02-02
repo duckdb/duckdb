@@ -63,4 +63,9 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType t
 	return std::move(result);
 }
 
+void ConjunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("children", children);
+}
+
 } // namespace duckdb

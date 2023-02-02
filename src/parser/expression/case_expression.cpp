@@ -69,4 +69,10 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, Fi
 	return std::move(result);
 }
 
+void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("case_checks", case_checks);
+	serializer.WriteProperty("else_expr", *else_expr);
+}
+
 } // namespace duckdb

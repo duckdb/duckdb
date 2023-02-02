@@ -173,7 +173,7 @@ string ExpressionTypeToOperator(ExpressionType type) {
 	}
 }
 
-ExpressionType NegateComparisionExpression(ExpressionType type) {
+ExpressionType NegateComparisonExpression(ExpressionType type) {
 	ExpressionType negated_type = ExpressionType::INVALID;
 	switch (type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -200,7 +200,7 @@ ExpressionType NegateComparisionExpression(ExpressionType type) {
 	return negated_type;
 }
 
-ExpressionType FlipComparisionExpression(ExpressionType type) {
+ExpressionType FlipComparisonExpression(ExpressionType type) {
 	ExpressionType flipped_type = ExpressionType::INVALID;
 	switch (type) {
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:

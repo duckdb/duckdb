@@ -45,4 +45,11 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type,
 	return make_unique<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
 }
 
+void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("input", *input);
+	serializer.WriteProperty("lower", *lower);
+	serializer.WriteProperty("upper", *upper);
+}
+
 } // namespace duckdb

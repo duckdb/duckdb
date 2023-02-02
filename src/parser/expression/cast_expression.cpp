@@ -48,4 +48,11 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, Fi
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
 }
 
+void CastExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("child", *child);
+	serializer.WriteProperty("cast_type", cast_type);
+	serializer.WriteProperty("try_cast", try_cast);
+}
+
 } // namespace duckdb
