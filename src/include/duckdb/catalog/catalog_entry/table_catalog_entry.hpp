@@ -33,6 +33,13 @@ struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 
+class TableFunction;
+struct FunctionData;
+
+class TableColumnInfo;
+class TableIndexInfo;
+class TableStorageInfo;
+
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
@@ -40,64 +47,66 @@ public:
 	static constexpr const char *Name = "table";
 
 public:
-	//! Create a real TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
-	                  std::shared_ptr<DataTable> inherited_storage = nullptr);
-
-	//! A reference to the underlying storage unit used for this table
-	std::shared_ptr<DataTable> storage;
-	//! A list of columns that are part of this table
-	ColumnList columns;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<Constraint>> constraints;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	ColumnDependencyManager column_dependency_manager;
+	//! Create a TableCatalogEntry and initialize storage for it
+	DUCKDB_API TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info);
 
 public:
-	bool HasGeneratedColumns() const;
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
-	void UndoAlter(ClientContext &context, AlterInfo *info) override;
+	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	ColumnDefinition &GetColumn(const string &name);
+	DUCKDB_API const ColumnDefinition &GetColumn(const string &name);
+	//! Returns a reference to the column of the specified logical index. Throws an
+	//! exception if the column does not exist.
+	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx);
 	//! Returns a list of types of the table, excluding generated columns
-	vector<LogicalType> GetTypes();
-	string ToSQL() override;
+	DUCKDB_API vector<LogicalType> GetTypes();
+	//! Returns a list of the columns of the table
+	DUCKDB_API const ColumnList &GetColumns() const;
+	//! Returns a mutable list of the columns of the table
+	DUCKDB_API ColumnList &GetColumnsMutable();
+	//! Returns the underlying storage of the table
+	virtual DataTable &GetStorage();
+	virtual DataTable *GetStoragePtr();
+	//! Returns a list of the bound constraints of the table
+	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
+
+	//! Returns a list of the constraints of the table
+	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints();
+	DUCKDB_API string ToSQL() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
-	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
-
-	void SetAsRoot() override;
-
-	void CommitAlter(AlterInfo &info);
-	void CommitDrop();
-
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
+	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false);
 
-private:
-	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
-	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
-	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
-	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
-	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
-	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
-	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
-	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
-	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
+	//! Returns the scan function that can be used to scan the given table
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+
+	virtual bool IsDuckTable() {
+		return false;
+	}
+
+	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
+
+	//! Returns the storage info of this table
+	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
+
+protected:
+	//! A list of columns that are part of this table
+	ColumnList columns;
+	//! A list of constraints that are part of this table
+	vector<unique_ptr<Constraint>> constraints;
 };
 } // namespace duckdb

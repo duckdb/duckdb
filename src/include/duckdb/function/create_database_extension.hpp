@@ -27,7 +27,7 @@ typedef unique_ptr<TableFunctionRef> (*create_database_t)(ClientContext &context
 struct CreateDatabaseExtension {
 	explicit CreateDatabaseExtension(create_database_t function,
 	                                 unique_ptr<CreateDatabaseExtensionData> data_p = nullptr)
-	    : function(function), data(move(data_p)) {
+	    : function(function), data(std::move(data_p)) {
 	}
 
 	create_database_t function;

@@ -1,11 +1,11 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -73,7 +73,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the set of committed schemas
-	catalog.schemas->Scan([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	auto &catalog = (DuckCatalog &)Catalog::GetCatalog(db);
+	catalog.ScanSchemas([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
@@ -341,9 +342,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	// Create index in the catalog
 	auto schema_catalog = catalog.GetSchema(context, info->schema);
 	auto table_catalog =
-	    (TableCatalogEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
-	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
-	index_catalog->info = table_catalog->storage->info;
+	    (DuckTableEntry *)catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name);
+	auto index_catalog = (DuckIndexEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
+	index_catalog->info = table_catalog->GetStorage().info;
 	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<block_id_t>();
 	auto root_offset = reader.Read<uint32_t>();
@@ -371,7 +372,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		// column refs
 		unbound_expressions.reserve(info->column_ids.size());
 		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
-			auto &col = table_catalog->columns.GetColumn(LogicalIndex(info->column_ids[key_nr]));
+			auto &col = table_catalog->GetColumn(LogicalIndex(info->column_ids[key_nr]));
 			unbound_expressions.push_back(
 			    make_unique<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
 		}
@@ -379,11 +380,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	switch (info->index_type) {
 	case IndexType::ART: {
-		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(*table_catalog->storage),
-		                            std::move(unbound_expressions), info->constraint_type, table_catalog->storage->db,
-		                            true, root_block_id, root_offset);
+		auto &storage = table_catalog->GetStorage();
+		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                            info->constraint_type, storage.db, true, root_block_id, root_offset);
 		index_catalog->index = art.get();
-		table_catalog->storage->info->indexes.AddIndex(std::move(art));
+		storage.info->indexes.AddIndex(std::move(art));
 		break;
 	}
 	default:
