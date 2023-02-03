@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
@@ -64,7 +65,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				    storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
 				if (drop_database_function_ref) {
 					unique_ptr<BoundTableRef> bound_drop_database_func = Bind(*drop_database_function_ref);
-					result.plan = CreatePlan(*bound_drop_database_func);
+					result.plan = CreatePlan(*move(bound_drop_database_func));
 					break;
 				}
 			}

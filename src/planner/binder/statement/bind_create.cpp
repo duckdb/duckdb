@@ -642,8 +642,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				auto create_database_function_ref = storage_extension->create_database(
 				    context, database_name, source_path, storage_extension->storage_info.get());
 				if (create_database_function_ref) {
-					auto bound_create_database_func = Bind(*create_database_function_ref);
-					result.plan = CreatePlan(*bound_create_database_func);
+					unique_ptr<BoundTableRef> bound_create_database_func = Bind(*create_database_function_ref);
+					result.plan = CreatePlan(*move(bound_create_database_func));
 					break;
 				}
 			}
