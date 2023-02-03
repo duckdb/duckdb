@@ -321,12 +321,16 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
+bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
+	return loaded_extensions.find(name) != loaded_extensions.end();
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
-	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
+	return instance->ExtensionIsLoaded(name);
 }
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	loaded_extensions.insert(name);

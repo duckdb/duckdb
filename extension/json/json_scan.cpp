@@ -75,7 +75,7 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+			throw IOException(fs.NoFilesFound(context, file_pattern));
 		}
 		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());
 	}

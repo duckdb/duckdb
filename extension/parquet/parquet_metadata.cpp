@@ -421,7 +421,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 	result->return_types = return_types;
 	result->files = fs.Glob(file_name, context);
 	if (result->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_name);
+		throw IOException(fs.NoFilesFound(context, file_name));
 	}
 	return std::move(result);
 }

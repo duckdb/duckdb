@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/test_no_httpfs_error.test
+# description: Issue #5886: Unclear error message if httpfs not installed
+# group: [csv]
+
+statement error
+SELECT * FROM read_csv_auto('http://www.nonexistentwebsite-123456789.com/x.csv')
+----
+the httpfs extension is not loaded
+
+require httpfs
+
+statement error
+SELECT * FROM read_csv_auto('http://www.nonexistentwebsite-123456789.com/x.csv')
+----
+Connection error

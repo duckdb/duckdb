@@ -222,7 +222,7 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = fs.Glob(info.file_path, context);
 		if (files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
+			throw IOException(fs.NoFilesFound(context, info.file_path));
 		}
 
 		// The most likely path (Parquet read without union by name option)
@@ -363,7 +363,7 @@ public:
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
 		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
 		if (files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", glob);
+			throw IOException(fs.NoFilesFound(context, glob));
 		}
 		return files;
 	}

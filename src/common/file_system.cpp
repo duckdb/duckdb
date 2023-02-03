@@ -432,4 +432,47 @@ FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
 }
 
+enum class HTTPFileType : uint8_t { REGULAR_FILE, HTTP_TYPE_HTTP, HTTP_TYPE_HTTPS, HTTP_TYPE_S3 };
+
+static HTTPFileType GetHTTPFileType(const string &path) {
+	if (path.rfind("http://", 0) == 0) {
+		return HTTPFileType::HTTP_TYPE_HTTP;
+	}
+	if (path.rfind("https://", 0) == 0) {
+		return HTTPFileType::HTTP_TYPE_HTTPS;
+	}
+	if (path.rfind("s3://", 0) == 0) {
+		return HTTPFileType::HTTP_TYPE_S3;
+	}
+	return HTTPFileType::REGULAR_FILE;
+}
+
+static string GetHTTPTypeName(HTTPFileType type) {
+	switch (type) {
+	case HTTPFileType::HTTP_TYPE_HTTP:
+		return "http";
+	case HTTPFileType::HTTP_TYPE_HTTPS:
+		return "https";
+	case HTTPFileType::HTTP_TYPE_S3:
+		return "s3";
+	default:
+		throw InternalException("Unsupported HTTPFileType");
+	}
+}
+
+std::string FileSystem::NoFilesFound(ClientContext &context, const std::string &path) const {
+	auto type = GetHTTPFileType(path);
+	if (type != HTTPFileType::REGULAR_FILE) {
+		auto &db = DatabaseInstance::GetDatabase(context);
+		if (!db.ExtensionIsLoaded("httpfs")) {
+			auto http_type_name = GetHTTPTypeName(type);
+			return StringUtil::Format(
+			    "No files found that match the pattern \"%s\"\n\nFile is hosted on \"%s\" but the httpfs extension is "
+			    "not loaded.\nTry loading the extension using \"LOAD httpfs\".",
+			    path, http_type_name);
+		}
+	}
+	return StringUtil::Format("No files found that match the pattern \"%s\"", path);
+}
+
 } // namespace duckdb

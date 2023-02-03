@@ -221,6 +221,9 @@ public:
 
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
+
+	//! Get a NoFilesFound exception
+	DUCKDB_API std::string NoFilesFound(ClientContext &context, const std::string &path) const;
 };
 
 } // namespace duckdb
