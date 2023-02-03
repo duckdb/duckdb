@@ -5,6 +5,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -45,15 +46,13 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {
-		// allow extensions to handle drop database impl
+		// use DuckDB default impl if no storage extension is registered to handle this functionality
 		auto &base = (DropInfo &)*stmt.info;
 		string database_name = base.name;
 
 		auto &config = DBConfig::GetConfig(context);
 
-		// for now only handling the case where there is one storage extension registered
 		if (config.storage_extensions.empty()) {
-			// use DuckDB default impl
 			// attaching and detaching is read-only
 			stmt.info->catalog = SYSTEM_CATALOG;
 		}
