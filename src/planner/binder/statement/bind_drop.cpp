@@ -61,6 +61,9 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		auto entry = config.storage_extensions.begin();
 		auto &storage_extension = entry->second;
+		if (storage_extension->drop_database_extension_function == nullptr) {
+			throw BinderException("DROP DATABASE is not supported in this extension.");
+		}
 		auto drop_database_function_ref = storage_extension->drop_database_extension_function(
 		    context, database_name, storage_extension->storage_info.get());
 		if (drop_database_function_ref) {

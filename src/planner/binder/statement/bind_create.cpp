@@ -630,7 +630,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::DATABASE_ENTRY: {
 		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
 		auto &base = (CreateDatabaseInfo &)*stmt.info;
-		string extension_name = base.extension_name;
 		string database_name = base.name;
 		string source_path = base.path;
 
@@ -644,8 +643,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		auto entry = config.storage_extensions.begin();
 		auto &storage_extension = entry->second;
+		if (storage_extension->create_database_extension_function == nullptr) {
+			throw BinderException("CREATE DATABASE is not supported in this extension.");
+		}
 		auto create_database_function_ref = storage_extension->create_database_extension_function(
-		    context, extension_name, database_name, source_path, storage_extension->storage_info.get());
+		    context, database_name, source_path, storage_extension->storage_info.get());
 		if (create_database_function_ref) {
 			auto bound_create_database_func = Bind(*create_database_function_ref);
 			result.plan = CreatePlan(*bound_create_database_func);
