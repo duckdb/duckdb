@@ -50,18 +50,23 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		string database_name = base.name;
 
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &extension : config.drop_database_extensions) {
-			auto drop_database_function_ref = extension.function(context, database_name, extension.data.get());
-			if (drop_database_function_ref) {
-				auto bound_drop_database_func = Bind(*drop_database_function_ref);
-				result.plan = CreatePlan(*bound_drop_database_func);
-				break;
-			}
-		}
-		if (!result.plan) {
+
+		// for now only handling the case where there is one storage extension registered
+		if (config.storage_extensions.empty()) {
 			// use DuckDB default impl
 			// attaching and detaching is read-only
 			stmt.info->catalog = SYSTEM_CATALOG;
+		} else if (config.storage_extensions.size() > 1) {
+			throw BinderException("DROP DATABASE only supported when there is one storage extension registered.");
+		}
+		auto entry = config.storage_extensions.begin();
+		auto &storage_extension = entry->second;
+		auto drop_database_function_ref = storage_extension->drop_database_extension_function(
+		    context, database_name, storage_extension->storage_info.get());
+		if (drop_database_function_ref) {
+			auto bound_drop_database_func = Bind(*drop_database_function_ref);
+			result.plan = CreatePlan(*bound_drop_database_func);
+			break;
 		}
 		break;
 	}

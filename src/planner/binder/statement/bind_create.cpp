@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_database_info.hpp"
-#include "duckdb/function/create_database_extension.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -635,17 +635,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		string source_path = base.path;
 
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &extension : config.create_database_extensions) {
-			auto create_database_function_ref =
-			    extension.function(context, extension_name, database_name, source_path, extension.data.get());
-			if (create_database_function_ref) {
-				auto bound_create_database_func = Bind(*create_database_function_ref);
-				result.plan = CreatePlan(*bound_create_database_func);
-				break;
-			}
-		}
-		if (!result.plan) {
+
+		// for now only handling the case where there is one storage extension registered
+		if (config.storage_extensions.empty()) {
 			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
+		} else if (config.storage_extensions.size() > 1) {
+			throw BinderException("CREATE DATABASE only supported when there is one storage extension registered.");
+		}
+		auto entry = config.storage_extensions.begin();
+		auto &storage_extension = entry->second;
+		auto create_database_function_ref = storage_extension->create_database_extension_function(
+		    context, extension_name, database_name, source_path, storage_extension->storage_info.get());
+		if (create_database_function_ref) {
+			auto bound_create_database_func = Bind(*create_database_function_ref);
+			result.plan = CreatePlan(*bound_create_database_func);
+			break;
 		}
 		break;
 	}
