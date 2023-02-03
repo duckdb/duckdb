@@ -644,7 +644,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto entry = config.storage_extensions.begin();
 		auto &storage_extension = entry->second;
 		if (storage_extension->create_database_extension_function == nullptr) {
-			throw BinderException("CREATE DATABASE is not supported in this extension.");
+			throw BinderException("CREATE DATABASE is not supported in \"%s\" extension.", entry->first);
 		}
 		auto create_database_function_ref = storage_extension->create_database_extension_function(
 		    context, database_name, source_path, storage_extension->storage_info.get());
