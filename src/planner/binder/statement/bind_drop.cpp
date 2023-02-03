@@ -56,20 +56,19 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			// use DuckDB default impl
 			// attaching and detaching is read-only
 			stmt.info->catalog = SYSTEM_CATALOG;
-		} else if (config.storage_extensions.size() > 1) {
-			throw BinderException("DROP DATABASE only supported when there is one storage extension registered.");
 		}
-		auto entry = config.storage_extensions.begin();
-		auto &storage_extension = entry->second;
-		if (storage_extension->drop_database_extension_function == nullptr) {
-			throw BinderException("DROP DATABASE is not supported in \"%s\" extension.", entry->first);
-		}
-		auto drop_database_function_ref = storage_extension->drop_database_extension_function(
-		    context, database_name, storage_extension->storage_info.get());
-		if (drop_database_function_ref) {
-			auto bound_drop_database_func = Bind(*drop_database_function_ref);
-			result.plan = CreatePlan(*bound_drop_database_func);
-			break;
+		// for now assume only one storage extension provides the custom drop_database impl
+		for (auto &extension_entry : config.storage_extensions) {
+			if (extension_entry.second->create_database != nullptr) {
+				auto &storage_extension = extension_entry.second;
+				auto drop_database_function_ref =
+				    storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
+				if (drop_database_function_ref) {
+					auto bound_drop_database_func = Bind(*drop_database_function_ref);
+					result.plan = CreatePlan(*bound_drop_database_func);
+					break;
+				}
+			}
 		}
 		break;
 	}

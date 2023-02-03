@@ -36,8 +36,8 @@ class StorageExtension {
 public:
 	attach_function_t attach;
 	create_transaction_manager_t create_transaction_manager;
-	create_database_t create_database_extension_function;
-	drop_database_t drop_database_extension_function;
+	create_database_t create_database;
+	drop_database_t drop_database;
 
 	//! Additional info passed to the various storage functions
 	shared_ptr<StorageExtensionInfo> storage_info;

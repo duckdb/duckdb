@@ -635,23 +635,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		auto &config = DBConfig::GetConfig(context);
 
-		// for now only handling the case where there is one storage extension registered
 		if (config.storage_extensions.empty()) {
 			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
-		} else if (config.storage_extensions.size() > 1) {
-			throw BinderException("CREATE DATABASE only supported when there is one storage extension registered.");
 		}
-		auto entry = config.storage_extensions.begin();
-		auto &storage_extension = entry->second;
-		if (storage_extension->create_database_extension_function == nullptr) {
-			throw BinderException("CREATE DATABASE is not supported in \"%s\" extension.", entry->first);
-		}
-		auto create_database_function_ref = storage_extension->create_database_extension_function(
-		    context, database_name, source_path, storage_extension->storage_info.get());
-		if (create_database_function_ref) {
-			auto bound_create_database_func = Bind(*create_database_function_ref);
-			result.plan = CreatePlan(*bound_create_database_func);
-			break;
+		// for now assume only one storage extension provides the custom create_database impl
+		for (auto &extension_entry : config.storage_extensions) {
+			if (extension_entry.second->create_database != nullptr) {
+				auto &storage_extension = extension_entry.second;
+				auto create_database_function_ref = storage_extension->create_database(
+				    context, database_name, source_path, storage_extension->storage_info.get());
+				if (create_database_function_ref) {
+					auto bound_create_database_func = Bind(*create_database_function_ref);
+					result.plan = CreatePlan(*bound_create_database_func);
+					break;
+				}
+			}
 		}
 		break;
 	}
