@@ -362,7 +362,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	}
 	case PythonObjectType::Bytes: {
 		const string &ele_string = ele.cast<string>();
-		return Value::BIT(const_data_ptr_t(ele_string.data()), ele_string.size());
+		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
 	}
 	case PythonObjectType::List:
 		return TransformListValue(ele);
