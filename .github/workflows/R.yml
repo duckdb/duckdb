@@ -2,7 +2,7 @@ name: R
 on:
   push:
     paths-ignore:
-      # - '**.md'
+      - '**.md'
   pull_request:
     paths-ignore:
       - '**.md'
