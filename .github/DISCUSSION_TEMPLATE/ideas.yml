@@ -1,0 +1,48 @@
+title: '[Feature Request]: '
+
+body:
+  - type: markdown
+    attributes:
+      value: >
+        DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
+         * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
+         * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
+         * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
+         * [WASM](https://github.com/duckdb/duckdb-wasm/issues/new)
+
+        If none of the above repositories are applicable, feel free to raise it in this one
+
+  - type: textarea
+    attributes:
+      label: What does it do?
+      description: A short, clear and concise description of what the feature is. Bonus points if the feature exists in another system, and you can link to the docs
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What does it look like?
+      description: Steps to demonstrate the requested behavior. Bonus points if those are only SQL queries.
+    validations:
+      required: false
+ 
+  - type: markdown
+    attributes:
+      value: "# Identity Disclosure:"
+  - type: input
+    attributes:
+      label: "Full Name:"
+      placeholder: e.g. John Doe
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Affiliation:"
+      placeholder: e.g. Oracle
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        If the above is not given and is not obvious from your GitHub profile page, we might close your issue without further review. Please refer to the [reasoning behind this rule](https://berthub.eu/articles/posts/anonymous-help/) if you have questions.
