@@ -8,6 +8,7 @@ body:
          * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
          * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
          * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
+         * [WASM](https://github.com/duckdb/duckdb-wasm/issues/new)
 
         If none of the above repositories are applicable, feel free to raise it in this one
 
