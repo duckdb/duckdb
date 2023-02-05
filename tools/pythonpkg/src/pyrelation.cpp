@@ -69,19 +69,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string>
 	                          union_by_name);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->GetSubstrait(query);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn, bool enable_optimizer) {
+    if (!conn) {
+        conn = DuckDBPyConnection::DefaultConnection();
+    }
+    return conn->GetSubstrait(query, enable_optimizer);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstraitJSON(const string &query,
-                                                                shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->GetSubstraitJSON(query);
+                                                                shared_ptr<DuckDBPyConnection> conn, bool enable_optimizer) {
+    if (!conn) {
+        conn = DuckDBPyConnection::DefaultConnection();
+    }
+    return conn->GetSubstraitJSON(query, enable_optimizer);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstraitJSON(const string &json,
