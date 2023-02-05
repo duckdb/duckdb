@@ -372,6 +372,8 @@ public:
 	//! Called after all fields have been read. Should always be called.
 	DUCKDB_API void Finalize();
 
+	void ForceFinalize();
+
 	Deserializer &GetSource() {
 		return source;
 	}
