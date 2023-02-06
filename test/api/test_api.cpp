@@ -554,18 +554,3 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	result = con.SendQuery("SELECT MIN(c0) FROM t0;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
-
-TEST_CASE("Fuzzer issue #5984 no.25: C/C++ API Parsed statement fails", "[api]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	unique_ptr<QueryResult> result;
-
-	con.EnableQueryVerification();
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1), (-2), (0);"));
-	REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0 = (~1);"));
-	result = con.Query("SELECT c0 FROM t0;");
-	REQUIRE(CHECK_COLUMN(result, 0, {-2, -2, -2}));
-
-	REQUIRE_NO_FAIL(con.Query("SELECT CAST((((1!) << CASE WHEN 1 THEN 1 WHEN 1 THEN 1 END) IS NULL) AS USMALLINT)"));
-}

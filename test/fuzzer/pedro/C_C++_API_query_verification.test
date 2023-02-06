@@ -1,0 +1,25 @@
+# name: test/fuzzer/pedro/C_C++_API_query_verification.test
+# description: Issue #5984 (25): C/C++ API missing backslash interpretation
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (1), (-2), (0);
+
+statement ok
+UPDATE t0 SET c0 = (~1);
+
+query I
+SELECT c0 FROM t0;
+----
+-2
+-2
+-2
+
+statement ok
+SELECT CAST((((1!) << CASE WHEN 1 THEN 1 WHEN 1 THEN 1 END) IS NULL) AS USMALLINT)
