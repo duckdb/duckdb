@@ -16,12 +16,14 @@ set(JSON_EXTENSION_FILES
     json_functions/json_array_length.cpp
     json_functions/json_contains.cpp
     json_functions/json_extract.cpp
+    json_functions/json_keys.cpp
     json_functions/json_merge_patch.cpp
     json_functions/json_structure.cpp
     json_functions/json_transform.cpp
     json_functions/json_create.cpp
     json_functions/json_type.cpp
     json_functions/json_valid.cpp
+    json_functions/read_json.cpp
     json_functions/read_json_objects.cpp
     ${YYJSON_OBJECT_FILES})
 

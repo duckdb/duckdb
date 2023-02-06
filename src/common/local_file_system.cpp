@@ -407,7 +407,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -734,7 +735,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());

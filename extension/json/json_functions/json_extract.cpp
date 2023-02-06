@@ -7,7 +7,7 @@ static inline string_t ExtractFromVal(yyjson_val *val, yyjson_alc *alc, Vector &
 }
 
 static inline string_t ExtractStringFromVal(yyjson_val *val, yyjson_alc *alc, Vector &result) {
-	return yyjson_is_str(val) ? StringVector::AddString(result, unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
+	return yyjson_is_str(val) ? string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
 	                          : JSONCommon::WriteVal<yyjson_val>(val, alc);
 }
 

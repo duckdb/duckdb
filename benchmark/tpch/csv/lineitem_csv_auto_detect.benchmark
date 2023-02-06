@@ -1,0 +1,21 @@
+# name: benchmark/tpch/csv/lineitem_csv_auto_detect.benchmark
+# description: Run CSV auto-detection on the lineitem CSV
+# group: [csv]
+
+name Read Lineitem CSV Auto-Detect
+group csv
+
+require tpch
+
+# create the CSV file
+load
+CALL dbgen(sf=0.1, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+CREATE SCHEMA tpch;
+CALL dbgen(sf=0, schema='tpch');
+
+run
+SELECT COUNT(l_orderkey) FROM (FROM '${BENCHMARK_DIR}/lineitem.csv' LIMIT 5)
+
+result I
+5

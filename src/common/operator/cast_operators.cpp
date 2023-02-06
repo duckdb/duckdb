@@ -945,11 +945,13 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					ExponentData exponent {0, false};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation>(buf + pos, len - pos,
+						                                                                      exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation>(buf + pos, len - pos,
+						                                                                       exponent, strict)) {
 							return false;
 						}
 					}

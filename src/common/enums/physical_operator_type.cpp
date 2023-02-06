@@ -135,6 +135,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ATTACH";
 	case PhysicalOperatorType::RESULT_COLLECTOR:
 		return "RESULT_COLLECTOR";
+	case PhysicalOperatorType::EXTENSION:
+		return "EXTENSION";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}
