@@ -9,6 +9,11 @@ namespace duckdb {
 PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle)
     : FileHandle(file_system, path), handle(handle) {
 }
+PythonFileHandle::~PythonFileHandle() {
+	PythonGILWrapper gil;
+	handle.dec_ref();
+	handle.release();
+}
 
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
