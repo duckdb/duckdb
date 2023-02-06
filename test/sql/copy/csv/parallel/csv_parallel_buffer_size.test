@@ -2,6 +2,8 @@
 # description: Test read CSV function
 # group: [parallel]
 
+require notwindows
+
 statement ok
 SET experimental_parallel_csv=true;
 

@@ -33,6 +33,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<UnicodeFun>();
 	Register<NFCNormalizeFun>();
 	Register<StringSplitFun>();
+	Register<BarFun>();
 	Register<ASCII>();
 	Register<CHR>();
 	Register<MismatchesFun>();

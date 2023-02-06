@@ -50,14 +50,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, con
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename,
-                                                           shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromCsvAuto(filename);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
                                                            bool file_row_number, bool filename, bool hive_partitioning,
                                                            bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {

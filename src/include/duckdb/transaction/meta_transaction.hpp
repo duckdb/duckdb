@@ -51,6 +51,9 @@ public:
 	void SetActiveQuery(transaction_t query_number);
 
 	void ModifyDatabase(AttachedDatabase *db);
+	AttachedDatabase *ModifiedDatabase() {
+		return modified_database;
+	}
 
 private:
 	//! The set of active transactions for each database

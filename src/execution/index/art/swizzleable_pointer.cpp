@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
+
 namespace duckdb {
 SwizzleablePointer::~SwizzleablePointer() {
 	if (pointer) {
@@ -78,6 +80,7 @@ Node *SwizzleablePointer::Unswizzle(ART &art) {
 		// first we unset the bae
 		auto block_info = GetSwizzledBlockInfo();
 		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
+		art.Verify();
 	}
 	return (Node *)pointer;
 }

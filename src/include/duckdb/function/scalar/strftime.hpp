@@ -138,8 +138,8 @@ public:
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result);
 
-	bool TryParseDate(string_t str, date_t &result, string &error_message);
-	bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message);
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
 
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);

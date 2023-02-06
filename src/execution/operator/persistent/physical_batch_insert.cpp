@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
@@ -98,7 +99,7 @@ public:
 	}
 
 	mutex lock;
-	TableCatalogEntry *table;
+	DuckTableEntry *table;
 	idx_t insert_count;
 	map<idx_t, unique_ptr<RowGroupCollection>> collections;
 
@@ -249,9 +250,9 @@ public:
 		writer->FlushToDisk(*current_collection, true);
 	}
 
-	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
-		auto &table_info = table->storage->info;
-		auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
+	void CreateNewCollection(DuckTableEntry *table, const vector<LogicalType> &insert_types) {
+		auto &table_info = table->GetStorage().info;
+		auto &block_manager = TableIOManager::Get(table->GetStorage()).GetBlockManagerForRowData();
 		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
@@ -266,10 +267,11 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
 		result->table =
-		    (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
 	} else {
 		D_ASSERT(insert_table);
-		result->table = insert_table;
+		D_ASSERT(insert_table->IsDuckTable());
+		result->table = (DuckTableEntry *)insert_table;
 	}
 	return std::move(result);
 }
@@ -290,7 +292,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-		lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
+		lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
@@ -301,9 +303,9 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
-	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
-	// TODO: call method that returns for which values the constraint check failed
-	// so we can support ON CONFLICT in here
+
+	table->GetStorage().VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);
@@ -340,7 +342,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	vector<unique_ptr<CollectionMerger>> mergers;
 	unique_ptr<CollectionMerger> current_merger;
 
-	auto &storage = *gstate.table->storage;
+	auto &storage = gstate.table->GetStorage();
 	for (auto &collection : gstate.collections) {
 		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			// this collection has very few rows: add it to the merge set

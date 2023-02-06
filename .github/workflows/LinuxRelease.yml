@@ -681,5 +681,4 @@ jobs:
       shell: bash
       run:  |
           python scripts/amalgamation.py --extended
-          python scripts/parquet_amalgamation.py
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
