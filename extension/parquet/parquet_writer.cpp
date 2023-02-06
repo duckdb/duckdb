@@ -211,32 +211,17 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	}
 }
 
-vector<string> GetUniqueNames(const vector<string> &original_names) {
+void VerifyUniqueNames(const vector<string> &names) {
+#ifdef DEBUG
 	unordered_set<string> name_set;
-	vector<string> unique_names;
-	unique_names.reserve(original_names.size());
-
-	for (auto &name : original_names) {
-		auto insert_result = name_set.insert(name);
-		if (insert_result.second == false) {
-			// Could not be inserted, name already exists
-			idx_t index = 1;
-			string postfixed_name;
-			while (true) {
-				postfixed_name = StringUtil::Format("%s:%d", name, index);
-				auto res = name_set.insert(postfixed_name);
-				if (!res.second) {
-					index++;
-					continue;
-				}
-				break;
-			}
-			unique_names.push_back(postfixed_name);
-		} else {
-			unique_names.push_back(name);
-		}
+	name_set.reserve(names.size());
+	for (auto &column : names) {
+		auto res = name_set.insert(column);
+		D_ASSERT(res.second == true);
 	}
-	return unique_names;
+	// If there would be duplicates, these sizes would differ
+	D_ASSERT(name_set.size() == names.size());
+#endif
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
@@ -265,7 +250,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
-	auto unique_names = GetUniqueNames(column_names);
+	auto &unique_names = column_names;
+	VerifyUniqueNames(unique_names);
 
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
