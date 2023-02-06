@@ -955,6 +955,71 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 }
 
 void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
+	auto &type = GetType();
+
+	UnifiedVectorFormat vdata;
+	ToUnifiedFormat(count, vdata);
+
+	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
+	serializer.WriteProperty("has_validity", write_validity);
+	if (write_validity) {
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+	}
+	if (TypeIsConstantSize(type.InternalType())) {
+		// constant size type: simple copy
+		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		serializer.WriteProperty("data", write_size);
+	} else {
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = (string_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+				string_t str = string_t(source.GetDataUnsafe(), source.GetSize());
+				serializer.WriteProperty("data", str);
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			Flatten(count);
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->FormatSerialize(serializer, count);
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &child = ListVector::GetEntry(*this);
+			auto list_size = ListVector::GetListSize(*this);
+
+			// serialize the list entries in a flat array
+			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto source_array = (list_entry_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = source_array[idx];
+				data[i].offset = source.offset;
+				data[i].length = source.length;
+			}
+
+			// write the list size
+			serializer.WriteProperty("list_size", list_size);
+			serializer.WriteProperty("data", (data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			child.FormatSerialize(serializer, list_size);
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
+		}
+	}
 	throw NotImplementedException("TODO: Implement serialization for DuckDB Vectors");
 }
 

@@ -133,6 +133,12 @@ public:
 		auto val = yyjson_mut_strcpy(doc, value.c_str());
 		push_value(val);
 	}
+
+	void WriteValue(const string_t value) override {
+		auto str = value.GetString();
+		auto val = yyjson_mut_strcpy(doc, str.c_str());
+		push_value(val);
+	}
 	void WriteValue(const char *value) override {
 		auto val = yyjson_mut_strcpy(doc, value);
 		push_value(val);

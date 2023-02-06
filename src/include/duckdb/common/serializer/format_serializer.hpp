@@ -14,6 +14,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -56,8 +57,15 @@ public:
 		WriteValue(value);
 	}
 
-	// Serialize an enum
+	// Serialize a range
+	template<class T>
+	typename std::enable_if<std::is_pointer<T>::value, void>::type
+	WriteProperty(const char* tag, const T start, idx_t count) {
+			WriteTag(tag);
+		    WriteValue(start, count);
+	}
 
+	// Serialize an enum
 	template <class T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value,
 	                                                                          const char *(*to_string)(T)) {
@@ -84,6 +92,7 @@ public:
 		}
 	}
 
+
 protected:
 	// Unique Pointer Ref
 	template <typename T>
@@ -102,6 +111,27 @@ protected:
 			WriteValue(*ptr);
 			EndWriteOptional(true);
 		}
+	}
+
+	// data_ptr_t
+	void WriteValue(data_ptr_t ptr, idx_t count) {
+		BeginWriteList(count);
+		auto end = ptr + count;
+		while(ptr != end) {
+			WriteValue(*ptr);
+			ptr++;
+		}
+		EndWriteList(count);
+	}
+
+	void WriteValue(const_data_ptr_t ptr, idx_t count) {
+		BeginWriteList(count);
+		auto end = ptr + count;
+		while(ptr != end) {
+			WriteValue(*ptr);
+			ptr++;
+		}
+		EndWriteList(count);
 	}
 
 	// Pair
@@ -210,6 +240,7 @@ protected:
 	virtual void WriteValue(double value) = 0;
 	virtual void WriteValue(interval_t value) = 0;
 	virtual void WriteValue(const string &value) = 0;
+	virtual void WriteValue(const string_t value) = 0;
 	virtual void WriteValue(const char *value) = 0;
 	virtual void WriteValue(bool value) = 0;
 };
@@ -241,6 +272,10 @@ public:
 	void WriteValue(const string &value) override {
 		writer->WriteString(value);
 	}
+	void WriteValue(const string_t value) override {
+		writer->WriteStringLen(reinterpret_cast<const unsigned char*>(value.GetDataUnsafe()), value.GetSize());
+	}
+
 	void WriteValue(const char *value) override {
 		writer->WriteString(value);
 	}
