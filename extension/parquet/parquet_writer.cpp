@@ -220,13 +220,13 @@ vector<string> GetUniqueNames(const vector<string> &original_names) {
 		auto insert_result = name_set.insert(name);
 		if (insert_result.second == false) {
 			// Could not be inserted, name already exists
-			idx_t postfix = 1;
+			idx_t index = 1;
 			string postfixed_name;
 			while (true) {
-				postfixed_name = StringUtil::Format("%s_%d", name, postfix);
+				postfixed_name = StringUtil::Format("%s:%d", name, index);
 				auto res = name_set.insert(postfixed_name);
 				if (!res.second) {
-					postfix++;
+					index++;
 					continue;
 				}
 				break;
