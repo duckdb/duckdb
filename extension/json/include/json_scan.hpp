@@ -167,11 +167,16 @@ public:
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	yyjson_alc *GetAllocator();
+	BufferedJSONReader *GetReader();
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_val *objects[STANDARD_VECTOR_SIZE];
 
 	idx_t batch_index;
+
+	//! Options when transforming the JSON to columnar data
+	DateFormatMap date_format_map;
+	JSONTransformOptions transform_options;
 
 private:
 	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);

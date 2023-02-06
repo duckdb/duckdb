@@ -216,6 +216,7 @@ public:
 		auto data = WriteVal<YYJSON_VAL_T>(val, alc, len);
 		return string_t(data, len);
 	}
+	static string ValToString(yyjson_val *val);
 	//! Throw an error with the printed yyjson_val
 	static void ThrowValFormatError(string error_string, yyjson_val *val);
 

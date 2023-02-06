@@ -170,7 +170,14 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
                                                                       TableFunctionInitInput &input,
                                                                       GlobalTableFunctionState *global_state) {
 	auto &gstate = (JSONGlobalTableFunctionState &)*global_state;
-	return make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+	auto result = make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+
+	// Copy the transform options / date format map because we need to do thread-local stuff
+	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.transform_options = gstate.state.bind_data.transform_options;
+	result->state.transform_options.date_format_map = &result->state.date_format_map;
+
+	return result;
 }
 
 idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
@@ -602,6 +609,10 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 
 yyjson_alc *JSONScanLocalState::GetAllocator() {
 	return json_allocator.GetYYJSONAllocator();
+}
+
+BufferedJSONReader *JSONScanLocalState::GetReader() {
+	return current_reader;
 }
 
 } // namespace duckdb

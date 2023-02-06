@@ -161,8 +161,10 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	// TODO: if errors occur during transformation, we don't have line number information
+	// Pass current reader to transform options so we can get line number information if an error occurs
+	lstate.transform_options.reader = lstate.GetReader();
 	JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names, result_vectors,
-	                               gstate.bind_data.transform_options);
+	                               lstate.transform_options);
 	output.SetCardinality(count);
 }
 
