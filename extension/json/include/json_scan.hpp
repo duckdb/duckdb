@@ -167,7 +167,7 @@ public:
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	yyjson_alc *GetAllocator();
-	BufferedJSONReader *GetReader();
+	void ThrowTransformError(idx_t count, idx_t object_index, const string &error_message);
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_val *objects[STANDARD_VECTOR_SIZE];

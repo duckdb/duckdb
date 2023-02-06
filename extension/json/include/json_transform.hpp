@@ -32,10 +32,10 @@ public:
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key = false;
 
+	//! JSON reader for adding line number information to transform errors (can be NULL)
+	bool from_file = false;
 	//! Date format used for parsing (can be NULL)
 	DateFormatMap *date_format_map = nullptr;
-	//! JSON reader for adding line number information to transform errors (can be NULL)
-	BufferedJSONReader *reader = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred

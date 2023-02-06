@@ -611,8 +611,11 @@ yyjson_alc *JSONScanLocalState::GetAllocator() {
 	return json_allocator.GetYYJSONAllocator();
 }
 
-BufferedJSONReader *JSONScanLocalState::GetReader() {
-	return current_reader;
+void JSONScanLocalState::ThrowTransformError(idx_t count, idx_t object_index, const string &error_message) {
+	D_ASSERT(current_reader);
+	D_ASSERT(current_buffer_handle);
+	auto line_or_object_in_buffer = lines_or_objects_in_buffer - count + object_index;
+	current_reader->ThrowTransformError(current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
 }
 
 } // namespace duckdb

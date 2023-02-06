@@ -141,6 +141,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_duplicate_key = !bind_data.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
+	transform_options.from_file = true;
 
 	return result;
 }
@@ -160,11 +161,12 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		result_vectors.push_back(&output.data[col_idx]);
 	}
 
-	// TODO: if errors occur during transformation, we don't have line number information
 	// Pass current reader to transform options so we can get line number information if an error occurs
-	lstate.transform_options.reader = lstate.GetReader();
-	JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names, result_vectors,
-	                               lstate.transform_options);
+	if (!JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names, result_vectors,
+	                                    lstate.transform_options)) {
+		lstate.ThrowTransformError(count, lstate.transform_options.object_index,
+		                           lstate.transform_options.error_message);
+	}
 	output.SetCardinality(count);
 }
 

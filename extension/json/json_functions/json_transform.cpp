@@ -22,6 +22,7 @@ void JSONTransformOptions::Serialize(FieldWriter &writer) {
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);
 	writer.WriteField(error_unknown_key);
+	writer.WriteField(from_file);
 }
 
 void JSONTransformOptions::Deserialize(FieldReader &reader) {
@@ -29,6 +30,7 @@ void JSONTransformOptions::Deserialize(FieldReader &reader) {
 	error_duplicate_key = reader.ReadRequired<bool>();
 	error_missing_key = reader.ReadRequired<bool>();
 	error_unknown_key = reader.ReadRequired<bool>();
+	from_file = reader.ReadRequired<bool>();
 }
 
 //! Forward declaration for recursion
@@ -273,8 +275,9 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 
 	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message, options.strict_cast) &&
 	    options.strict_cast) {
-		options.object_index = 0;
-		return false; // Can't get line number information here
+		options.object_index = 0; // Can't get line number information here
+		options.error_message += " (line/object number information is approximate)";
+		return false;
 	}
 	return true;
 }
@@ -429,21 +432,20 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	}
 
 	if (!success) {
-		if (!options.reader) {
+		if (!options.from_file) {
 			throw InvalidInputException(options.error_message);
 		}
-		// TODO: line number error
+		return false;
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		if (Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
 			continue;
 		}
-		success = false;
-		if (!options.reader) {
+		if (!options.from_file) {
 			throw InvalidInputException(options.error_message);
 		}
-		// TODO: line number error
+		return false;
 	}
 
 	return success;
@@ -502,10 +504,21 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	}
 	D_ASSERT(list_i == offset);
 
-	// TODO: object index error within array
-
 	// Transform array values
-	return Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
+	auto success = Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
+	if (!success && options.from_file) {
+		// Set object index in case of error in nested list so we can get accurate line number information
+		for (idx_t i = 0; i < count; i++) {
+			if (!list_validity.RowIsValid(i)) {
+				continue;
+			}
+			auto &entry = list_entries[i];
+			if (options.object_index >= entry.offset && options.object_index < entry.offset + entry.length) {
+				options.object_index = i;
+			}
+		}
+	}
+	return success;
 }
 
 static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
