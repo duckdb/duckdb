@@ -1,5 +1,3 @@
-skip_if_not_installed("non_existent_extension")
-
 library("DBI")
 library("testthat")
 
@@ -22,8 +20,8 @@ test_that("we won't crash when creating a relation from odd things", {
 })
 
 test_that("we can round-trip a data frame", {
-  expect_equivalent(mtcars, as.data.frame(rel_from_df(con, mtcars)))
-  expect_equivalent(iris, as.data.frame(rel_from_df(con, iris)))
+  expect_equivalent(mtcars, as.data.frame.duckdb_relation(rel_from_df(con, mtcars)))
+  expect_equivalent(iris, as.data.frame.duckdb_relation(rel_from_df(con, iris)))
 })
 
 
@@ -71,7 +69,7 @@ test_that("we can cast R strings to DuckDB strings", {
   test_string_vec <- c(vapply(1:n, gen_rand_string, "character", max_len), NA, NA, NA, NA, NA, NA, NA, NA) # batman
 
   df <- data.frame(s = test_string_vec, stringsAsFactors = FALSE)
-  expect_equivalent(df, as.data.frame(rel_from_df(con, df)))
+  expect_equivalent(df, as.data.frame.duckdb_relation(rel_from_df(con, df)))
 
   res <- rel_from_df(con, df) |> rel_sql("SELECT s::string FROM _")
   expect_equivalent(df, res)
@@ -82,7 +80,7 @@ test_that("we can cast R strings to DuckDB strings", {
   # many rounds yay
   df2 <- df
   for (i in 1:10) {
-    df2 <- as.data.frame(rel_from_df(con, df2))
+    df2 <- as.data.frame.duckdb_relation(rel_from_df(con, df2))
     expect_equivalent(df, df2)
   }
 
@@ -128,7 +126,7 @@ test_that("Inner join returns all inner relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
     right <- rel_from_df(con, data.frame(right_b=c(1, 3), right_c=c(4, 5)))
-    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_b"))))
     rel2 <- rel_join(left, right, cond, "inner")
     rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
@@ -141,7 +139,7 @@ test_that("Left join returns all left relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
     right <- rel_from_df(con, data.frame(right_b=c(1)))
-    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_b"))))
     rel2 <- rel_join(left, right, cond, "left")
     rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
@@ -153,7 +151,7 @@ test_that("Right join returns all right relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_b=c(1)))
     right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    cond <- list(expr_function("eq", list(expr_reference("left_b", left), expr_reference("right_b", right))))
+    cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_b"))))
     rel2 <- rel_join(left, right, cond, "right")
     rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
@@ -165,7 +163,7 @@ test_that("Full join returns all outer relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 5), left_b=c(4, 5, 6)))
     right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    cond <- list(expr_function("eq", list(expr_reference("left_a", left), expr_reference("right_a", right))))
+    cond <- list(expr_function("eq", list(expr_reference("left_a"), expr_reference("right_a"))))
     rel2 <- rel_join(left, right, cond, "outer")
     rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
