@@ -16,7 +16,7 @@ namespace duckdb {
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.pyarrow.dataset.IsLoaded()) {
+	if (!import_cache.arrow.dataset.IsLoaded()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
@@ -112,6 +112,8 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 }
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
+	VerifyArrowDatasetLoaded();
+
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
