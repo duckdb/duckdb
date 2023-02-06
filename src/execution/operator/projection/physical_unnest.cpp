@@ -190,12 +190,11 @@ static void UnnestVector(UnifiedVectorFormat &child_vector_data, Vector &child_v
 		auto &child_vector_entries = StructVector::GetEntries(child_vector);
 		auto &result_entries = StructVector::GetEntries(result);
 
-		// TODO: still don't completely understand why this is necessary
+		// set the validity mask for the 'outer' struct vector before unnesting its children
 		UnnestValidity(child_vector_data, start, end, result);
 
 		for (idx_t i = 0; i < child_vector_entries.size(); i++) {
 			UnifiedVectorFormat child_vector_entries_data;
-			// TODO: is list_size the correct length?
 			child_vector_entries[i]->ToUnifiedFormat(list_size, child_vector_entries_data);
 			UnnestVector(child_vector_entries_data, *child_vector_entries[i], list_size, start, end,
 			             *result_entries[i]);
