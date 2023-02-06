@@ -4,7 +4,7 @@
 # # stubgen override
 # to help the sanity of maintainers.
 # stubgen override - missing import of Set
-from typing import Any, ClassVar, Set
+from typing import Any, ClassVar, Set, Optional, Sequence
 
 from typing import overload
 import pandas
@@ -65,6 +65,35 @@ class DuckDBPyConnection:
     def fetchnumpy(self) -> dict: ...
     def fetchone(self) -> object: ...
     def from_arrow(self, arrow_object: object) -> DuckDBPyRelation: ...
+    def read_excel(
+        io,
+        sheet_name: str | int | list | None = 0,
+        header: int | Sequence[int] | None = 0,
+        names: list[str] | None = None,
+        index_col = None,
+        usecols = None,
+        squeeze: bool | None = None,
+        dtype = None,
+        engine = None,
+        converters = None,
+        true_values = None,
+        false_values = None,
+        skiprows = None,
+        nrows: int | None = None,
+        na_values= None,
+        keep_default_na: bool = True,
+        na_filter: bool = True,
+        verbose: bool = False,
+        parse_dates: list | dict | bool = False,
+        date_parser = None,
+        thousands: str | None = None,
+        decimal: str = ".",
+        comment: str | None = None,
+        skipfooter: int = 0,
+        convert_float: bool | None = None,
+        mangle_dupe_cols: bool = True,
+        storage_options = None,
+    ) -> DuckDBPyRelation: ...
     def from_csv_auto(self, file_name: str) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload
@@ -259,7 +288,6 @@ def limit(df: pandas.DataFrame, n: int, connection: DuckDBPyConnection = ...) ->
 def order(df: pandas.DataFrame, order_expr: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def project(df: pandas.DataFrame, project_expr: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def write_csv(df: pandas.DataFrame, file_name: str, connection: DuckDBPyConnection = ...) -> None: ...
-
 def append(table_name: str, df: pandas.DataFrame, connection: DuckDBPyConnection = ...) -> DuckDBPyConnection: ...
 def arrow(chunk_size: int = ..., connection: DuckDBPyConnection = ...) -> pyarrow.lib.Table: ...
 def begin(connection: DuckDBPyConnection = ...) -> DuckDBPyConnection: ...
@@ -280,6 +308,38 @@ def fetchmany(size: int = ..., connection: DuckDBPyConnection = ...) -> list: ..
 def fetchnumpy(connection: DuckDBPyConnection = ...) -> dict: ...
 def fetchone(connection: DuckDBPyConnection = ...) -> object: ...
 def from_arrow(arrow_object: object, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
+
+def read_excel(
+    io,
+    sheet_name: str | int | list | None = 0,
+    header: int | Sequence[int] | None = 0,
+    names: list[str] | None = None,
+    index_col = None,
+    usecols = None,
+    squeeze: bool | None = None,
+    dtype = None,
+    engine = None,
+    converters = None,
+    true_values = None,
+    false_values = None,
+    skiprows = None,
+    nrows: int | None = None,
+    na_values=None,
+    keep_default_na: bool = True,
+    na_filter: bool = True,
+    verbose: bool = False,
+    parse_dates: list | dict | bool = False,
+    date_parser = None,
+    thousands: str | None = None,
+    decimal: str = ".",
+    comment: str | None = None,
+    skipfooter: int = 0,
+    convert_float: bool | None = None,
+    mangle_dupe_cols: bool = True,
+    storage_options = None,
+    connection: DuckDBPyConnection = ...
+) -> DuckDBPyRelation: ...
+
 def from_csv_auto(file_name: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def from_df(df: pandas.DataFrame = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 @overload
