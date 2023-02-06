@@ -36,7 +36,7 @@ private:
 	void RefineCandidateTypesString(yyjson_val *vals[], idx_t count, Vector &string_vector,
 	                                DateFormatMap &date_format_map);
 	void EliminateCandidateTypes(idx_t count, Vector &string_vector, DateFormatMap &date_format_map);
-	void EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
+	bool EliminateCandidateFormats(idx_t count, Vector &string_vector, Vector &result_vector,
 	                               vector<StrpTimeFormat> &formats);
 
 public:

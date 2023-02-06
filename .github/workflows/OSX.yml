@@ -60,6 +60,7 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
+      GEN: ninja
       ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
@@ -70,6 +71,9 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Install Ninja
+      run: brew install ninja
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
