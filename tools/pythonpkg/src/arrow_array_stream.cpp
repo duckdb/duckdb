@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+void VerifyArrowDatasetLoaded() {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.pyarrow.dataset.IsLoaded()) {
+		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
+	}
+}
+
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
@@ -62,6 +69,8 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
+
+	VerifyArrowDatasetLoaded();
 
 	py::object scanner;
 	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
@@ -204,7 +213,6 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 }
 
 py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config) {
-
 	py::object field = py::module_::import("pyarrow.dataset").attr("field");
 	switch (filter->filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
