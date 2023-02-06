@@ -58,7 +58,7 @@ public:
 
 	void DeserializeColumn(Deserializer &source) override;
 
-	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) override;
+	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) override;
 
 private:
 	list_entry_t FetchListEntry(idx_t row_idx);

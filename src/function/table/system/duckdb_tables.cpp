@@ -9,6 +9,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -79,7 +80,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			auto &unique = (UniqueConstraint &)*constraint;
 			if (unique.is_primary_key) {
@@ -92,7 +93,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
-	for (auto &constraint : table.constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::CHECK) {
 			check_count++;
 		}
@@ -116,6 +117,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 			continue;
 		}
 		auto &table = (TableCatalogEntry &)*entry;
+		auto storage_info = table.GetStorageInfo(context);
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR
@@ -137,11 +139,13 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// has_primary_key, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.storage->info->cardinality.load()));
+		Value card_val =
+		    storage_info.cardinality == DConstants::INVALID_INDEX ? Value() : Value::BIGINT(storage_info.cardinality);
+		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.columns.LogicalColumnCount()));
+		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.storage->info->indexes.Count()));
+		output.SetValue(col++, count, Value::BIGINT(storage_info.index_info.size()));
 		// check_constraint_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR

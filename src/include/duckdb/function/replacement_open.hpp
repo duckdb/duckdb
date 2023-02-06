@@ -9,14 +9,23 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
 class DatabaseInstance;
+class StorageExtension;
 struct DBConfig;
 
 struct ReplacementOpenData {
 	virtual ~ReplacementOpenData() {
+	}
+
+	virtual bool HasStorageExtension() {
+		return false;
+	}
+	virtual unique_ptr<StorageExtension> GetStorageExtension(AttachInfo &info) {
+		return nullptr;
 	}
 };
 

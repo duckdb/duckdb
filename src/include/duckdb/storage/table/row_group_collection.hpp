@@ -21,6 +21,8 @@ class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
 
+class BoundConstraint;
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
@@ -49,9 +51,9 @@ public:
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	bool Scan(Transaction &transaction, const vector<column_t> &column_ids,
+	bool Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
 	          const std::function<bool(DataChunk &chunk)> &fun);
-	bool Scan(Transaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
+	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
@@ -81,7 +83,7 @@ public:
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	vector<vector<Value>> GetStorageInfo();
+	void GetStorageInfo(TableStorageInfo &result);
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,

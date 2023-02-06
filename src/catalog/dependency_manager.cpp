@@ -1,6 +1,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
+DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog) {
 }
 
 void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry *object, DependencyList &dependencies) {
@@ -109,7 +109,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			auto user_type = (TypeCatalogEntry *)dependency;
 			auto table = (TableCatalogEntry *)new_obj;
 			bool deleted_dependency = true;
-			for (auto &column : table->columns.Logical()) {
+			for (auto &column : table->GetColumns().Logical()) {
 				if (column.Type() == user_type->user_type) {
 					deleted_dependency = false;
 					break;
@@ -131,7 +131,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	vector<CatalogEntry *> to_add;
 	if (new_obj->type == CatalogType::TABLE_ENTRY) {
 		auto table = (TableCatalogEntry *)new_obj;
-		for (auto &column : table->columns.Logical()) {
+		for (auto &column : table->GetColumns().Logical()) {
 			auto user_type_catalog = LogicalType::GetCatalog(column.Type());
 			if (user_type_catalog) {
 				to_add.push_back(user_type_catalog);
@@ -180,7 +180,7 @@ void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
 }
 
 void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback) {
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	for (auto &entry : dependents_map) {
 		for (auto &dependent : entry.second) {
 			callback(entry.first, dependent.entry, dependent.dependency_type);
@@ -190,7 +190,7 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEnt
 
 void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntry *owner, CatalogEntry *entry) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
 	// If the owner is already owned by something else, throw an error
 	for (auto &dep : dependents_map[owner]) {

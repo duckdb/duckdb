@@ -16,10 +16,9 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/catalog/similar_catalog_entry.hpp"
 #include <functional>
 #include <memory>
 
@@ -30,6 +29,10 @@ class ClientContext;
 class DependencyList;
 struct MappingValue;
 struct EntryIndex;
+
+class DuckCatalog;
+class TableCatalogEntry;
+class SequenceCatalogEntry;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
@@ -83,7 +86,7 @@ public:
 	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
 
-	DUCKDB_API Catalog &GetCatalog();
+	DUCKDB_API DuckCatalog &GetCatalog();
 
 	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo *info);
 
@@ -95,7 +98,7 @@ public:
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
-	pair<string, idx_t> SimilarEntry(CatalogTransaction transaction, const string &name);
+	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
@@ -152,7 +155,7 @@ private:
 	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);
 
 private:
-	Catalog &catalog;
+	DuckCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
 	//! The set of catalog entries
