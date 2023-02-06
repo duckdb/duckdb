@@ -174,8 +174,8 @@ test_that("Right join returns all right relations", {
 test_that("anti join works", {
     left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right)))
-    left_projection <- duckdb:::rel_project(left, list(expr_reference("left_b", left)))
+    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a")))
+    left_projection <- duckdb:::rel_project(left, list(expr_reference("left_b")))
     rel2 <- duckdb:::rel_join_filter(left, right_projection, list(left_projection), "anti")
     rel_df <- duckdb:::rel_to_altrep(rel2)
     dim(rel_df)
@@ -186,16 +186,16 @@ test_that("anti join works", {
 test_that("anti join throws exception when projection lists are not the same size", {
     left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a", right), expr_reference("right_b", right)))
-    left_projection <- duckdb:::rel_project(left, list(expr_reference("left_b", left)))
+    right_projection <- duckdb:::rel_project(right, list(expr_reference("right_a"), expr_reference("right_b")))
+    left_projection <- duckdb:::rel_project(left, list(expr_reference("left_b")))
     expect_error(duckdb:::rel_join_filter(left, right_projection, list(left_projection), "anti"))
 })
 
 test_that("semi join works", {
     left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 6)))
     right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
-    right_projection <- rel_project(right, list(expr_reference("right_a", right)))
-    left_projection <- rel_project(left, list(expr_reference("left_b", left)))
+    right_projection <- rel_project(right, list(expr_reference("right_a")))
+    left_projection <- rel_project(left, list(expr_reference("left_b")))
     rel2 <- rel_join_filter(left, right_projection, list(left_projection), "semi")
     rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
@@ -206,8 +206,8 @@ test_that("semi join works", {
 test_that("semi join returns only one row per match", {
     left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 6)))
     right <- rel_from_df(con, data.frame(right_a=c(1, 1, 1), right_b=c(1, 1, 2)))
-    right_projection <- rel_project(right, list(expr_reference("right_a", right)))
-    left_projection <- rel_project(left, list(expr_reference("left_b", left)))
+    right_projection <- rel_project(right, list(expr_reference("right_a")))
+    left_projection <- rel_project(left, list(expr_reference("left_b")))
     # rel2 = select * from left where left_b in (select right_a from right);
     rel2 <- rel_join_filter(left, right_projection, list(left_projection), "semi")
     rel_df <- rel_to_altrep(rel2)
@@ -220,8 +220,8 @@ test_that("semi join returns only one row per match", {
 test_that("You can place more relations on top of a semi join", {
     left <- rel_from_df(con, data.frame(left_a=c(4, 5, 6), left_b=c(1, 5, 6)))
     right <- rel_from_df(con, data.frame(right_a=c(1, 1, 1), right_b=c(1, 1, 2)))
-    right_projection <- rel_project(right, list(expr_reference("right_a", right)))
-    left_projection <- rel_project(left, list(expr_reference("left_b", left)))
+    right_projection <- rel_project(right, list(expr_reference("right_a")))
+    left_projection <- rel_project(left, list(expr_reference("left_b")))
     # rel2 = select * from left where left_b in (select right_a from right);
     rel2 <- rel_join_filter(left, right_projection, list(left_projection), "semi")
     rel2_proj_left <- rel_project(rel2, list(expr_reference("left_a")))
