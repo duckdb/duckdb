@@ -268,9 +268,18 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 				if (IS_TRANSFORM) {
 					AppendTransformedToResult(lambda_vector, elem_cnt, result);
 				} else {
-					AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
-					                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
-					                       input_chunk);
+					if (lambda_vector.GetType() != LogicalType::BOOLEAN) {
+						// try casting, otherwise fail
+						Vector cast_vector(LogicalType::BOOLEAN);
+						VectorOperations::Cast(state.GetContext(), lambda_vector, cast_vector, elem_cnt, true);
+						AppendFilteredToResult(cast_vector, result_entries, elem_cnt, result, curr_list_len,
+						                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
+						                       input_chunk);
+					} else {
+						AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
+						                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
+						                       input_chunk);
+					}
 				}
 				elem_cnt = 0;
 			}
@@ -295,8 +304,16 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	if (IS_TRANSFORM) {
 		AppendTransformedToResult(lambda_vector, elem_cnt, result);
 	} else {
-		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+		if (lambda_vector.GetType() != LogicalType::BOOLEAN) {
+			// try casting, otherwise fail
+			Vector cast_vector(LogicalType::BOOLEAN);
+			VectorOperations::Cast(state.GetContext(), lambda_vector, cast_vector, elem_cnt, true);
+			AppendFilteredToResult(cast_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
+			                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+		} else {
+			AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
+			                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+		}
 	}
 
 	if (args.AllConstant()) {
