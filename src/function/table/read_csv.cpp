@@ -38,6 +38,10 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	auto &config = DBConfig::GetConfig(context);
 	single_threaded = !config.options.experimental_parallel_csv_reader;
+	if (options.has_parallel) {
+		// Override the option set in the config
+		single_threaded = !options.use_parallel;
+	}
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
@@ -789,6 +793,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
+	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,

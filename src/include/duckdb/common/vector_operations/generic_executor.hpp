@@ -274,8 +274,9 @@ private:
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUNC>
 	static void ExecuteTernaryInternal(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC &fun) {
-		auto constant =
-		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		auto constant = a.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		                b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		                c.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE a_state;
 		typename B_TYPE::STRUCT_STATE b_state;
@@ -313,7 +314,8 @@ private:
 	static void ExecuteQuaternaryInternal(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count,
 	                                      FUNC &fun) {
 		auto constant =
-		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    c.GetVectorType() == VectorType::CONSTANT_VECTOR && d.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE a_state;
 		typename B_TYPE::STRUCT_STATE b_state;

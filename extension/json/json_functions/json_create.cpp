@@ -252,8 +252,8 @@ static void CreateValuesStruct(const JSONCreateFunctionData &info, yyjson_mut_do
 		vals[i] = yyjson_mut_obj(doc);
 	}
 	// Initialize re-usable array for the nested values
-	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[count]);
-	auto nested_vals = nested_vals_ptr.get();
+	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * count);
+
 	// Add the key/value pairs to the objects
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
@@ -277,14 +277,12 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 	// Create nested keys
 	auto &map_key_v = MapVector::GetKeys(value_v);
 	auto map_key_count = ListVector::GetListSize(value_v);
-	auto nested_keys_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_key_count]);
-	auto nested_keys = nested_keys_ptr.get();
+	auto nested_keys = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * map_key_count);
 	TemplatedCreateValues<string_t>(doc, nested_keys, map_key_v, map_key_count);
 	// Create nested values
 	auto &map_val_v = MapVector::GetValues(value_v);
 	auto map_val_count = ListVector::GetListSize(value_v);
-	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[map_val_count]);
-	auto nested_vals = nested_vals_ptr.get();
+	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * map_val_count);
 	CreateValues(info, doc, nested_vals, map_val_v, map_val_count);
 	// Add the key/value pairs to the objects
 	UnifiedVectorFormat map_data;
@@ -316,8 +314,7 @@ static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc
 	}
 
 	// Initialize re-usable array for the nested values
-	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[count]);
-	auto nested_vals = nested_vals_ptr.get();
+	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * count);
 
 	auto &tag_v = UnionVector::GetTags(value_v);
 	UnifiedVectorFormat tag_data;
@@ -363,8 +360,7 @@ static void CreateValuesList(const JSONCreateFunctionData &info, yyjson_mut_doc 
 	// Initialize array for the nested values
 	auto &child_v = ListVector::GetEntry(value_v);
 	auto child_count = ListVector::GetListSize(value_v);
-	auto nested_vals_ptr = unique_ptr<yyjson_mut_val *[]>(new yyjson_mut_val *[child_count]);
-	auto nested_vals = nested_vals_ptr.get();
+	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * child_count);
 	// Fill nested_vals with list values
 	CreateValues(info, doc, nested_vals, child_v, child_count);
 	// Now we add the values to the appropriate JSON arrays

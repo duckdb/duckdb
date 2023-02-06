@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 
 #include "duckdb/common/atomic.hpp"
@@ -37,7 +38,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 	auto &ustate = (DeleteLocalState &)lstate;
 
 	// get rows and
-	auto &transaction = Transaction::Get(context.client, table.db);
+	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_identifiers = input.data[row_id_index];
 
 	vector<column_t> column_ids;

@@ -7,7 +7,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -32,7 +32,7 @@ struct NextvalBindData : public FunctionData {
 };
 
 struct CurrentSequenceValueOperator {
-	static int64_t Operation(Transaction &transaction, SequenceCatalogEntry *seq) {
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry *seq) {
 		lock_guard<mutex> seqlock(seq->lock);
 		int64_t result;
 		if (seq->usage_count == 0u) {
@@ -44,7 +44,7 @@ struct CurrentSequenceValueOperator {
 };
 
 struct NextSequenceValueOperator {
-	static int64_t Operation(Transaction &transaction, SequenceCatalogEntry *seq) {
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry *seq) {
 		lock_guard<mutex> seqlock(seq->lock);
 		int64_t result;
 		result = seq->counter;
@@ -91,7 +91,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	auto &context = state.GetContext();
 	if (info.sequence) {
-		auto &transaction = Transaction::Get(context, *info.sequence->catalog);
+		auto &transaction = DuckTransaction::Get(context, *info.sequence->catalog);
 		// sequence to use is hard coded
 		// increment the sequence
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -106,7 +106,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			// fetch the sequence from the catalog
 			auto sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
-			auto &transaction = Transaction::Get(context, *sequence->catalog);
+			auto &transaction = DuckTransaction::Get(context, *sequence->catalog);
 			return OP::Operation(transaction, sequence);
 		});
 	}
