@@ -342,14 +342,14 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			}
 		}
 
+		chunk.Verify();
+
 		state.list_position += this_chunk_len;
 		if (state.list_position == state.longest_list_length) {
 			state.current_row++;
 			state.longest_list_length = DConstants::INVALID_INDEX;
 			state.list_position = 0;
 		}
-
-		chunk.Verify();
 
 		// we only emit one unnested row (that contains data) at a time
 	} while (chunk.size() == 0);
