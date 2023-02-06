@@ -46,21 +46,28 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
-			AlterTableType alt_tbl_type;
+			string column_name;
 			// deserialize it
 			{
 				BufferedDeserializer type_source(extra_data, extra_data_size);
 				FieldReader reader(type_source);
 				reader.ReadRequired<AlterType>();
-				alt_tbl_type = reader.ReadRequired<AlterTableType>();
+				auto alt_tbl_type = reader.ReadRequired<AlterTableType>();
+				// Read some Gunk
+				reader.ReadRequired<string>();
+				reader.ReadRequired<string>();
+				reader.ReadRequired<string>();
+				reader.ReadRequired<bool>();
+				if (alt_tbl_type == AlterTableType::REMOVE_COLUMN ||
+				    alt_tbl_type == AlterTableType::ALTER_COLUMN_TYPE) {
+					column_name = reader.ReadRequired<string>();
+				}
 				reader.ForceFinalize();
 			}
 
-			if (alt_tbl_type == AlterTableType::REMOVE_COLUMN || alt_tbl_type == AlterTableType::ALTER_COLUMN_TYPE) {
-				BufferedDeserializer source(extra_data, extra_data_size);
-				auto info = AlterInfo::Deserialize(source);
+			if (!column_name.empty()) {
 				// write the alter table in the log
-				table_entry->CommitAlter(*info);
+				table_entry->CommitAlter(column_name);
 			}
 
 			log->WriteAlter(extra_data, extra_data_size);
