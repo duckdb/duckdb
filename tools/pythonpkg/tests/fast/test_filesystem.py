@@ -106,14 +106,14 @@ class TestPythonFilesystem:
         with raises(ModuleNotFoundError):
             duckdb_cursor.register_filesystem(None)
 
-    def test_arrow_fs_wrapper(self):
+    def test_arrow_fs_wrapper(self, tmp_path: Path):
         fs = importorskip('pyarrow.fs')
         from fsspec.implementations.arrow import ArrowFSWrapper
 
         local = fs.LocalFileSystem()
         local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
         local_fsspec.protocol = "local"
-        filename = "test.csv"
+        filename = str(tmp_path / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:
             f.write("a,b,c\n")
             f.write("1,2,3\n")
