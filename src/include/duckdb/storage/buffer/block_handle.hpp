@@ -113,7 +113,7 @@ private:
 	//! an unloaded block, this tells us how much memory to reserve.
 	idx_t memory_usage;
 	//! Current memory reservation / usage
-	BufferPoolReservation memory_charge;
+	std::unique_ptr<BufferPoolReservation> memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
 };

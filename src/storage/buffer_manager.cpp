@@ -59,7 +59,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
-	memory_charge = std::move(reservation);
+	memory_charge = make_unique<BufferPoolReservation>(std::move(reservation));
 }
 
 BlockHandle::~BlockHandle() {
@@ -68,12 +68,12 @@ BlockHandle::~BlockHandle() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	// no references remain to this block: erase
 	if (buffer && state == BlockState::BLOCK_LOADED) {
-		D_ASSERT(memory_charge.size > 0);
+		D_ASSERT(memory_charge->size > 0);
 		// the block is still loaded in memory: erase it
 		buffer.reset();
-		memory_charge.Resize(buffer_manager.current_memory, 0);
+		memory_charge->Resize(buffer_manager.current_memory, 0);
 	} else {
-		D_ASSERT(memory_charge.size == 0);
+		D_ASSERT(memory_charge->size == 0);
 	}
 	buffer_manager.PurgeQueue();
 	block_manager.UnregisterBlock(block_id, can_destroy);
@@ -150,7 +150,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 		// temporary block that cannot be destroyed: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(block_id, *buffer);
 	}
-	memory_charge.Resize(block_manager.buffer_manager.current_memory, 0);
+	memory_charge->Resize(block_manager.buffer_manager.current_memory, 0);
 	state = BlockState::BLOCK_UNLOADED;
 	return std::move(buffer);
 }
@@ -187,7 +187,7 @@ struct BufferEvictionNode {
 	}
 
 	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
+	idx_t timestamp {};
 
 	bool CanUnload(BlockHandle &handle_p) {
 		if (timestamp != handle_p.eviction_timestamp) {
@@ -366,7 +366,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
-	D_ASSERT(handle->memory_usage == handle->memory_charge.size);
+	D_ASSERT(handle->memory_usage == handle->memory_charge->size);
 
 	auto req = handle->buffer->CalculateMemory(block_size);
 	int64_t memory_delta = (int64_t)req.alloc_size - handle->memory_usage;
@@ -379,10 +379,10 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		    EvictBlocksOrThrow(memory_delta, maximum_memory, nullptr, "failed to resize block from %lld to %lld%s",
 		                       handle->memory_usage, req.alloc_size);
 		// EvictBlocks decrements 'current_memory' for us.
-		handle->memory_charge.Merge(std::move(reservation));
+		handle->memory_charge->Merge(std::move(reservation));
 	} else {
 		// no need to evict blocks, but we do need to decrement 'current_memory'.
-		handle->memory_charge.Resize(current_memory, req.alloc_size);
+		handle->memory_charge->Resize(current_memory, req.alloc_size);
 	}
 
 	// resize and adjust current memory
@@ -421,13 +421,13 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->readers = 1;
 	auto buf = handle->Load(handle, std::move(reusable_buffer));
-	handle->memory_charge = std::move(reservation);
+	handle->memory_charge = make_unique<BufferPoolReservation>(std::move(reservation));
 	// In the case of a variable sized block, the buffer may be smaller than a full block.
 	int64_t delta = handle->buffer->AllocSize() - handle->memory_usage;
 	if (delta) {
 		D_ASSERT(delta < 0);
 		handle->memory_usage += delta;
-		handle->memory_charge.Resize(current_memory, handle->memory_usage);
+		handle->memory_charge->Resize(current_memory, handle->memory_usage);
 	}
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	return buf;
