@@ -53,12 +53,13 @@ public:
 
 	static const vector<string> GetPublicKeys();
 
-	static unique_ptr<ReplacementOpenData> ReplacementOpenPre(const string &extension, DBConfig &config);
-	static void ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
-	                                ReplacementOpenData *open_data);
+	static void StorageInit(string &extension, DBConfig &config);
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
+
+	//! Apply any known extension aliases
+	static string ApplyExtensionAlias(string extension_name);
 
 private:
 	static const vector<string> PathComponents();
@@ -68,8 +69,6 @@ private:
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static bool IsRelease(const string &version_tag);
-	//! Apply any known extension aliases
-	static string ApplyExtensionAlias(string extension_name);
 	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
