@@ -220,19 +220,19 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t max_upload_threads;
 	Value value;
 
-	if (opener->TryGetCurrentSetting("s3_uploader_max_filesize", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value)) {
 		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
 	} else {
 		uploader_max_filesize = S3ConfigParams::DEFAULT_MAX_FILESIZE;
 	}
 
-	if (opener->TryGetCurrentSetting("s3_uploader_max_parts_per_file", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value)) {
 		max_parts_per_file = value.GetValue<uint64_t>();
 	} else {
 		max_parts_per_file = S3ConfigParams::DEFAULT_MAX_PARTS_PER_FILE; // AWS Default
 	}
 
-	if (opener->TryGetCurrentSetting("s3_uploader_thread_limit", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", value)) {
 		max_upload_threads = value.GetValue<uint64_t>();
 	} else {
 		max_upload_threads = S3ConfigParams::DEFAULT_MAX_UPLOAD_THREADS;
