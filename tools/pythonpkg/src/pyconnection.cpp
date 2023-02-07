@@ -456,8 +456,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			}
 			struct_fields.push_back(make_pair(py::str(name), Value(py::str(type))));
 		}
-		auto dtype_struct = Value::STRUCT(move(struct_fields));
-		options["columns"] = move(dtype_struct);
+		auto dtype_struct = Value::STRUCT(std::move(struct_fields));
+		options["columns"] = std::move(dtype_struct);
 	}
 
 	if (!py::none().is(sample_size)) {
@@ -474,11 +474,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		options["auto_detect"] = Value::BOOLEAN(true);
 	}
 
-	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, move(options));
+	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options));
 	if (read_json_relation == nullptr) {
 		throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
 	}
-	return make_unique<DuckDBPyRelation>(move(read_json_relation));
+	return make_unique<DuckDBPyRelation>(std::move(read_json_relation));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
