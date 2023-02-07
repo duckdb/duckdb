@@ -66,12 +66,13 @@ public:
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table when we only have one query predicate
-	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
+	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
 	                                                                 ExpressionType expressionType) = 0;
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two query predicates
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
-	                                                               ExpressionType low_expression_type, Value high_value,
+	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
+	                                                               ExpressionType low_expression_type,
+	                                                               const Value &high_value,
 	                                                               ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index, fetching up to max_count result ids. Returns true if all row ids were fetched,
 	//! and false otherwise.

@@ -70,7 +70,7 @@ ART::~ART() {
 // Initialize Predicate Scans
 //===--------------------------------------------------------------------===//
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
+unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
                                                               ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
@@ -78,8 +78,8 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &trans
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
-                                                            ExpressionType low_expression_type, Value high_value,
+unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
+                                                            ExpressionType low_expression_type, const Value &high_value,
                                                             ExpressionType high_expression_type) {
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = low_value;
