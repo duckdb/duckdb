@@ -613,10 +613,13 @@ function pending_execute_tasks(pending::PendingQueryResult)::Bool
 end
 
 # execute background tasks in a loop, until task execution is finished
-function execute_tasks(state::duckdb_task_state)
+function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
         GC.safepoint()
-        duckdb_execute_n_tasks_state(state, 1)
+        ret = duckdb_execute_n_tasks_state(state, 1)
+        if duckdb_execution_is_finished(con.handle)
+            break
+        end
     end
     return
 end
@@ -658,17 +661,20 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     task_state = duckdb_create_task_state(stmt.con.db.handle)
     tasks = []
     for i in 2:Threads.nthreads()
-        task_val = @spawn execute_tasks(task_state)
+        task_val = @spawn execute_tasks(task_state, stmt.con)
         push!(tasks, task_val)
     end
     success = true
-    try
-        # now start executing tasks of the pending result in a loop
-        success = pending_execute_tasks(pending)
-    catch ex
-        cleanup_tasks(tasks, task_state)
-        throw(ex)
-    end
+	while !duckdb_execution_is_finished(stmt.con.handle)
+		GC.safepoint()
+	end
+    #try
+    #    # now start executing tasks of the pending result in a loop
+    #    success = pending_execute_tasks(pending)
+    #catch ex
+    #    cleanup_tasks(tasks, task_state)
+    #    throw(ex)
+    #end
 
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)

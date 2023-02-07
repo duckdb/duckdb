@@ -37,10 +37,12 @@ function test_tpch_multithread()
 
 	#throw(UndefVarError(:df_con))
 	# Execute all the queries
-	for i in 1:22
+	for _ in 1:100
+		for i in 1:22
 
-		print("T:$id | Q:$i\n")
-		res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
+			print("T:$id | Q:$i\n")
+			res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
+		end
 	end
 	DBInterface.close!(df_con)
 
