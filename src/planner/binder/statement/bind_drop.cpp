@@ -66,11 +66,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			auto drop_database_function_ref =
 			    storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
 			if (drop_database_function_ref) {
-				auto bound_drop_database_func = Bind(*drop_database_function_ref);
+				auto bound_drop_database_func = std::move(Bind(*drop_database_function_ref));
 				result.plan = CreatePlan(*bound_drop_database_func);
 				break;
 			}
 		}
+		break;
 	}
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
