@@ -27,7 +27,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	tree = nullptr;
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
-		Verify();
+		ART::Verify();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
@@ -58,7 +58,7 @@ ART::~ART() {
 	if (!tree) {
 		return;
 	}
-	Verify();
+	ART::Verify();
 	if (track_memory) {
 		buffer_manager.DecreaseUsedMemory(memory_size);
 	}
