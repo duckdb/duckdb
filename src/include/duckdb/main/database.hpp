@@ -49,6 +49,7 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 

@@ -42,6 +42,7 @@ public:
 
 	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
+	static void LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension);
 
 	static string ExtensionDirectory(ClientContext &context);
 

@@ -121,14 +121,13 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	return res;
 }
 
-void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	auto &db = DatabaseInstance::GetDatabase(context);
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
 	auto &loaded_extensions = db.LoadedExtensions();
 	if (loaded_extensions.find(extension) != loaded_extensions.end()) {
 		return;
 	}
 
-	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), opener, extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -141,7 +140,11 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 		                            init_fun_name, res.filename, e.what());
 	}
 
-	DatabaseInstance::GetDatabase(context).SetExtensionLoaded(extension);
+	db.SetExtensionLoaded(extension);
+}
+
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
 }
 
 void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {

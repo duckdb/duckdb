@@ -197,7 +197,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// check if we are opening a standard DuckDB database or an extension database
 	auto database_type = ExtractDatabaseType(config.options.database_path);
 	if (!database_type.empty()) {
-		// we are opening an extension database
+		// we are opening an extension database, run storage_init
 		ExtensionHelper::StorageInit(database_type, config);
 	}
 	AttachInfo info;
@@ -216,6 +216,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	db_manager->InitializeSystemCatalog();
 	// initialize the database
 	initial_database->Initialize();
+
+	if (!database_type.empty()) {
+		// if we are opening an extension database - load the extension
+		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
+	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
@@ -332,9 +337,14 @@ idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DuckDB::ExtensionIsLoaded(const std::string &name) {
-	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
+bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
+	return loaded_extensions.find(name) != loaded_extensions.end();
 }
+
+bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+	return instance->ExtensionIsLoaded(name);
+}
+
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	loaded_extensions.insert(name);
 }

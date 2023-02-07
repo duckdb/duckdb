@@ -68,6 +68,13 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
 
+	// if we are loading a database type from an extension - check if that extension is loaded
+	if (!type.empty()) {
+		if (!db.ExtensionIsLoaded(type)) {
+			ExtensionHelper::LoadExternalExtension(context.client, type);
+		}
+	}
+
 	// attach the database
 	auto &name = info->name;
 	const auto &path = info->path;
