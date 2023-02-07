@@ -1241,7 +1241,7 @@ TableFuncElementList:
 					$$ = lappend($1, $3);
 				}
 		;
-
+``
 TableFuncElement:	ColIdOrString Typename opt_collate_clause
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
