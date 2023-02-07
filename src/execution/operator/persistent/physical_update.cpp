@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/client_context.hpp"
-#include <iostream>
 
 namespace duckdb {
 
