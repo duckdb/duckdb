@@ -409,13 +409,12 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 			bind_data.options.file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(bind_data.options, context);
 			current_csv_position = 0;
-			// FIXME: This will probably require some changes on the verification code
 			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
+			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
 		} else {
 			// We are done scanning.
 			return nullptr;
 		}
-		return nullptr;
 	}
 	// set up the current buffer
 	auto result = make_unique<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
