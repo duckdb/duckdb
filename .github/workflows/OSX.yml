@@ -13,10 +13,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
   xcode-debug:
@@ -47,11 +43,10 @@ jobs:
       shell: bash
       run: |
         python scripts/amalgamation.py --extended
-        python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
     name: OSX Release
@@ -65,6 +60,7 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
+      GEN: ninja
       ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
@@ -75,6 +71,9 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Install Ninja
+      run: brew install ninja
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -128,8 +127,6 @@ jobs:
     runs-on: macos-latest
     needs: xcode-debug
     env:
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
       AWS_DEFAULT_REGION: us-east-1
       OSX_BUILD_UNIVERSAL: 1
@@ -173,6 +170,9 @@ jobs:
 
       - name: Deploy
         shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli

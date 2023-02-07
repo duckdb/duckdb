@@ -31,6 +31,7 @@ struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
+struct DatabaseSize;
 
 class AttachedDatabase;
 class ClientContext;
@@ -53,18 +54,21 @@ struct CatalogLookup;
 struct CatalogEntryLookup;
 struct SimilarCatalogEntry;
 
+class Binder;
+class LogicalOperator;
+class PhysicalOperator;
+class LogicalCreateIndex;
+class LogicalCreateTable;
+class LogicalInsert;
+class LogicalDelete;
+class LogicalUpdate;
+class CreateStatement;
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
 	explicit Catalog(AttachedDatabase &db);
-	~Catalog();
-
-	//! The catalog set holding the schemas
-	unique_ptr<CatalogSet> schemas;
-	//! The DependencyManager manages dependencies between different catalog objects
-	unique_ptr<DependencyManager> dependency_manager;
-	//! Write lock for the catalog
-	mutex write_lock;
+	virtual ~Catalog();
 
 public:
 	//! Get the SystemCatalog from the ClientContext
@@ -78,13 +82,13 @@ public:
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
-	DUCKDB_API DependencyManager &GetDependencyManager() {
-		return *dependency_manager;
-	}
 	DUCKDB_API AttachedDatabase &GetAttached();
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
-	void Initialize(bool load_builtin);
+	virtual bool IsDuckCatalog() {
+		return false;
+	}
+	virtual void Initialize(bool load_builtin) = 0;
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
@@ -97,11 +101,12 @@ public:
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const string &GetName();
 	DUCKDB_API idx_t GetOid();
+	DUCKDB_API virtual string GetCatalogType() = 0;
 
 	DUCKDB_API CatalogTransaction GetCatalogTransaction(ClientContext &context);
 
 	//! Creates a schema in the catalog.
-	DUCKDB_API CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info);
+	DUCKDB_API virtual CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) = 0;
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info);
@@ -168,14 +173,14 @@ public:
 	DUCKDB_API SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA,
 	                                         bool if_exists = false,
 	                                         QueryErrorContext error_context = QueryErrorContext());
-	DUCKDB_API SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
-	                                         bool if_exists = false,
-	                                         QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API virtual SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
+	                                                 bool if_exists = false,
+	                                                 QueryErrorContext error_context = QueryErrorContext()) = 0;
 	DUCKDB_API static SchemaCatalogEntry *GetSchema(ClientContext &context, const string &catalog_name,
 	                                                const string &schema_name, bool if_exists = false,
 	                                                QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
-	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);
+	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) = 0;
 	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not
 	//! exist, otherwise an exception is thrown
 	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -210,6 +215,22 @@ public:
 	//! Alter an existing entry in the catalog.
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo *info);
 
+	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+	                                                       unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
+	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+	                                                    unique_ptr<LogicalOperator> plan) = 0;
+
+	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
+
+	virtual bool InMemory() = 0;
+	virtual string GetDBPath() = 0;
+
 public:
 	template <class T>
 	static T *GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
@@ -222,12 +243,13 @@ public:
 		return (T *)entry;
 	}
 
+	DUCKDB_API vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context);
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context, const string &catalog_name);
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
 
-	DUCKDB_API void Verify();
+	virtual void Verify();
 
-private:
+protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
@@ -250,7 +272,7 @@ private:
 	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
 	                                                 const unordered_set<SchemaCatalogEntry *> &schemas);
 
-	void DropSchema(ClientContext &context, DropInfo *info);
+	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
 };
 
 } // namespace duckdb

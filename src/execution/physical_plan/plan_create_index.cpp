@@ -24,11 +24,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// because they make deletions and lookups unfeasible
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
 		auto &expr = op.unbound_expressions[i];
-		if (expr->expression_class == ExpressionClass::BOUND_FUNCTION) {
-			auto &func_expr = (BoundFunctionExpression &)*expr;
-			if (func_expr.function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS) {
-				throw BinderException("Index keys cannot contain the \"%s\" function.", func_expr.function.name);
-			}
+		if (expr->HasSideEffects()) {
+			throw BinderException("Index keys cannot contain expressions with side "
+			                      "effects.");
 		}
 	}
 

@@ -46,8 +46,15 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
 
-	if (op.type == PhysicalOperatorType::CROSS_PRODUCT) {
+	switch (op.type) {
+	case PhysicalOperatorType::POSITIONAL_JOIN:
+		// Positional joins are always outer
+		meta_pipeline.CreateChildPipeline(current, &op, last_pipeline);
 		return;
+	case PhysicalOperatorType::CROSS_PRODUCT:
+		return;
+	default:
+		break;
 	}
 
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core

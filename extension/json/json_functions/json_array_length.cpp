@@ -1,32 +1,37 @@
-#include "json_common.hpp"
-#include "json_functions.hpp"
+#include "json_executors.hpp"
 
 namespace duckdb {
 
-static inline uint64_t GetArrayLength(yyjson_val *val, Vector &result) {
+static inline uint64_t GetArrayLength(yyjson_val *val, yyjson_alc *alc, Vector &result) {
 	return yyjson_arr_size(val);
 }
 
 static void UnaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::UnaryExecute<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::UnaryExecute<uint64_t>(args, state, result, GetArrayLength);
 }
 
 static void BinaryArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::BinaryExecute<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::BinaryExecute<uint64_t>(args, state, result, GetArrayLength);
 }
 
 static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONCommon::ExecuteMany<uint64_t>(args, state, result, GetArrayLength);
+	JSONExecutors::ExecuteMany<uint64_t>(args, state, result, GetArrayLength);
+}
+
+static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::UBIGINT, UnaryArrayLengthFunction, nullptr, nullptr,
+	                               nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::UBIGINT, BinaryArrayLengthFunction,
+	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
+	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
+	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
-	set.AddFunction(ScalarFunction({LogicalType::JSON}, LogicalType::UBIGINT, UnaryArrayLengthFunction));
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::UBIGINT,
-	                               BinaryArrayLengthFunction, JSONReadFunctionData::Bind));
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
-	                               JSONReadManyFunctionData::Bind));
+	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
+	GetArrayLengthFunctionsInternal(set, JSONCommon::JSONType());
 
 	return CreateScalarFunctionInfo(std::move(set));
 }

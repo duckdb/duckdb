@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -358,7 +359,7 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
 
-void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops,
+void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_ops,
                                                          vector<unique_ptr<FilterInfo>> *filter_infos) {
 	InitEquivalentRelations(filter_infos);
 	InitTotalDomains();
@@ -564,12 +565,12 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	auto table_filters = GetTableFilters(op);
 
 	auto card_after_filters = node->GetBaseTableCardinality();
-	// Logical Filter on a seq scan
-	if (has_logical_filter) {
-		card_after_filters *= DEFAULT_SELECTIVITY;
-	} else if (table_filters) {
+	if (table_filters) {
 		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
 		card_after_filters = MinValue(inspect_result, (double)card_after_filters);
+	}
+	if (has_logical_filter) {
+		card_after_filters *= DEFAULT_SELECTIVITY;
 	}
 	node->SetEstimatedCardinality(card_after_filters);
 }

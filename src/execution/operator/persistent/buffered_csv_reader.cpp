@@ -40,9 +40,9 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    move(options_p), requested_types),
+                    std::move(options_p), requested_types),
       buffer_size(0), position(0), start(0) {
-	options.file_path = move(filename);
+	options.file_path = std::move(filename);
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
@@ -128,7 +128,7 @@ TextSearchShiftArray::TextSearchShiftArray() {
 
 TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_term.size()) {
 	if (length > 255) {
-		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
+		throw InvalidInputException("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 	// initialize the shifts array
 	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
@@ -248,7 +248,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect) {
 		return_types = SniffCSV(requested_types);
 		if (return_types.empty()) {
-			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
+			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
 		if (cached_chunks.empty()) {
 			JumpToBeginning(options.skip_rows, options.header);
@@ -444,13 +444,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
-					idx_t num_buffers = 0;
-					bool parsing_success = true;
-					while (num_buffers < options.sample_chunks && !end_of_file_reached) {
-						parsing_success = parsing_success && TryParseCSV(ParserMode::SNIFFING_DIALECT);
-						num_buffers++;
-					}
-					if (!parsing_success) {
+					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
 						continue;
 					}
 
@@ -482,6 +476,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 					} else if ((more_values || single_column_before) && rows_consistent) {
 						sniff_info.skip_rows = start_row;
 						sniff_info.num_cols = num_cols;
+						sniff_info.new_line = options.new_line;
 						best_consistent_rows = consistent_rows;
 						best_num_cols = num_cols;
 
@@ -497,6 +492,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 						if (!same_quote_is_candidate) {
 							sniff_info.skip_rows = start_row;
 							sniff_info.num_cols = num_cols;
+							sniff_info.new_line = options.new_line;
 							info_candidates.push_back(sniff_info);
 						}
 					}
@@ -832,6 +828,27 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 	return detected_types;
 }
 
+string BufferedCSVReader::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column,
+                                           const vector<string> &names) {
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto it = sql_types_per_column.find(names[i]);
+		if (it != sql_types_per_column.end()) {
+			sql_types_per_column.erase(names[i]);
+			continue;
+		}
+	}
+	if (sql_types_per_column.empty()) {
+		return string();
+	}
+	string exception = "COLUMN_TYPES error: Columns with names: ";
+	for (auto &col : sql_types_per_column) {
+		exception += "\"" + col.first + "\",";
+	}
+	exception.pop_back();
+	exception += " do not exist in the CSV File";
+	return exception;
+}
+
 vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
 	for (auto &type : requested_types) {
 		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
@@ -887,23 +904,38 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	options.num_cols = best_num_cols;
 	DetectHeader(best_sql_types_candidates, best_header_row);
-	auto sql_types_per_column = options.sql_types_per_column;
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto it = sql_types_per_column.find(names[i]);
-		if (it != sql_types_per_column.end()) {
-			best_sql_types_candidates[i] = {it->second};
-			sql_types_per_column.erase(names[i]);
+	if (!options.sql_type_list.empty()) {
+		// user-defined types were supplied for certain columns
+		// override the types
+		if (!options.sql_types_per_column.empty()) {
+			// types supplied as name -> value map
+			idx_t found = 0;
+			for (idx_t i = 0; i < names.size(); i++) {
+				auto it = options.sql_types_per_column.find(names[i]);
+				if (it != options.sql_types_per_column.end()) {
+					best_sql_types_candidates[i] = {options.sql_type_list[it->second]};
+					found++;
+					continue;
+				}
+			}
+			if (!options.union_by_name && found < options.sql_types_per_column.size()) {
+				string exception = ColumnTypesError(options.sql_types_per_column, names);
+				if (!exception.empty()) {
+					throw BinderException(exception);
+				}
+			}
+		} else {
+			// types supplied as list
+			if (names.size() < options.sql_type_list.size()) {
+				throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
+				                      options.sql_type_list.size(), names.size());
+			}
+			for (idx_t i = 0; i < options.sql_type_list.size(); i++) {
+				best_sql_types_candidates[i] = {options.sql_type_list[i]};
+			}
 		}
 	}
-	if (!sql_types_per_column.empty()) {
-		string exception = "COLUMN_TYPES error: Columns with names: ";
-		for (auto &col : sql_types_per_column) {
-			exception += "\"" + col.first + "\",";
-		}
-		exception.pop_back();
-		exception += " do not exist in the CSV File";
-		throw BinderException(exception);
-	}
+
 	// #######
 	// ### type detection (refining)
 	// #######
@@ -1228,6 +1260,7 @@ add_row : {
 		// \r newline, go to special state that parses an optional \n afterwards
 		goto carriage_return;
 	} else {
+		SetNewLineDelimiter();
 		// \n newline, move to value start
 		if (finished_chunk) {
 			return true;
@@ -1306,6 +1339,7 @@ carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position] == '\n') {
+		SetNewLineDelimiter(true, true);
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start = ++position;
@@ -1313,6 +1347,8 @@ carriage_return:
 			// file ends right after delimiter, go to final state
 			goto final_state;
 		}
+	} else {
+		SetNewLineDelimiter(true, false);
 	}
 	if (finished_chunk) {
 		return true;

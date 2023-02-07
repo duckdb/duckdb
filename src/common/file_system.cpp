@@ -172,7 +172,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 	return result;
 }
 
-string FileSystem::ExtractBaseName(const string &path) {
+string FileSystem::ExtractName(const string &path) {
 	if (path.empty()) {
 		return string();
 	}
@@ -180,7 +180,14 @@ string FileSystem::ExtractBaseName(const string &path) {
 	auto sep = PathSeparator();
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
-	auto vec = StringUtil::Split(splits.back(), ".");
+	return splits.back();
+}
+
+string FileSystem::ExtractBaseName(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
 	D_ASSERT(!vec.empty());
 	return vec[0];
 }
@@ -239,6 +246,14 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
 }
 
+string FileSystem::GetFileExtension(FileHandle &handle) {
+	auto dot_location = handle.path.rfind('.');
+	if (dot_location != std::string::npos) {
+		return handle.path.substr(dot_location + 1, std::string::npos);
+	}
+	return string();
+}
+
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
@@ -267,7 +282,8 @@ void FileSystem::RemoveDirectory(const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
-bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                           FileOpener *opener) {
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
@@ -305,6 +321,14 @@ void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 
 void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
+}
+
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+vector<string> FileSystem::ListSubSystems() {
+	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }
 
 bool FileSystem::CanHandleFile(const string &fpath) {

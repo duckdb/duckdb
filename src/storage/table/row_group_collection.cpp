@@ -151,7 +151,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
-bool RowGroupCollection::Scan(Transaction &transaction, const vector<column_t> &column_ids,
+bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
                               const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -177,7 +177,7 @@ bool RowGroupCollection::Scan(Transaction &transaction, const vector<column_t> &
 	}
 }
 
-bool RowGroupCollection::Scan(Transaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
+bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
 	vector<column_t> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -190,7 +190,7 @@ bool RowGroupCollection::Scan(Transaction &transaction, const std::function<bool
 // Fetch
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
-                               Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+                               const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	idx_t count = 0;
@@ -550,9 +550,7 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetStorageInfo
 //===--------------------------------------------------------------------===//
-vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
-	vector<vector<Value>> result;
-
+void RowGroupCollection::GetStorageInfo(TableStorageInfo &result) {
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
 	idx_t row_group_index = 0;
 	while (row_group) {
@@ -561,8 +559,6 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 
 		row_group = (RowGroup *)row_group->Next();
 	}
-
-	return result;
 }
 
 //===--------------------------------------------------------------------===//
