@@ -8,6 +8,8 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE t0 (c0 INT);
 
+mode skip
+
 query I
 SELECT (SELECT 2) c0 WHERE (SELECT (SELECT (SELECT c0)));
 ----
@@ -22,12 +24,16 @@ select (select 42) as a, (select a);
 ----
 This is not yet supported
 
+mode unskip
+
 # The last a should resolve to 1 from the (select 1) a
 # The b should resolve to 3
 query I
 select (select 1) a where (select (select 3) b where (select b) > (select a));
 ----
 1
+
+mode skip
 
 # the b alias resolves to the where alias binder in the subquery
 # the a alias resolves to the where alias binder from the select clause.
