@@ -59,18 +59,18 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		// for now assume only one storage extension provides the custom drop_database impl
 		for (auto &extension_entry : config.storage_extensions) {
-			if (extension_entry.second->create_database != nullptr) {
-				auto &storage_extension = extension_entry.second;
-				auto drop_database_function_ref =
-				    storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
-				if (drop_database_function_ref) {
-					unique_ptr<BoundTableRef> bound_drop_database_func = Bind(*drop_database_function_ref);
-					result.plan = CreatePlan(*move(bound_drop_database_func));
-					break;
-				}
+			if (extension_entry.second->drop_database != nullptr) {
+				continue;
+			}
+			auto &storage_extension = extension_entry.second;
+			auto drop_database_function_ref =
+			storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
+			if (drop_database_function_ref) {
+				auto bound_drop_database_func = Bind(*drop_database_function_ref);
+				result.plan = CreatePlan(*bound_drop_database_func);
+				break;
 			}
 		}
-		break;
 	}
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
