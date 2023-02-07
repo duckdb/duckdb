@@ -1,0 +1,40 @@
+# name: test/sql/copy/csv/parallel/test_multiple_files.test
+# description: Test parallel read CSV function on multiple files
+# group: [parallel]
+
+statement ok
+SET experimental_parallel_csv=true;
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+PRAGMA THREADS=2
+
+statement ok
+CREATE TABLE new_csv_tbl AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/auto/glob/[0-9].csv');
+
+query IIII
+select * from new_csv_tbl limit 10;
+----
+0	0	1.0	zero
+1	1	1.1	one
+2	2	1.2	two
+3	3	1.3	three
+4	4	1.4	four
+5	5	1.5	five
+6	6	1.6	six
+7	7	1.7	seven
+8	8	1.8	eight
+9	9	1.9	nine
+
+query IIII
+select count(integer) as cnt, sum(integer) as sumInt, min(integer) as minInt, max(integer) as maxInt from new_csv_tbl;
+----
+55	729	0	27
+
+query III
+select sum(row_id) as sumRow_Id, min(row_id) as minRow_Id, max(row_id) as maxRow_Id from new_csv_tbl;
+----
+1400729	0	50027
