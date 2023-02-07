@@ -425,7 +425,12 @@ int64_t Date::Epoch(date_t date) {
 }
 
 int64_t Date::EpochNanoseconds(date_t date) {
-	return ((int64_t)date.days) * (Interval::MICROS_PER_DAY * 1000);
+	int64_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY * 1000,
+	                                                               result)) {
+		throw ConversionException("Could not convert DATE to nanoseconds");
+	}
+	return result;
 }
 
 int64_t Date::EpochMicroseconds(date_t date) {
