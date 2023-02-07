@@ -589,7 +589,6 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0 ? 1 : 0);
 		bottom_rows = rows_to_render - top_rows;
 	}
-	// (≥ " + to_string(config.limit) ")"
 	auto row_count_str = to_string(row_count) + " rows";
 	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
 	if (has_limited_rows) {
