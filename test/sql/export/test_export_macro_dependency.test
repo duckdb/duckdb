@@ -42,6 +42,8 @@ select * from v_p;
 statement ok
 EXPORT DATABASE '__TEST_DIR__/macro_dependency'
 
+# remove the contents of the database
+
 statement ok
 DROP VIEW v_p;
 
@@ -59,3 +61,57 @@ query II
 select * from v_p;
 ----
 5	2008-01-01 01:01:01
+
+# remove the contents of the database
+
+statement ok
+DROP VIEW v_p;
+
+statement ok
+DROP MACRO parse_ts;
+
+statement ok
+DROP TABLE my_p;
+
+# Now test situations where macros depend on views
+
+# m1 depends on nothing
+statement ok
+CREATE MACRO m1(a) AS a+42;
+
+# v1 depends on m1
+statement ok
+CREATE VIEW v1 AS SELECT m1(42);
+
+# m2 depends on v1
+statement ok
+CREATE MACRO m2(a) AS (SELECT * FROM v1);
+
+query I
+select m2(5);
+----
+84
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/macro_dependency'
+
+# remove the contents of the database
+
+statement ok
+DROP VIEW v1;
+
+statement ok
+DROP MACRO m1;
+
+statement ok
+DROP MACRO m2;
+
+# import the db again
+statement ok
+IMPORT DATABASE '__TEST_DIR__/macro_dependency'
+
+query I
+select m2(5);
+----
+84
