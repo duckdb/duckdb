@@ -600,7 +600,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	if (has_hidden_rows) {
 		shown_str = "(";
 		if (has_limited_rows) {
-			shown_str += ">" + to_string(config.limit - 1) + ", ";
+			shown_str += ">" + to_string(config.limit - 1) + " rows, ";
 		}
 		shown_str += to_string(top_rows + bottom_rows) + " shown)";
 	}
