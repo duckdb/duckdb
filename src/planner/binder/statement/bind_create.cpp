@@ -243,7 +243,11 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog 
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
 		if (catalog) {
-			type = catalog->GetType(context, schema, user_type_name);
+			type = catalog->GetType(context, schema, user_type_name, true);
+			if (type.id() == LogicalTypeId::INVALID) {
+				// look in the system catalog if the type was not found
+				type = Catalog::GetType(context, SYSTEM_CATALOG, schema, user_type_name);
+			}
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
@@ -252,6 +256,11 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog 
 		TypeCatalogEntry *enum_type_catalog;
 		if (catalog) {
 			enum_type_catalog = catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, true);
+			if (!enum_type_catalog) {
+				// look in the system catalog if the type was not found
+				enum_type_catalog =
+				    Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name, true);
+			}
 		} else {
 			enum_type_catalog =
 			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);

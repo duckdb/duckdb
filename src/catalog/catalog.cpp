@@ -552,8 +552,11 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 	return result;
 }
 
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {
-	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name);
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name, bool if_exists) {
+	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
+	if (!type_entry) {
+		return LogicalType::INVALID;
+	}
 	auto result_type = type_entry->user_type;
 	LogicalType::SetCatalog(result_type, type_entry);
 	return result_type;
