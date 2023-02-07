@@ -2832,6 +2832,6 @@ Returns true if execution of the current query is finished.
 
 * con: The connection on which to check
 """
-function duckdb_execution_is_finished(con)::Bool
-    return ccall((:duckdb_execution_is_finished, libduckdb), Int32, (duckdb_connection,), con)
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end
