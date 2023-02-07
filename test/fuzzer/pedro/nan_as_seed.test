@@ -1,0 +1,6 @@
+# name: test/fuzzer/pedro/nan-as-seed.test
+# description: Issue #4984 (42): Nan as seed
+# group: [pedro]
+
+statement ok
+SELECT setseed(CAST('nan' AS REAL));
