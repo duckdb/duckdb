@@ -616,7 +616,7 @@ end
 function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
         GC.safepoint()
-        ret = duckdb_execute_n_tasks_state(state, 1)
+        duckdb_execute_n_tasks_state(state, 1)
         if duckdb_execution_is_finished(con.handle)
             break
         end
@@ -660,28 +660,28 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
 
-	# We can't use all of the additional threads, or the main thread would halt
+    # We can't use all of the additional threads, or the main thread would halt
     tasks = []
     for _ in 2:Threads.nthreads()
         task_val = @spawn execute_tasks(task_state, stmt.con)
         push!(tasks, task_val)
     end
-	success = true
-	if Threads.nthreads() != 1
-		# When we have additional worker threads, don't execute using the main thread
-		while !duckdb_execution_is_finished(stmt.con.handle)
-			GC.safepoint()
-		end
-	else
-		# Only when there are no additional threads, use the main thread to execute
-		try
-			# now start executing tasks of the pending result in a loop
-			success = pending_execute_tasks(pending)
-		catch ex
-			cleanup_tasks(tasks, task_state)
-			throw(ex)
-		end
-	end
+    success = true
+    if Threads.nthreads() != 1
+        # When we have additional worker threads, don't execute using the main thread
+        while !duckdb_execution_is_finished(stmt.con.handle)
+            GC.safepoint()
+        end
+    else
+        # Only when there are no additional threads, use the main thread to execute
+        try
+            # now start executing tasks of the pending result in a loop
+            success = pending_execute_tasks(pending)
+        catch ex
+            cleanup_tasks(tasks, task_state)
+            throw(ex)
+        end
+    end
 
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)

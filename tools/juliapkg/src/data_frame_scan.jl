@@ -183,14 +183,14 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         # ran out of data to scan in the local info: fetch new rows from the global state (if any)
         # we can in increments of 100 vectors
         lock(global_info.global_lock) do
-			row_count::Int64 = size(bind_info.df, 1)
-			local_info.current_pos = global_info.pos
-			total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
-			if local_info.current_pos + total_scan_amount >= row_count
-				total_scan_amount = row_count - local_info.current_pos
-			end
-			local_info.end_pos = local_info.current_pos + total_scan_amount
-			global_info.pos += total_scan_amount
+            row_count::Int64 = size(bind_info.df, 1)
+            local_info.current_pos = global_info.pos
+            total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
+            if local_info.current_pos + total_scan_amount >= row_count
+                total_scan_amount = row_count - local_info.current_pos
+            end
+            local_info.end_pos = local_info.current_pos + total_scan_amount
+            return global_info.pos += total_scan_amount
         end
     end
     scan_count::Int64 = DuckDB.VECTOR_SIZE

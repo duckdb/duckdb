@@ -654,7 +654,7 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_va
 DUCKDB_API void duckdb_free(void *ptr);
 """
 function duckdb_free(ptr)
-    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
+    return ccall((:duckdb_free, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
 end
 
 """

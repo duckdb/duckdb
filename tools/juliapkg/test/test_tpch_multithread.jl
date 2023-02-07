@@ -41,7 +41,7 @@ function test_tpch_multithread()
         end
     end
     DBInterface.close!(df_con)
-    DBInterface.close!(native_con)
+    return DBInterface.close!(native_con)
 end
 
 @testset "Test TPC-H Stresstest" begin
