@@ -16,6 +16,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
