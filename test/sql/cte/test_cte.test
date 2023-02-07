@@ -8,11 +8,10 @@ PRAGMA enable_verification
 statement ok
 create table a(i integer);
 
-
-mode skip 
-
 statement ok
 insert into a values (42);
+
+mode skip 
 
 query I
 with cte1 as (Select i as j from a) select * from cte1;
@@ -121,6 +120,17 @@ SELECT max(d) FROM cte;
 1
 
 mode unskip
+
+query IIII
+select i as b, b as c, c as d, d as e from a;
+----
+42	42	42	42
+
+
+query IIII
+select i as b, b as c, c as d, d as e from a where e > 5;
+----
+42	42	42	42
 
 # test CTE with nested aliases
 query II
