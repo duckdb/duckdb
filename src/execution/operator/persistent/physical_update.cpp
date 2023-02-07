@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/client_context.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -70,8 +71,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	// update data in the base table
 	// the row ids are given to us as the last column of the child chunk
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
-	update_chunk.SetCardinality(chunk);
 	update_chunk.Reset();
+	update_chunk.SetCardinality(chunk);
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
