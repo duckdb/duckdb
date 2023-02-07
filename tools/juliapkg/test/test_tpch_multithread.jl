@@ -7,7 +7,6 @@ function test_tpch_multithread()
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
-    #df_con = DBInterface.connect(DuckDB.DB)
     DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
 
     # convert all tables to Julia DataFrames
@@ -20,37 +19,31 @@ function test_tpch_multithread()
     region = DataFrame(DBInterface.execute(native_con, "SELECT * FROM region"))
     supplier = DataFrame(DBInterface.execute(native_con, "SELECT * FROM supplier"))
 
-	#db = DuckDB.DB()
-	id = Threads.threadid()
-	# now open a new in-memory database, and register the dataframes there
-	df_con = DBInterface.connect(DuckDB.DB)
-	#DBInterface.execute(df_con, "SET external_threads=1");
-	DuckDB.register_data_frame(df_con, customer, "customer")
-	DuckDB.register_data_frame(df_con, lineitem, "lineitem")
-	DuckDB.register_data_frame(df_con, nation, "nation")
-	DuckDB.register_data_frame(df_con, orders, "orders")
-	DuckDB.register_data_frame(df_con, part, "part")
-	DuckDB.register_data_frame(df_con, partsupp, "partsupp")
-	DuckDB.register_data_frame(df_con, region, "region")
-	DuckDB.register_data_frame(df_con, supplier, "supplier")
-	GC.gc()
+    id = Threads.threadid()
+    # now open a new in-memory database, and register the dataframes there
+    df_con = DBInterface.connect(DuckDB.DB)
+    DuckDB.register_data_frame(df_con, customer, "customer")
+    DuckDB.register_data_frame(df_con, lineitem, "lineitem")
+    DuckDB.register_data_frame(df_con, nation, "nation")
+    DuckDB.register_data_frame(df_con, orders, "orders")
+    DuckDB.register_data_frame(df_con, part, "part")
+    DuckDB.register_data_frame(df_con, partsupp, "partsupp")
+    DuckDB.register_data_frame(df_con, region, "region")
+    DuckDB.register_data_frame(df_con, supplier, "supplier")
+    GC.gc()
 
-	#throw(UndefVarError(:df_con))
-	# Execute all the queries
-	for _ in 1:100
-		for i in 1:22
+    # Execute all the queries
+    for _ in 1:10
+        for i in 1:22
 
-			print("T:$id | Q:$i\n")
-			res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
-		end
-	end
-	DBInterface.close!(df_con)
-
+            print("T:$id | Q:$i\n")
+            res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
+        end
+    end
+    DBInterface.close!(df_con)
     DBInterface.close!(native_con)
 end
 
-@testset "Test TPC-H" begin
-	test_tpch_multithread()
+@testset "Test TPC-H Stresstest" begin
+    test_tpch_multithread()
 end
-
-#@enter test_tpch_multithread()

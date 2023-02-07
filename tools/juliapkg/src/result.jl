@@ -659,25 +659,33 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     end
     # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
+
+	# We can't use all of the additional threads, or the main thread would halt
     tasks = []
-    for i in 2:Threads.nthreads()
+    for _ in 2:Threads.nthreads()
         task_val = @spawn execute_tasks(task_state, stmt.con)
         push!(tasks, task_val)
     end
-    success = true
-	while !duckdb_execution_is_finished(stmt.con.handle)
-		GC.safepoint()
+	success = true
+	if Threads.nthreads() != 1
+		# When we have additional worker threads, don't execute using the main thread
+		while !duckdb_execution_is_finished(stmt.con.handle)
+			GC.safepoint()
+		end
+	else
+		# Only when there are no additional threads, use the main thread to execute
+		try
+			# now start executing tasks of the pending result in a loop
+			success = pending_execute_tasks(pending)
+		catch ex
+			cleanup_tasks(tasks, task_state)
+			throw(ex)
+		end
 	end
-    #try
-    #    # now start executing tasks of the pending result in a loop
-    #    success = pending_execute_tasks(pending)
-    #catch ex
-    #    cleanup_tasks(tasks, task_state)
-    #    throw(ex)
-    #end
 
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)
+
     # check if an error was thrown
     if !success
         throw(QueryException(get_error(stmt, pending)))
