@@ -33,6 +33,34 @@ static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
 	return ret;
 }
 
+vector<string> GetUniqueNames(const vector<string> &original_names) {
+	unordered_set<string> name_set;
+	vector<string> unique_names;
+	unique_names.reserve(original_names.size());
+
+	for (auto &name : original_names) {
+		auto insert_result = name_set.insert(name);
+		if (insert_result.second == false) {
+			// Could not be inserted, name already exists
+			idx_t index = 1;
+			string postfixed_name;
+			while (true) {
+				postfixed_name = StringUtil::Format("%s:%d", name, index);
+				auto res = name_set.insert(postfixed_name);
+				if (!res.second) {
+					index++;
+					continue;
+				}
+				break;
+			}
+			unique_names.push_back(postfixed_name);
+		} else {
+			unique_names.push_back(name);
+		}
+	}
+	return unique_names;
+}
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -99,8 +127,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
 	}
 
+	auto unique_column_names = GetUniqueNames(select_node.names);
+
 	auto function_data =
-	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
+	    copy_function->function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
@@ -110,7 +140,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
-	copy->names = select_node.names;
+
+	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
 
 	copy->AddChild(std::move(select_node.plan));
