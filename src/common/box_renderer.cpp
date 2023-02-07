@@ -589,11 +589,20 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0 ? 1 : 0);
 		bottom_rows = rows_to_render - top_rows;
 	}
+	// (≥ " + to_string(config.limit) ")"
 	auto row_count_str = to_string(row_count) + " rows";
+	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
+	if (has_limited_rows) {
+		row_count_str = "? rows";
+	}
 	string shown_str;
 	bool has_hidden_rows = top_rows < row_count;
 	if (has_hidden_rows) {
-		shown_str = "(" + to_string(top_rows + bottom_rows) + " shown)";
+		shown_str = "(";
+		if (has_limited_rows) {
+			shown_str += ">" + to_string(config.limit - 1) + ", ";
+		}
+		shown_str += to_string(top_rows + bottom_rows) + " shown)";
 	}
 	auto minimum_row_length = MaxValue<idx_t>(row_count_str.size(), shown_str.size()) + 4;
 
