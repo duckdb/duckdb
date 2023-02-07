@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/drop_gcol.test
+# description: Issue #4571: Duplicate table name at CTE in INSERT statement
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 INT AS (0), c1 INT, CHECK(c1 > 0));
+
+statement ok
+ALTER TABLE t0 DROP c0;

@@ -13,7 +13,7 @@
 namespace duckdb {
 
 void TableFunctionRelation::AddNamedParameter(const string &name, Value argument) {
-	named_parameters[name] = move(argument);
+	named_parameters[name] = std::move(argument);
 }
 
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
