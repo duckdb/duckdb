@@ -1,0 +1,13 @@
+# name: test/fuzzer/pedro/binder_error_with_having_statement.test
+# description: Issue #5984 (8): Another Binder Error 
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+mode output_result
+
+# SELECT 1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);
+
+statement ok
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);
