@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+// Optionally push a PROJECTION operator
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
                                                                vector<LogicalType> &target_types,
                                                                unique_ptr<LogicalOperator> op) {

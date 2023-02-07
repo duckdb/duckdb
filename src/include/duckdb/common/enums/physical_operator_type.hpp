@@ -102,7 +102,8 @@ enum class PhysicalOperatorType : uint8_t {
 	LOAD,
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,
-	RESET
+	RESET,
+	EXTENSION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

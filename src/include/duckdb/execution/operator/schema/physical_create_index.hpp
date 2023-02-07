@@ -17,24 +17,17 @@
 #include <fstream>
 
 namespace duckdb {
+class DuckTableEntry;
 
 //! Physical CREATE (UNIQUE) INDEX statement
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
-	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
+	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
 	                    unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-	                    idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality), table(table),
-	      info(std::move(info)), unbound_expressions(std::move(unbound_expressions)) {
-
-		// convert virtual column ids to storage column ids
-		for (auto &column_id : column_ids) {
-			storage_ids.push_back(table.columns.LogicalToPhysical(LogicalIndex(column_id)).index);
-		}
-	}
+	                    idx_t estimated_cardinality);
 
 	//! The table to create the index for
-	TableCatalogEntry &table;
+	DuckTableEntry &table;
 	//! The list of column IDs required for the index
 	vector<column_t> storage_ids;
 	//! Info for index creation

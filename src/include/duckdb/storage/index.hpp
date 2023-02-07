@@ -17,20 +17,23 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class TableIOManager;
 class Transaction;
+class ConflictManager;
 
 struct IndexLock;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
-	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
+	Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
+	      bool track_memory);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -49,6 +52,16 @@ public:
 	vector<LogicalType> logical_types;
 	//! Index constraint type (primary key, foreign key, ...)
 	IndexConstraintType constraint_type;
+
+	//! Attached database instance
+	AttachedDatabase &db;
+	//! Buffer manager of the database instance
+	BufferManager &buffer_manager;
+	//! The size of the index in memory
+	//! This does not track the size of the index meta information, but only allocated nodes and leaves
+	idx_t memory_size;
+	//! Flag determining if this index's size is tracked by the buffer manager
+	bool track_memory;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -72,10 +85,12 @@ public:
 	bool Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	//! Verify that data can be appended to the index
+	virtual void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) = 0;
 	//! Verify that data can be appended to the index for foreign key constraint
-	virtual void VerifyAppendForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyAppendForeignKey(DataChunk &chunk) = 0;
 	//! Verify that data can be delete from the index for foreign key constraint
-	virtual void VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) = 0;
+	virtual void VerifyDeleteForeignKey(DataChunk &chunk) = 0;
 
 	//! Called when data inside the index is Deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
@@ -90,9 +105,15 @@ public:
 
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
+	//! Verifies that the memory_size value of the index matches its actual size
+	virtual void Verify() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
+
+	//! Returns how many of the input values were found in the 'input' chunk, with the option to also record what those
+	//! matches were. For this purpose, nulls count as a match, and are returned in 'null_count'
+	virtual void LookupValues(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
 	//! Returns unique flag
 	bool IsUnique() {
@@ -108,6 +129,7 @@ public:
 	}
 	//! Serializes the index and returns the pair of block_id offset positions
 	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
+	BlockPointer GetBlockPointer();
 
 	//! Returns block/offset of where index was most recently serialized.
 	BlockPointer GetSerializedDataPointer() const {

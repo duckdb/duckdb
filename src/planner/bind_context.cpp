@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "re2/re2.h"
 
 #include <algorithm>
@@ -191,7 +192,7 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
 	auto table_entry = (TableCatalogEntry *)catalog_entry;
-	return table_entry->columns.GetColumn(LogicalIndex(index)).Generated();
+	return table_entry->GetColumn(LogicalIndex(index)).Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &catalog_name, const string &schema_name,
@@ -467,7 +468,7 @@ static string AddColumnNameToBinding(const string &base_name, case_insensitive_s
 	idx_t index = 1;
 	string name = base_name;
 	while (current_names.find(name) != current_names.end()) {
-		name = base_name + ":" + to_string(index++);
+		name = base_name + ":" + std::to_string(index++);
 	}
 	current_names.insert(name);
 	return name;

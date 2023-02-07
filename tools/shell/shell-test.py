@@ -43,7 +43,7 @@ def test(cmd, out=None, err=None, extra_commands=None, input_file=None, output_f
           test_exception(command, cmd, stdout, stderr, 'out test failed')
 
      if err and err not in stderr:
-          test_exception(command, cmd, stdout, stderr, 'err test failed')
+          test_exception(command, cmd, stdout, stderr, f"err test failed, error does not contain: '{err}'")
 
      if not err and stderr != '':
           test_exception(command, cmd, stdout, stderr, 'got err test failed')
@@ -954,6 +954,45 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
           extra_commands=['-csv', ':memory:'],
           input_file='data/csv/tpcds_14.csv',
           out='''web,8006004,844.21,21''')
+
+     test('''create table mytable as select * from
+read_json_objects('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''json
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}''')
+
+     test('''create table mytable as select * from
+read_ndjson_objects('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''json
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}''')
+
+     test('''create table mytable as select * from
+read_json_auto('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''id|name
+1|O Brother, Where Art Thou?
+2|Home for the Holidays
+3|The Firm
+4|Broadcast News
+5|Raising Arizona''')
 
      test('''
      COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');

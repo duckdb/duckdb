@@ -15,6 +15,7 @@ namespace duckdb {
 
 struct ColumnBinding {
 	idx_t table_index;
+	// This index is local to a Binding, and has no meaning outside of the context of the Binding that created it
 	idx_t column_index;
 
 	ColumnBinding() : table_index(DConstants::INVALID_INDEX), column_index(DConstants::INVALID_INDEX) {

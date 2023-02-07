@@ -536,10 +536,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = ((string_t *)data)[index];
 		return Value(str.GetString());
 	}
-	case LogicalTypeId::JSON: {
-		auto str = ((string_t *)data)[index];
-		return Value::JSON(str.GetString());
-	}
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
@@ -1114,7 +1110,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
 		D_ASSERT(!vector->auxiliary);
 	}
-	if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::JSON) {
+	if (type.id() == LogicalTypeId::VARCHAR) {
 		// verify that the string is correct unicode
 		switch (vtype) {
 		case VectorType::FLAT_VECTOR: {
@@ -1355,7 +1351,7 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::JSON);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -1750,6 +1746,97 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 void ListVector::PushBack(Vector &target, const Value &insert) {
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.PushBack(insert);
+}
+
+idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+
+	auto info = ListVector::GetConsecutiveChildListInfo(list, offset, count);
+	if (info.needs_slicing) {
+		SelectionVector sel(info.child_list_info.length);
+		ListVector::GetConsecutiveChildSelVector(list, sel, offset, count);
+
+		result.Slice(sel, info.child_list_info.length);
+		result.Flatten(info.child_list_info.length);
+	}
+	return info.child_list_info.length;
+}
+
+ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
+
+	ConsecutiveChildListInfo info;
+	UnifiedVectorFormat unified_list_data;
+	list.ToUnifiedFormat(offset + count, unified_list_data);
+	auto list_data = (list_entry_t *)unified_list_data.data;
+
+	// find the first non-NULL entry
+	idx_t first_length = 0;
+	for (idx_t i = offset; i < offset + count; i++) {
+		auto idx = unified_list_data.sel->get_index(i);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		info.child_list_info.offset = list_data[idx].offset;
+		first_length = list_data[idx].length;
+		break;
+	}
+
+	// small performance improvement for constant vectors
+	// avoids iterating over all their (constant) elements
+	if (list.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		info.child_list_info.length = first_length;
+		return info;
+	}
+
+	// now get the child count and determine whether the children are stored consecutively
+	// also determine if a flat vector has pseudo constant values (all offsets + length the same)
+	// this can happen e.g. for UNNESTs
+	bool is_consecutive = true;
+	for (idx_t i = offset; i < offset + count; i++) {
+		auto idx = unified_list_data.sel->get_index(i);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		if (list_data[idx].offset != info.child_list_info.offset || list_data[idx].length != first_length) {
+			info.is_constant = false;
+		}
+		if (list_data[idx].offset != info.child_list_info.offset + info.child_list_info.length) {
+			is_consecutive = false;
+		}
+		info.child_list_info.length += list_data[idx].length;
+	}
+
+	if (info.is_constant) {
+		info.child_list_info.length = first_length;
+	}
+	if (!info.is_constant && !is_consecutive) {
+		info.needs_slicing = true;
+	}
+
+	return info;
+}
+
+void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
+
+	UnifiedVectorFormat unified_list_data;
+	list.ToUnifiedFormat(offset + count, unified_list_data);
+	auto list_data = (list_entry_t *)unified_list_data.data;
+
+	//	SelectionVector child_sel(info.second.length);
+	idx_t entry = 0;
+	for (idx_t i = offset; i < offset + count; i++) {
+		auto idx = unified_list_data.sel->get_index(i);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		for (idx_t k = 0; k < list_data[idx].length; k++) {
+			//			child_sel.set_index(entry++, list_data[idx].offset + k);
+			sel.set_index(entry++, list_data[idx].offset + k);
+		}
+	}
+	//
+	//	result.Slice(child_sel, info.second.length);
+	//	result.Flatten(info.second.length);
+	//	info.second.offset = 0;
 }
 
 // Union vector

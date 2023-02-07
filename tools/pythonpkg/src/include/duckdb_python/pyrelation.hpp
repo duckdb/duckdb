@@ -63,9 +63,6 @@ public:
 	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
-
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
 	                                                bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);

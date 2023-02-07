@@ -37,10 +37,12 @@ struct InternalType {
 };
 
 struct MergeInfo {
-	MergeInfo(ART *l_art, ART *r_art, Node *&l_node, Node *&r_node)
-	    : l_art(l_art), r_art(r_art), l_node(l_node), r_node(r_node) {};
+	MergeInfo(ART *l_art, ART *r_art, ART *root_l_art, ART *root_r_art, Node *&l_node, Node *&r_node)
+	    : l_art(l_art), r_art(r_art), root_l_art(root_l_art), root_r_art(root_r_art), l_node(l_node), r_node(r_node) {};
 	ART *l_art;
 	ART *r_art;
+	ART *root_l_art;
+	ART *root_r_art;
 	Node *&l_node;
 	Node *&r_node;
 };
@@ -57,6 +59,8 @@ struct ParentsOfNodes {
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
+	static const uint8_t NODE_48_SHRINK_THRESHOLD = 12;
+	static const uint8_t NODE_256_SHRINK_THRESHOLD = 36;
 
 public:
 	explicit Node(NodeType type);
@@ -71,6 +75,8 @@ public:
 	Prefix prefix;
 
 	static void Delete(Node *node);
+	//! Returns the memory size of the node
+	virtual idx_t MemorySize(ART &art, const bool &recurse);
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if not
 	//! exists
 	virtual idx_t GetChildPos(uint8_t k) {
@@ -98,20 +104,24 @@ public:
 	virtual Node *GetChild(ART &art, idx_t pos);
 	//! Replaces the pointer to a child node
 	virtual void ReplaceChildPointer(idx_t pos, Node *node);
+	//! Returns whether the child at pos is in memory
+	virtual bool ChildIsInMemory(idx_t pos);
 
 	//! Insert a new child node at key_byte into the node
-	static void InsertChild(Node *&node, uint8_t key_byte, Node *new_child);
+	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase child node entry from node
-	static void EraseChild(Node *&node, idx_t pos, ART &art);
+	static void EraseChild(ART &art, Node *&node, idx_t pos);
 	//! Get the corresponding node type for the provided size
 	static NodeType GetTypeBySize(idx_t size);
 	//! Create a new node of the specified type
-	static void New(NodeType &type, Node *&node);
+	static void New(const NodeType &type, Node *&node);
 
 	//! Returns the string representation of a node
 	string ToString(ART &art);
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
+	//! Returns the memory size of the node
+	idx_t RecursiveMemorySize(ART &art);
 
 	//! Deserialize this node
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
@@ -122,7 +132,7 @@ private:
 	//! Serialize internal nodes
 	BlockPointer SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type);
 	//! Deserialize internal nodes
-	void DeserializeInternal(duckdb::MetaBlockReader &reader);
+	void DeserializeInternal(ART &art, duckdb::MetaBlockReader &reader);
 };
 
 } // namespace duckdb

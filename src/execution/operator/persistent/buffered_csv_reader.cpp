@@ -128,7 +128,7 @@ TextSearchShiftArray::TextSearchShiftArray() {
 
 TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_term.size()) {
 	if (length > 255) {
-		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
+		throw InvalidInputException("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 	// initialize the shifts array
 	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
@@ -248,7 +248,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect) {
 		return_types = SniffCSV(requested_types);
 		if (return_types.empty()) {
-			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
+			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
 		if (cached_chunks.empty()) {
 			JumpToBeginning(options.skip_rows, options.header);
@@ -444,13 +444,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
-					idx_t num_buffers = 0;
-					bool parsing_success = true;
-					while (num_buffers < options.sample_chunks && !end_of_file_reached) {
-						parsing_success = parsing_success && TryParseCSV(ParserMode::SNIFFING_DIALECT);
-						num_buffers++;
-					}
-					if (!parsing_success) {
+					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
 						continue;
 					}
 
@@ -482,6 +476,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 					} else if ((more_values || single_column_before) && rows_consistent) {
 						sniff_info.skip_rows = start_row;
 						sniff_info.num_cols = num_cols;
+						sniff_info.new_line = options.new_line;
 						best_consistent_rows = consistent_rows;
 						best_num_cols = num_cols;
 
@@ -497,6 +492,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 						if (!same_quote_is_candidate) {
 							sniff_info.skip_rows = start_row;
 							sniff_info.num_cols = num_cols;
+							sniff_info.new_line = options.new_line;
 							info_candidates.push_back(sniff_info);
 						}
 					}
@@ -1264,6 +1260,7 @@ add_row : {
 		// \r newline, go to special state that parses an optional \n afterwards
 		goto carriage_return;
 	} else {
+		SetNewLineDelimiter();
 		// \n newline, move to value start
 		if (finished_chunk) {
 			return true;
@@ -1342,6 +1339,7 @@ carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
 	if (buffer[position] == '\n') {
+		SetNewLineDelimiter(true, true);
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start = ++position;
@@ -1349,6 +1347,8 @@ carriage_return:
 			// file ends right after delimiter, go to final state
 			goto final_state;
 		}
+	} else {
+		SetNewLineDelimiter(true, false);
 	}
 	if (finished_chunk) {
 		return true;

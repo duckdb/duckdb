@@ -169,7 +169,6 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bool");
 		result.push_back("interval");
 		result.push_back("varchar");
-		result.push_back("json");
 		collection = true;
 	}
 	if (is_compression) {
@@ -209,10 +208,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
-
-#ifdef DUCKDB_OUT_OF_TREE
-	db->LoadExtension<duckdb::DUCKDB_EXTENSION_CLASS>();
-#endif
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
