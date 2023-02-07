@@ -155,16 +155,16 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	     [](const CatalogEntry *lhs, const CatalogEntry *rhs) { return lhs->oid < rhs->oid; });
 
 	// write the schema.sql file
-	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
+	// export order is SCHEMA -> SEQUENCE -> TABLE -> MACRO -> VIEW -> INDEX
 
 	stringstream ss;
 	WriteCatalogEntries(ss, schemas);
 	WriteCatalogEntries(ss, custom_types);
 	WriteCatalogEntries(ss, sequences);
+	WriteCatalogEntries(ss, macros);
 	WriteCatalogEntries(ss, tables);
 	WriteCatalogEntries(ss, views);
 	WriteCatalogEntries(ss, indexes);
-	WriteCatalogEntries(ss, macros);
 
 	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
 

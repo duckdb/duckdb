@@ -1,0 +1,61 @@
+# name: test/sql/export/test_export_macro_dependency.test
+# description: Test export macro
+# group: [export]
+
+statement ok
+create table my_p (
+	pp BIGINT,
+	opened_at VARCHAR
+);
+
+statement ok
+insert into my_p values (5, '01-01 2008-01:01:01');
+
+# Create a macro
+statement ok
+CREATE MACRO main.parse_ts (timestamp_text) AS (
+  CASE
+    WHEN ((main.trim (timestamp_text) IN ('--', ''))) THEN (NULL)
+    ELSE CAST(((((((SUBSTR(timestamp_text, 7, 4) || '-') || SUBSTR(timestamp_text, 4, 2)
+              ) || '-'
+            ) || SUBSTR(timestamp_text, 1, 2)
+          ) || ' '
+        ) || SUBSTR(timestamp_text, 12, 8)
+      ) AS TIMESTAMP
+    )
+  END
+)
+
+# Create a view that references the macro
+statement ok
+CREATE OR REPLACE VIEW
+  v_p AS
+    SELECT pp, parse_ts (opened_at) opened_at
+    FROM my_p p;
+
+query II
+select * from v_p;
+----
+5	2008-01-01 01:01:01
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/macro_dependency'
+
+statement ok
+DROP VIEW v_p;
+
+statement ok
+DROP MACRO parse_ts;
+
+statement ok
+DROP TABLE my_p;
+
+# import the db again
+statement ok
+IMPORT DATABASE '__TEST_DIR__/macro_dependency'
+
+query II
+select * from v_p;
+----
+5	2008-01-01 01:01:01
