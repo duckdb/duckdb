@@ -153,7 +153,7 @@ void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
 	storage_init_fun = LoadFunctionFromDLL<ext_storage_init_t>(res.lib_hdl, storage_fun_name, res.filename);
 
 	try {
-		return (*storage_init_fun)(config);
+		(*storage_init_fun)(config);
 	} catch (std::exception &e) {
 		throw InvalidInputException(
 		    "Storage initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"", storage_fun_name,
