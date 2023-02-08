@@ -4,12 +4,14 @@ add_library_unity(
   json_array_length.cpp
   json_contains.cpp
   json_extract.cpp
+  json_keys.cpp
   json_merge_patch.cpp
   json_structure.cpp
   json_transform.cpp
   json_create.cpp
   json_type.cpp
   json_valid.cpp
+  read_json.cpp
   read_json_objects.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_json_functions>

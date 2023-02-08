@@ -748,11 +748,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 
 string DuckDBPyRelation::Print() {
 	if (rendered_result.empty()) {
+		idx_t limit_rows = 10000;
 		BoxRenderer renderer;
-		auto res = ExecuteInternal();
+		auto limit = Limit(limit_rows, 0);
+		auto res = limit->ExecuteInternal();
 
 		auto context = rel->context.GetContext();
 		BoxRendererConfig config;
+		config.limit = limit_rows;
 		rendered_result = res->ToBox(*context, config);
 	}
 	return rendered_result;

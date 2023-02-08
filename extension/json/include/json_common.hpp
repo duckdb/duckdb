@@ -50,6 +50,37 @@ private:
 	yyjson_alc yyjson_allocator;
 };
 
+struct JSONKey {
+	const char *ptr;
+	size_t len;
+};
+
+struct JSONKeyHash {
+	inline std::size_t operator()(const JSONKey &k) const {
+		size_t result;
+		if (k.len >= sizeof(size_t)) {
+			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
+		} else {
+			result = 0;
+			duckdb::FastMemcpy(&result, k.ptr, k.len);
+		}
+		return result;
+	}
+};
+
+struct JSONKeyEquality {
+	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
+		if (a.len != b.len) {
+			return false;
+		}
+		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+	}
+};
+
+template <typename T>
+using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
+using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
+
 struct JSONCommon {
 public:
 	static constexpr auto JSON_TYPE_NAME = "JSON";
@@ -109,6 +140,31 @@ public:
 	template <class YYJSON_VAL_T>
 	static inline constexpr string_t ValTypeToStringT(YYJSON_VAL_T *val) {
 		return string_t(ValTypeToString<YYJSON_VAL_T>(val));
+	}
+
+	template <class YYJSON_VAL_T>
+	static inline const LogicalTypeId ValTypeToLogicalTypeId(YYJSON_VAL_T *val) {
+		switch (GetTag<YYJSON_VAL_T>(val)) {
+		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+			return LogicalTypeId::SQLNULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+			return LogicalTypeId::VARCHAR;
+		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
+			return LogicalTypeId::LIST;
+		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
+			return LogicalTypeId::STRUCT;
+		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
+			return LogicalTypeId::BOOLEAN;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+			return LogicalTypeId::UBIGINT;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+			return LogicalTypeId::BIGINT;
+		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+			return LogicalTypeId::DOUBLE;
+		default:
+			throw InternalException("Unexpected yyjson tag in ValTypeToLogicalTypeId");
+		}
 	}
 
 public:

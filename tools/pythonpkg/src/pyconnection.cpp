@@ -513,8 +513,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			for (auto &kv : dtype_dict) {
 				struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
 			}
-			auto dtype_struct = Value::STRUCT(move(struct_fields));
-			read_csv.AddNamedParameter("dtypes", move(dtype_struct));
+			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
+			read_csv.AddNamedParameter("dtypes", std::move(dtype_struct));
 		} else if (py::isinstance<py::list>(dtype)) {
 			auto dtype_list = TransformPythonValue(py::list(dtype));
 			D_ASSERT(dtype_list.type().id() == LogicalTypeId::LIST);
@@ -524,7 +524,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 					throw InvalidInputException("The types provided to 'dtype' have to be strings");
 				}
 			}
-			read_csv.AddNamedParameter("dtypes", move(dtype_list));
+			read_csv.AddNamedParameter("dtypes", std::move(dtype_list));
 		} else {
 			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
 		}
