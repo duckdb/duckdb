@@ -23,10 +23,10 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const BufferedCSVReaderOptions &optio
 	return make_unique<CSVFileHandle>(std::move(file_handle));
 }
 
-static bool	MissingExtensionHttpfs(const string& filepath, const ClientContext& context){
+static bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
 	const string prefixes[] = {"http://", "https://", "s3://"};
-	for (auto& prefix : prefixes){
-		if (StringUtil::StartsWith(filepath, prefix)){
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(filepath, prefix)) {
 			if (!context.db->LoadedExtensions().count("httpfs")) {
 				return true;
 			}
@@ -40,8 +40,10 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
-			if (MissingExtensionHttpfs(file_pattern, context)){
-				throw MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs extension is not loaded", file_pattern);
+			if (MissingExtensionHttpfs(file_pattern, context)) {
+				throw MissingExtensionException(
+				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded",
+				    file_pattern);
 			}
 			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 		}

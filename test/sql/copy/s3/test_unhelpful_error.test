@@ -1,3 +1,6 @@
+# name: test/sql/copy/s3/test_unhelpful_error.test
+# group: [s3]
+
 require parquet
 
 #require httpfs

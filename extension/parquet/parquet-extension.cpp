@@ -221,8 +221,10 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = fs.Glob(info.file_path, context);
 		if (files.empty()) {
-			if (MissingExtensionHttpfs(info.file_path, context)){
-				throw MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs extension is not loaded", info.file_path);
+			if (MissingExtensionHttpfs(info.file_path, context)) {
+				throw MissingExtensionException(
+				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded",
+				    info.file_path);
 			}
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
@@ -366,8 +368,9 @@ public:
 		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
 
 		if (files.empty()) {
-			if (MissingExtensionHttpfs(glob, context)){
-				throw MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs extension is not loaded", glob);
+			if (MissingExtensionHttpfs(glob, context)) {
+				throw MissingExtensionException(
+				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded", glob);
 			}
 			throw IOException("No files found that match the pattern \"%s\"", glob);
 		}
@@ -723,10 +726,10 @@ public:
 		return false;
 	}
 
-	static bool	MissingExtensionHttpfs(const string& filepath, const ClientContext& context){
+	static bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
 		const string prefixes[] = {"http://", "https://", "s3://"};
-		for (auto& prefix : prefixes){
-			if (StringUtil::StartsWith(filepath, prefix)){
+		for (auto &prefix : prefixes) {
+			if (StringUtil::StartsWith(filepath, prefix)) {
 				if (!context.db->LoadedExtensions().count("httpfs")) {
 					return true;
 				}
