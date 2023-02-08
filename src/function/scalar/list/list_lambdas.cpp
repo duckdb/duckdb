@@ -5,6 +5,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 namespace duckdb {
 
@@ -268,18 +270,9 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 				if (IS_TRANSFORM) {
 					AppendTransformedToResult(lambda_vector, elem_cnt, result);
 				} else {
-					if (lambda_vector.GetType() != LogicalType::BOOLEAN) {
-						// try casting, otherwise fail
-						Vector cast_vector(LogicalType::BOOLEAN);
-						VectorOperations::Cast(state.GetContext(), lambda_vector, cast_vector, elem_cnt, true);
-						AppendFilteredToResult(cast_vector, result_entries, elem_cnt, result, curr_list_len,
-						                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
-						                       input_chunk);
-					} else {
-						AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
-						                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
-						                       input_chunk);
-					}
+					AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
+					                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
+					                       input_chunk);
 				}
 				elem_cnt = 0;
 			}
@@ -304,16 +297,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	if (IS_TRANSFORM) {
 		AppendTransformedToResult(lambda_vector, elem_cnt, result);
 	} else {
-		if (lambda_vector.GetType() != LogicalType::BOOLEAN) {
-			// try casting, otherwise fail
-			Vector cast_vector(LogicalType::BOOLEAN);
-			VectorOperations::Cast(state.GetContext(), lambda_vector, cast_vector, elem_cnt, true);
-			AppendFilteredToResult(cast_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-			                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
-		} else {
-			AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-			                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
-		}
+		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
+		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
 	}
 
 	if (args.AllConstant()) {
@@ -379,6 +364,19 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
+
+	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
+		auto source_type = bound_lambda_expr.lambda_expr->return_type;
+		auto cast_function_info = GetCastFunctionInput(context);
+		CastFunctionSet cast_function_set;
+		auto bound_cast_info = cast_function_set.GetCastFunction(source_type, LogicalType::BOOLEAN, cast_function_info);
+		auto bound_cast_expr = make_unique<BoundCastExpression>(std::move(bound_lambda_expr.lambda_expr),
+		                                                        LogicalType::BOOLEAN, bound_cast_info.Copy());
+		bound_lambda_expr.lambda_expr = std::move(bound_cast_expr);
+	}
+
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
