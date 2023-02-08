@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+
+statement ok
+CREATE TABLE t2(c1 INT, c2 INT);
+
 mode output_result
 
 # SELECT 1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);

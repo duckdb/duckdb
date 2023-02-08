@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -47,6 +48,10 @@ BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindResult("HAVING clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
+//	case ExpressionClass::SUBQUERY: {
+//		auto &tmp = (SubqueryExpression&)*expr_ptr;
+//		return BindExpression(tmp, depth);
+//	}
 	default:
 		return duckdb::SelectBinder::BindExpression(expr_ptr, depth);
 	}
