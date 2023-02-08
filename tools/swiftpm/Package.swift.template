@@ -1,0 +1,25 @@
+// swift-tools-version: 5.7
+
+import PackageDescription
+
+let package = Package(
+  name: "Cduckdb",
+  products: [
+    .library(name: "Cduckdb", targets: ["Cduckdb"]),
+  ],
+  targets: [
+    .target(
+      name: "Cduckdb",
+      sources: [
+        $source_list
+      ],
+      cxxSettings: [
+        $search_path_list
+        $define_list
+        .define("DUCKDB_BUILD_LIBRARY")
+      ]
+    ),
+    .testTarget(name: "CduckdbTests", dependencies: ["Cduckdb"])
+  ],
+  cxxLanguageStandard: .cxx11
+)
