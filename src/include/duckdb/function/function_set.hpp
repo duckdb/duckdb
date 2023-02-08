@@ -34,9 +34,11 @@ public:
 		return functions.size();
 	}
 	T GetFunctionByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	T &GetFunctionReferenceByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	bool MergeFunctionSet(FunctionSet<T> new_functions) {

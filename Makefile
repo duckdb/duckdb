@@ -143,8 +143,12 @@ endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	EXTENSIONS:=${EXTENSIONS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
+# TODO: deprecated, can be removed once all OOTEs use BUILD_OUT_OF_TREE_EXTENSIONS
 ifneq ($(BUILD_OUT_OF_TREE_EXTENSION),)
 	EXTENSIONS:=${EXTENSIONS} -DEXTERNAL_EXTENSION_DIRECTORIES="$(BUILD_OUT_OF_TREE_EXTENSION)"
+endif
+ifneq ($(BUILD_OUT_OF_TREE_EXTENSIONS),)
+	EXTENSIONS:=${EXTENSIONS} -DDUCKDB_OOT_EXTENSION_NAMES="$(BUILD_OUT_OF_TREE_EXTENSIONS)"
 endif
 ifeq (${CRASH_ON_ASSERT}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DASSERT_EXCEPTION=0
@@ -168,7 +172,7 @@ clean-python:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 release:
@@ -231,7 +235,7 @@ benchmark:
 
 amaldebug:
 	mkdir -p build/amaldebug && \
-	python scripts/amalgamation.py && \
+	python3 scripts/amalgamation.py && \
 	cd build/amaldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
@@ -249,7 +253,7 @@ tidy-fix:
 	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	python scripts/amalgamation.py --compile
+	python3 scripts/amalgamation.py --compile
 
 format-check:
 	python3 scripts/format.py --all --check

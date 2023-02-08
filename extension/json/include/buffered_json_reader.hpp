@@ -10,12 +10,11 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
-
-struct FileHandle;
 
 enum class JSONFormat : uint8_t {
 	//! Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)
@@ -58,21 +57,28 @@ public:
 
 struct JSONFileHandle {
 public:
-	explicit JSONFileHandle(unique_ptr<FileHandle> file_handle);
+	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
 
-	bool CanSeek() const;
 	bool PlainFileSource() const;
+	bool CanSeek() const;
+	void Seek(idx_t position);
 
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
-	void ReadAtPosition(const char *pointer, idx_t size, idx_t position);
-	idx_t Read(const char *pointer, idx_t requested_size);
+	void ReadAtPosition(const char *pointer, idx_t size, idx_t position, bool sample_run);
+	idx_t Read(const char *pointer, idx_t requested_size, bool sample_run);
+
+	void Reset();
+
+private:
+	idx_t ReadFromCache(const char *&pointer, idx_t &size, idx_t &position);
 
 private:
 	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;
+	Allocator &allocator;
 
 	//! File properties
 	const bool can_seek;
@@ -81,11 +87,15 @@ private:
 
 	//! Read properties
 	idx_t read_position;
+
+	//! Cached buffers for resetting when reading stream
+	vector<AllocatedData> cached_buffers;
+	idx_t cached_size;
 };
 
 class BufferedJSONReader {
 public:
-	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, idx_t file_index, string file_path);
+	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, string file_path);
 
 	void OpenJSONFile();
 	bool IsOpen();
@@ -93,18 +103,25 @@ public:
 	BufferedJSONReaderOptions &GetOptions();
 	JSONFileHandle &GetFileHandle() const;
 
+	//! Insert/get/remove buffer (grabs the lock)
 	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
 	JSONBufferHandle *GetBuffer(idx_t buffer_idx);
 	AllocatedData RemoveBuffer(idx_t buffer_idx);
+
+	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();
+	//! Set line count for a buffer that is done (grabs the lock)
+	void SetBufferLineOrObjectCount(idx_t index, idx_t count);
+	//! Throws an error that mentions the file name and line number
+	void ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err, const string &extra = "");
 
 	double GetProgress() const;
+	void Reset();
 
 public:
 	mutex lock;
 
-	//! File index / path
-	const idx_t file_index;
+	//! File path
 	const string file_path;
 
 private:
@@ -118,6 +135,9 @@ private:
 	idx_t buffer_index;
 	//! Mapping from batch index to currently held buffers
 	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
+
+	//! Line count per buffer
+	vector<int64_t> buffer_line_or_object_counts;
 };
 
 } // namespace duckdb

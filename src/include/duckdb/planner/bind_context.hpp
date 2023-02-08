@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -27,6 +25,9 @@ class LogicalGet;
 class BoundQueryNode;
 
 class StarExpression;
+
+class TableCatalogEntry;
+class TableFunctionCatalogEntry;
 
 struct UsingColumnSet {
 	string primary_binding;

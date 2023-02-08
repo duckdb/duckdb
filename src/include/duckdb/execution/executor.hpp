@@ -89,6 +89,9 @@ public:
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 
+	//! Returns true if all pipelines have been completed
+	bool ExecutionIsFinished();
+
 private:
 	void InitializeInternal(PhysicalOperator *physical_plan);
 

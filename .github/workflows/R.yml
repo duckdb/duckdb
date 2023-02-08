@@ -34,6 +34,12 @@ jobs:
       with:
         openssl: 1
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
     - uses: ./.github/actions/build_extensions
       with:
         run_tests: 0
@@ -175,6 +181,12 @@ jobs:
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
     - name: Build
       shell: bash
       run: |
@@ -201,6 +213,12 @@ jobs:
         update-rtools: true
 
     - uses: r-lib/actions/setup-pandoc@v2
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Install
       shell: bash
@@ -240,6 +258,12 @@ jobs:
 
     - uses: r-lib/actions/setup-pandoc@v2
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
     - name: Install
       shell: bash
       run: |
@@ -261,6 +285,12 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Run
       shell: bash

@@ -22,7 +22,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateDatabase(duckdb_libpgque
 	info->catalog = qualified_name.catalog;
 	info->name = qualified_name.name;
 
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 
