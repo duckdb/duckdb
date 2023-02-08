@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
