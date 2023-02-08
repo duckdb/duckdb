@@ -194,7 +194,6 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			throw BinderException(error_msg);
 		}
 		auto bound_expr = (BoundExpression *)expr.get();
-		//
 		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
 	}
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);

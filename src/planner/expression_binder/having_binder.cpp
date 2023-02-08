@@ -51,10 +51,6 @@ BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindResult("HAVING clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
-//	case ExpressionClass::SUBQUERY: {
-//		auto &tmp = (SubqueryExpression&)*expr_ptr;
-//		return BindExpression(tmp, depth);
-//	}
 	default:
 		return duckdb::SelectBinder::BindExpression(expr_ptr, depth);
 	}
