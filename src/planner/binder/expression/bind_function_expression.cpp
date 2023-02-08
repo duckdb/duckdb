@@ -209,6 +209,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,
                                            idx_t depth) {
+	if (expr.children.empty()) {
+		// If the aggregate does not contain any parameters (i.e. COUNT()), throw a proper error since
+		// we won't be able to recover by binding to something in the outer scopes (there is nothing to bind)
+		throw BinderException(binder.FormatError(expr, UnsupportedAggregateMessage()));
+	}
 	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
 }
 

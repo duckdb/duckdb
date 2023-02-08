@@ -1,0 +1,16 @@
+# name: test/sql/subquery/complex/correlated_having.test
+# description: Test correlated aggregate subqueries with having. Found in https://github.com/duckdb/duckdb/issues/5984 example 17.
+# group: [complex]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT count() c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
+----
+1
+
+query I
+SELECT (SELECT c0 EXCEPT (SELECT 'a')) FROM (SELECT 1) t1(c0);
+----
+1
