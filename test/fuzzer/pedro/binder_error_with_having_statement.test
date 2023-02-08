@@ -18,3 +18,9 @@ query I
 SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT alias1);
 ----
 1
+
+# works without a group by all
+query I 
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY c1 HAVING (SELECT c1);
+----
+1
