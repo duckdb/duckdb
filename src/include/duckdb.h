@@ -1580,7 +1580,6 @@ Sets the total capacity of the underlying child-vector of a list.
 */
 DUCKDB_API void duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
-
 /*!
 Retrieves the child vector of a struct vector.
 
