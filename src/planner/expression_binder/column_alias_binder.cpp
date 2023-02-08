@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
-
 namespace duckdb {
 
 ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map)
