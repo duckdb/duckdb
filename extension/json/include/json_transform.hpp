@@ -61,6 +61,8 @@ struct TryParseTimeStamp {
 };
 
 struct JSONTransform {
+	static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+	                      JSONTransformOptions &options);
 	static bool TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count, const vector<string> &names,
 	                            const vector<Vector *> &result_vectors, JSONTransformOptions &options);
 	static bool GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target, Vector &string_vector,

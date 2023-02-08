@@ -97,6 +97,8 @@ public:
 	vector<string> names;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! Whether we're parsing objects (usually), or something else like arrays
+	bool objects = true;
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;

@@ -219,6 +219,7 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 		} else if (!GetValueNumerical<T>(val, data[i], options)) {
 			validity.SetInvalid(i);
 			if (options.strict_cast) {
+				options.object_index = i;
 				return false;
 			}
 		}
@@ -239,6 +240,7 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 		} else if (!GetValueDecimal<T>(val, data[i], width, scale, options)) {
 			validity.SetInvalid(i);
 			if (options.strict_cast) {
+				options.object_index = i;
 				return false;
 			}
 		}
@@ -352,9 +354,6 @@ static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	return true;
 }
 
-static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                      JSONTransformOptions &options);
-
 bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     JSONTransformOptions &options) {
@@ -398,6 +397,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 					}
 					nested_vals[col_idx][i] = val;
 					found_keys[col_idx] = true;
+					found_key_count++;
 				} else if (options.error_unknown_key) {
 					options.error_message =
 					    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
@@ -439,7 +439,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		if (Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
+		if (JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
 			continue;
 		}
 		if (!options.from_file) {
@@ -451,8 +451,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	return success;
 }
 
-static bool TransformObject(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                            const LogicalType &type, JSONTransformOptions &options) {
+static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                    const LogicalType &type, JSONTransformOptions &options) {
 	// Get child vectors and names
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
@@ -505,7 +505,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	D_ASSERT(list_i == offset);
 
 	// Transform array values
-	auto success = Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
+	auto success = JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
 	if (!success && options.from_file) {
 		// Set object index in case of error in nested list so we can get accurate line number information
 		for (idx_t i = 0; i < count; i++) {
@@ -521,8 +521,8 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	return success;
 }
 
-static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                      JSONTransformOptions &options) {
+bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
+                              JSONTransformOptions &options) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
 		// Auto-detected date/timestamp format during sampling
@@ -589,7 +589,7 @@ static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObject(vals, alc, result, count, result_type, options);
+		return TransformObjectInternal(vals, alc, result, count, result_type, options);
 	case LogicalTypeId::LIST:
 		return TransformArray(vals, alc, result, count, options);
 	default:
@@ -625,7 +625,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	JSONTransformOptions options(strict, strict, strict, false);
 
-	if (!Transform(vals, alc, result, count, options)) {
+	if (!JSONTransform::Transform(vals, alc, result, count, options)) {
 		throw InvalidInputException(options.error_message);
 	}
 

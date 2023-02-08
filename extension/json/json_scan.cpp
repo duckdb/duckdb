@@ -92,6 +92,7 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteField<idx_t>(sample_size);
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(max_depth);
+	writer.WriteField<bool>(objects);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -105,6 +106,7 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	sample_size = reader.ReadRequired<idx_t>();
 	names = reader.ReadRequiredList<string>();
 	max_depth = reader.ReadRequired<idx_t>();
+	objects = reader.ReadRequired<bool>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
@@ -145,8 +147,8 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto result = make_unique<JSONGlobalTableFunctionState>(context, input);
 
 	// Check if we need to do projection pushdown
-	if (bind_data.type == JSONScanType::READ_JSON && input.column_ids.size() != bind_data.names.size()) {
-		D_ASSERT(input.column_ids.size() < bind_data.names.size()); // Can't project to have more columns
+	if (bind_data.type == JSONScanType::READ_JSON) {
+		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
 		vector<string> names;
 		names.reserve(input.column_ids.size());
 		for (const auto &id : input.column_ids) {
@@ -614,6 +616,7 @@ yyjson_alc *JSONScanLocalState::GetAllocator() {
 void JSONScanLocalState::ThrowTransformError(idx_t count, idx_t object_index, const string &error_message) {
 	D_ASSERT(current_reader);
 	D_ASSERT(current_buffer_handle);
+	D_ASSERT(object_index != DConstants::INVALID_INDEX);
 	auto line_or_object_in_buffer = lines_or_objects_in_buffer - count + object_index;
 	current_reader->ThrowTransformError(current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
 }

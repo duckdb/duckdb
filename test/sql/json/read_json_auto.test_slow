@@ -110,6 +110,58 @@ select * from '__TEST_DIR__/my_file.json'
 
 endloop
 
+# we can't detect this as timestamp because we don't have this specific format in our auto-detection
+# however, we shouldn't error when reading it!
+query II
+select typeof(createdAt), createdAt from 'data/json/timestamp_example.json'
+----
+VARCHAR	2023-02-07T19:12:28Z
+
+# we can read even if the top-level json is not object
+query I
+select * from 'data/json/top_level_array.json'
+----
+[{'conclusion': cancelled}, {'conclusion': cancelled}]
+
+# issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
+statement ok
+select * from 'data/json/projection_pushdown_example.json' WHERE status <> 'completed'
+
+# different schema's - this one should work regardless of sampling 1 or all lines
+query II
+select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=1)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
+
+query II
+select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-1)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
+
+# inconsistent schema's - if we only sample 1 row, we get an error, because we only see a NULL value for the 2nd column
+statement error
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
+----
+Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 2
+
+# if we increase the sample size to 2, we can read it just fine
+query II
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=2)
+----
+1	NULL
+2	Home for the Holidays
+[3]	The Firm
+4	Broadcast News
+5	Raising Arizona
+
 require httpfs
 
 # this is one big object - yyjson uses it as a benchmark
