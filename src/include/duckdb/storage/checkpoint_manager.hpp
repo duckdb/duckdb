@@ -25,15 +25,13 @@ class TypeCatalogEntry;
 
 class CheckpointWriter {
 public:
-	explicit CheckpointWriter(AttachedDatabase &db) : db(db), catalog(Catalog::GetCatalog(db)) {
+	explicit CheckpointWriter(AttachedDatabase &db) : db(db) {
 	}
 	virtual ~CheckpointWriter() {
 	}
 
 	//! The database
 	AttachedDatabase &db;
-	//! The catalog
-	Catalog &catalog;
 
 	virtual MetaBlockWriter &GetMetaBlockWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;

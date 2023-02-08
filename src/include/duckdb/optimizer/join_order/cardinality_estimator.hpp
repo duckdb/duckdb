@@ -7,7 +7,6 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -44,7 +43,7 @@ struct NodeOp {
 	unique_ptr<JoinNode> node;
 	LogicalOperator *op;
 
-	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
+	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(std::move(node)), op(op) {};
 };
 
 struct Subgraph2Denominator {
@@ -69,12 +68,10 @@ private:
 
 	vector<RelationsToTDom> relations_to_tdoms;
 
+public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
-public:
 	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
-
-	void AssertEquivalentRelationSize();
 
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
@@ -92,7 +89,7 @@ public:
 	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op);
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
 
-	void InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
+	void InitCardinalityEstimatorProps(vector<NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
 	double EstimateCardinalityWithSet(JoinRelationSet *new_set);
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);

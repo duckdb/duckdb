@@ -80,7 +80,7 @@ struct QualifiedName {
 struct QualifiedColumnName {
 	QualifiedColumnName() {
 	}
-	QualifiedColumnName(string table_p, string column_p) : table(move(table_p)), column(move(column_p)) {
+	QualifiedColumnName(string table_p, string column_p) : table(std::move(table_p)), column(std::move(column_p)) {
 	}
 
 	string schema;

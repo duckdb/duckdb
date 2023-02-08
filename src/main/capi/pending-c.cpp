@@ -92,5 +92,5 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	}
 	auto result = wrapper->statement->Execute();
 	wrapper->statement.reset();
-	return duckdb_translate_result(move(result), out_result);
+	return duckdb_translate_result(std::move(result), out_result);
 }

@@ -5,7 +5,7 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
 namespace duckdb {
@@ -616,7 +616,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment *segment, string_t element) {
-	return element.IsInlined() ? element : segment->GetStringHeap().AddString(element);
+	return element.IsInlined() ? element : segment->GetStringHeap().AddBlob(element);
 }
 
 template <class T>
@@ -942,7 +942,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		for (idx_t i = 0; i < count; i++) {
 			((StringStatistics &)*stats.statistics).Update(update_data[i]);
 			if (!update_data[i].IsInlined()) {
-				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
 		sel.Initialize(nullptr);
@@ -955,7 +955,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 				sel.set_index(not_null_count++, i);
 				((StringStatistics &)*stats.statistics).Update(update_data[i]);
 				if (!update_data[i].IsInlined()) {
-					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 				}
 			}
 		}
@@ -1118,7 +1118,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
-				node = transaction.transaction->CreateUpdateInfo(type_size, count);
+				auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+				node = dtransaction.CreateUpdateInfo(type_size, count);
 			} else {
 				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
 			}
@@ -1179,7 +1180,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		transaction_node->Verify();
 		result->info->Verify();
 
-		root->info[vector_index] = move(result);
+		root->info[vector_index] = std::move(result);
 	}
 }
 

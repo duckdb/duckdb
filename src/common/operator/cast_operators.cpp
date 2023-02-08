@@ -875,14 +875,27 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation, char decimal_separator = '.'>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos;
+	if (NEGATIVE) {
+		start_pos = 1;
+	} else {
+		if (*buf == '+') {
+			if (strict) {
+				// leading plus is not allowed in strict mode
+				return false;
+			}
+			start_pos = 1;
+		} else {
+			start_pos = 0;
+		}
+	}
 	idx_t pos = start_pos;
 	while (pos < len) {
 		if (!StringUtil::CharacterIsDigit(buf[pos])) {
 			// not a digit!
-			if (buf[pos] == '.') {
+			if (buf[pos] == decimal_separator) {
 				if (strict) {
 					return false;
 				}
@@ -932,11 +945,13 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					ExponentData exponent {0, false};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation>(buf + pos, len - pos,
+						                                                                      exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false>(buf + pos, len - pos, exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation>(buf + pos, len - pos,
+						                                                                       exponent, strict)) {
 							return false;
 						}
 					}
@@ -1024,7 +1039,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 }
 
 template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation,
-          bool ZERO_INITIALIZE = true>
+          bool ZERO_INITIALIZE = true, char decimal_separator = '.'>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
@@ -1048,24 +1063,25 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 				}
 			}
 		}
-		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP, decimal_separator>(buf, len, result, strict);
 	}
-	// If it starts with 0x or 0X, we parse it as a hex value
-	else if (len > 1 && *buf == '0' && (buf[1] == 'x' || buf[1] == 'X')) {
-		// Skip the 0x
-		buf++;
-		len--;
-		return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+	if (len > 1 && *buf == '0') {
+		if (buf[1] == 'x' || buf[1] == 'X') {
+			// If it starts with 0x or 0X, we parse it as a hex value
+			buf++;
+			len--;
+			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (buf[1] == 'b' || buf[1] == 'B') {
+			// If it starts with 0b or 0B, we parse it as a binary value
+			buf++;
+			len--;
+			return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (strict && StringUtil::CharacterIsDigit(buf[1])) {
+			// leading zeros are not allowed in strict mode
+			return false;
+		}
 	}
-	// If it starts with 0b or 0B, we parse it as a binary value
-	else if (len > 1 && *buf == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
-		// Skip the 0b
-		buf++;
-		len--;
-		return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
-	} else {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
-	}
+	return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP, decimal_separator>(buf, len, result, strict);
 }
 
 template <typename T, bool IS_SIGNED = true>
@@ -1156,7 +1172,7 @@ bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 	return TrySimpleIntegerCast<uint64_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
-template <class T>
+template <class T, char decimal_separator = '.'>
 static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
@@ -1167,11 +1183,21 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 		return false;
 	}
 	if (*buf == '+') {
+		if (strict) {
+			// plus is not allowed in strict mode
+			return false;
+		}
 		buf++;
 		len--;
 	}
+	if (strict && len >= 2) {
+		if (buf[0] == '0' && StringUtil::CharacterIsDigit(buf[1])) {
+			// leading zeros are not allowed in strict mode
+			return false;
+		}
+	}
 	auto endptr = buf + len;
-	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result);
+	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result, decimal_separator);
 	if (parse_result.ec != std::errc()) {
 		return false;
 	}
@@ -1192,6 +1218,26 @@ bool TryCast::Operation(string_t input, float &result, bool strict) {
 template <>
 bool TryCast::Operation(string_t input, double &result, bool strict) {
 	return TryDoubleCast<double>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+}
+
+template <>
+bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message, bool strict) {
+	if (!TryDoubleCast<float, ','>(input.GetDataUnsafe(), input.GetSize(), result, strict)) {
+		HandleCastError::AssignError(StringUtil::Format("Could not cast string to float: \"%s\"", input.GetString()),
+		                             error_message);
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message, bool strict) {
+	if (!TryDoubleCast<double, ','>(input.GetDataUnsafe(), input.GetSize(), result, strict)) {
+		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
+		                             error_message);
+		return false;
+	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1818,7 +1864,7 @@ struct DecimalCastOperation {
 	}
 };
 
-template <class T>
+template <class T, char decimal_separator = '.'>
 bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint8_t width, uint8_t scale) {
 	DecimalCastData<T> state;
 	state.result = 0;
@@ -1830,8 +1876,8 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.exponent_type = DecimalCastData<T>::ExponentType::NONE;
 	state.round_set = false;
 	state.should_round = false;
-	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(),
-	                                                                                 input.GetSize(), state, false)) {
+	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
+	        input.GetDataUnsafe(), input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),
 		                                  (int)width, (int)scale);
 		HandleCastError::AssignError(error, error_message);
@@ -1860,6 +1906,30 @@ template <>
 bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width,
                                  uint8_t scale) {
 	return TryDecimalStringCast<hugeint_t>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
+	return TryDecimalStringCast<int16_t, ','>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
+	return TryDecimalStringCast<int32_t, ','>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
+	return TryDecimalStringCast<int64_t, ','>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                               uint8_t scale) {
+	return TryDecimalStringCast<hugeint_t, ','>(input, result, error_message, width, scale);
 }
 
 template <>

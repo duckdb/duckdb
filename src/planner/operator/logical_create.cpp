@@ -11,7 +11,7 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(LogicalDeserializationSta
 	auto info = CreateInfo::Deserialize(reader.GetSource());
 
 	auto schema_catalog_entry = Catalog::GetSchema(context, INVALID_CATALOG, info->schema, true);
-	return make_unique<LogicalCreate>(state.type, move(info), schema_catalog_entry);
+	return make_unique<LogicalCreate>(state.type, std::move(info), schema_catalog_entry);
 }
 
 idx_t LogicalCreate::EstimateCardinality(ClientContext &context) {

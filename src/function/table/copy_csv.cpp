@@ -1,14 +1,16 @@
-#include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/function/copy_function.hpp"
-#include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+
 #include <limits>
 
 namespace duckdb {
@@ -58,13 +60,6 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static Value ConvertVectorToValue(vector<Value> set) {
-	if (set.empty()) {
-		return Value::EMPTYLIST(LogicalType::BOOLEAN);
-	}
-	return Value::LIST(move(set));
-}
-
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                              vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
@@ -73,7 +68,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(move(set)));
+		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(std::move(set)));
 	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
@@ -83,7 +78,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
@@ -102,7 +97,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		options.SetReadOption(loption, ConvertVectorToValue(move(set)), expected_names);
+		options.SetReadOption(loption, ConvertVectorToValue(std::move(set)), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
@@ -115,7 +110,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 		options = initial_reader->options;
 	}
-	return move(bind_data);
+	return std::move(bind_data);
 }
 
 //===--------------------------------------------------------------------===//
@@ -170,12 +165,14 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 		}
 
 		// check for delimiter
-		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		if (options.delimiter.length() != 0 &&
+		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
 		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		if (options.quote.length() != 0 &&
+		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
 		                      options.quote.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
@@ -205,10 +202,12 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			if (options.quote.length() != 0 &&
+			    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
 			                      options.quote.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
-			} else if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			} else if (options.escape.length() != 0 &&
+			           ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
 			                             options.escape.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			}
@@ -274,7 +273,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
-	return move(local_data);
+	return std::move(local_data);
 }
 
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -298,7 +297,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 
 		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
-	return move(global_data);
+	return std::move(global_data);
 }
 
 static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
@@ -316,8 +315,8 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
-			// VARCHAR, just create a reference
-			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
+			// VARCHAR, just reinterpret (cannot reference, because LogicalTypeId::VARCHAR is used by the JSON type too)
+			cast_chunk.data[col_idx].Reinterpret(input.data[col_idx]);
 		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(

@@ -1,6 +1,9 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/parser/statement/export_statement.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -29,7 +32,7 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 }
 
 string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM pragma_database_list() ORDER BY name;";
+	return "SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name;";
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
@@ -38,7 +41,7 @@ string PragmaAllProfiling(ClientContext &context, const FunctionParameters &para
 }
 
 string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_database_list() ORDER BY 1;";
+	return "SELECT * FROM pragma_database_list;";
 }
 
 string PragmaCollations(ClientContext &context, const FunctionParameters &parameters) {
@@ -73,7 +76,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto *opener = FileSystem::GetFileOpener(context);
 
-	string query;
+	string final_query;
 	// read the "shema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
@@ -83,10 +86,25 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);
-
-		query += string(buffer.get(), fsize);
+		auto query = string(buffer.get(), fsize);
+		// Replace the placeholder with the path provided to IMPORT
+		if (file == "load.sql") {
+			Parser parser;
+			parser.ParseQuery(query);
+			auto copy_statements = std::move(parser.statements);
+			query.clear();
+			for (auto &statement_p : copy_statements) {
+				D_ASSERT(statement_p->type == StatementType::COPY_STATEMENT);
+				auto &statement = (CopyStatement &)*statement_p;
+				auto &info = *statement.info;
+				auto file_name = fs.ExtractName(info.file_path);
+				info.file_path = fs.JoinPath(parameters.values[0].ToString(), file_name);
+				query += statement.ToString() + ";";
+			}
+		}
+		final_query += query;
 	}
-	return query;
+	return final_query;
 }
 
 string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &parameters) {

@@ -19,9 +19,9 @@ public:
 	PhysicalLimitPercent(vector<LogicalType> types, double limit_percent, idx_t offset,
 	                     unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
 	                     idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, move(types), estimated_cardinality),
-	      limit_percent(limit_percent), offset_value(offset), limit_expression(move(limit_expression)),
-	      offset_expression(move(offset_expression)) {
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
+	      limit_percent(limit_percent), offset_value(offset), limit_expression(std::move(limit_expression)),
+	      offset_expression(std::move(offset_expression)) {
 	}
 
 	double limit_percent;

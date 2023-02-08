@@ -8,9 +8,9 @@ namespace duckdb {
 
 PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
                              unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNION, move(types), estimated_cardinality) {
-	children.push_back(move(top));
-	children.push_back(move(bottom));
+    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality) {
+	children.push_back(std::move(top));
+	children.push_back(std::move(bottom));
 }
 
 //===--------------------------------------------------------------------===//

@@ -9,7 +9,7 @@ namespace duckdb {
 
 const idx_t BoxRenderer::SPLIT_COLUMN = idx_t(-1);
 
-BoxRenderer::BoxRenderer(BoxRendererConfig config_p) : config(move(config_p)) {
+BoxRenderer::BoxRenderer(BoxRendererConfig config_p) : config(std::move(config_p)) {
 }
 
 string BoxRenderer::ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result) {
@@ -590,10 +590,18 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		bottom_rows = rows_to_render - top_rows;
 	}
 	auto row_count_str = to_string(row_count) + " rows";
+	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
+	if (has_limited_rows) {
+		row_count_str = "? rows";
+	}
 	string shown_str;
 	bool has_hidden_rows = top_rows < row_count;
 	if (has_hidden_rows) {
-		shown_str = "(" + to_string(top_rows + bottom_rows) + " shown)";
+		shown_str = "(";
+		if (has_limited_rows) {
+			shown_str += ">" + to_string(config.limit - 1) + " rows, ";
+		}
+		shown_str += to_string(top_rows + bottom_rows) + " shown)";
 	}
 	auto minimum_row_length = MaxValue<idx_t>(row_count_str.size(), shown_str.size()) + 4;
 
@@ -645,7 +653,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		column_count--;
 		column_count_str += " (" + to_string(column_count) + " shown)";
 	}
-	RenderRowCount(move(row_count_str), move(shown_str), column_count_str, boundaries, has_hidden_rows,
+	RenderRowCount(std::move(row_count_str), std::move(shown_str), column_count_str, boundaries, has_hidden_rows,
 	               has_hidden_columns, total_length, row_count, column_count, minimum_row_length, ss);
 }
 

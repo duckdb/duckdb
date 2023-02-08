@@ -150,8 +150,8 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 		result.types.push_back(result_type);
 	}
 
-	result.left_reorder_idx = move(left_reorder_idx);
-	result.right_reorder_idx = move(right_reorder_idx);
+	result.left_reorder_idx = std::move(left_reorder_idx);
+	result.right_reorder_idx = std::move(right_reorder_idx);
 
 	// If reorder is required, collect reorder expressions for push projection
 	// into the two child nodes of union node
@@ -181,8 +181,8 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 				    right_node->types[right_index->second],
 				    ColumnBinding(right_node->GetRootIndex(), right_index->second));
 			}
-			result.left_reorder_exprs.push_back(move(left_reorder_expr));
-			result.right_reorder_exprs.push_back(move(right_reorder_expr));
+			result.left_reorder_exprs.push_back(std::move(left_reorder_expr));
+			result.right_reorder_exprs.push_back(std::move(right_reorder_expr));
 		}
 	}
 }
@@ -260,7 +260,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
 	BindModifierTypes(*result, result->types, result->setop_index);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

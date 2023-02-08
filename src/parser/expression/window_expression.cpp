@@ -7,7 +7,7 @@
 namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), catalog(move(catalog_name)), schema(move(schema)),
+    : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
@@ -32,7 +32,7 @@ string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
-bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression *b) {
+bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *b) {
 	// check if the child expressions are equivalent
 	if (b->children.size() != a->children.size()) {
 		return false;
@@ -48,7 +48,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (a->start != b->start || a->end != b->end) {
 		return false;
 	}
-	// check if the framing expressions are equivalent
+	// check if the framing expressions are equivalentbind_
 	if (!BaseExpression::Equals(a->start_expr.get(), b->start_expr.get()) ||
 	    !BaseExpression::Equals(a->end_expr.get(), b->end_expr.get()) ||
 	    !BaseExpression::Equals(a->offset_expr.get(), b->offset_expr.get()) ||
@@ -111,7 +111,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 
-	return move(new_window);
+	return std::move(new_window);
 }
 
 void WindowExpression::Serialize(FieldWriter &writer) const {
@@ -142,7 +142,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, move(schema), function_name);
+	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
@@ -161,7 +161,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
-	return move(expr);
+	return std::move(expr);
 }
 
 } // namespace duckdb

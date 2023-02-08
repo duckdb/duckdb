@@ -11,8 +11,7 @@ namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
-	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "'duckdb'"},                    // name of current database (called "catalog" in the SQL standard)
-	{DEFAULT_SCHEMA, "current_database", {nullptr}, "'duckdb'"},                   // name of current database
+	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, "current_user"},                           // equivalent to current_user
 	{DEFAULT_SCHEMA, "session_user", {nullptr}, "'duckdb'"},                       // session user name
 	{"pg_catalog", "inet_client_addr", {nullptr}, "NULL"},                       // address of the remote connection
@@ -93,6 +92,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
+	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -145,7 +145,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
-	bind_info->function = move(function);
+	bind_info->function = std::move(function);
 	return bind_info;
 
 }
@@ -155,8 +155,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto result = make_unique<ScalarMacroFunction>(std::move(expressions[0]));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
@@ -166,8 +166,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
 	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(move(select.node));
-	return CreateInternalTableMacroInfo(default_macro, move(result));
+	auto result = make_unique<TableMacroFunction>(std::move(select.node));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {

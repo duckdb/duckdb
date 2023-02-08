@@ -15,7 +15,7 @@ unique_ptr<SetStatement> Transformer::TransformUse(duckdb_libpgquery::PGNode *no
 	} else {
 		name = qualified_name.schema + "." + qualified_name.name;
 	}
-	return make_unique<SetVariableStatement>("schema", move(name), SetScope::AUTOMATIC);
+	return make_unique<SetVariableStatement>("schema", std::move(name), SetScope::AUTOMATIC);
 }
 
 } // namespace duckdb

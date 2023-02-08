@@ -55,12 +55,12 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBViewsData>();
 
-	// scan all the schemas for tables and collect themand collect them
+	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

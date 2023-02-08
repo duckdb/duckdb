@@ -10,6 +10,7 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -423,7 +424,7 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
 	}
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
-	catalog.CreateTable(context, move(info));
+	catalog.CreateTable(context, std::move(info));
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {

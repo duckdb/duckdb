@@ -15,6 +15,8 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/magic_bytes.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -144,10 +146,17 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.database_path.clear();
 	}
 
+	auto file_type = MagicBytes::CheckMagicBytes(config_ptr->file_system.get(), config_ptr->options.database_path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		config_ptr->options.database_path = "sqlite:" + config_ptr->options.database_path;
+	}
+
+	ReplacementOpen *replacement_open = nullptr;
 	for (auto &open : config_ptr->replacement_opens) {
 		if (open.pre_func) {
 			open.data = open.pre_func(*config_ptr, open.static_data.get());
 			if (open.data) {
+				replacement_open = &open;
 				break;
 			}
 		}
@@ -168,13 +177,26 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_unique<ConnectionManager>();
 
 	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-	auto attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
-	                                                       config.options.database_path, config.options.access_mode);
+	unique_ptr<AttachedDatabase> attached_database;
+	if (replacement_open && replacement_open->data && replacement_open->data->HasStorageExtension()) {
+		// use storage extension from replacement open to create initial database
+		AttachInfo info;
+		info.name = database_name;
+		info.path = config.options.database_path;
+		auto storage_extension = replacement_open->data->GetStorageExtension(info);
+		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *storage_extension,
+		                                                  database_name, info, config.options.access_mode);
+		replacement_open = nullptr;
+	} else {
+		// check if this is an in-memory database or not
+		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
+		                                                  config.options.database_path, config.options.access_mode);
+	}
 	auto initial_database = attached_database.get();
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, move(attached_database));
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
 		con.Commit();
 	}
 
@@ -186,11 +208,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
 
-	for (auto &open : config.replacement_opens) {
-		if (open.post_func && open.data) {
-			open.post_func(*this, open.data.get());
-			break;
-		}
+	if (replacement_open) {
+		replacement_open->post_func(*this, replacement_open->data.get());
 	}
 }
 
@@ -260,7 +279,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
-		config.file_system = move(new_config.file_system);
+		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
@@ -270,14 +289,14 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.SetDefaultMaxThreads();
 	}
-	config.allocator = move(new_config.allocator);
+	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_unique<Allocator>();
 	}
-	config.replacement_scans = move(new_config.replacement_scans);
-	config.replacement_opens = move(new_config.replacement_opens);
-	config.parser_extensions = move(new_config.parser_extensions);
-	config.error_manager = move(new_config.error_manager);
+	config.replacement_scans = std::move(new_config.replacement_scans);
+	config.replacement_opens = std::move(new_config.replacement_opens);
+	config.parser_extensions = std::move(new_config.parser_extensions);
+	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_unique<ErrorManager>();
 	}

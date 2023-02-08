@@ -8,11 +8,11 @@
 namespace duckdb {
 
 CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns.GetColumn(LogicalIndex(i)).CompressionType();
+	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
 void RowGroupWriter::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	partial_block_manager.RegisterPartialBlock(move(allocation));
+	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 }
 
 PartialBlockAllocation RowGroupWriter::GetBlockAllocation(uint32_t segment_size) {

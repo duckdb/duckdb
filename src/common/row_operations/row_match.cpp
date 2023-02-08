@@ -201,7 +201,6 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const RowLay
 		                                               no_match_count);
 		break;
 	case PhysicalType::LIST:
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
 		break;

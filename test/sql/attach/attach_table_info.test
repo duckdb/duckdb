@@ -2,7 +2,8 @@
 # description: Test ATTACH with table info
 # group: [attach]
 
-require skip_reload
+# avoid loading a storage database because it changes the initial database name
+require noforcestorage
 
 statement ok
 PRAGMA enable_verification
@@ -31,6 +32,11 @@ PRAGMA table_info('new_database.new_schema.integers');
 ----
 0	i	INTEGER	0	NULL	0
 
+query I
+SELECT current_database()
+----
+memory
+
 statement ok
 USE "new_database.new_schema"
 
@@ -38,3 +44,8 @@ query ITTTTT nosort table_info
 PRAGMA table_info('integers');
 ----
 0	i	INTEGER	0	NULL	0
+
+query I
+SELECT current_database()
+----
+new_database

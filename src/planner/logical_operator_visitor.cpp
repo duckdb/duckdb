@@ -50,6 +50,16 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_INSERT: {
+		auto &insert = (LogicalInsert &)op;
+		if (insert.on_conflict_condition) {
+			callback(&insert.on_conflict_condition);
+		}
+		if (insert.do_update_condition) {
+			callback(&insert.do_update_condition);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -165,7 +175,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 		throw InternalException("Unrecognized expression type in logical operator visitor");
 	}
 	if (result) {
-		*expression = move(result);
+		*expression = std::move(result);
 	} else {
 		// visit the children of this node
 		VisitExpressionChildren(expr);

@@ -482,7 +482,7 @@ struct yy_buffer_state
 	/* Size of input buffer in bytes, not including room for EOB
 	 * characters.
 	 */
-	int yy_buf_size;
+	yy_size_t yy_buf_size;
 
 	/* Number of characters read into yy_ch_buf, not including EOB
 	 * characters.
@@ -2615,7 +2615,7 @@ YY_RULE_SETUP
 						if (keyword_text[yyleng - 1] == '\0') {
 							yyless(yyleng - 1);
 						}
-						yylval->keyword = keyword->name;
+						yylval->keyword = keyword_text;
 						return keyword->value;
 					}
 

@@ -27,7 +27,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery
 			}
 		}
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

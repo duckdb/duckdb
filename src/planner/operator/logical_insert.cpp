@@ -5,6 +5,11 @@
 
 namespace duckdb {
 
+LogicalInsert::LogicalInsert(TableCatalogEntry *table, idx_t table_index)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false),
+      action_type(OnConflictAction::THROW) {
+}
+
 void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(insert_values.size());
 	for (auto &entry : insert_values) {
@@ -17,6 +22,7 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
+	writer.WriteField(action_type);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -33,6 +39,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	auto action_type = reader.ReadRequired<OnConflictAction>();
 
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
@@ -46,11 +53,12 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->return_chunk = return_chunk;
-	result->insert_values = move(insert_values);
+	result->insert_values = std::move(insert_values);
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
-	result->bound_defaults = move(bound_defaults);
-	return move(result);
+	result->bound_defaults = std::move(bound_defaults);
+	result->action_type = action_type;
+	return std::move(result);
 }
 
 idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
@@ -59,6 +67,21 @@ idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {
 
 vector<idx_t> LogicalInsert::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+vector<ColumnBinding> LogicalInsert::GetColumnBindings() {
+	if (return_chunk) {
+		return GenerateColumnBindings(table_index, table->GetTypes().size());
+	}
+	return {ColumnBinding(0, 0)};
+}
+
+void LogicalInsert::ResolveTypes() {
+	if (return_chunk) {
+		types = table->GetTypes();
+	} else {
+		types.emplace_back(LogicalType::BIGINT);
+	}
 }
 
 } // namespace duckdb

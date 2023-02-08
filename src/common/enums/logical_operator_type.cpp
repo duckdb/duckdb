@@ -50,6 +50,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "JOIN";
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		return "POSITIONAL_JOIN";
 	case LogicalOperatorType::LOGICAL_UNION:
 		return "UNION";
 	case LogicalOperatorType::LOGICAL_EXCEPT:

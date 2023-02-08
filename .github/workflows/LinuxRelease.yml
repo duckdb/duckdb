@@ -19,10 +19,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
  linux-release-64:
@@ -49,6 +45,12 @@ jobs:
       with:
         fetch-depth: 0
     - uses: ./.github/actions/ubuntu_16_setup
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -114,7 +116,14 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+
      - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
      - name: Install Stuff
        shell: bash
@@ -246,6 +255,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -276,6 +286,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ./.github/actions/ubuntu_16_setup
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -325,6 +341,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -353,7 +370,7 @@ jobs:
 
 
  linux-clang:
-    name: Clang 12
+    name: Clang 14
     runs-on: ubuntu-18.04
     needs: linux-release-64
 
@@ -364,6 +381,7 @@ jobs:
       LD: /home/runner/work/llvm/bin/ld.lld
       EXTENSION_STATIC_BUILD: 1
       BUILD_JSON: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -373,7 +391,7 @@ jobs:
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
       with:
-        version: "12.0"
+        version: "14.0"
         directory: '/home/runner/work/llvm'
 
     - uses: actions/setup-python@v2
@@ -384,6 +402,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -419,6 +438,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -461,6 +481,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -493,6 +514,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Test
       shell: bash
@@ -519,6 +541,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build Library Module
       shell: bash
@@ -562,6 +585,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -595,6 +619,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -615,6 +640,12 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      AWS_DEFAULT_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: minio_duckdb_user
+      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
+      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
+      DUCKDB_S3_USE_SSL: false
+
       GEN: ninja
 
     steps:
@@ -634,6 +665,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -649,7 +681,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/get_test_list.py --file-contains "require httpfs" > test.list
+        python3 scripts/get_test_list.py --file-contains 'require-env S3_TEST_SERVER_AVAILABLE 1' --list '"*"' > test.list
         build/release/test/unittest -f test.list
 
  amalgamation-tests:
@@ -678,5 +710,4 @@ jobs:
       shell: bash
       run:  |
           python scripts/amalgamation.py --extended
-          python scripts/parquet_amalgamation.py
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0

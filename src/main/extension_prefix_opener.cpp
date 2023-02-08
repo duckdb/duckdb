@@ -7,11 +7,18 @@ namespace duckdb {
 
 struct ExtensionPrefixOpenData : public ReplacementOpenData {
 	ExtensionPrefixOpenData(string extension, string path, unique_ptr<ReplacementOpenData> data)
-	    : extension(move(extension)), path(move(path)), data(move(data)) {
+	    : extension(std::move(extension)), path(std::move(path)), data(std::move(data)) {
 	}
 	string extension;
 	string path;
 	unique_ptr<ReplacementOpenData> data;
+
+	bool HasStorageExtension() override {
+		return data->HasStorageExtension();
+	}
+	unique_ptr<StorageExtension> GetStorageExtension(AttachInfo &info) override {
+		return data->GetStorageExtension(info);
+	}
 };
 
 static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, ReplacementOpenStaticData *) {
@@ -22,7 +29,8 @@ static unique_ptr<ReplacementOpenData> ExtensionPrefixPreOpen(DBConfig &config, 
 	}
 	auto extension_data = ExtensionHelper::ReplacementOpenPre(extension, config);
 	if (extension_data) {
-		return make_unique<ExtensionPrefixOpenData>(extension, path, move(extension_data));
+		config.options.database_path = StringUtil::Replace(config.options.database_path, extension + ":", "");
+		return make_unique<ExtensionPrefixOpenData>(extension, path, std::move(extension_data));
 	}
 	return nullptr;
 }

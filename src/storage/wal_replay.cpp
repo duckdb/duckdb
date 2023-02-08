@@ -191,7 +191,7 @@ void ReplayState::ReplayCreateTable() {
 
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 
 	catalog.CreateTable(context, bound_info.get());
 }
@@ -402,7 +402,7 @@ void ReplayState::ReplayInsert() {
 	}
 
 	// append to the current table
-	current_table->storage->LocalAppend(*current_table, context, chunk);
+	current_table->GetStorage().LocalAppend(*current_table, context, chunk);
 }
 
 void ReplayState::ReplayDelete() {
@@ -423,7 +423,7 @@ void ReplayState::ReplayDelete() {
 	// delete the tuples from the current table
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		current_table->storage->Delete(*current_table, context, row_identifiers, 1);
+		current_table->GetStorage().Delete(*current_table, context, row_identifiers, 1);
 	}
 }
 
@@ -443,16 +443,16 @@ void ReplayState::ReplayUpdate() {
 		throw InternalException("Corrupt WAL: update without table");
 	}
 
-	if (column_path[0] >= current_table->columns.PhysicalColumnCount()) {
+	if (column_path[0] >= current_table->GetColumns().PhysicalColumnCount()) {
 		throw InternalException("Corrupt WAL: column index for update out of bounds");
 	}
 
 	// remove the row id vector from the chunk
-	auto row_ids = move(chunk.data.back());
+	auto row_ids = std::move(chunk.data.back());
 	chunk.data.pop_back();
 
 	// now perform the update
-	current_table->storage->UpdateColumn(*current_table, context, row_ids, column_path, chunk);
+	current_table->GetStorage().UpdateColumn(*current_table, context, row_ids, column_path, chunk);
 }
 
 void ReplayState::ReplayCheckpoint() {

@@ -1,6 +1,7 @@
 import pandas as pd
 import duckdb
 import datetime
+import pytest
 
 def run_checks(df):
     assert type(df['d'][0]) is datetime.date

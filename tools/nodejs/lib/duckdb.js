@@ -46,6 +46,10 @@ var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 // some wrappers for compatibilities sake
 /**
  * Main database interface
+ * @arg path - path to database file or :memory: for in-memory database
+ * @arg access_mode - access mode
+ * @arg config - the configuration object
+ * @arg callback - callback function
  */
 var Database = duckdb.Database;
 /**
@@ -330,7 +334,6 @@ Connection.prototype.register_udf = function (name, return_type, fun) {
                 desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
         } catch (error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
-            console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message
@@ -608,6 +611,15 @@ Database.prototype.unregister_udf = function () {
     default_connection(this).unregister_udf.apply(this.default_connection, arguments);
     return this;
 }
+
+/**
+ * Register a table replace scan function
+ * @method
+ * @arg fun Replacement scan function
+ * @return {this}
+ */
+
+Database.prototype.registerReplacementScan;
 
 /**
  * Not implemented
