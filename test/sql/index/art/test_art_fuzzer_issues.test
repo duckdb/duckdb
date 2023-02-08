@@ -60,6 +60,19 @@ INSERT INTO t4 VALUES (1),(0),(1),(1);
 statement ok
 UPDATE t4 SET c1 = NULL;
 
+# issue 5984, number 19
+
+statement ok
+CREATE TABLE t_leak (c1 INT);
+
+statement ok
+INSERT INTO t_leak VALUES (2), (1), (1), (540000);
+
+statement error
+CREATE UNIQUE INDEX i_leak ON t_leak (c1);
+----
+Constraint Error: Data contains duplicates on indexed column(s)
+
 # issue 5984, number 22
 # FIXME: eventually, we might want to rethink the way that we null-terminate keys, see #5865
 # FIXME: this fails only with verification enabled and force reload, we should fix this when we
