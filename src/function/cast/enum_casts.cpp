@@ -91,7 +91,7 @@ static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 struct EnumBoundCastData : public BoundCastData {
 	EnumBoundCastData(BoundCastInfo to_varchar_cast, BoundCastInfo from_varchar_cast)
-	    : to_varchar_cast(move(to_varchar_cast)), from_varchar_cast(move(from_varchar_cast)) {
+	    : to_varchar_cast(std::move(to_varchar_cast)), from_varchar_cast(std::move(from_varchar_cast)) {
 	}
 
 	BoundCastInfo to_varchar_cast;
@@ -106,7 +106,7 @@ public:
 unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto to_varchar_cast = input.GetCastFunction(source, LogicalType::VARCHAR);
 	auto from_varchar_cast = input.GetCastFunction(LogicalType::VARCHAR, target);
-	return make_unique<EnumBoundCastData>(move(to_varchar_cast), move(from_varchar_cast));
+	return make_unique<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
 }
 
 static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -140,7 +140,6 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:

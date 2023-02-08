@@ -28,15 +28,17 @@ public:
 
 public:
 	void AddFunction(T function) {
-		functions.push_back(move(function));
+		functions.push_back(std::move(function));
 	}
 	idx_t Size() {
 		return functions.size();
 	}
 	T GetFunctionByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	T &GetFunctionReferenceByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	bool MergeFunctionSet(FunctionSet<T> new_functions) {
@@ -82,7 +84,7 @@ public:
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
-	explicit PragmaFunctionSet(string name) : FunctionSet(move(name)) {
+	explicit PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {
 	}
 };
 

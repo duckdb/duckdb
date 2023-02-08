@@ -239,7 +239,7 @@ void MiniZStreamWrapper::Close() {
 class GZipFile : public CompressedFile {
 public:
 	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
-	    : CompressedFile(gzip_fs, move(child_handle_p), path) {
+	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
 		Initialize(write);
 	}
 
@@ -320,7 +320,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 
 unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
 	auto path = handle->path;
-	return make_unique<GZipFile>(move(handle), path, write);
+	return make_unique<GZipFile>(std::move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {

@@ -21,7 +21,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
-		intermediate_chunks.push_back(move(chunk));
+		intermediate_chunks.push_back(std::move(chunk));
 
 		auto op_state = current_operator->GetOperatorState(context);
 		intermediate_states.push_back(std::move(op_state));
@@ -133,8 +133,11 @@ void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
 			finalize_result = cached_final_execute_result;
 		} else {
 			// Flush the current operator
-			finalize_result = pipeline.operators[op_idx]->FinalExecute(
-			    context, curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
+			auto current_operator = pipeline.operators[op_idx];
+			StartOperator(current_operator);
+			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
+			                                                 *intermediate_states[op_idx]);
+			EndOperator(current_operator, &curr_chunk);
 		}
 
 		auto execute_result = Execute(curr_chunk, result, op_idx + 1);
@@ -171,8 +174,11 @@ void PipelineExecutor::FlushCachingOperatorsPush() {
 		do {
 			auto &curr_chunk =
 			    op_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[op_idx + 1];
-			finalize_result = pipeline.operators[op_idx]->FinalExecute(
-			    context, curr_chunk, *pipeline.operators[op_idx]->op_state, *intermediate_states[op_idx]);
+			auto current_operator = pipeline.operators[op_idx];
+			StartOperator(current_operator);
+			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
+			                                                 *intermediate_states[op_idx]);
+			EndOperator(current_operator, &curr_chunk);
 			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);
 		} while (finalize_result != OperatorFinalizeResultType::FINISHED &&
 		         push_result != OperatorResultType::FINISHED);

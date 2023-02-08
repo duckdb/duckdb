@@ -15,6 +15,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
@@ -77,7 +78,7 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(move(current_chunk)) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(std::move(current_chunk)) {
 	}
 
 	unique_ptr<ArrowArrayStreamWrapper> stream;

@@ -5,7 +5,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,13 @@ static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vecto
 
 // current_schema
 static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault());
+	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
+	result.Reference(val);
+}
+
+// current_database
+static void CurrentDatabaseFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	Value val(DatabaseManager::GetDefaultDatabase(state.GetContext()));
 	result.Reference(val);
 }
 
@@ -34,9 +41,9 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 	auto implicit_schemas = *ConstantVector::GetData<bool>(input.data[0]);
 	vector<Value> schema_list;
 	auto &catalog_search_path = ClientData::Get(state.GetContext()).catalog_search_path;
-	vector<string> search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
+	auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 	std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-	               [](const string &s) -> Value { return Value(s); });
+	               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
 
 	auto val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	result.Reference(val);
@@ -44,7 +51,9 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &transaction = Transaction::GetTransaction(state.GetContext());
+	auto &context = state.GetContext();
+	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
+	auto &transaction = DuckTransaction::Get(context, catalog);
 	auto val = Value::BIGINT(transaction.start_time);
 	result.Reference(val);
 }
@@ -62,6 +71,7 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction(current_query);
 	set.AddFunction(ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction));
+	set.AddFunction(ScalarFunction("current_database", {}, LogicalType::VARCHAR, CurrentDatabaseFunction));
 	set.AddFunction(
 	    ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction));
 	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent));

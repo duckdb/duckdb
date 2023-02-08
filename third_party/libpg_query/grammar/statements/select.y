@@ -255,7 +255,7 @@ simple_select:
             | select_clause UNION all_or_distinct by_name select_clause
 				{
 					$$ = makeSetOp(PG_SETOP_UNION_BY_NAME, $3, $1, $5);
-				}    
+				}
 			| select_clause UNION all_or_distinct select_clause
 				{
 					$$ = makeSetOp(PG_SETOP_UNION, $3, $1, $4);
@@ -954,6 +954,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
  * A NATURAL JOIN implicitly matches column names between
  * tables and the shape is determined by which columns are
  * in common. We'll collect columns during the later transformations.
+ * A POSITIONAL JOIN implicitly matches row numbers and is more like a table.
  */
 
 joined_table:
@@ -1025,6 +1026,19 @@ joined_table:
 					n->rarg = $4;
 					n->usingClause = NIL; /* figure out which columns later... */
 					n->quals = NULL; /* fill later */
+					n->location = @2;
+					$$ = n;
+				}
+			| table_ref POSITIONAL JOIN table_ref
+				{
+					/* POSITIONAL JOIN is a coordinated scan */
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_POSITION;
+					n->isNatural = false;
+					n->larg = $1;
+					n->rarg = $4;
+					n->usingClause = NIL;
+					n->quals = NULL;
 					n->location = @2;
 					$$ = n;
 				}
@@ -2300,51 +2314,24 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
-			| '?' opt_indirection
+			| indirection_expr opt_indirection
 				{
 					if ($2)
 					{
 						PGAIndirection *n = makeNode(PGAIndirection);
-						n->arg = makeParamRef(0, @1);
+						n->arg = (PGNode *) $1;
 						n->indirection = check_indirection($2, yyscanner);
 						$$ = (PGNode *) n;
 					}
 					else
-						$$ = makeParamRef(0, @1);
+						$$ = (PGNode *) $1;
 				}
-			| PARAM opt_indirection
+			| '$' named_param
 				{
-					PGParamRef *p = makeNode(PGParamRef);
-					p->number = $1;
-					p->location = @1;
-					if ($2)
-					{
-						PGAIndirection *n = makeNode(PGAIndirection);
-						n->arg = (PGNode *) p;
-						n->indirection = check_indirection($2, yyscanner);
-						$$ = (PGNode *) n;
-					}
-					else
-						$$ = (PGNode *) p;
-				}
-			| '(' a_expr ')' opt_indirection
-				{
-					if ($4)
-					{
-						PGAIndirection *n = makeNode(PGAIndirection);
-						n->arg = $2;
-						n->indirection = check_indirection($4, yyscanner);
-						$$ = (PGNode *)n;
-					}
-					else
-						$$ = $2;
+					$$ = makeNamedParamRef($2, @1);
 				}
 			| row {
 				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-				$$ = (PGNode *) n;
-			}
-			| '{' dict_arguments_opt_comma '}' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
 				$$ = (PGNode *) n;
 			}
 			| '[' opt_expr_list_opt_comma ']' {
@@ -2372,18 +2359,6 @@ c_expr:		columnref								{ $$ = $1; }
 			}
 			| case_expr
 				{ $$ = $1; }
-			| func_expr opt_indirection
-				{
-					if ($2) {
-						PGAIndirection *n = makeNode(PGAIndirection);
-						n->arg = $1;
-						n->indirection = check_indirection($2, yyscanner);
-						$$ = (PGNode *)n;
-					}
-					else {
-						$$ = $1;
-					}
-				}
 			| select_with_parens			%prec UMINUS
 				{
 					PGSubLink *n = makeNode(PGSubLink);
@@ -2438,6 +2413,33 @@ c_expr:		columnref								{ $$ = $1; }
 				  $$ = (PGNode *)g;
 			  }
 		;
+
+
+
+indirection_expr:		'?'
+				{
+					$$ = makeParamRef(0, @1);
+				}
+			| PARAM
+				{
+					PGParamRef *p = makeNode(PGParamRef);
+					p->number = $1;
+					p->location = @1;
+					$$ = (PGNode *) p;
+				}
+			| '(' a_expr ')'
+				{
+					$$ = $2;
+				}
+			| '{' dict_arguments_opt_comma '}'
+				{
+					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = (PGNode *) f;
+				}
+			| func_expr
+				{
+					$$ = $1;
+				}
 
 func_application:       func_name '(' ')'
 				{
@@ -3526,6 +3528,7 @@ qualified_name:
 							$$->schemaname = strVal(linitial($2));
 							$$->relname = strVal(lsecond($2));
 							break;
+						case 3:
 						default:
 							ereport(ERROR,
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
@@ -3759,3 +3762,5 @@ ColLabel:	IDENT									{ $$ = $1; }
 ColLabelOrString:	ColLabel						{ $$ = $1; }
 					| SCONST						{ $$ = $1; }
 		;
+
+named_param: IDENT { $$ = $1; }

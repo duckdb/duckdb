@@ -10,6 +10,7 @@
 
 #include "duckdb/function/function_set.hpp"
 #include "utf8proc.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace re2 {
 class RE2;
@@ -180,6 +181,10 @@ struct UnicodeFun {
 };
 
 struct StringSplitFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct BarFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

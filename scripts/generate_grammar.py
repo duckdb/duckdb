@@ -37,7 +37,7 @@ for arg in sys.argv[1:]:
 # parse the keyword lists
 def read_list_from_file(fname):
     with open_utf8(fname, 'r') as f:
-        return f.read().split('\n')
+        return [x.strip() for x in f.read().split('\n') if len(x.strip()) > 0]
 
 kwdir = os.path.join(base_dir, 'keywords')
 unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
@@ -262,3 +262,12 @@ if res != 0:
 
 os.rename(result_source, target_source_loc)
 os.rename(result_header, target_header_loc)
+
+with open_utf8(target_source_loc, 'r') as f:
+    text = f.read()
+
+text = text.replace('#include "grammar_out.hpp"', '#include "include/parser/gram.hpp"')
+text = text.replace('yynerrs = 0;', 'yynerrs = 0; (void)yynerrs;')
+
+with open_utf8(target_source_loc, 'w+') as f:
+    f.write(text)

@@ -1,7 +1,8 @@
 #include "duckdb/common/string_util.hpp"
+
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/exception.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -19,7 +20,7 @@ bool StringUtil::Contains(const string &haystack, const string &needle) {
 
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
-	while (CharacterIsSpace(*it)) {
+	while (it != str.end() && CharacterIsSpace(*it)) {
 		it++;
 	}
 	str.erase(str.begin(), it);
@@ -28,6 +29,13 @@ void StringUtil::LTrim(string &str) {
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
 	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
+	          str.end());
+}
+
+void StringUtil::RTrim(string &str, const string &chars_to_trim) {
+	str.erase(find_if(str.rbegin(), str.rend(),
+	                  [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
+	              .base(),
 	          str.end());
 }
 
@@ -163,6 +171,10 @@ string StringUtil::Lower(const string &str) {
 	string copy(str);
 	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
 	return (copy);
+}
+
+bool StringUtil::CIEquals(const string &l1, const string &l2) {
+	return StringUtil::Lower(l1) == StringUtil::Lower(l2);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

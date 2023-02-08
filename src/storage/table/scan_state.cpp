@@ -1,12 +1,12 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
 void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
-	this->column_ids = move(column_ids);
+	this->column_ids = std::move(column_ids);
 	this->table_filters = table_filters;
 	if (table_filters) {
 		D_ASSERT(table_filters->filters.size() > 0);
@@ -84,7 +84,7 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 	return parent.GetAdaptiveFilter();
 }
 
-bool CollectionScanState::Scan(Transaction &transaction, DataChunk &result) {
+bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	auto current_row_group = row_group_state.row_group;
 	while (current_row_group) {
 		current_row_group->Scan(transaction, row_group_state, result);

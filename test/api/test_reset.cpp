@@ -30,6 +30,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"default_order", {"desc", "desc"}},
 	    {"default_null_order", {"nulls_last", "nulls_last"}},
 	    {"disabled_optimizers", {"extension", "extension"}},
+	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"enable_fsst_vectors", {true, true}},
 	    {"enable_object_cache", {true, true}},
 	    {"enable_profiling", {"json", "json"}},
@@ -40,6 +41,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"file_search_path", {"test", "test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test", "test"}},
+	    {"immediate_transaction_mode", {true, true}},
 	    {"log_query_path", {"test", "test"}},
 	    {"max_expression_depth", {50, 50}},
 	    {"max_memory", {"4.2GB", "4.2GB"}},
@@ -150,7 +152,8 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			continue;
 		}
 		// Set the new option
-		op->set_global(db.instance.get(), config, value_pair.input);
+		auto input = value_pair.input.DefaultCastAs(op->parameter_type);
+		op->set_global(db.instance.get(), config, input);
 
 		// Get the value of the option again
 		auto changed_value = op->get_setting(*con.context);

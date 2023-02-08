@@ -46,7 +46,7 @@ static void testRunner() {
 		storage_name = StringUtil::Replace(storage_name, "\\", "_");
 		initial_dbpath = TestCreatePath(storage_name + ".db");
 	}
-	SQLLogicTestRunner runner(move(initial_dbpath));
+	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
 	runner.ExecuteFile(name);

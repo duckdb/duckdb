@@ -13,8 +13,16 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
+
+enum NewLineIdentifier {
+	SINGLE = 1,   // Either \r or \n
+	CARRY_ON = 2, // \r\n
+	MIX = 3,      // Hippie-Land, can't run it multithreaded
+	NOT_SET = 4
+};
 
 struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
@@ -25,7 +33,16 @@ struct BufferedCSVReaderOptions {
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
 	string delimiter = ",";
-	//! Whether or not a quote sign was defined by the user
+	//! Whether or not a new_line was defined by the user
+	bool has_newline = false;
+	//! New Line separator
+	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
+
+	//! Whether or not an option was provided for parallel
+	bool has_parallel = false;
+	//! Whether or not the read will use the ParallelCSVReader
+	bool use_parallel = false;
+	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
 	string quote = "\"";
@@ -54,8 +71,10 @@ struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
-	//! SQL Types defined per specific column
-	unordered_map<string, LogicalType> sql_types_per_column;
+	//! SQL Type list mapping of name to SQL type index in sql_type_list
+	case_insensitive_map_t<idx_t> sql_types_per_column;
+	//! User-defined SQL type list
+	vector<LogicalType> sql_type_list;
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -87,6 +106,8 @@ struct BufferedCSVReaderOptions {
 	bool union_by_name = false;
 	//! Buffer Size (Parallel Scan)
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
+	//! Decimal separator when reading as numeric
+	string decimal_separator = ".";
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
@@ -106,7 +127,14 @@ struct BufferedCSVReaderOptions {
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
 
+	void SetCompression(const string &compression);
+	void SetHeader(bool has_header);
+	void SetEscape(const string &escape);
+	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
+	void SetParallel(bool use_parallel);
+
+	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
 	bool SetBaseOption(const string &loption, const Value &value);

@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class Allocator;
+class AttachedDatabase;
 class ClientContext;
 class DatabaseInstance;
 class ExecutionContext;
@@ -91,6 +92,7 @@ public:
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+	static Allocator &Get(AttachedDatabase &db);
 
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
@@ -118,7 +120,7 @@ void DeleteArray(T *ptr, idx_t size) {
 }
 
 template <typename T, typename... ARGS>
-T *AllocateObject(ARGS &&...args) {
+T *AllocateObject(ARGS &&... args) {
 	auto data = Allocator::DefaultAllocator().AllocateData(sizeof(T));
 	return new (data) T(std::forward<ARGS>(args)...);
 }
@@ -137,6 +139,7 @@ void DestroyObject(T *ptr) {
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
 	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
+	DUCKDB_API static Allocator &Get(AttachedDatabase &db);
 };
 
 } // namespace duckdb

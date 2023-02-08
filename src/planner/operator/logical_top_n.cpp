@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(LogicalDeserializationState
 	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
 	auto offset = reader.ReadRequired<idx_t>();
 	auto limit = reader.ReadRequired<idx_t>();
-	return make_unique<LogicalTopN>(move(orders), limit, offset);
+	return make_unique<LogicalTopN>(std::move(orders), limit, offset);
 }
 
 idx_t LogicalTopN::EstimateCardinality(ClientContext &context) {

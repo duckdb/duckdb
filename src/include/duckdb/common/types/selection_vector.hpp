@@ -40,10 +40,31 @@ struct SelectionVector {
 		Initialize(sel_vector);
 	}
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
-		Initialize(move(data));
+		Initialize(std::move(data));
+	}
+	SelectionVector &operator=(SelectionVector &&other) {
+		sel_vector = other.sel_vector;
+		other.sel_vector = nullptr;
+		selection_data = std::move(other.selection_data);
+		return *this;
 	}
 
 public:
+	static idx_t Inverted(const SelectionVector &src, SelectionVector &dst, idx_t source_size, idx_t count) {
+		idx_t src_idx = 0;
+		idx_t dst_idx = 0;
+		for (idx_t i = 0; i < count; i++) {
+			if (src_idx < source_size && src.get_index(src_idx) == i) {
+				src_idx++;
+				// This index is selected by 'src', skip it in 'dst'
+				continue;
+			}
+			// This index does not exist in 'src', add it to the selection of 'dst'
+			dst.set_index(dst_idx++, i);
+		}
+		return dst_idx;
+	}
+
 	void Initialize(sel_t *sel) {
 		selection_data.reset();
 		sel_vector = sel;
@@ -53,7 +74,7 @@ public:
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
-		selection_data = move(data);
+		selection_data = std::move(data);
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(const SelectionVector &other) {
@@ -97,8 +118,11 @@ private:
 
 class OptionalSelection {
 public:
-	explicit inline OptionalSelection(SelectionVector *sel_p) : sel(sel_p) {
-
+	explicit inline OptionalSelection(SelectionVector *sel_p) {
+		Initialize(sel_p);
+	}
+	void Initialize(SelectionVector *sel_p) {
+		sel = sel_p;
 		if (sel) {
 			vec.Initialize(sel->data());
 			sel = &vec;
@@ -125,6 +149,62 @@ public:
 private:
 	SelectionVector *sel;
 	SelectionVector vec;
+};
+
+// Contains a selection vector, combined with a count
+class ManagedSelection {
+public:
+	explicit inline ManagedSelection(idx_t size, bool initialize = true)
+	    : initialized(initialize), size(size), internal_opt_selvec(nullptr) {
+		count = 0;
+		if (!initialized) {
+			return;
+		}
+		sel_vec.Initialize(size);
+		internal_opt_selvec.Initialize(&sel_vec);
+	}
+
+public:
+	bool Initialized() const {
+		return initialized;
+	}
+	void Initialize(idx_t size) {
+		D_ASSERT(!initialized);
+		this->size = size;
+		sel_vec.Initialize(size);
+		internal_opt_selvec.Initialize(&sel_vec);
+		initialized = true;
+	}
+
+	inline idx_t operator[](idx_t index) const {
+		D_ASSERT(index < size);
+		return sel_vec.get_index(index);
+	}
+	inline bool IndexMapsToLocation(idx_t idx, idx_t location) const {
+		return idx < count && sel_vec.get_index(idx) == location;
+	}
+	inline void Append(const idx_t idx) {
+		internal_opt_selvec.Append(count, idx);
+	}
+	inline idx_t Count() const {
+		return count;
+	}
+	inline idx_t Size() const {
+		return size;
+	}
+	inline const SelectionVector &Selection() const {
+		return sel_vec;
+	}
+	inline SelectionVector &Selection() {
+		return sel_vec;
+	}
+
+private:
+	bool initialized = false;
+	idx_t count;
+	idx_t size;
+	SelectionVector sel_vec;
+	OptionalSelection internal_opt_selvec;
 };
 
 } // namespace duckdb

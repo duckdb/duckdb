@@ -8,7 +8,11 @@ add_library_unity(
   catalog.cpp
   catalog_search_path.cpp
   catalog_set.cpp
-  dependency_manager.cpp)
+  catalog_transaction.cpp
+  duck_catalog.cpp
+  dependency_list.cpp
+  dependency_manager.cpp
+  similar_catalog_entry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_catalog>
     PARENT_SCOPE)

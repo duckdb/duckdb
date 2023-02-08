@@ -24,7 +24,14 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	bool allow_overwrite;
+	bool parallel;
 	bool per_thread_output;
+
+	bool partition_output;
+	vector<idx_t> partition_columns;
+	vector<string> names;
+	vector<LogicalType> expected_types;
 
 public:
 	// Source interface
@@ -51,7 +58,7 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return per_thread_output;
+		return per_thread_output || partition_output || parallel;
 	}
 };
 } // namespace duckdb

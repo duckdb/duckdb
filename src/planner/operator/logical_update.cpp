@@ -5,6 +5,10 @@
 
 namespace duckdb {
 
+LogicalUpdate::LogicalUpdate(TableCatalogEntry *table)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
+}
+
 void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	table->Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
@@ -17,7 +21,7 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
@@ -31,11 +35,26 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
-	return move(result);
+	return std::move(result);
 }
 
 idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
+}
+
+vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
+	if (return_chunk) {
+		return GenerateColumnBindings(table_index, table->GetTypes().size());
+	}
+	return {ColumnBinding(0, 0)};
+}
+
+void LogicalUpdate::ResolveTypes() {
+	if (return_chunk) {
+		types = table->GetTypes();
+	} else {
+		types.emplace_back(LogicalType::BIGINT);
+	}
 }
 
 } // namespace duckdb

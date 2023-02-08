@@ -1,0 +1,10 @@
+# name: test/sql/copy/csv/auto/test_auto_5378.test
+# description: Test read_csv_auto on issue 5378
+# group: [auto]
+
+mode skip
+
+query I
+SELECT count(*) FROM read_csv_auto ('test/sql/copy/csv/data/auto/titlebasicsdebug.tsv', nullstr='\N', sample_size = 3000);
+----
+3002

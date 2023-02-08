@@ -1,6 +1,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -13,6 +14,9 @@
 #include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/magic_bytes.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -27,8 +31,7 @@ DBConfig::DBConfig() {
 	error_manager = make_unique<ErrorManager>();
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
-	compression_functions = make_unique<CompressionFunctionSet>();
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
@@ -51,43 +54,41 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		auto &storage = StorageManager::GetStorageManager(*this);
-		if (!storage.InMemory()) {
-			auto &config = storage.db.config;
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
-			}
-			storage.CreateCheckpoint(true);
-		}
-	} catch (...) {
-	}
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().buffer_manager;
+	return db.GetBufferManager();
+}
+
+BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
+	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }
 
-StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
-	return db.GetStorageManager();
+DatabaseManager &DatabaseInstance::GetDatabaseManager() {
+	if (!db_manager) {
+		throw InternalException("Missing DB manager");
+	}
+	return *db_manager;
 }
 
-Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
+Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
+	return db.GetDatabaseManager().GetSystemCatalog();
+}
+
+Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+FileSystem &FileSystem::Get(AttachedDatabase &db) {
+	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
@@ -98,6 +99,10 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+DBConfig &DBConfig::Get(AttachedDatabase &db) {
+	return DBConfig::GetConfig(db.GetDatabase());
+}
+
 const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
 	return db.config;
 }
@@ -106,11 +111,7 @@ const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
 	return context.config;
 }
 
-TransactionManager &TransactionManager::Get(ClientContext &context) {
-	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
-}
-
-TransactionManager &TransactionManager::Get(DatabaseInstance &db) {
+TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
 	return db.GetTransactionManager();
 }
 
@@ -145,10 +146,17 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.database_path.clear();
 	}
 
+	auto file_type = MagicBytes::CheckMagicBytes(config_ptr->file_system.get(), config_ptr->options.database_path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		config_ptr->options.database_path = "sqlite:" + config_ptr->options.database_path;
+	}
+
+	ReplacementOpen *replacement_open = nullptr;
 	for (auto &open : config_ptr->replacement_opens) {
 		if (open.pre_func) {
 			open.data = open.pre_func(*config_ptr, open.static_data.get());
 			if (open.data) {
+				replacement_open = &open;
 				break;
 			}
 		}
@@ -160,28 +168,48 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	// TODO: Support an extension here, to generate different storage managers
-	// depending on the DB path structure/prefix.
-	const string dbPath = config.options.database_path;
-	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
-
-	catalog = make_unique<Catalog>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
+	auto &config = DBConfig::GetConfig(*this);
+	db_manager = make_unique<DatabaseManager>(*this);
+	buffer_manager =
+	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
+	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	unique_ptr<AttachedDatabase> attached_database;
+	if (replacement_open && replacement_open->data && replacement_open->data->HasStorageExtension()) {
+		// use storage extension from replacement open to create initial database
+		AttachInfo info;
+		info.name = database_name;
+		info.path = config.options.database_path;
+		auto storage_extension = replacement_open->data->GetStorageExtension(info);
+		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *storage_extension,
+		                                                  database_name, info, config.options.access_mode);
+		replacement_open = nullptr;
+	} else {
+		// check if this is an in-memory database or not
+		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
+		                                                  config.options.database_path, config.options.access_mode);
+	}
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		con.Commit();
+	}
+
+	// initialize the system catalog
+	db_manager->InitializeSystemCatalog();
 	// initialize the database
-	storage->Initialize();
+	initial_database->Initialize();
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
 
-	for (auto &open : config.replacement_opens) {
-		if (open.post_func && open.data) {
-			open.post_func(*this, open.data.get());
-			break;
-		}
+	if (replacement_open) {
+		replacement_open->post_func(*this, replacement_open->data.get());
 	}
 }
 
@@ -201,16 +229,16 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 DuckDB::~DuckDB() {
 }
 
-StorageManager &DatabaseInstance::GetStorageManager() {
-	return *storage;
+BufferManager &DatabaseInstance::GetBufferManager() {
+	return *buffer_manager;
 }
 
-Catalog &DatabaseInstance::GetCatalog() {
-	return *catalog;
+DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
+	return db.GetDatabaseManager();
 }
 
-TransactionManager &DatabaseInstance::GetTransactionManager() {
-	return *transaction_manager;
+DatabaseManager &DatabaseManager::Get(ClientContext &db) {
+	return DatabaseManager::Get(*db.db);
 }
 
 TaskScheduler &DatabaseInstance::GetScheduler() {
@@ -241,13 +269,17 @@ Allocator &Allocator::Get(DatabaseInstance &db) {
 	return *db.config.allocator;
 }
 
+Allocator &Allocator::Get(AttachedDatabase &db) {
+	return Allocator::Get(db.GetDatabase());
+}
+
 void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.options = new_config.options;
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
-		config.file_system = move(new_config.file_system);
+		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
@@ -257,14 +289,14 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.SetDefaultMaxThreads();
 	}
-	config.allocator = move(new_config.allocator);
+	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_unique<Allocator>();
 	}
-	config.replacement_scans = move(new_config.replacement_scans);
-	config.replacement_opens = move(new_config.replacement_opens);
-	config.parser_extensions = move(new_config.parser_extensions);
-	config.error_manager = move(new_config.error_manager);
+	config.replacement_scans = std::move(new_config.replacement_scans);
+	config.replacement_opens = std::move(new_config.replacement_opens);
+	config.parser_extensions = std::move(new_config.parser_extensions);
+	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_unique<ErrorManager>();
 	}

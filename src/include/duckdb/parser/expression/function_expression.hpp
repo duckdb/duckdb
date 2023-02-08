@@ -16,7 +16,7 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	DUCKDB_API FunctionExpression(string schema_name, const string &function_name,
+	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
@@ -26,6 +26,8 @@ public:
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
 
+	//! Catalog of the function
+	string catalog;
 	//! Schema of the function
 	string schema;
 	//! Function name
@@ -48,7 +50,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equals(const FunctionExpression *a, const FunctionExpression *b);
+	static bool Equal(const FunctionExpression *a, const FunctionExpression *b);
 	hash_t Hash() const override;
 
 	void Serialize(FieldWriter &writer) const override;
@@ -66,8 +68,8 @@ public:
 			D_ASSERT(!distinct);
 			if (entry.children.size() == 1) {
 				if (StringUtil::Contains(function_name, "__postfix")) {
-					return "(" + entry.children[0]->ToString() + ")" +
-					       StringUtil::Replace(function_name, "__postfix", "");
+					return "((" + entry.children[0]->ToString() + ")" +
+					       StringUtil::Replace(function_name, "__postfix", "") + ")";
 				} else {
 					return function_name + "(" + entry.children[0]->ToString() + ")";
 				}

@@ -43,6 +43,7 @@ enum class PhysicalOperatorType : uint8_t {
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
 	EXPRESSION_SCAN,
+	POSITIONAL_SCAN,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -54,6 +55,7 @@ enum class PhysicalOperatorType : uint8_t {
 	IE_JOIN,
 	DELIM_JOIN,
 	INDEX_JOIN,
+	POSITIONAL_JOIN,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
@@ -84,6 +86,7 @@ enum class PhysicalOperatorType : uint8_t {
 	PRAGMA,
 	TRANSACTION,
 	CREATE_TYPE,
+	ATTACH,
 
 	// -----------------------------
 	// Helpers
@@ -99,7 +102,8 @@ enum class PhysicalOperatorType : uint8_t {
 	LOAD,
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,
-	RESET
+	RESET,
+	EXTENSION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

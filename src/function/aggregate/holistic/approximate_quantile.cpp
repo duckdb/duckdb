@@ -20,7 +20,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	explicit ApproximateQuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
 	}
 
-	explicit ApproximateQuantileBindData(vector<float> quantiles_p) : quantiles(move(quantiles_p)) {
+	explicit ApproximateQuantileBindData(vector<float> quantiles_p) : quantiles(std::move(quantiles_p)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -45,7 +45,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<float>();
-		return make_unique<ApproximateQuantileBindData>(move(quantiles));
+		return make_unique<ApproximateQuantileBindData>(std::move(quantiles));
 	}
 
 	vector<float> quantiles;

@@ -15,15 +15,15 @@ string PositionalReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-bool PositionalReferenceExpression::Equals(const PositionalReferenceExpression *a,
-                                           const PositionalReferenceExpression *b) {
+bool PositionalReferenceExpression::Equal(const PositionalReferenceExpression *a,
+                                          const PositionalReferenceExpression *b) {
 	return a->index == b->index;
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
 	auto copy = make_unique<PositionalReferenceExpression>(index);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 hash_t PositionalReferenceExpression::Hash() const {
@@ -37,7 +37,7 @@ void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
-	return move(expression);
+	return std::move(expression);
 }
 
 } // namespace duckdb

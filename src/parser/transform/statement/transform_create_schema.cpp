@@ -11,6 +11,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery
 	auto info = make_unique<CreateSchemaInfo>();
 
 	D_ASSERT(stmt->schemaname);
+	info->catalog = stmt->catalogname ? stmt->catalogname : INVALID_CATALOG;
 	info->schema = stmt->schemaname;
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
@@ -26,7 +27,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery
 			}
 		}
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

@@ -8,8 +8,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // AlterFunctionInfo
 //===--------------------------------------------------------------------===//
-AlterFunctionInfo::AlterFunctionInfo(AlterFunctionType type, string schema_p, string table_p, bool if_exists)
-    : AlterInfo(AlterType::ALTER_FUNCTION, move(move(schema_p)), move(table_p), if_exists), alter_function_type(type) {
+AlterFunctionInfo::AlterFunctionInfo(AlterFunctionType type, AlterEntryData data)
+    : AlterInfo(AlterType::ALTER_FUNCTION, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+                data.if_exists),
+      alter_function_type(type) {
 }
 AlterFunctionInfo::~AlterFunctionInfo() {
 }
@@ -20,6 +22,7 @@ CatalogType AlterFunctionInfo::GetCatalogType() const {
 
 void AlterFunctionInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteField<AlterFunctionType>(alter_function_type);
+	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteString(name);
 	writer.WriteField(if_exists);
@@ -37,17 +40,16 @@ unique_ptr<AlterInfo> AlterFunctionInfo::Deserialize(FieldReader &reader) {
 //===--------------------------------------------------------------------===//
 // AddFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
-AddFunctionOverloadInfo::AddFunctionOverloadInfo(string schema_p, string name_p, bool if_exists_p,
-                                                 ScalarFunctionSet new_overloads_p)
-    : AlterFunctionInfo(AlterFunctionType::ADD_FUNCTION_OVERLOADS, move(schema_p), move(name_p), if_exists_p),
-      new_overloads(move(new_overloads_p)) {
+AddFunctionOverloadInfo::AddFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads_p)
+    : AlterFunctionInfo(AlterFunctionType::ADD_FUNCTION_OVERLOADS, std::move(data)),
+      new_overloads(std::move(new_overloads_p)) {
 	this->allow_internal = true;
 }
 AddFunctionOverloadInfo::~AddFunctionOverloadInfo() {
 }
 
 unique_ptr<AlterInfo> AddFunctionOverloadInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddFunctionOverloadInfo>(schema, name, if_exists, new_overloads);
+	return make_unique_base<AlterInfo, AddFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
 }
 
 } // namespace duckdb

@@ -10,13 +10,14 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
-DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(std::move(rel)) {
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(move(result)) {
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(std::move(result)) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
@@ -30,7 +31,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, shared_
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->Values(move(values));
+	return conn->Values(std::move(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
@@ -49,30 +50,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, con
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename,
-                                                           shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromCsvAuto(filename);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
                                                            bool file_row_number, bool filename, bool hive_partitioning,
-                                                           shared_ptr<DuckDBPyConnection> conn) {
+                                                           bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning);
+	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning, union_by_name);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                             bool file_row_number, bool filename, bool hive_partitioning,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
+                                                            bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning);
+	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning,
+	                          union_by_name);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn) {
@@ -332,7 +326,7 @@ idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
 	D_ASSERT(aggregate_rel->result && aggregate_rel->result->result);
-	auto tmp_res = move(aggregate_rel->result);
+	auto tmp_res = std::move(aggregate_rel->result);
 	return tmp_res->result->Fetch()->GetValue(0, 0).GetValue<idx_t>();
 }
 
@@ -391,16 +385,22 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
+unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
+	{
+		auto context = rel->context.GetContext();
+		py::gil_scoped_release release;
+		auto pending_query = context->PendingQuery(rel, false);
+		return DuckDBPyConnection::CompletePendingQuery(*pending_query);
+	}
+}
+
 void DuckDBPyRelation::ExecuteOrThrow() {
 	auto tmp_result = make_unique<DuckDBPyResult>();
-	{
-		py::gil_scoped_release release;
-		tmp_result->result = rel->Execute();
-	}
+	tmp_result->result = ExecuteInternal();
 	if (tmp_result->result->HasError()) {
 		tmp_result->result->ThrowError();
 	}
-	result = move(tmp_result);
+	result = std::move(tmp_result);
 }
 
 DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
@@ -436,7 +436,7 @@ py::object DuckDBPyRelation::FetchAll() {
 	AssertResultOpen();
 	auto res = result->Fetchall();
 	result = nullptr;
-	return res;
+	return std::move(res);
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
@@ -537,7 +537,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	rel->CreateView(view_name, replace);
 	// We need to pass ownership of any Python Object Dependencies to the connection
 	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
@@ -555,7 +555,7 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
+	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 
 	Parser parser(rel->context.GetContext()->GetParserOptions());
 	parser.ParseQuery(sql_query);
@@ -564,10 +564,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
-		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(move(parser.statements[0]));
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 		auto query_relation =
-		    make_shared<QueryRelation>(rel->context.GetContext(), move(select_statement), "query_relation");
-		return make_unique<DuckDBPyRelation>(move(query_relation));
+		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
+		return make_unique<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		FunctionParameters parameters;
 		parameters.values.emplace_back(view_name);
@@ -576,7 +576,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	}
 	{
 		py::gil_scoped_release release;
-		auto query_result = rel->context.GetContext()->Query(move(parser.statements[0]), false);
+		auto query_result = rel->context.GetContext()->Query(std::move(parser.statements[0]), false);
 		// Execute it anyways, for creation/altering statements
 		// We only care that it succeeds, we can't store the result
 		D_ASSERT(query_result);
@@ -641,14 +641,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 }
 
 string DuckDBPyRelation::Print() {
-	std::string rel_res_string;
-	{
-		py::gil_scoped_release release;
-		rel_res_string = rel->Limit(10)->Execute()->ToString();
-	}
+	if (rendered_result.empty()) {
+		idx_t limit_rows = 10000;
+		BoxRenderer renderer;
+		auto limit = Limit(limit_rows, 0);
+		auto res = limit->ExecuteInternal();
 
-	return rel->ToString() + "\n---------------------\n-- Result Preview --\n---------------------\n" + rel_res_string +
-	       "\n";
+		auto context = rel->context.GetContext();
+		BoxRendererConfig config;
+		config.limit = limit_rows;
+		rendered_result = res->ToBox(*context, config);
+	}
+	return rendered_result;
 }
 
 string DuckDBPyRelation::Explain() {
@@ -674,6 +678,10 @@ py::list DuckDBPyRelation::ColumnTypes() {
 		res.append(col.Type().ToString());
 	}
 	return res;
+}
+
+bool DuckDBPyRelation::IsRelation(const py::object &object) {
+	return py::isinstance<DuckDBPyRelation>(object);
 }
 
 } // namespace duckdb

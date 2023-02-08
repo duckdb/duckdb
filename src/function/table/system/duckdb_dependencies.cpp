@@ -1,6 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,17 +52,20 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	auto result = make_unique<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
-	auto &catalog = Catalog::GetCatalog(context);
-	auto &dependency_manager = catalog.GetDependencyManager();
-	dependency_manager.Scan([&](CatalogEntry *obj, CatalogEntry *dependent, DependencyType type) {
-		DependencyInformation info;
-		info.object = obj;
-		info.dependent = dependent;
-		info.type = type;
-		result->entries.push_back(info);
-	});
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	if (catalog.IsDuckCatalog()) {
+		auto &duck_catalog = (DuckCatalog &)catalog;
+		auto &dependency_manager = duck_catalog.GetDependencyManager();
+		dependency_manager.Scan([&](CatalogEntry *obj, CatalogEntry *dependent, DependencyType type) {
+			DependencyInformation info;
+			info.object = obj;
+			info.dependent = dependent;
+			info.type = type;
+			result->entries.push_back(info);
+		});
+	}
 
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

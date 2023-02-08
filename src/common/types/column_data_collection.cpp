@@ -51,23 +51,23 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
+	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
+	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
-	Initialize(move(types_p));
-	this->allocator = move(allocator_p);
+	Initialize(std::move(types_p));
+	this->allocator = std::move(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), move(types_p)) {
+    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -81,7 +81,7 @@ ColumnDataCollection::~ColumnDataCollection() {
 }
 
 void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
-	this->types = move(types_p);
+	this->types = std::move(types_p);
 	this->count = 0;
 	this->finished_append = false;
 	D_ASSERT(!types.empty());
@@ -136,10 +136,11 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 		auto &temp_handles = temp_scan_state.current_chunk_state.handles;
 		auto &scan_handles = scan_state.current_chunk_state.handles;
 		for (auto &temp_handle_pair : temp_handles) {
-			auto handle_copy = make_pair<uint32_t, BufferHandle>(scan_handles.size(), move(temp_handle_pair.second));
-			scan_state.current_chunk_state.handles.insert(move(handle_copy));
+			auto handle_copy =
+			    make_pair<uint32_t, BufferHandle>(scan_handles.size(), std::move(temp_handle_pair.second));
+			scan_state.current_chunk_state.handles.insert(std::move(handle_copy));
 		}
-		chunks.push_back(move(chunk));
+		chunks.push_back(std::move(chunk));
 	}
 	// now create all of the column data rows
 	rows.reserve(collection.Count());
@@ -176,12 +177,12 @@ ColumnDataChunkIterationHelper ColumnDataCollection::Chunks() const {
 }
 
 ColumnDataChunkIterationHelper ColumnDataCollection::Chunks(vector<column_t> column_ids) const {
-	return ColumnDataChunkIterationHelper(*this, move(column_ids));
+	return ColumnDataChunkIterationHelper(*this, std::move(column_ids));
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataCollection &collection_p,
                                                                vector<column_t> column_ids_p)
-    : collection(collection_p), column_ids(move(column_ids_p)) {
+    : collection(collection_p), column_ids(std::move(column_ids_p)) {
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
@@ -190,7 +191,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator
 	if (!collection) {
 		return;
 	}
-	collection->InitializeScan(scan_state, move(column_ids_p));
+	collection->InitializeScan(scan_state, std::move(column_ids_p));
 	collection->InitializeScanChunk(scan_state, *scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
 }
@@ -343,11 +344,21 @@ struct StringValueCopy : public BaseValueCopy<string_t> {
 	}
 };
 
+struct ConstListValueCopy : public BaseValueCopy<list_entry_t> {
+	using TYPE = list_entry_t;
+
+	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
+		input.offset = meta_data.child_list_size;
+		return input;
+	}
+};
+
 struct ListValueCopy : public BaseValueCopy<list_entry_t> {
 	using TYPE = list_entry_t;
 
 	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
-		input.offset += meta_data.child_list_size;
+		input.offset = meta_data.child_list_size;
+		meta_data.child_list_size += input.length;
 		return input;
 	}
 };
@@ -543,22 +554,20 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
+
 	auto &segment = meta_data.segment;
 
-	// first append the child entries of the list
 	auto &child_vector = ListVector::GetEntry(source);
-	idx_t child_list_size = ListVector::GetListSize(source);
 	auto &child_type = child_vector.GetType();
-
-	UnifiedVectorFormat child_vector_data;
-	child_vector.ToUnifiedFormat(child_list_size, child_vector_data);
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
+
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
 	// figure out the current list size by traversing the set of child entries
 	idx_t current_list_size = 0;
 	auto current_child_index = child_index;
@@ -567,14 +576,37 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 		current_list_size += child_vdata.count;
 		current_child_index = child_vdata.next_data;
 	}
+
+	// set the child vector
+	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	// FIXME: appending the entire child list here is not required
-	// We can also scan the actual list entries required per the offset/copy_count
-	child_function.function(child_meta_data, child_vector_data, child_vector, 0, child_list_size);
+	auto info = ListVector::GetConsecutiveChildListInfo(source, offset, copy_count);
+
+	if (info.needs_slicing) {
+		SelectionVector sel(info.child_list_info.length);
+		ListVector::GetConsecutiveChildSelVector(source, sel, offset, copy_count);
+
+		auto sliced_child_vector = Vector(child_vector, sel, info.child_list_info.length);
+		sliced_child_vector.Flatten(info.child_list_info.length);
+		info.child_list_info.offset = 0;
+
+		sliced_child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		child_function.function(child_meta_data, child_vector_data, sliced_child_vector, info.child_list_info.offset,
+		                        info.child_list_info.length);
+
+	} else {
+		child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
+		child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
+		                        info.child_list_info.length);
+	}
 
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
-	TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	if (info.is_constant) {
+		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	} else {
+		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
+	}
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
@@ -730,7 +762,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnData
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.push_back(i);
 	}
-	InitializeScan(state, move(column_ids), properties);
+	InitializeScan(state, std::move(column_ids), properties);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
@@ -741,7 +773,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
 	state.properties = properties;
-	state.column_ids = move(column_ids);
+	state.column_ids = std::move(column_ids);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
@@ -751,7 +783,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
                                           ColumnDataScanProperties properties) const {
-	InitializeScan(state.scan_state, move(column_ids), properties);
+	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
@@ -860,7 +892,7 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	this->count += other.count;
 	this->segments.reserve(segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
-		segments.push_back(move(other_seg));
+		segments.push_back(std::move(other_seg));
 	}
 	Verify();
 }
@@ -915,6 +947,9 @@ void ColumnDataCollection::Print() const {
 void ColumnDataCollection::Reset() {
 	count = 0;
 	segments.clear();
+
+	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
+	allocator = make_shared<ColumnDataAllocator>(*allocator);
 }
 
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,

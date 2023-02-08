@@ -6,11 +6,14 @@
 
 namespace duckdb {
 
+// Warning: some fields here were added while this code appears untested
+// -> copy test in test/api/test_plan_serialization.cpp was commented out as WIP
 void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField(use_tmp_file);
-	writer.WriteField(is_file_and_exists);
+	writer.WriteField(allow_overwrite);
 	writer.WriteField(per_thread_output);
+	writer.WriteList<idx_t>(partition_columns);
 
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
@@ -26,20 +29,20 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
-	auto is_file_and_exists = reader.ReadRequired<bool>();
+	auto allow_overwrite = reader.ReadRequired<bool>();
 	auto per_thread_output = reader.ReadRequired<bool>();
+	auto partition_columns = reader.ReadRequiredList<idx_t>();
 
 	auto copy_func_name = reader.ReadRequired<string>();
 
 	auto has_bind_data = reader.ReadRequired<bool>();
 
 	auto &context = state.gstate.context;
-	auto &catalog = Catalog::GetCatalog(context);
-	auto func_catalog = catalog.GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, DEFAULT_SCHEMA, copy_func_name);
-	if (!func_catalog || func_catalog->type != CatalogType::COPY_FUNCTION_ENTRY) {
+	auto copy_func_catalog_entry =
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, copy_func_name);
+	if (!copy_func_catalog_entry) {
 		throw InternalException("Cant find catalog entry for function %s", copy_func_name);
 	}
-	auto copy_func_catalog_entry = (CopyFunctionCatalogEntry *)func_catalog;
 	CopyFunction copy_func = copy_func_catalog_entry->function;
 
 	unique_ptr<FunctionData> bind_data;
@@ -50,12 +53,13 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 		bind_data = copy_func.deserialize(context, reader, copy_func);
 	}
 
-	auto result = make_unique<LogicalCopyToFile>(copy_func, move(bind_data));
+	auto result = make_unique<LogicalCopyToFile>(copy_func, std::move(bind_data));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
-	result->is_file_and_exists = is_file_and_exists;
+	result->allow_overwrite = allow_overwrite;
 	result->per_thread_output = per_thread_output;
-	return move(result);
+	result->partition_columns = std::move(partition_columns);
+	return std::move(result);
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

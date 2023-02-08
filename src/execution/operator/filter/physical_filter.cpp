@@ -6,17 +6,17 @@ namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, move(types), estimated_cardinality) {
+    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
 	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
 		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 		for (auto &expr : select_list) {
-			conjunction->children.push_back(move(expr));
+			conjunction->children.push_back(std::move(expr));
 		}
-		expression = move(conjunction);
+		expression = std::move(conjunction);
 	} else {
-		expression = move(select_list[0]);
+		expression = std::move(select_list[0]);
 	}
 }
 
@@ -53,7 +53,10 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 }
 
 string PhysicalFilter::ParamsToString() const {
-	return expression->GetName();
+	auto result = expression->GetName();
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	return result;
 }
 
 } // namespace duckdb

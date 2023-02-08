@@ -41,7 +41,7 @@ int main() {
 	BoundOrderByNode node(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
 	                      make_unique<BoundReferenceExpression>(input_types[0], 0) // a
 	);
-	sum->orders.push_back(move(node));
+	sum->orders.push_back(std::move(node));
 
 	// the return types are (1) the input types, and (2) the return types of the computed window functions
 	// the window function also returns all input columns rather than only the result columns of the window function
@@ -50,9 +50,9 @@ int main() {
 	// in this case the window function will receive [a, b] as input, and output [a, b, row_num] as output
 	vector<LogicalType> result_types {input_types[0], input_types[1], sum->return_type};
 	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(move(sum));
+	expressions.push_back(std::move(sum));
 	// construct the window operator
-	auto window = make_unique<PhysicalWindow>(result_types, move(expressions), 0);
+	auto window = make_unique<PhysicalWindow>(result_types, std::move(expressions), 0);
 
 	// now we can run the window function
 	// first set up some contexts
@@ -92,7 +92,7 @@ int main() {
 
 	// now finalize
 	// this should happen once in total, after every thread has been combined
-	window->FinalizeInternal(client_context, move(global_state));
+	window->FinalizeInternal(client_context, std::move(global_state));
 
 	// after the window function is finalized we can pull the result from it using the GetChunk method
 	DataChunk result;

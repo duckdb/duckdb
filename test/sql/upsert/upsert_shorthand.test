@@ -1,0 +1,41 @@
+# name: test/sql/upsert/upsert_shorthand.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (a integer, b integer unique);
+
+statement ok
+insert into tbl values (1,2), (2,1);
+
+statement ok
+insert into tbl values (1,2) on conflict do update set a = excluded.a;
+
+# We can not supply both a shorthand and a verbose version of the ON CONFLICT clause
+statement error
+insert or replace into tbl values (4,3) on conflict do nothing;
+----
+Parser Error: You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove the first if you want to have more granual control
+
+# INSERT OR IGNORE is shorthand for DO NOTHING
+statement ok
+insert or ignore into tbl values (1,2), (2,1);
+
+# INSERT OR REPLACE is shorthand for DO UPDATE SET a = excluded.a, SET b = excluded.b;
+statement ok
+insert or replace into tbl values (5,2), (10,1);
+
+query II
+select * from tbl;
+----
+5	2
+10	1
+
+statement ok
+create or replace table tbl (a integer unique, b integer unique);
+
+# When there is more than 1 index on the table, OR REPLACE is not supported, just like DO UPDATE
+statement error
+insert or replace into tbl values (1,2);

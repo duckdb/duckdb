@@ -19,6 +19,7 @@
 #include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class BlockManager;
 class ColumnData;
 class DatabaseInstance;
@@ -28,6 +29,7 @@ struct DataTableInfo;
 class ExpressionExecutor;
 class RowGroupWriter;
 class UpdateSegment;
+class TableStorageInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
@@ -49,15 +51,15 @@ public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 public:
-	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(DatabaseInstance &db, BlockManager &block_manager, DataTableInfo &table_info,
+	RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
+	RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info,
 	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
 	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
 private:
 	//! The database instance
-	DatabaseInstance &db;
+	AttachedDatabase &db;
 	//! The block manager
 	BlockManager &block_manager;
 	//! The table info of this row_group
@@ -70,9 +72,7 @@ private:
 	vector<shared_ptr<SegmentStatistics>> stats;
 
 public:
-	DatabaseInstance &GetDatabase() {
-		return db;
-	}
+	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
@@ -150,7 +150,7 @@ public:
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result);
+	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
 
 	void Verify();
 

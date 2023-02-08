@@ -1,7 +1,9 @@
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -39,7 +41,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	switch (parent->type) {
 	case CatalogType::TABLE_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto table_entry = (TableCatalogEntry *)entry;
+			auto table_entry = (DuckTableEntry *)entry;
+			D_ASSERT(table_entry->IsDuckTable());
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
@@ -91,7 +94,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::DELETED_ENTRY:
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY: {
-			auto table_entry = (TableCatalogEntry *)entry;
+			auto table_entry = (DuckTableEntry *)entry;
+			D_ASSERT(table_entry->IsDuckTable());
 			table_entry->CommitDrop();
 			log->WriteDropTable(table_entry);
 			break;
@@ -220,9 +224,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 
 		auto &catalog = catalog_entry->catalog;
 		D_ASSERT(catalog);
+		D_ASSERT(catalog->IsDuckCatalog());
 
 		// Grab a write lock on the catalog
-		lock_guard<mutex> write_lock(catalog->write_lock);
+		auto &duck_catalog = (DuckCatalog &)*catalog;
+		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		catalog_entry->set->UpdateTimestamp(catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {
 			catalog_entry->set->UpdateTimestamp(catalog_entry, commit_id);

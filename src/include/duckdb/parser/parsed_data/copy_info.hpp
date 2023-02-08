@@ -16,27 +16,30 @@
 namespace duckdb {
 
 struct CopyInfo : public ParseInfo {
-	CopyInfo() : schema(DEFAULT_SCHEMA) {
+	CopyInfo() : catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
 	}
 
+	//! The catalog name to copy to/from
+	string catalog;
 	//! The schema name to copy to/from
 	string schema;
 	//! The table name to copy to/from
 	string table;
 	//! List of columns to copy to/from
 	vector<string> select_list;
-	//! The file path to copy to/from
-	string file_path;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
 	//! The file format of the external file
 	string format;
+	//! The file path to copy to/from
+	string file_path;
 	//! Set of (key, value) options
 	unordered_map<string, vector<Value>> options;
 
 public:
 	unique_ptr<CopyInfo> Copy() const {
 		auto result = make_unique<CopyInfo>();
+		result->catalog = catalog;
 		result->schema = schema;
 		result->table = table;
 		result->select_list = select_list;

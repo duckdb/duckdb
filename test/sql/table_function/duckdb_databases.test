@@ -1,0 +1,43 @@
+# name: test/sql/table_function/duckdb_databases.test
+# description: Test duckdb_databases function
+# group: [table_function]
+
+# avoid loading a storage database because it changes the initial database name
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT * FROM duckdb_databases();
+
+query IIII
+SELECT database_name, internal, path, type FROM duckdb_databases() ORDER BY database_name;
+----
+memory	false	NULL	duckdb
+system	true	NULL	duckdb
+temp	true	NULL	duckdb
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_databases.db' AS new_duckdb_database
+
+query IIII
+SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
+----
+new_duckdb_database	false	duckdb_databases.db	duckdb
+
+query II nosort show_db
+SELECT database_name FROM duckdb_databases ORDER BY database_name
+----
+
+query II nosort show_db
+SHOW databases
+----
+
+query I
+SELECT datname FROM pg_catalog.pg_database ORDER BY 1
+----
+memory
+new_duckdb_database
+system
+temp

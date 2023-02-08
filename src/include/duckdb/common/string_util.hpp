@@ -121,6 +121,9 @@ public:
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
 
+	//! Case insensitive equals
+	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
+
 	//! Format a string using printf semantics
 	template <typename... Args>
 	static string Format(const string fmt_str, Args... params) {
@@ -134,6 +137,8 @@ public:
 	DUCKDB_API static void LTrim(string &str);
 	//! Remove the whitespace char in the right end of the string
 	DUCKDB_API static void RTrim(string &str);
+	//! Remove the all chars from chars_to_trim char in the right end of the string
+	DUCKDB_API static void RTrim(string &str, const string &chars_to_trim);
 	//! Remove the whitespace char in the left and right end of the string
 	DUCKDB_API static void Trim(string &str);
 
