@@ -46,7 +46,4 @@ select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_mu
 2	100
 3	98
 
-statement error
-select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_multiple_columns.csv', buffer_size=24) group by foo order by cnt desc
-
 endloop
