@@ -1,4 +1,4 @@
-# name: test/sql/index/art/fuzzer_issues.test
+# name: test/sql/index/art/test_art_fuzzer_issues.test
 # description: Test different ART fuzzer issues
 # group: [art]
 
