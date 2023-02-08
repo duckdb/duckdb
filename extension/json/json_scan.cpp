@@ -3,6 +3,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -62,12 +63,26 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	return std::move(result);
 }
 
+static bool	MissingExtensionHttpfs(const string& filepath, const ClientContext& context){
+	const string prefixes[] = {"http://", "https://", "s3://"};
+	for (auto& prefix : prefixes){
+		if (StringUtil::StartsWith(filepath, prefix)){
+			if (!context.db->LoadedExtensions().count("httpfs")) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<string> &patterns,
                                        vector<string> &file_paths) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
+			if (MissingExtensionHttpfs(file_pattern, context)){
+				throw MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs extension is not loaded", file_pattern);
+			}
 			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
 		}
 		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());

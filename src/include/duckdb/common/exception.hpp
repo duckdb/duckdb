@@ -258,7 +258,18 @@ public:
 	DUCKDB_API explicit IOException(const string &msg);
 
 	template <typename... Args>
-	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	explicit IOException(const string &msg, Args... params) 
+		: IOException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class MissingExtensionException : public IOException {
+public:
+	DUCKDB_API explicit MissingExtensionException(const string &msg);
+
+	template <typename... Args>
+	explicit MissingExtensionException(const string &msg, Args... params)
+		: IOException(ConstructMessage(msg, params...)) {
 	}
 };
 
