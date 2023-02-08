@@ -135,7 +135,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 					throw BinderException("Unrecognized type \"%s\" for read_csv_auto %s definition", sql_type,
 					                      kv.first);
 				}
-				options.sql_type_list.push_back(move(def_type));
+				options.sql_type_list.push_back(std::move(def_type));
 			}
 		} else if (loption == "all_varchar") {
 			options.all_varchar = BooleanValue::Get(kv.second);

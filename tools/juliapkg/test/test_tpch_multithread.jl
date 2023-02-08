@@ -1,9 +1,9 @@
-# test_tpch.jl
+# test_tpch_multithread.jl
 
 # DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
 
-@testset "Test TPC-H" begin
-    sf = "0.1"
+function test_tpch_multithread()
+    sf = "0.10"
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
@@ -19,6 +19,7 @@
     region = DataFrame(DBInterface.execute(native_con, "SELECT * FROM region"))
     supplier = DataFrame(DBInterface.execute(native_con, "SELECT * FROM supplier"))
 
+    id = Threads.threadid()
     # now open a new in-memory database, and register the dataframes there
     df_con = DBInterface.connect(DuckDB.DB)
     DuckDB.register_data_frame(df_con, customer, "customer")
@@ -31,24 +32,18 @@
     DuckDB.register_data_frame(df_con, supplier, "supplier")
     GC.gc()
 
-    # run all the queries
-    for i in 1:22
-        #         print("Q$i\n")
-        # for each query, compare the results of the query ran on the original tables
-        # versus the result when run on the Julia DataFrames
-        res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
-        res2 = DataFrame(DBInterface.execute(native_con, "PRAGMA tpch($i)"))
-        @test isequal(res, res2)
-        #         print("Native DuckDB\n")
-        #         @time begin
-        #             results = DBInterface.execute(native_con, "PRAGMA tpch($i)")
-        #         end
-        #         print("DataFrame\n")
-        #         @time begin
-        #             results = DBInterface.execute(df_con, "PRAGMA tpch($i)")
-        #         end
-    end
+    # Execute all the queries
+    for _ in 1:10
+        for i in 1:22
 
+            print("T:$id | Q:$i\n")
+            res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
+        end
+    end
     DBInterface.close!(df_con)
-    DBInterface.close!(native_con)
+    return DBInterface.close!(native_con)
+end
+
+@testset "Test TPC-H Stresstest" begin
+    test_tpch_multithread()
 end

@@ -376,6 +376,10 @@ void Executor::WorkOnTasks() {
 	}
 }
 
+bool Executor::ExecutionIsFinished() {
+	return completed_pipelines >= total_pipelines || HasError();
+}
+
 PendingExecutionResult Executor::ExecuteTask() {
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
 		return execution_result;

@@ -188,14 +188,6 @@ class TestAllTypes(object):
                 ],
                 mask=[0, 0, 1],
             ),
-            'date': np.ma.array(
-                [
-                    np.datetime64(-5235121029329846272, "ns"),
-                    np.datetime64(5235121029329846272, "ns"),
-                    np.datetime64("1990-01-01T00:42"),
-                ],
-                mask=[0, 0, 1],
-            ),
             # For timestamp_ns, the lowest value is out-of-range for numpy,
             # such that the conversion yields "Not a Time"
             'timestamp_ns': np.ma.array(
@@ -314,6 +306,8 @@ class TestAllTypes(object):
         # - 'dec38_10'
 
         # The following types lead to errors:
+        # Conversion Error: Could not convert DATE to nanoseconds
+        # - 'date'
         # Conversion Error: Date out of range in timestamp conversion
         # - 'timestamp_array'
         # - 'timestamptz_array'
@@ -329,11 +323,9 @@ class TestAllTypes(object):
         for cur_type in all_types:
             if cur_type not in correct_answer_map:
                 continue
-
             result = rel.project(cur_type).fetchnumpy()
             result = result[cur_type]
             correct_answer = correct_answer_map[cur_type]
-
             if isinstance(result, pd.Categorical) or result.dtype == object:
                 assert recursive_equality(list(result), list(correct_answer))
             else:

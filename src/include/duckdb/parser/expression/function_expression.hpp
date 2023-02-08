@@ -68,8 +68,8 @@ public:
 			D_ASSERT(!distinct);
 			if (entry.children.size() == 1) {
 				if (StringUtil::Contains(function_name, "__postfix")) {
-					return "(" + entry.children[0]->ToString() + ")" +
-					       StringUtil::Replace(function_name, "__postfix", "");
+					return "((" + entry.children[0]->ToString() + ")" +
+					       StringUtil::Replace(function_name, "__postfix", "") + ")";
 				} else {
 					return function_name + "(" + entry.children[0]->ToString() + ")";
 				}
