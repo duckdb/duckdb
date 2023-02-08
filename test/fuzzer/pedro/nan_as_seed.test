@@ -1,4 +1,4 @@
-# name: test/fuzzer/pedro/nan-as-seed.test
+# name: test/fuzzer/pedro/nan_as_seed.test
 # description: Issue #4984 (42): Nan as seed
 # group: [pedro]
 
