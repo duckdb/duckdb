@@ -820,15 +820,15 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	}
 	// now fetch the data from the RHS
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
-		auto &v = result.data[input.ColumnCount() + i];
+		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
 		for (idx_t j = 0; j < input.size(); j++) {
 			if (!found_match[j]) {
-				FlatVector::SetNull(v, j, true);
+				FlatVector::SetNull(vector, j, true);
 			}
 		}
 		// for the remaining values we fetch the values
-		GatherResult(v, result_sel, result_sel, result_count, i + ht.condition_types.size());
+		GatherResult(vector, result_sel, result_sel, result_count, i + ht.condition_types.size());
 	}
 	result.SetCardinality(input.size());
 
