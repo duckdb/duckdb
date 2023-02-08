@@ -9,9 +9,12 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE t2(c1 INT, c2 INT);
 
-mode output_result
-
-# SELECT 1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);
-
-statement ok
+statement error 
 SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT c1);
+----
+Binder Error
+
+query I 
+SELECT 1 alias1 FROM (SELECT 1) t2(c1) GROUP BY ALL HAVING (SELECT alias1);
+----
+1
