@@ -338,7 +338,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	}
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
-			memcpy(target, tz_name, strlen(tz_name));
+			strncpy(target, tz_name, strlen(tz_name));
 			target += strlen(tz_name);
 		}
 		break;
