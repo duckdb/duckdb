@@ -822,29 +822,9 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &v = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
-		if (v.GetType().InternalType() != PhysicalType::STRUCT) {
-			// fast path for non-structs
-			// batch set all entries to invalid
-			// then, based on which entries found a match, set those entries back to valid
-			auto &mask = FlatVector::Validity(v);
-			mask.SetAllInvalid(input.size());
-			for (idx_t j = 0; j < result_count; j++) {
-				mask.SetValid(result_sel.get_index(j));
-			}
-		} else {
-			// for structs we do this the other way around
-			// first we figure out which entries found a match
-			// then we call FlatVector::SetNull for all entries that did not find a match
-			// we need to use FlatVector::SetNull so all child entries are also correctly set to invalid
-			vector<bool> found_match;
-			found_match.resize(input.size(), false);
-			for (idx_t j = 0; j < result_count; j++) {
-				found_match[result_sel.get_index(j)] = true;
-			}
-			for (idx_t i = 0; i < input.size(); i++) {
-				if (!found_match[i]) {
-					FlatVector::SetNull(v, i, true);
-				}
+		for (idx_t j = 0; j < input.size(); j++) {
+			if (!found_match[j]) {
+				FlatVector::SetNull(v, j, true);
 			}
 		}
 		// for the remaining values we fetch the values
