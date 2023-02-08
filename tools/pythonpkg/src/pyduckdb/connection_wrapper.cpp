@@ -204,7 +204,7 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyCo
 	return conn->Cursor();
 }
 
-py::list PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnection> conn) {
+Optional<py::list> PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}

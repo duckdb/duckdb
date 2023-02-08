@@ -860,7 +860,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	return shared_from_this();
 }
 
-py::list DuckDBPyConnection::GetDescription() {
+Optional<py::list> DuckDBPyConnection::GetDescription() {
 	if (!result) {
 		return py::none();
 	}

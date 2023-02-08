@@ -131,7 +131,7 @@ public:
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
 
-	py::list GetDescription();
+	Optional<py::list> GetDescription();
 
 	// these should be functions on the result but well
 	Optional<py::tuple> FetchOne();
