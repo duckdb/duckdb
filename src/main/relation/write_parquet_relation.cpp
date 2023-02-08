@@ -9,7 +9,7 @@ namespace duckdb {
 WriteParquetRelation::WriteParquetRelation(shared_ptr<Relation> child_p, string parquet_file_p,
                                            case_insensitive_map_t<vector<Value>> options_p)
     : Relation(child_p->context, RelationType::WRITE_PARQUET_RELATION), child(std::move(child_p)),
-      parquet_file(std::move(parquet_file_p)), options(move(options_p)) {
+      parquet_file(std::move(parquet_file_p)), options(std::move(options_p)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 

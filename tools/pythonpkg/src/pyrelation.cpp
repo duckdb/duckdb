@@ -531,7 +531,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 		options["compression"] = {Value(py::str(compression))};
 	}
 
-	rel->WriteParquet(filename, move(options));
+	rel->WriteParquet(filename, std::move(options));
 }
 
 void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, const py::object &na_rep,
@@ -628,7 +628,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 		options["compression"] = {Value(py::str(compression))};
 	}
 
-	rel->WriteCSV(filename, move(options));
+	rel->WriteCSV(filename, std::move(options));
 }
 
 void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
