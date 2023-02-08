@@ -4,8 +4,9 @@ from pathlib import Path
 from shutil import copyfileobj
 from typing import Callable
 
+import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
-from pytest import raises, importorskip, fixture, MonkeyPatch
+from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
@@ -104,3 +105,23 @@ class TestPythonFilesystem:
 
         with raises(ModuleNotFoundError):
             duckdb_cursor.register_filesystem(None)
+
+    @mark.skipif(sys.version_info < (3, 8), reason="ArrowFSWrapper requires python 3.8 or higher")
+    def test_arrow_fs_wrapper(self, tmp_path: Path):
+        fs = importorskip('pyarrow.fs')
+        from fsspec.implementations.arrow import ArrowFSWrapper
+
+        local = fs.LocalFileSystem()
+        local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
+        local_fsspec.protocol = "local"
+        filename = str(tmp_path / "test.csv")
+        with local_fsspec.open(filename, mode='w') as f:
+            f.write("a,b,c\n")
+            f.write("1,2,3\n")
+            f.write("4,5,6\n")
+
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.register_filesystem(local_fsspec)
+        duckdb_cursor.execute(f"select * from read_csv_auto('local://{filename}', header=true)")
+
+        assert duckdb_cursor.fetchall() == [(1, 2, 3), (4, 5, 6)]
