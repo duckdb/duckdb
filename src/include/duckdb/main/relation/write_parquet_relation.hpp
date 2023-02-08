@@ -12,12 +12,13 @@
 
 namespace duckdb {
 
-class WriteCSVRelation : public Relation {
+class WriteParquetRelation : public Relation {
 public:
-	WriteCSVRelation(shared_ptr<Relation> child, string csv_file, case_insensitive_map_t<vector<Value>> options);
+	WriteParquetRelation(shared_ptr<Relation> child, string parquet_file,
+	                     case_insensitive_map_t<vector<Value>> options);
 
 	shared_ptr<Relation> child;
-	string csv_file;
+	string parquet_file;
 	vector<ColumnDefinition> columns;
 	case_insensitive_map_t<vector<Value>> options;
 

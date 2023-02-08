@@ -6,7 +6,7 @@
 # stubgen override - missing import of Set
 from typing import Any, ClassVar, Set, Optional
 
-from typing import overload
+from typing import overload, Dict, List
 import pandas
 # stubgen override - unfortunately we need this for version checks
 import sys
@@ -72,7 +72,7 @@ class DuckDBPyConnection:
         compression: Optional[str] = None,
         sep: Optional[str] = None,
         delimiter: Optional[str] = None,
-        dtype: Optional[dict[str, str] | list[str]] = None,
+        dtype: Optional[Dict[str, str] | List[str]] = None,
         na_values: Optional[str] = None,
         skiprows: Optional[int] = None,
         quotechar: Optional[str] = None,
@@ -93,7 +93,7 @@ class DuckDBPyConnection:
         compression: Optional[str] = None,
         sep: Optional[str] = None,
         delimiter: Optional[str] = None,
-        dtype: Optional[dict[str, str] | list[str]] = None,
+        dtype: Optional[Dict[str, str] | List[str]] = None,
         na_values: Optional[str] = None,
         skiprows: Optional[int] = None,
         quotechar: Optional[str] = None,
@@ -109,9 +109,13 @@ class DuckDBPyConnection:
     ) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload
+    def read_parquet(self, file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
+    @overload
+    def read_parquet(self, file_globs: List[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
+    @overload
     def from_parquet(self, file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
     @overload
-    def from_parquet(self, file_globs: list[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
+    def from_parquet(self, file_globs: List[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ...) -> DuckDBPyRelation: ...
     def from_query(self, query: str, alias: str = ...) -> DuckDBPyRelation: ...
     def from_substrait(self, proto: bytes) -> DuckDBPyRelation: ...
     def get_substrait(self, query: str) -> DuckDBPyRelation: ...
@@ -194,7 +198,44 @@ class DuckDBPyRelation:
     def unique(self, unique_aggr: str) -> DuckDBPyRelation: ...
     def value_counts(self, value_counts_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
     def var(self, var_aggr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
-    def write_csv(self, file_name: str) -> None: ...
+    def to_parquet(
+        self,
+        file_name: str,
+        compression: Optional[str]
+    ) -> None: ...
+    def write_parquet(
+        self,
+        file_name: str,
+        compression: Optional[str]
+    ) -> None: ...
+    def to_csv(
+        self,
+        file_name: str,
+        sep: Optional[str],
+        na_rep: Optional[str],
+        header: Optional[bool],
+        quotechar: Optional[str],
+        escapechar: Optional[str],
+        date_format: Optional[str],
+        timestamp_format: Optional[str],
+        quoting: Optional[str | int],
+        encoding: Optional[str],
+        compression: Optional[str]
+    ) -> None: ...
+    def write_csv(
+        self,
+        file_name: str,
+        sep: Optional[str],
+        na_rep: Optional[str],
+        header: Optional[bool],
+        quotechar: Optional[str],
+        escapechar: Optional[str],
+        date_format: Optional[str],
+        timestamp_format: Optional[str],
+        quoting: Optional[str | int],
+        encoding: Optional[str],
+        compression: Optional[str]
+    ) -> None: ...
     def __len__(self) -> int: ...
     @property
     def alias(self) -> str: ...
@@ -306,7 +347,7 @@ def read_csv(
     compression: Optional[str] = None,
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
-    dtype: Optional[dict[str, str] | list[str]] = None,
+    dtype: Optional[Dict[str, str] | List[str]] = None,
     na_values: Optional[str] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
@@ -327,7 +368,7 @@ def from_csv_auto(
     compression: Optional[str] = None,
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
-    dtype: Optional[dict[str, str] | list[str]] = None,
+    dtype: Optional[Dict[str, str] | List[str]] = None,
     na_values: Optional[str] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
@@ -365,9 +406,13 @@ def fetchone(connection: DuckDBPyConnection = ...) -> object: ...
 def from_arrow(arrow_object: object, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def from_df(df: pandas.DataFrame = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 @overload
+def read_parquet(file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
+@overload
+def read_parquet(file_globs: List[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
+@overload
 def from_parquet(file_glob: str, binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 @overload
-def from_parquet(file_globs: list[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
+def from_parquet(file_globs: List[str], binary_as_string: bool = ..., *, file_row_number: bool = ..., filename: bool = ..., hive_partitioning: bool = ..., union_by_name: bool = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def from_query(query: str, alias: str = ..., connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def from_substrait(proto: bytes, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
 def get_substrait(query: str, connection: DuckDBPyConnection = ...) -> DuckDBPyRelation: ...
