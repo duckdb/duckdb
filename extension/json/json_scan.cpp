@@ -146,16 +146,20 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto &bind_data = (JSONScanData &)*input.bind_data;
 	auto result = make_unique<JSONGlobalTableFunctionState>(context, input);
 
-	// Check if we need to do projection pushdown
+	// Perform projection pushdown
 	if (bind_data.type == JSONScanType::READ_JSON) {
 		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
+		if (bind_data.auto_detect && input.column_ids.size() < bind_data.names.size()) {
+			// If we are auto-detecting, but don't need all columns present in the file,
+			// then we don't need to throw an error if we encounter an unseen column
+			bind_data.transform_options.error_unknown_key = false;
+		}
 		vector<string> names;
 		names.reserve(input.column_ids.size());
 		for (const auto &id : input.column_ids) {
 			names.push_back(std::move(bind_data.names[id]));
 		}
 		bind_data.names = std::move(names);
-		bind_data.transform_options.error_unknown_key = false;
 	}
 	return result;
 }
