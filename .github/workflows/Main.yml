@@ -55,6 +55,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -97,6 +98,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -138,6 +140,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -180,6 +183,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -221,6 +225,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -260,6 +265,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -307,6 +313,17 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+# Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
+    - name: Build
+      shell: bash
+      run: make release
+
     - name: Test
       shell: bash
       run: make sqlite
@@ -337,6 +354,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -383,6 +401,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash

@@ -50,6 +50,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build source dist
       shell: bash
@@ -155,6 +156,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -212,6 +214,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.python_build }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
@@ -276,6 +279,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.python_build }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
@@ -320,6 +324,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash

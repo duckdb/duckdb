@@ -65,8 +65,11 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					bool carrier_return = (*buffer)[position_buffer] == '\r';
 					position_buffer++;
-					if (carrier_return && position_buffer < end_buffer && (*buffer)[position_buffer] == '\n') {
+					if (carrier_return && position_buffer < buffer_size && (*buffer)[position_buffer] == '\n') {
 						position_buffer++;
+					}
+					if (position_buffer > end_buffer) {
+						return false;
 					}
 					return true;
 				}
