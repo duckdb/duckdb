@@ -83,15 +83,7 @@ public:
 		return !validity_mask;
 	}
 	inline bool CheckAllValid(idx_t count) const {
-		if (AllValid()) {
-			return true;
-		}
-		idx_t entry_count = ValidityBuffer::EntryCount(count);
-		idx_t valid_count = 0;
-		for (idx_t i = 0; i < entry_count; i++) {
-			valid_count += validity_mask[i] == ValidityBuffer::MAX_ENTRY;
-		}
-		return valid_count == entry_count;
+		return CountValid(count) == count;
 	}
 
 	inline bool CheckAllValid(idx_t to, idx_t from) const {
