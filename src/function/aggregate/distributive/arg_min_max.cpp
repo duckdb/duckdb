@@ -183,7 +183,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 		auto states = (STATE **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
-			const auto aidx = adata.sel->get_index(i);
+			const auto aidx = i;
 			const auto bidx = bdata.sel->get_index(i);
 			if (!bdata.validity.RowIsValid(bidx)) {
 				continue;
