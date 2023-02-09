@@ -472,13 +472,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		options["sample_size"] = Value::INTEGER(py::int_(sample_size));
 	}
 
-	// TODO: add 'maximum_depth' option
-
-	if (!options.count("columns")) {
-		options["auto_detect"] = Value::BOOLEAN(true);
+	if (!py::none().is(maximum_depth)) {
+		if (!py::isinstance<py::int_>(maximum_depth)) {
+			string actual_type = py::str(maximum_depth.get_type());
+			throw InvalidInputException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
+		}
+		options["maximum_depth"] = Value::INTEGER(py::int_(maximum_depth));
 	}
 
-	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options));
+	bool auto_detect = false;
+	if (!options.count("columns")) {
+		options["auto_detect"] = Value::BOOLEAN(true);
+		auto_detect = true;
+	}
+
+	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
 		throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
 	}

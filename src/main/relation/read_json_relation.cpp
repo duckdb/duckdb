@@ -3,8 +3,9 @@
 namespace duckdb {
 
 ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, string json_file_p,
-                                   named_parameter_map_t options, string alias_p)
-    : TableFunctionRelation(context, "read_json", {Value(json_file_p)}, std::move(options)),
+                                   named_parameter_map_t options, bool auto_detect, string alias_p)
+    : TableFunctionRelation(context, auto_detect ? "read_json_auto" : "read_json", {Value(json_file_p)},
+                            std::move(options)),
       json_file(std::move(json_file_p)), alias(std::move(alias_p)) {
 
 	if (alias.empty()) {
