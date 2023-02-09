@@ -279,6 +279,11 @@ duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t chunk_size, shared_
 	return conn->FetchArrow(chunk_size);
 }
 
+py::object PyConnectionWrapper::FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn) {
+	auto arrow = PyConnectionWrapper::FetchArrow(chunk_size, std::move(conn));
+	return pybind11::module_::import("polars").attr("DataFrame")(arrow);
+}
+
 duckdb::pyarrow::RecordBatchReader PyConnectionWrapper::FetchRecordBatchReader(const idx_t chunk_size,
                                                                                shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {

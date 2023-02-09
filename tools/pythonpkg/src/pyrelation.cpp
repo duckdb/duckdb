@@ -478,6 +478,11 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return res;
 }
 
+py::object DuckDBPyRelation::ToPolars(idx_t batch_size) {
+	auto arrow = ToArrowTable(batch_size);
+	return pybind11::module_::import("polars").attr("DataFrame")(arrow);
+}
+
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	if (!result) {
 		ExecuteOrThrow();

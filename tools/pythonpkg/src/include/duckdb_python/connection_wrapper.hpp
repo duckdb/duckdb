@@ -109,6 +109,8 @@ public:
 
 	static duckdb::pyarrow::Table FetchArrow(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static py::object FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size,
 	                                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 

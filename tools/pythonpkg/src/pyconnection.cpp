@@ -129,9 +129,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("parameters") = py::none());
 
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
-	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
-	         "otherwise run the query as-is.",
-	         py::arg("query"), py::arg("alias") = "query_relation");
+	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
+	             "otherwise run the query as-is.",
+	             py::arg("query"), py::arg("alias") = "query_relation");
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -972,6 +972,39 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
+
+static bool IsPolarsDataFrame(py::object entry) {
+	auto py_object_type = string(py::str(entry.get_type()));
+	if (StringUtil::Contains(py_object_type, "polars.internals.dataframe.frame.DataFrame")) {
+		return true;
+	}
+	return false;
+}
+
+static bool IsLazyPolarsDataFrame(py::object entry) {
+	auto py_object_type = string(py::str(entry.get_type()));
+	if (StringUtil::Contains(py_object_type, "polars.internals.lazyframe.frame.LazyFrame")) {
+		return true;
+	}
+	return false;
+}
+
+static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
+                            vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
+	string name = "arrow_" + GenerateRandomName();
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
+	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
+
+	table_function.function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
+	table_function.external_dependency =
+	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+}
+
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
                                            py::object &current_frame) {
 	if (!dict.contains(table_name)) {
@@ -989,18 +1022,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
 		                                                                      make_unique<RegisteredObject>(new_df));
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
-		string name = "arrow_" + GenerateRandomName();
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
-		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
-
-		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
-		table_function->external_dependency =
-		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+		CreateArrowScan(entry, *table_function, children, config);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
@@ -1009,6 +1031,13 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 
 		auto subquery = make_unique<SubqueryRef>(std::move(select));
 		return std::move(subquery);
+	} else if (IsPolarsDataFrame(entry)) {
+		auto arrow_dataset = entry.attr("to_arrow")();
+		CreateArrowScan(arrow_dataset, *table_function, children, config);
+	} else if (IsLazyPolarsDataFrame(entry)) {
+		auto materialized = entry.attr("collect")();
+		auto arrow_dataset = materialized.attr("to_arrow")();
+		CreateArrowScan(arrow_dataset, *table_function, children, config);
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
