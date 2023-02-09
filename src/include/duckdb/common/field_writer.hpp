@@ -94,11 +94,6 @@ public:
 		element.Serialize(*buffer);
 	}
 
-	void WriteSerializableType(const LogicalType &element) {
-		AddField();
-		element.Serialize(*buffer, from_catalog);
-	}
-
 	template <class T>
 	void WriteSerializableList(const vector<unique_ptr<T>> &elements) {
 		AddField();
@@ -133,17 +128,11 @@ public:
 		return *buffer;
 	}
 
-	void SetFromCatalog(bool from_catalog_p) {
-		from_catalog = from_catalog_p;
-	}
-	bool IsFromCatalog() {
-		return from_catalog;
-	};
-
-private:
 	void AddField() {
 		field_count++;
 	}
+private:
+
 
 	template <class T>
 	void Write(const T &element) {
@@ -157,7 +146,6 @@ private:
 	unique_ptr<BufferedSerializer> buffer;
 	idx_t field_count;
 	bool finalized;
-	bool from_catalog = false;
 };
 
 template <>
@@ -371,8 +359,6 @@ public:
 
 	//! Called after all fields have been read. Should always be called.
 	DUCKDB_API void Finalize();
-
-	void ForceFinalize();
 
 	Deserializer &GetSource() {
 		return source;

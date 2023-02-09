@@ -778,7 +778,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			// return the "larger" type, with the most members
 			return left_member_count > right_member_count ? left : right;
 		}
-		// otherwise, keep left, dont try to meld the two together.
+		// otherwise, keep left, don't try to meld the two together.
 		return left;
 	}
 	// types are equal but no extra specifier: just return the type
@@ -819,17 +819,6 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-enum class ExtraTypeInfoType : uint8_t {
-	INVALID_TYPE_INFO = 0,
-	GENERIC_TYPE_INFO = 1,
-	DECIMAL_TYPE_INFO = 2,
-	STRING_TYPE_INFO = 3,
-	LIST_TYPE_INFO = 4,
-	STRUCT_TYPE_INFO = 5,
-	ENUM_TYPE_INFO = 6,
-	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
-};
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -915,6 +904,10 @@ TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
 		return nullptr;
 	}
 	return ((ExtraTypeInfo &)*info).catalog_entry;
+}
+
+ExtraTypeInfoType LogicalType::GetExtraTypeInfoType(const ExtraTypeInfo &type){
+	return type.type;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1246,7 +1239,7 @@ const string &UnionType::GetMemberName(const LogicalType &type, idx_t index) {
 }
 
 idx_t UnionType::GetMemberCount(const LogicalType &type) {
-	// dont count the "tag" field
+	// don't count the "tag" field
 	return StructType::GetChildTypes(type).size() - 1;
 }
 const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &type) {
@@ -1312,6 +1305,9 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	const string &GetEnumName() {
 		return enum_name;
 	};
+	const string GetSchemaName() const {
+		return catalog_entry ? catalog_entry->schema->name: "";
+	};
 	const Vector &GetValuesInsertOrder() {
 		return values_insert_order;
 	};
@@ -1349,16 +1345,8 @@ protected:
 		if (dict_type != EnumDictType::VECTOR_DICT) {
 			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
 		}
-		// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
-		bool is_catalog_reference = !writer.IsFromCatalog() && catalog_entry;
-		writer.WriteField<bool>(is_catalog_reference);
-		writer.WriteString(enum_name);
-		if (writer.IsFromCatalog() || !catalog_entry) {
-			writer.WriteField<uint32_t>(dict_size);
-			((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
-		} else {
-			writer.WriteString(catalog_entry->schema->name);
-		}
+		bool serialize_internals = GetSchemaName().empty();
+		EnumType::Serialize(writer,*this, serialize_internals);
 	}
 
 	Vector values_insert_order;
@@ -1368,6 +1356,27 @@ private:
 	string enum_name;
 	idx_t dict_size;
 };
+
+	// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
+
+void EnumType::Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals){
+	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
+	auto &enum_info = (EnumTypeInfo&) type_info;
+	// Store Schema Name
+	writer.WriteString(enum_info.GetSchemaName());
+	// Store Enum Name
+	writer.WriteString(enum_info.GetEnumName());
+	// Store If we are serializing the internals
+	writer.WriteField<bool>(serialize_internals);
+	if (serialize_internals){
+		// We must serialize the internals
+		auto dict_size = enum_info.GetDictSize();
+		// Store Dictionary Size
+		writer.WriteField<uint32_t>(dict_size);
+		// Store Vector Order By Insertion
+		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer());;
+	}
+}
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
@@ -1506,6 +1515,11 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
+string EnumType::GetSchemaName(const LogicalType &type) {
+	auto catalog_entry = EnumType::GetCatalog(type);
+	return catalog_entry ? catalog_entry->schema->name: "";
+}
+
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto aux_info = type.AuxInfo();
@@ -1558,14 +1572,15 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		extra_info = UserTypeInfo::Deserialize(reader);
 		break;
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto is_catalog_reference = reader.ReadRequired<bool>();
+		auto schema_name = reader.ReadRequired<string>();
 		auto enum_name = reader.ReadRequired<string>();
-		if (is_catalog_reference) {
+		auto deserialize_internals = reader.ReadRequired<bool>();
+		if (!deserialize_internals) {
 			// this means the enum should already be in the catalog.
 			auto &client_context = reader.GetSource().GetContext();
 			// FIXME have to pass on the catalog name
 			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
-			auto schema_name = reader.ReadRequired<string>();
+
 			bool found_enum = false;
 			LogicalType enum_type;
 			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
@@ -1626,13 +1641,21 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 LogicalType::~LogicalType() {
 }
 
-void LogicalType::Serialize(Serializer &serializer, bool from_catalog) const {
+void LogicalType::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.SetFromCatalog(from_catalog);
 	writer.WriteField<LogicalTypeId>(id_);
 	ExtraTypeInfo::Serialize(type_info_.get(), writer);
 	writer.Finalize();
 }
+
+void LogicalType::SerializeEnumType(Serializer &serializer) const{
+		FieldWriter writer(serializer);
+		writer.WriteField<LogicalTypeId>(id_);
+	    writer.WriteField<ExtraTypeInfoType>(type_info_->type);
+	    EnumType::Serialize(writer,*type_info_, true);
+	    writer.WriteString(type_info_->alias);
+		writer.Finalize();
+	}
 
 LogicalType LogicalType::Deserialize(Deserializer &source) {
 	FieldReader reader(source);

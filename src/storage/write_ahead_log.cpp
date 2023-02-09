@@ -269,13 +269,6 @@ void WriteAheadLog::WriteAlter(data_ptr_t ptr, idx_t data_size) {
 	writer->WriteData(ptr, data_size);
 }
 
-void WriteAheadLog::WriteAlter(AlterInfo &info) {
-	if (skip_writing) {
-		return;
-	}
-	writer->Write<WALType>(WALType::ALTER_INFO);
-	info.Serialize(*writer);
-}
 
 //===--------------------------------------------------------------------===//
 // FLUSH

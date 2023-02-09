@@ -93,9 +93,4 @@ void FieldReader::Finalize() {
 	D_ASSERT(source.RemainingData() == 0);
 }
 
-void FieldReader::ForceFinalize() {
-	D_ASSERT(!finalized);
-	finalized = true;
-}
-
 } // namespace duckdb

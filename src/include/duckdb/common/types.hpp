@@ -23,6 +23,20 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class FieldWriter;
+
+//! Extra Type Info Type
+enum class ExtraTypeInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	USER_TYPE_INFO = 7,
+	AGGREGATE_STATE_TYPE_INFO = 8
+};
 
 struct hugeint_t {
 public:
@@ -328,7 +342,30 @@ struct LogicalType {
 	}
 
 	//! Serializes a LogicalType to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer, bool from_catalog = false) const;
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+
+	DUCKDB_API void SerializeEnumType(Serializer &serializer) const;
+
+//	DUCKDB_API void SerializableEnumType(Serializer &serializer) const{
+//		FieldWriter internal_writer(*buffer);
+//		auto& type_info = *enum_type.AuxInfo();
+//		// Enum Logical Type ID
+//		internal_writer.WriteField<LogicalTypeId>(enum_type.id());
+//		// Extra Type Info
+//		internal_writer.WriteField<ExtraTypeInfoType>(LogicalType::GetExtraTypeInfoType(type_info));
+//		// Schema
+//		internal_writer.WriteString(EnumType::GetSchemaName(enum_type));
+//		//Enum Name
+//		internal_writer.WriteString(EnumType::GetTypeName(enum_type));
+//		bool actual_catalog_entry = true;
+//		// That this is an actual catalog entry
+//		internal_writer.WriteField(actual_catalog_entry);
+//		// Actual catalog entry must have the internals
+//		EnumType::SerializeInternals(internal_writer,type_info);
+//		// Write alias
+//		internal_writer.WriteString(enum_type.GetAlias());
+//		internal_writer.Finalize();
+//	}
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
@@ -353,6 +390,8 @@ struct LogicalType {
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+
+	DUCKDB_API static ExtraTypeInfoType GetExtraTypeInfoType(const ExtraTypeInfo &type);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -450,7 +489,9 @@ struct EnumType{
 	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static string GetSchemaName(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
+	DUCKDB_API static void Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals);
 };
 
 struct StructType {
