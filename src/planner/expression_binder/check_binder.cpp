@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 
+#include "duckdb/planner/table_binding.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
