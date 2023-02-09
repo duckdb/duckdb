@@ -249,7 +249,8 @@ public:
 	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
 	                       idx_t rows_to_skip, bool force_parallelism_p)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
-	      force_parallelism(force_parallelism_p), current_file_path(files_path_p[0]) {
+	      force_parallelism(force_parallelism_p) {
+		current_file_path = files_path_p[0];
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
