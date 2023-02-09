@@ -15,6 +15,36 @@ PythonFileHandle::~PythonFileHandle() {
 	handle.release();
 }
 
+string PythonFilesystem::DecodeFlags(uint8_t flags) {
+	// see https://stackoverflow.com/a/58925279 for truth table of python file modes
+	bool read = flags & FileFlags::FILE_FLAGS_READ;
+	bool write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool append = flags & FileFlags::FILE_FLAGS_APPEND;
+	bool truncate = flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	bool create = flags & FileFlags::FILE_FLAGS_FILE_CREATE;
+
+	string flags_s;
+	if (read && write && truncate) {
+		flags_s = "w+";
+	} else if (read && write && append) {
+		flags_s = "a+";
+	} else if (read && write && create) {
+		flags_s = "r+";
+	} else if (read) {
+		flags_s = "r";
+	} else if (write) {
+		flags_s = "w";
+	} else if (append) {
+		flags_s = "a";
+	} else {
+		throw InvalidInputException("%s: unsupported file flags", GetName());
+	}
+
+	flags_s.insert(1, "b"); // always read in binary mode
+
+	return flags_s;
+}
+
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
 	PythonGILWrapper gil;
@@ -25,16 +55,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 
 	// TODO: lock support?
 
-	string flags_s;
-	if (flags & FileFlags::FILE_FLAGS_READ) {
-		flags_s = "rb";
-	} else if (flags & FileFlags::FILE_FLAGS_WRITE) {
-		flags_s = "wb";
-	} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
-		flags_s = "ab";
-	} else {
-		throw InvalidInputException("%s: unsupported file flags", GetName());
-	}
+	string flags_s = DecodeFlags(flags);
 
 	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
 	const auto &handle =

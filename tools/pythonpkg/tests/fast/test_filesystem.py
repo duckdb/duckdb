@@ -125,3 +125,25 @@ class TestPythonFilesystem:
         duckdb_cursor.execute(f"select * from read_csv_auto('local://{filename}', header=true)")
 
         assert duckdb_cursor.fetchall() == [(1, 2, 3), (4, 5, 6)]
+
+
+    def test_database_attach(self, tmp_path: Path):
+        db_path = str(tmp_path / 'hello.db')
+
+        # setup a database to attach later
+
+        breakpoint()
+        with duckdb.connect(db_path) as conn:
+            conn.execute('''
+                CREATE TABLE t (id int);
+                INSERT INTO t VALUES (0)
+            ''')
+
+        with duckdb.connect() as conn:
+            conn.register_filesystem(filesystem('file', skip_instance_cache=True))
+            conn.execute(f"ATTACH 'file://{db_path}'")
+
+            conn.execute('INSERT INTO t VALUES (1)')
+
+            conn.execute('FROM hello.t')
+            assert conn.fetchall() == [(0, ), (1, )]
