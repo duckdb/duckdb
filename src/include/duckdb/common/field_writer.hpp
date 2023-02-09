@@ -167,6 +167,10 @@ public:
 		return root.GetContext();
 	}
 
+	Catalog *GetCatalog() override {
+		return root.GetCatalog();
+	}
+
 private:
 	Deserializer &root;
 	idx_t remaining_data;

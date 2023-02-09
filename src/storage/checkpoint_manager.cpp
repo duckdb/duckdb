@@ -439,6 +439,7 @@ void CheckpointWriter::WriteTable(TableCatalogEntry &table) {
 
 void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader) {
 	// deserialize the table meta data
+	reader.catalog = &catalog;
 	auto info = TableCatalogEntry::Deserialize(reader, context);
 	// bind the info
 	auto binder = Binder::CreateBinder(context);

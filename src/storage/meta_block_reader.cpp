@@ -45,6 +45,9 @@ ClientContext &MetaBlockReader::GetContext() {
 	}
 	return *client_context;
 }
+Catalog *MetaBlockReader::GetCatalog() {
+	return catalog;
+}
 
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	auto &buffer_manager = block_manager.buffer_manager;

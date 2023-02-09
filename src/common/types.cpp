@@ -1,7 +1,9 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -17,14 +19,13 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_data.hpp"
 
 #include <cmath>
 
@@ -1583,30 +1584,46 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		if (!deserialize_internals) {
 			// this means the enum should already be in the catalog.
 			auto &client_context = reader.GetSource().GetContext();
-			// FIXME have to pass on the catalog name
-			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
-
-			bool found_enum = false;
-			LogicalType enum_type;
-			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
-				enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
-				found_enum = true;
-			} else {
-				// Look into set catalog paths
-				auto &catalog_paths = client_context.client_data->catalog_search_path->GetSetPaths();
-				for (auto &path : catalog_paths) {
-					if (Catalog::TypeExists(client_context, path.catalog, path.schema, enum_name)) {
-						enum_type = Catalog::GetType(client_context, path.catalog, path.schema, enum_name);
-						found_enum = true;
-						break;
-					}
+			// See if the serializer has a catalog
+			auto catalog = reader.GetSource().GetCatalog();
+			if (catalog) {
+				auto enum_type = catalog->GetType(client_context, schema_name, enum_name, true);
+				if (enum_type != LogicalType::INVALID) {
+					extra_info = enum_type.GetAuxInfoShrPtr();
+					break;
 				}
 			}
-			if (!found_enum) {
-				// capture error
-				enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+			// Try the DB Path as a catalog name
+			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
+			bool found_enum = false;
+			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
+				extra_info = Catalog::GetType(client_context, catalog_name, schema_name, enum_name).GetAuxInfoShrPtr();
+				break;
 			}
-			extra_info = enum_type.GetAuxInfoShrPtr();
+			// Look into set catalog paths
+			auto &catalog_paths = client_context.client_data->catalog_search_path->GetSetPaths();
+			for (auto &path : catalog_paths) {
+				if (Catalog::TypeExists(client_context, path.catalog, path.schema, enum_name)) {
+					extra_info =
+					    Catalog::GetType(client_context, path.catalog, path.schema, enum_name).GetAuxInfoShrPtr();
+					break;
+				}
+			}
+			// Look into databases in the DB Manager
+			auto &db_manager = client_context.db->GetDatabaseManager();
+			auto all_databases = db_manager.GetDatabases(client_context);
+			for (auto &db : all_databases) {
+				auto db_catalog_name = AttachedDatabase::ExtractDatabaseName(db->name);
+				if (Catalog::TypeExists(client_context, db_catalog_name, schema_name, enum_name)) {
+					extra_info =
+					    Catalog::GetType(client_context, db_catalog_name, schema_name, enum_name).GetAuxInfoShrPtr();
+					break;
+				}
+			}
+			if (!extra_info) {
+				// capture error
+				auto enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
+			}
 			break;
 		} else {
 			auto enum_size = reader.ReadRequired<uint32_t>();

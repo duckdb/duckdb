@@ -31,12 +31,15 @@ public:
 	idx_t offset;
 	block_id_t next_block;
 	bool free_blocks_on_read;
+	Catalog *catalog = nullptr;
 
 public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
 	ClientContext &GetContext() override;
+
+	Catalog *GetCatalog() override;
 
 private:
 	void ReadNewBlock(block_id_t id);

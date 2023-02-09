@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
@@ -114,6 +115,11 @@ public:
 	//! Gets the context for the deserializer
 	virtual ClientContext &GetContext() {
 		throw InternalException("This deserializer does not have a client-context");
+	};
+
+	//! Gets the catalog for the deserializer
+	virtual Catalog *GetCatalog() {
+		return nullptr;
 	};
 
 	template <class T>
