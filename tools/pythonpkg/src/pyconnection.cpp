@@ -974,19 +974,13 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 }
 
 static bool IsPolarsDataFrame(py::object entry) {
-	auto py_object_type = string(py::str(entry.get_type()));
-	if (StringUtil::Contains(py_object_type, "polars.internals.dataframe.frame.DataFrame")) {
-		return true;
-	}
-	return false;
+	auto polars_df_type = pybind11::module_::import("polars").attr("DataFrame");
+	return py::isinstance(entry, polars_df_type);
 }
 
 static bool IsLazyPolarsDataFrame(py::object entry) {
-	auto py_object_type = string(py::str(entry.get_type()));
-	if (StringUtil::Contains(py_object_type, "polars.internals.lazyframe.frame.LazyFrame")) {
-		return true;
-	}
-	return false;
+	auto lazy_frame_type = pybind11::module_::import("polars").attr("LazyFrame");
+	return py::isinstance(entry, lazy_frame_type);
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,

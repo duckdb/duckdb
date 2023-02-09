@@ -1,19 +1,10 @@
 import duckdb
-import os
-try:
-    import pyarrow
-    import pyarrow.parquet
-    import numpy as np
-    import polars as pl
-    import pandas as pd
-    can_run = True
-except:
-    can_run = False
+import pytest
 
 class TestPolars(object):
     def test_polars(self,duckdb_cursor):
-        if not can_run:
-            return
+        pd = pytest.importorskip("pandas")
+        pl = pytest.importorskip("polars")
         df = pd.DataFrame(
             {
                 "A": [1, 2, 3, 4, 5],
@@ -31,5 +22,3 @@ class TestPolars(object):
         lazy_df = polars_df.lazy()
         lazy_result = duckdb.sql('SELECT * FROM lazy_df').pl()
         pd.testing.assert_frame_equal(polars_df.to_pandas(), lazy_result.to_pandas())
-
-

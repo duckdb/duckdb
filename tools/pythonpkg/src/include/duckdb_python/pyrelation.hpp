@@ -192,7 +192,7 @@ public:
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
-	py::object ToPolars(idx_t batch_size);
+	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 

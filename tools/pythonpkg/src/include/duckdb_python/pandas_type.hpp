@@ -17,6 +17,18 @@ public:
 	}
 };
 
+class PolarsDataFrame : public py::object {
+public:
+	PolarsDataFrame(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
+	using py::object::object;
+
+public:
+	static bool check_(const py::handle &object) {
+		return !object.is_none();
+	}
+};
+
 // Pandas has two different sets of types
 // NumPy dtypes (e.g., bool, int8,...)
 // Pandas Specific Types (e.g., categorical, datetime_tz,...)
