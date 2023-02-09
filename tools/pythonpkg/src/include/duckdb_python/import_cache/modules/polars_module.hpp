@@ -15,6 +15,7 @@ namespace duckdb {
 struct PolarsCacheItem : public PythonImportCacheItem {
 public:
 	static constexpr const char *Name = "polars";
+
 public:
 	~PolarsCacheItem() override {
 	}

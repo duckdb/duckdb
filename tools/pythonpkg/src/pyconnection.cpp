@@ -980,8 +980,7 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
 	auto arrow = FetchArrow(chunk_size);
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::cast<PolarsDataFrame>(import_cache.polars().DataFrame()(arrow));
+	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
@@ -1216,7 +1215,7 @@ bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().DataFrame());
+	return import_cache.polars().DataFrame.IsInstance(object);
 }
 
 bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
@@ -1224,7 +1223,7 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().LazyFrame());
+	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
