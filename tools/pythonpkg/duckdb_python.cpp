@@ -98,6 +98,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("arrow", &PyConnectionWrapper::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
+	    .def("pl", &PyConnectionWrapper::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
+	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
 	    .def("begin", &PyConnectionWrapper::Begin, "Start a new transaction", py::arg("connection") = py::none())
 	    .def("commit", &PyConnectionWrapper::Commit, "Commit changes performed within a transaction",
 	         py::arg("connection") = py::none())
