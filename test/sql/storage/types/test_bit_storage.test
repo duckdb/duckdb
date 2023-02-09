@@ -1,0 +1,30 @@
+# name: test/sql/storage/types/test_bit_storage.test
+# description: Test BIT with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/bit_storage_test.db
+
+# create a table with bts
+statement ok
+CREATE TABLE bits (b BIT);
+
+statement ok
+INSERT INTO bits VALUES('1'), ('010111'), ('111110010011'), (NULL), ('000000000000000000'), ('00100110010100100101001010010101010011110101000000000111100100110')
+
+# reload the database from disk a few times, and check that the data is still there
+loop i 0 2
+
+restart
+
+query I
+SELECT * FROM bits
+----
+1
+010111
+111110010011
+NULL
+000000000000000000
+00100110010100100101001010010101010011110101000000000111100100110
+
+endloop

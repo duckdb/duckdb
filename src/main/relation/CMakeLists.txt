@@ -24,6 +24,7 @@ add_library_unity(
   table_relation.cpp
   value_relation.cpp
   view_relation.cpp
+  write_parquet_relation.cpp
   write_csv_relation.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_relation>

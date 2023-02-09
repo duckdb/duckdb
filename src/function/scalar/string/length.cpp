@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/types/bit.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -49,11 +50,26 @@ struct StrLenOperator {
 	}
 };
 
+struct OctetLenOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return Bit::OctetLength(input);
+	}
+};
+
 // bitlen returns the size in bits
 struct BitLenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		return 8 * input.GetSize();
+	}
+};
+
+// bitstringlen returns the amount of bits in a bitstring
+struct BitStringLenOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return Bit::BitLength(input);
 	}
 };
 
@@ -89,6 +105,8 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
 	                                  nullptr, LengthPropagateStats));
+	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
+	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	length.AddFunction(array_length_unary);
 	set.AddFunction(length);
 	length.name = "len";
@@ -109,11 +127,19 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
-	set.AddFunction(ScalarFunction("bit_length", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
+	ScalarFunctionSet bit_length("bit_length");
+	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
+	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
+	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
+	set.AddFunction(bit_length);
 	// length for BLOB type
-	set.AddFunction(ScalarFunction("octet_length", {LogicalType::BLOB}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
+	ScalarFunctionSet octet_length("octet_length");
+	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
+	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
+	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
+	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
+	set.AddFunction(octet_length);
 }
 
 struct UnicodeOperator {
