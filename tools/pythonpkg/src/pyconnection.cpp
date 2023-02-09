@@ -126,10 +126,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none())
-	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
-	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("query", &DuckDBPyConnection::RunQuery,
+	         py::arg("parameters") = py::none());
+
+	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	         "otherwise run the query as-is.",
 	         py::arg("query"), py::arg("alias") = "query_relation");
