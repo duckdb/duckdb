@@ -3,9 +3,6 @@
 # group: [pedro]
 
 statement ok
-pragma threads=1
-
-statement ok
 PRAGMA MEMORY_LIMIT='10MB';
 
 statement ok
