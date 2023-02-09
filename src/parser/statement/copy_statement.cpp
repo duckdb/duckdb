@@ -22,7 +22,7 @@ string ConvertOptionValueToString(const Value &val) {
 }
 
 string CopyStatement::CopyOptionsToString(const string &format,
-                                          const unordered_map<string, vector<Value>> &options) const {
+                                          const case_insensitive_map_t<vector<Value>> &options) const {
 	if (format.empty() && options.empty()) {
 		return string();
 	}

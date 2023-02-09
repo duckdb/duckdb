@@ -29,10 +29,20 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 
 static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	m.def("execute", &DuckDBPyRelation::Execute, "Transform the relation into a result set")
-	    .def("close", &DuckDBPyRelation::Close, "Closes the result")
-	    .def("write_csv", &DuckDBPyRelation::WriteCsv, "Write the relation object to a CSV file in file_name",
-	         py::arg("file_name"))
-	    .def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
+	    .def("close", &DuckDBPyRelation::Close, "Closes the result");
+
+	DefineMethod({"to_parquet", "write_parquet"}, m, &DuckDBPyRelation::ToParquet,
+	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
+	             py::arg("compression") = py::none());
+
+	DefineMethod(
+	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
+	    py::arg("file_name"), py::kw_only(), py::arg("sep") = py::none(), py::arg("na_rep") = py::none(),
+	    py::arg("header") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
+	    py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(),
+	    py::arg("encoding") = py::none(), py::arg("compression") = py::none());
+
+	m.def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
 	    .def("fetchmany", &DuckDBPyRelation::FetchMany, "Execute and fetch the next set of rows as a list of tuples",
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyRelation::FetchAll, "Execute and fetch all rows as a list of tuples")

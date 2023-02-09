@@ -9,6 +9,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -222,6 +223,14 @@ struct HugeIntBitCntOperator {
 	}
 };
 
+struct BitStringBitCntOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		TR count = Bit::BitCount(input);
+		return count;
+	}
+};
+
 void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("bit_count");
 	functions.AddFunction(ScalarFunction({LogicalType::TINYINT}, LogicalType::TINYINT,
@@ -234,6 +243,8 @@ void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::TINYINT,
 	                                     ScalarFunction::UnaryFunction<hugeint_t, int8_t, HugeIntBitCntOperator>));
+	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
+	                                     ScalarFunction::UnaryFunction<string_t, idx_t, BitStringBitCntOperator>));
 	set.AddFunction(functions);
 }
 
