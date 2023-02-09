@@ -2287,6 +2287,13 @@ on the task state.
 */
 DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
 
+/*!
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+*/
+DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
+
 #ifdef __cplusplus
 }
 #endif

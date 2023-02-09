@@ -2,11 +2,15 @@
 
 namespace duckdb {
 
-void JSONCommon::ThrowValFormatError(string error_string, yyjson_val *val) {
+string JSONCommon::ValToString(yyjson_val *val) {
 	JSONAllocator json_allocator(Allocator::DefaultAllocator());
 	idx_t len;
 	auto data = JSONCommon::WriteVal<yyjson_val>(val, json_allocator.GetYYJSONAllocator(), len);
-	error_string = StringUtil::Format(error_string, string(data, len));
+	return string(data, len);
+}
+
+void JSONCommon::ThrowValFormatError(string error_string, yyjson_val *val) {
+	error_string = StringUtil::Format(error_string, JSONCommon::ValToString(val));
 	throw InvalidInputException(error_string);
 }
 

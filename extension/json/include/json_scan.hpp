@@ -97,6 +97,8 @@ public:
 	vector<string> names;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! Whether we're parsing objects (usually), or something else like arrays
+	bool objects = true;
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;
@@ -167,11 +169,16 @@ public:
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	yyjson_alc *GetAllocator();
+	void ThrowTransformError(idx_t count, idx_t object_index, const string &error_message);
 
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_val *objects[STANDARD_VECTOR_SIZE];
 
 	idx_t batch_index;
+
+	//! Options when transforming the JSON to columnar data
+	DateFormatMap date_format_map;
+	JSONTransformOptions transform_options;
 
 private:
 	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
