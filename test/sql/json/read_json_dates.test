@@ -15,7 +15,7 @@ create table timestamp_test as select '1996-03-27 07:42:33'::TIMESTAMP t
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-copy (select d from date_test) to '__TEST_DIR__/my_file.json' (format json, dateformat ${date_format})
+copy (select d from date_test) to '__TEST_DIR__/my_file.json' (dateformat ${date_format})
 
 # auto-detect
 query II
@@ -37,7 +37,7 @@ statement ok
 create table date_copy_test (d date)
 
 statement ok
-copy date_copy_test from '__TEST_DIR__/my_file.json' (format json, dateformat ${date_format})
+copy date_copy_test from '__TEST_DIR__/my_file.json' (dateformat ${date_format})
 
 query II
 select typeof(d), d from date_copy_test

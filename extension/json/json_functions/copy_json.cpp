@@ -54,6 +54,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	info.options["quote"] = {""};
 	info.options["escape"] = {""};
 	info.options["delimiter"] = {"\n"};
+	info.options["header"] = {0};
 
 	return binder.Bind(*stmt_copy);
 }
@@ -61,7 +62,6 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                                  vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<JSONScanData>();
-	// TODO: check info.options?? - what options can we do, really?
 
 	bind_data->file_paths.emplace_back(info.file_path);
 	bind_data->names = expected_names;
