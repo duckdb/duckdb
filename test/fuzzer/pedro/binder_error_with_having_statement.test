@@ -1,5 +1,5 @@
 # name: test/fuzzer/pedro/binder_error_with_having_statement.test
-# description: Issue #5984 (8): Another Binder Error
+# description: Issue #5984 (8, 12, 15): Another Binder Error
 # group: [pedro]
 
 statement ok
