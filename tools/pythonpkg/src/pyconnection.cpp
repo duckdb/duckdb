@@ -38,6 +38,12 @@ DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
+template <class T>
+static bool ModuleIsLoaded() {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
+}
+
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
@@ -45,10 +51,13 @@ void DuckDBPyConnection::DetectEnvironment() {
 		return;
 	}
 	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
+	if (!ModuleIsLoaded<IPythonCacheItem>()) {
+		return;
+	}
 
 	// Check to see if we are in a Jupyter Notebook
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto get_ipython = import_cache.IPython.get_ipython();
+	auto get_ipython = import_cache.IPython().get_ipython();
 	if (get_ipython.ptr() == nullptr) {
 		// Could either not load the IPython module, or it has no 'get_ipython' attribute
 		return;
@@ -973,16 +982,6 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
-bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
-	auto polars_df_type = pybind11::module_::import("polars").attr("DataFrame");
-	return py::isinstance(object, polars_df_type);
-}
-
-bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
-	auto lazy_frame_type = pybind11::module_::import("polars").attr("LazyFrame");
-	return py::isinstance(object, lazy_frame_type);
-}
-
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
 	string name = "arrow_" + GenerateRandomName();
@@ -1203,17 +1202,39 @@ void DuckDBPyConnection::Cleanup() {
 	import_cache.reset();
 }
 
-bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
+bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.pandas.DataFrame.IsInstance(object);
+	return py::isinstance(object, import_cache.polars().DataFrame());
+}
+
+bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return py::isinstance(object, import_cache.polars().LazyFrame());
+}
+
+bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
+	if (!ModuleIsLoaded<PandasCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.pandas().DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.arrow.lib.Table.IsInstance(object) ||
-	       import_cache.arrow.lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache.arrow.dataset.Dataset.IsInstance(object) ||
-	       import_cache.arrow.dataset.Scanner.IsInstance(object);
+	return import_cache.arrow().lib.Table.IsInstance(object) ||
+	       import_cache.arrow().lib.RecordBatchReader.IsInstance(object) ||
+	       import_cache.arrow().dataset.Dataset.IsInstance(object) ||
+	       import_cache.arrow().dataset.Scanner.IsInstance(object);
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
