@@ -973,14 +973,14 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
-static bool IsPolarsDataFrame(py::object entry) {
+bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
 	auto polars_df_type = pybind11::module_::import("polars").attr("DataFrame");
-	return py::isinstance(entry, polars_df_type);
+	return py::isinstance(object, polars_df_type);
 }
 
-static bool IsLazyPolarsDataFrame(py::object entry) {
+bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 	auto lazy_frame_type = pybind11::module_::import("polars").attr("LazyFrame");
-	return py::isinstance(entry, lazy_frame_type);
+	return py::isinstance(object, lazy_frame_type);
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
@@ -1025,10 +1025,10 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 
 		auto subquery = make_unique<SubqueryRef>(std::move(select));
 		return std::move(subquery);
-	} else if (IsPolarsDataFrame(entry)) {
+	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, config);
-	} else if (IsLazyPolarsDataFrame(entry)) {
+	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, config);
