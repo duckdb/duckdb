@@ -1,9 +1,8 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite imdb
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
 
 all: release
 opt: release
 unit: unittest
-imdb: third_party/imdb/data
 
 GENERATOR=
 FORCE_COLOR=
@@ -276,9 +275,6 @@ format-master:
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
-
-third_party/imdb/data:
-	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
