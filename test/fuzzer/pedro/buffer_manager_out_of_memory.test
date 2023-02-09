@@ -1,0 +1,9 @@
+# name: test/fuzzer/pedro/buffer_manager_out_of_memory.test
+# description: Issue #5984 (32): Buffer manager out-of-memory issue
+# group: [pedro]
+
+statement ok
+PRAGMA MEMORY_LIMIT='10MB';
+
+statement ok
+SELECT ((SELECT 1) EXCEPT (SELECT ('\xF1\x85\x96\xBA'::BLOB)::VARCHAR GROUP BY 1 ORDER BY 1));

@@ -24,7 +24,6 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
@@ -162,9 +161,6 @@ public:
 	mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
-
-	//! Replacement open handlers are callbacks that run pre and post database initialization
-	vector<ReplacementOpen> replacement_opens;
 
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;

@@ -334,7 +334,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
-		auto &conjunction_or = (ConjunctionOrFilter &)filter;
+		auto &conjunction_or = (const ConjunctionOrFilter &)filter;
 		for (auto &child_filter : conjunction_or.child_filters) {
 			SelectionVector temp_sel;
 			temp_sel.Initialize(sel);
@@ -360,14 +360,14 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		return approved_tuple_count;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = (ConjunctionAndFilter &)filter;
+		auto &conjunction_and = (const ConjunctionAndFilter &)filter;
 		for (auto &child_filter : conjunction_and.child_filters) {
 			FilterSelection(sel, result, *child_filter, approved_tuple_count, mask);
 		}
 		return approved_tuple_count;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &)filter;
+		auto &constant_filter = (const ConstantFilter &)filter;
 		// the inplace loops take the result as the last parameter
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::UINT8: {
