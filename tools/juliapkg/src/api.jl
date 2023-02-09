@@ -654,7 +654,7 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_va
 DUCKDB_API void duckdb_free(void *ptr);
 """
 function duckdb_free(ptr)
-    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
+    return ccall((:duckdb_free, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
 end
 
 """
@@ -2825,4 +2825,13 @@ on the task state.
 """
 function duckdb_destroy_task_state(state)
     return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+"""
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+"""
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end

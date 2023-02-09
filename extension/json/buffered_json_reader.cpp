@@ -185,8 +185,7 @@ void BufferedJSONReader::SetBufferLineOrObjectCount(idx_t index, idx_t count) {
 	buffer_line_or_object_counts[index] = count;
 }
 
-void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err,
-                                         const string &extra) {
+idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
 	D_ASSERT(options.format == JSONFormat::UNSTRUCTURED || options.format == JSONFormat::NEWLINE_DELIMITED);
 	while (true) {
 		lock_guard<mutex> guard(lock);
@@ -203,11 +202,25 @@ void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_i
 		if (!can_throw) {
 			continue;
 		}
-		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
 		// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-		throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_path,
-		                            err.pos + 1, unit, line + 1, err.msg, extra);
+		return line + 1;
 	}
+}
+
+void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err,
+                                         const string &extra) {
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
+	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
+	throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_path,
+	                            err.pos + 1, unit, line + 1, err.msg, extra);
+}
+
+void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf,
+                                             const string &error_message) {
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
+	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
+	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s", file_path, unit, line,
+	                            error_message);
 }
 
 double BufferedJSONReader::GetProgress() const {
