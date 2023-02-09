@@ -44,6 +44,7 @@ PRAGMA tpch(${i})
 endloop
 
 # we can also run straight on JSON by creating views
+# this also tests projection pushdown well
 statement ok
 rollback
 
