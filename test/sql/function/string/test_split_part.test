@@ -1,0 +1,36 @@
+# name: test/sql/function/string/test_split_part.test
+# description: split part test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test core functionality
+query T
+select split_part('a,b,c',',',1)
+----
+a
+
+query T
+select split_part('a,b,c',',',2)
+----
+b
+
+query T
+select split_part('a,,b,,c',',,',2)
+----
+b
+
+# Still need to test negative indexes, exceeding the bounds both negative and positive, and 0 position.
+# Should also test empty string inputs and null inputs
+
+# test incorrect usage
+# statement error
+# select string_split()
+
+# statement error
+# select string_split('a')
+
+# incorrect regex
+# statement error
+# SELECT string_split_regex(a, '[') FROM test ORDER BY a;
