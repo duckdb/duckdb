@@ -41,7 +41,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
-	transaction_manager = storage_extension.create_transaction_manager(*storage_extension.storage_info, *this, *catalog);
+	transaction_manager =
+	    storage_extension.create_transaction_manager(*storage_extension.storage_info, *this, *catalog);
 	if (!transaction_manager) {
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
