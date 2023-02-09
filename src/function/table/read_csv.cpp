@@ -257,7 +257,7 @@ public:
 		first_file_size = file_size;
 		bytes_read = 0;
 		if (buffer_size < file_size) {
-			bytes_per_local_state = buffer_size / MaxThreads();
+			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}

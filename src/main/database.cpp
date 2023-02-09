@@ -11,12 +11,12 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -26,7 +26,6 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_unique<CompressionFunctionSet>();
-	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
 	cast_functions = make_unique<CastFunctionSet>();
 	error_manager = make_unique<ErrorManager>();
 }
@@ -123,6 +122,42 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
+string DatabaseInstance::ExtractDatabaseType(string &path) {
+	// first check if there is an existing prefix
+	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
+	if (!extension.empty()) {
+		// path is prefixed with an extension - remove it
+		path = StringUtil::Replace(path, extension + ":", "");
+		return extension;
+	}
+	// if there isn't - check the magic bytes of the file (if any)
+	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		return "sqlite";
+	}
+	return string();
+}
+
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
+                                                                      AccessMode access_mode) {
+	unique_ptr<AttachedDatabase> attached_database;
+	if (!type.empty()) {
+		// find the storage extensionon database
+		auto entry = config.storage_extensions.find(type);
+		if (entry == config.storage_extensions.end()) {
+			throw BinderException("Unrecognized storage type \"%s\"", type);
+		}
+		// use storage extension to create the initial database
+		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+		                                                  info.name, info, access_mode);
+	} else {
+		// check if this is an in-memory database or not
+		attached_database =
+		    make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+	}
+	return attached_database;
+}
+
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
@@ -145,22 +180,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		config_ptr->options.database_path.clear();
 	}
-
-	auto file_type = MagicBytes::CheckMagicBytes(config_ptr->file_system.get(), config_ptr->options.database_path);
-	if (file_type == DataFileType::SQLITE_FILE) {
-		config_ptr->options.database_path = "sqlite:" + config_ptr->options.database_path;
-	}
-
-	ReplacementOpen *replacement_open = nullptr;
-	for (auto &open : config_ptr->replacement_opens) {
-		if (open.pre_func) {
-			open.data = open.pre_func(*config_ptr, open.static_data.get());
-			if (open.data) {
-				replacement_open = &open;
-				break;
-			}
-		}
-	}
 	Configure(*config_ptr);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
@@ -168,7 +187,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	auto &config = DBConfig::GetConfig(*this);
 	db_manager = make_unique<DatabaseManager>(*this);
 	buffer_manager =
 	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
@@ -176,22 +194,16 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
-	auto database_name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-	unique_ptr<AttachedDatabase> attached_database;
-	if (replacement_open && replacement_open->data && replacement_open->data->HasStorageExtension()) {
-		// use storage extension from replacement open to create initial database
-		AttachInfo info;
-		info.name = database_name;
-		info.path = config.options.database_path;
-		auto storage_extension = replacement_open->data->GetStorageExtension(info);
-		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *storage_extension,
-		                                                  database_name, info, config.options.access_mode);
-		replacement_open = nullptr;
-	} else {
-		// check if this is an in-memory database or not
-		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), database_name,
-		                                                  config.options.database_path, config.options.access_mode);
+	// check if we are opening a standard DuckDB database or an extension database
+	auto database_type = ExtractDatabaseType(config.options.database_path);
+	if (!database_type.empty()) {
+		// we are opening an extension database, run storage_init
+		ExtensionHelper::StorageInit(database_type, config);
 	}
+	AttachInfo info;
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.path = config.options.database_path;
+	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
 		Connection con(*this);
@@ -205,12 +217,13 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the database
 	initial_database->Initialize();
 
+	if (!database_type.empty()) {
+		// if we are opening an extension database - load the extension
+		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
+	}
+
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
-
-	if (replacement_open) {
-		replacement_open->post_func(*this, replacement_open->data.get());
-	}
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
@@ -294,7 +307,6 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.allocator = make_unique<Allocator>();
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
-	config.replacement_opens = std::move(new_config.replacement_opens);
 	config.parser_extensions = std::move(new_config.parser_extensions);
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
@@ -325,9 +337,14 @@ idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DuckDB::ExtensionIsLoaded(const std::string &name) {
-	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
+bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
+	return loaded_extensions.find(name) != loaded_extensions.end();
 }
+
+bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+	return instance->ExtensionIsLoaded(name);
+}
+
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	loaded_extensions.insert(name);
 }

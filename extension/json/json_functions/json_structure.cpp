@@ -28,10 +28,27 @@ JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p)
 }
 
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(LogicalTypeId type) {
+	if (descriptions.empty()) {
+		// Empty, just put this type in there
+		descriptions.emplace_back(type);
+		return descriptions.back();
+	}
+
+	if (descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::SQLNULL) {
+		// Only a NULL in there, override
+		descriptions[0].type = type;
+		return descriptions[0];
+	}
+
+	if (type == LogicalTypeId::SQLNULL) {
+		// 'descriptions' is non-empty, so let's not add NULL
+		return descriptions.back();
+	}
+
 	// Check if type is already in there or if we can merge numerics
 	const auto is_numeric = IsNumeric(type);
 	for (auto &description : descriptions) {
-		if (type == LogicalTypeId::SQLNULL || type == description.type) {
+		if (type == description.type) {
 			return description;
 		} else if (is_numeric && IsNumeric(description.type)) {
 			description.type = MaxNumericType(type, description.type);
@@ -111,19 +128,19 @@ void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], idx_t coun
 
 	idx_t total_list_size = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (vals[i] && !yyjson_is_null(vals[i])) {
+		if (vals[i] && !unsafe_yyjson_is_null(vals[i])) {
 			D_ASSERT(yyjson_is_arr(vals[i]));
 			total_list_size += unsafe_yyjson_get_len(vals[i]);
 		}
 	}
 
 	idx_t offset = 0;
-	auto child_vals = (yyjson_val **)allocator.Allocate(total_list_size * sizeof(yyjson_val *));
+	auto child_vals = (yyjson_val **)allocator.AllocateAligned(total_list_size * sizeof(yyjson_val *));
 
 	size_t idx, max;
 	yyjson_val *child_val;
 	for (idx_t i = 0; i < count; i++) {
-		if (vals[i] && !yyjson_is_null(vals[i])) {
+		if (vals[i] && !unsafe_yyjson_is_null(vals[i])) {
 			yyjson_arr_foreach(vals[i], idx, max, child_val) {
 				child_vals[offset++] = child_val;
 			}
@@ -141,14 +158,20 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t cou
 	vector<yyjson_val **> child_vals;
 	child_vals.reserve(child_count);
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
-		child_vals.emplace_back((yyjson_val **)allocator.Allocate(count * sizeof(yyjson_val *)));
+		child_vals.emplace_back((yyjson_val **)allocator.AllocateAligned(count * sizeof(yyjson_val *)));
 	}
+
+	idx_t found_key_count;
+	auto found_keys = (bool *)allocator.AllocateAligned(sizeof(bool) * child_count);
 
 	const auto &key_map = desc.key_map;
 	size_t idx, max;
 	yyjson_val *child_key, *child_val;
 	for (idx_t i = 0; i < count; i++) {
-		if (vals[i] && !yyjson_is_null(vals[i])) {
+		if (vals[i] && !unsafe_yyjson_is_null(vals[i])) {
+			found_key_count = 0;
+			memset(found_keys, false, child_count);
+
 			D_ASSERT(yyjson_is_obj(vals[i]));
 			yyjson_obj_foreach(vals[i], idx, max, child_key, child_val) {
 				D_ASSERT(yyjson_is_str(child_key));
@@ -156,7 +179,19 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t cou
 				auto key_len = unsafe_yyjson_get_len(child_key);
 				auto it = key_map.find({key_ptr, key_len});
 				D_ASSERT(it != key_map.end());
-				child_vals[it->second][i] = child_val;
+				const auto child_idx = it->second;
+				child_vals[child_idx][i] = child_val;
+				found_keys[child_idx] = true;
+				found_key_count++;
+			}
+
+			if (found_key_count != child_count) {
+				// Set child val to nullptr so recursion doesn't break
+				for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
+					if (!found_keys[child_idx]) {
+						child_vals[child_idx][i] = nullptr;
+					}
+				}
 			}
 		} else {
 			for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
@@ -180,7 +215,8 @@ void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], idx_t cou
 	if (descriptions[0].candidate_types.empty()) {
 		return;
 	}
-	JSONTransform::GetStringVector(vals, count, LogicalType::SQLNULL, string_vector, false);
+	static JSONTransformOptions OPTIONS;
+	JSONTransform::GetStringVector(vals, count, LogicalType::SQLNULL, string_vector, OPTIONS);
 	EliminateCandidateTypes(count, string_vector, date_format_map);
 }
 
@@ -203,7 +239,7 @@ void JSONStructureNode::EliminateCandidateTypes(idx_t count, Vector &string_vect
 			}
 		} else {
 			string error_message;
-			if (!VectorOperations::DefaultTryCast(string_vector, result_vector, count, &error_message)) {
+			if (!VectorOperations::DefaultTryCast(string_vector, result_vector, count, &error_message, true)) {
 				candidate_types.pop_back();
 			} else {
 				return;
@@ -467,6 +503,8 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 		return StructureToTypeObject(context, node, max_depth, depth);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
+	case LogicalTypeId::SQLNULL:
+		return LogicalTypeId::INTEGER;
 	default:
 		return desc.type;
 	}

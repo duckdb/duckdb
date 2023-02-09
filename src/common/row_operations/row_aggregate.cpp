@@ -22,7 +22,7 @@ void RowOperations::InitializeStates(RowLayout &layout, Vector &addresses, const
 	auto &offsets = layout.GetOffsets();
 	auto aggr_idx = layout.ColumnCount();
 
-	for (auto &aggr : layout.GetAggregates()) {
+	for (const auto &aggr : layout.GetAggregates()) {
 		for (idx_t i = 0; i < count; ++i) {
 			auto row_idx = sel.get_index(i);
 			auto row = pointers[row_idx];
@@ -38,7 +38,7 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 	}
 	//	Move to the first aggregate state
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), count);
-	for (auto &aggr : layout.GetAggregates()) {
+	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.destructor) {
 			aggr.function.destructor(addresses, count);
 		}

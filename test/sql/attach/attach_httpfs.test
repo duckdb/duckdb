@@ -6,6 +6,28 @@ require skip_reload
 
 require httpfs
 
-# ATTACH over HTTPFS is not supported yet
-statement error
+# ATTACH a DuckDB database over HTTPFS
+statement ok
 ATTACH 'https://github.com/duckdb/duckdb/raw/master/test/sql/storage_version/storage_version.db' AS db;
+
+query IIIII
+SELECT * FROM db.integral_values
+----
+1	2	3	4	5
+NULL	NULL	NULL	NULL	NULL
+
+statement error
+CREATE TABLE db.integers(i INTEGER);
+----
+Writing to HTTP files not implemented
+
+statement ok
+SELECT * FROM db.all_types
+
+statement error
+SELECT * FROM db.all_typez
+----
+all_types
+
+statement ok
+DETACH db

@@ -172,29 +172,29 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	bool use_ssl;
 	Value value;
 
-	if (opener->TryGetCurrentSetting("s3_region", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value)) {
 		region = value.ToString();
 	}
 
-	if (opener->TryGetCurrentSetting("s3_access_key_id", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value)) {
 		access_key_id = value.ToString();
 	}
 
-	if (opener->TryGetCurrentSetting("s3_secret_access_key", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value)) {
 		secret_access_key = value.ToString();
 	}
 
-	if (opener->TryGetCurrentSetting("s3_session_token", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value)) {
 		session_token = value.ToString();
 	}
 
-	if (opener->TryGetCurrentSetting("s3_endpoint", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value)) {
 		endpoint = value.ToString();
 	} else {
 		endpoint = "s3.amazonaws.com";
 	}
 
-	if (opener->TryGetCurrentSetting("s3_url_style", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value)) {
 		auto val_str = value.ToString();
 		if (!(val_str == "vhost" || val_str != "path" || val_str != "")) {
 			throw std::runtime_error(
@@ -205,7 +205,7 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 		url_style = "vhost";
 	}
 
-	if (opener->TryGetCurrentSetting("s3_use_ssl", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value)) {
 		use_ssl = value.GetValue<bool>();
 	} else {
 		use_ssl = true;
@@ -220,19 +220,19 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t max_upload_threads;
 	Value value;
 
-	if (opener->TryGetCurrentSetting("s3_uploader_max_filesize", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value)) {
 		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
 	} else {
 		uploader_max_filesize = S3ConfigParams::DEFAULT_MAX_FILESIZE;
 	}
 
-	if (opener->TryGetCurrentSetting("s3_uploader_max_parts_per_file", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value)) {
 		max_parts_per_file = value.GetValue<uint64_t>();
 	} else {
 		max_parts_per_file = S3ConfigParams::DEFAULT_MAX_PARTS_PER_FILE; // AWS Default
 	}
 
-	if (opener->TryGetCurrentSetting("s3_uploader_thread_limit", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", value)) {
 		max_upload_threads = value.GetValue<uint64_t>();
 	} else {
 		max_upload_threads = S3ConfigParams::DEFAULT_MAX_UPLOAD_THREADS;
@@ -670,15 +670,11 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const string &query_param, uint8_t flags,
                                                       FileLockType lock, FileCompressionType compression,
                                                       FileOpener *opener) {
-	if (!opener) {
-		throw IOException("CreateHandle called on S3FileSystem without FileOpener");
-	}
 	auto s3authparams = S3AuthParams::ReadFrom(opener);
 	ReadQueryParams(query_param, s3authparams);
 	string full_path = query_param.empty() ? path : path + "?" + query_param;
 
-	return duckdb::make_unique<S3FileHandle>(*this, full_path, path, flags,
-	                                         opener ? HTTPParams::ReadFrom(opener) : HTTPParams(), s3authparams,
+	return duckdb::make_unique<S3FileHandle>(*this, full_path, path, flags, HTTPParams::ReadFrom(opener), s3authparams,
 	                                         S3ConfigParams::ReadFrom(opener));
 }
 
