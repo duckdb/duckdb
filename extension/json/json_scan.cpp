@@ -92,6 +92,7 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteField<idx_t>(sample_size);
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(max_depth);
+	writer.WriteField<bool>(objects);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -105,6 +106,7 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	sample_size = reader.ReadRequired<idx_t>();
 	names = reader.ReadRequiredList<string>();
 	max_depth = reader.ReadRequired<idx_t>();
+	objects = reader.ReadRequired<bool>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
@@ -144,16 +146,20 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto &bind_data = (JSONScanData &)*input.bind_data;
 	auto result = make_unique<JSONGlobalTableFunctionState>(context, input);
 
-	// Check if we need to do projection pushdown
-	if (bind_data.type == JSONScanType::READ_JSON && input.column_ids.size() != bind_data.names.size()) {
-		D_ASSERT(input.column_ids.size() < bind_data.names.size()); // Can't project to have more columns
+	// Perform projection pushdown
+	if (bind_data.type == JSONScanType::READ_JSON) {
+		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
+		if (bind_data.auto_detect && input.column_ids.size() < bind_data.names.size()) {
+			// If we are auto-detecting, but don't need all columns present in the file,
+			// then we don't need to throw an error if we encounter an unseen column
+			bind_data.transform_options.error_unknown_key = false;
+		}
 		vector<string> names;
 		names.reserve(input.column_ids.size());
 		for (const auto &id : input.column_ids) {
 			names.push_back(std::move(bind_data.names[id]));
 		}
 		bind_data.names = std::move(names);
-		bind_data.transform_options.error_unknown_key = false;
 	}
 	return result;
 }
@@ -170,7 +176,14 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
                                                                       TableFunctionInitInput &input,
                                                                       GlobalTableFunctionState *global_state) {
 	auto &gstate = (JSONGlobalTableFunctionState &)*global_state;
-	return make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+	auto result = make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+
+	// Copy the transform options / date format map because we need to do thread-local stuff
+	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.transform_options = gstate.state.bind_data.transform_options;
+	result->state.transform_options.date_format_map = &result->state.date_format_map;
+
+	return result;
 }
 
 idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
@@ -602,6 +615,14 @@ void JSONScanLocalState::ReadNewlineDelimited(idx_t &count) {
 
 yyjson_alc *JSONScanLocalState::GetAllocator() {
 	return json_allocator.GetYYJSONAllocator();
+}
+
+void JSONScanLocalState::ThrowTransformError(idx_t count, idx_t object_index, const string &error_message) {
+	D_ASSERT(current_reader);
+	D_ASSERT(current_buffer_handle);
+	D_ASSERT(object_index != DConstants::INVALID_INDEX);
+	auto line_or_object_in_buffer = lines_or_objects_in_buffer - count + object_index;
+	current_reader->ThrowTransformError(current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
 }
 
 } // namespace duckdb

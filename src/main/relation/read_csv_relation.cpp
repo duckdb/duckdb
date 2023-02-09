@@ -21,7 +21,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
 
-	columns = move(columns_p);
+	columns = std::move(columns_p);
 
 	child_list_t<Value> column_names;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -42,7 +42,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	// Force auto_detect for this constructor
 	options.auto_detect = true;
-	BufferedCSVReader reader(*context, move(options));
+	BufferedCSVReader reader(*context, std::move(options));
 
 	for (idx_t i = 0; i < reader.return_types.size(); i++) {
 		columns.emplace_back(reader.names[i], reader.return_types[i]);

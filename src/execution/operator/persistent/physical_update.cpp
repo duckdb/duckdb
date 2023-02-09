@@ -70,7 +70,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	// update data in the base table
 	// the row ids are given to us as the last column of the child chunk
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
+	update_chunk.Reset();
 	update_chunk.SetCardinality(chunk);
+
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column

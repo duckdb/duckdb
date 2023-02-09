@@ -213,7 +213,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 			auto data = ret.Get("data").As<Napi::Array>();
 			auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
 			for (size_t i = 0; i < data.Length(); ++i) {
-				out[i] = duckdb::string_t(data.Get(i).ToString());
+				// Use the AddString method to save the memory into the StringHeap if it can't be inlined
+				out[i] = duckdb::StringVector::AddString(*jsargs->result, data.Get(i).ToString());
 			}
 			break;
 		}

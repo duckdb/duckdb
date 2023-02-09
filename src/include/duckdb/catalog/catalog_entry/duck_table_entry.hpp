@@ -57,6 +57,9 @@ private:
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 
+	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
+	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info, bool is_generated);
+
 private:
 	//! A reference to the underlying storage unit used for this table
 	std::shared_ptr<DataTable> storage;

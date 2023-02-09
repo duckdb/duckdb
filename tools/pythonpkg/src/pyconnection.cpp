@@ -147,17 +147,21 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
-	         py::arg("arrow_object"))
-	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
-	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false)
-	    .def("from_parquet", &DuckDBPyConnection::FromParquets,
-	         "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
-	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false)
-	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
-	         py::arg("proto"))
+	         py::arg("arrow_object"));
+
+	DefineMethod({"from_parquet", "read_parquet"}, m, &DuckDBPyConnection::FromParquet,
+	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
+	             py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	             py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
+	             py::arg("compression") = py::none());
+	DefineMethod({"from_parquet", "read_parquet"}, m, &DuckDBPyConnection::FromParquets,
+	             "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
+	             py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	             py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
+	             py::arg("compression") = py::none());
+
+	m.def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
+	      py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
 	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
@@ -509,8 +513,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			for (auto &kv : dtype_dict) {
 				struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
 			}
-			auto dtype_struct = Value::STRUCT(move(struct_fields));
-			read_csv.AddNamedParameter("dtypes", move(dtype_struct));
+			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
+			read_csv.AddNamedParameter("dtypes", std::move(dtype_struct));
 		} else if (py::isinstance<py::list>(dtype)) {
 			auto dtype_list = TransformPythonValue(py::list(dtype));
 			D_ASSERT(dtype_list.type().id() == LogicalTypeId::LIST);
@@ -520,7 +524,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 					throw InvalidInputException("The types provided to 'dtype' have to be strings");
 				}
 			}
-			read_csv.AddNamedParameter("dtypes", move(dtype_list));
+			read_csv.AddNamedParameter("dtypes", std::move(dtype_list));
 		} else {
 			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
 		}
@@ -722,7 +726,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
                                                              bool file_row_number, bool filename,
-                                                             bool hive_partitioning, bool union_by_name) {
+                                                             bool hive_partitioning, bool union_by_name,
+                                                             const py::object &compression) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -734,13 +739,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 	                                        {"filename", Value::BOOLEAN(filename)},
 	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)},
 	                                        {"union_by_name", Value::BOOLEAN(union_by_name)}});
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			throw InvalidInputException("from_parquet only accepts 'compression' as a string");
+		}
+		named_parameters["compression"] = Value(py::str(compression));
+	}
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                               bool file_row_number, bool filename,
-                                                              bool hive_partitioning, bool union_by_name) {
+                                                              bool hive_partitioning, bool union_by_name,
+                                                              const py::object &compression) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -756,6 +769,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<strin
 	                                        {"filename", Value::BOOLEAN(filename)},
 	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)},
 	                                        {"union_by_name", Value::BOOLEAN(union_by_name)}});
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			throw InvalidInputException("from_parquet only accepts 'compression' as a string");
+		}
+		named_parameters["compression"] = Value(py::str(compression));
+	}
+
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }

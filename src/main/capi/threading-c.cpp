@@ -78,3 +78,11 @@ void duckdb_destroy_task_state(duckdb_task_state state_p) {
 	auto state = (CAPITaskState *)state_p;
 	delete state;
 }
+
+bool duckdb_execution_is_finished(duckdb_connection con) {
+	if (!con) {
+		return false;
+	}
+	duckdb::Connection *conn = (duckdb::Connection *)con;
+	return conn->context->ExecutionIsFinished();
+}
