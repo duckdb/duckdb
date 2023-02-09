@@ -112,6 +112,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::kw_only(), py::arg("date_as_object") = false)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
+	    .def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
@@ -954,6 +956,7 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
+
 DataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
@@ -973,6 +976,12 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 		throw InvalidInputException("No open result set");
 	}
 	return result->ToArrowTable(chunk_size);
+}
+
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
+	auto arrow = FetchArrow(chunk_size);
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return py::cast<PolarsDataFrame>(import_cache.polars().DataFrame()(arrow));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
