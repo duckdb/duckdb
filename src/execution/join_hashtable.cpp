@@ -444,7 +444,6 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	if (finished) {
 		return;
 	}
-
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
@@ -823,10 +822,10 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
-		auto &mask = FlatVector::Validity(vector);
-		mask.SetAllInvalid(input.size());
-		for (idx_t j = 0; j < result_count; j++) {
-			mask.SetValid(result_sel.get_index(j));
+		for (idx_t j = 0; j < input.size(); j++) {
+			if (!found_match[j]) {
+				FlatVector::SetNull(vector, j, true);
+			}
 		}
 		// for the remaining values we fetch the values
 		GatherResult(vector, result_sel, result_sel, result_count, i + ht.condition_types.size());

@@ -286,7 +286,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.TypeMutable(), catalog->GetName(), schema->name);
+	Binder::BindLogicalType(context, info.new_column.TypeMutable(), catalog, schema->name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();

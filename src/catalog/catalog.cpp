@@ -552,20 +552,19 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 	return result;
 }
 
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name, bool if_exists) {
+	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
+	if (!type_entry) {
+		return LogicalType::INVALID;
+	}
+	auto result_type = type_entry->user_type;
+	LogicalType::SetCatalog(result_type, type_entry);
+	return result_type;
+}
+
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
-	CatalogEntry *entry;
-	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, true);
-	if (!entry) {
-		// look in the system catalog
-		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, true);
-		if (!entry) {
-			// repeat the search to get the error
-			GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name);
-			throw InternalException("Catalog::GetType - second type lookup somehow succeeded!?");
-		}
-	}
-	auto type_entry = (TypeCatalogEntry *)entry;
+	auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
 	auto result_type = type_entry->user_type;
 	LogicalType::SetCatalog(result_type, type_entry);
 	return result_type;

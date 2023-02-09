@@ -121,6 +121,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UUID,
 	// union type, only useful as logical type
 	DUCKDB_TYPE_UNION,
+	// duckdb_bit
+	DUCKDB_TYPE_BIT,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -2286,6 +2288,13 @@ on the task state.
 * state: The task state to clean up
 */
 DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
+
+/*!
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+*/
+DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
 
 #ifdef __cplusplus
 }

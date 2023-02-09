@@ -25,6 +25,8 @@ public:
 	virtual ClientContext *TryGetClientContext() = 0;
 
 	DUCKDB_API static FileOpener *Get(ClientContext &context);
+	DUCKDB_API static ClientContext *TryGetClientContext(FileOpener *opener);
+	DUCKDB_API static bool TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result);
 };
 
 } // namespace duckdb

@@ -67,6 +67,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.version }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
