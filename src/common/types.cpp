@@ -906,7 +906,7 @@ TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
 	return ((ExtraTypeInfo &)*info).catalog_entry;
 }
 
-ExtraTypeInfoType LogicalType::GetExtraTypeInfoType(const ExtraTypeInfo &type){
+ExtraTypeInfoType LogicalType::GetExtraTypeInfoType(const ExtraTypeInfo &type) {
 	return type.type;
 }
 
@@ -1306,7 +1306,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 		return enum_name;
 	};
 	const string GetSchemaName() const {
-		return catalog_entry ? catalog_entry->schema->name: "";
+		return catalog_entry ? catalog_entry->schema->name : "";
 	};
 	const Vector &GetValuesInsertOrder() {
 		return values_insert_order;
@@ -1346,7 +1346,7 @@ protected:
 			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
 		}
 		bool serialize_internals = GetSchemaName().empty();
-		EnumType::Serialize(writer,*this, serialize_internals);
+		EnumType::Serialize(writer, *this, serialize_internals);
 	}
 
 	Vector values_insert_order;
@@ -1357,24 +1357,25 @@ private:
 	idx_t dict_size;
 };
 
-	// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
+// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
 
-void EnumType::Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals){
+void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bool serialize_internals) {
 	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
-	auto &enum_info = (EnumTypeInfo&) type_info;
+	auto &enum_info = (EnumTypeInfo &)type_info;
 	// Store Schema Name
 	writer.WriteString(enum_info.GetSchemaName());
 	// Store Enum Name
 	writer.WriteString(enum_info.GetEnumName());
 	// Store If we are serializing the internals
 	writer.WriteField<bool>(serialize_internals);
-	if (serialize_internals){
+	if (serialize_internals) {
 		// We must serialize the internals
 		auto dict_size = enum_info.GetDictSize();
 		// Store Dictionary Size
 		writer.WriteField<uint32_t>(dict_size);
 		// Store Vector Order By Insertion
-		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer());;
+		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer());
+		;
 	}
 }
 
@@ -1517,7 +1518,7 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 
 string EnumType::GetSchemaName(const LogicalType &type) {
 	auto catalog_entry = EnumType::GetCatalog(type);
-	return catalog_entry ? catalog_entry->schema->name: "";
+	return catalog_entry ? catalog_entry->schema->name : "";
 }
 
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
@@ -1648,14 +1649,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-void LogicalType::SerializeEnumType(Serializer &serializer) const{
-		FieldWriter writer(serializer);
-		writer.WriteField<LogicalTypeId>(id_);
-	    writer.WriteField<ExtraTypeInfoType>(type_info_->type);
-	    EnumType::Serialize(writer,*type_info_, true);
-	    writer.WriteString(type_info_->alias);
-		writer.Finalize();
-	}
+void LogicalType::SerializeEnumType(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField<LogicalTypeId>(id_);
+	writer.WriteField<ExtraTypeInfoType>(type_info_->type);
+	EnumType::Serialize(writer, *type_info_, true);
+	writer.WriteString(type_info_->alias);
+	writer.Finalize();
+}
 
 LogicalType LogicalType::Deserialize(Deserializer &source) {
 	FieldReader reader(source);

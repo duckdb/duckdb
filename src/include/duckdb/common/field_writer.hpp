@@ -131,9 +131,8 @@ public:
 	void AddField() {
 		field_count++;
 	}
+
 private:
-
-
 	template <class T>
 	void Write(const T &element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));

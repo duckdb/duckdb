@@ -18,17 +18,16 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	this->internal = info->internal;
 }
 
-
 void TypeCatalogEntry::Serialize(Serializer &serializer) {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
-	if (user_type.id() == LogicalTypeId::ENUM){
+	if (user_type.id() == LogicalTypeId::ENUM) {
 		// We have to serialize Enum Values
 		writer.AddField();
 		user_type.SerializeEnumType(writer.GetSerializer());
-	}	else {
+	} else {
 		writer.WriteSerializable(user_type);
 	}
 	writer.Finalize();
