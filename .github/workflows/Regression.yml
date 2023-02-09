@@ -22,10 +22,12 @@ env:
 jobs:
  regression-test-benchmark-runner:
   name: Regression Tests
-  runs-on: ubuntu-20.04
+  runs-on: ubuntu-latest
   env:
-    CC: gcc-10
-    CXX: g++-10
+    CC: /home/runner/work/llvm/bin/clang
+    CPP: /home/runner/work/llvm/bin/clang-cpp
+    CXX: /home/runner/work/llvm/bin/clang++
+    LD: /home/runner/work/llvm/bin/ld.lld
     GEN: ninja
     BUILD_BENCHMARK: 1
     BUILD_TPCH: 1
@@ -100,8 +102,10 @@ jobs:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
   env:
-    CC: gcc-10
-    CXX: g++-10
+    CC: /home/runner/work/llvm/bin/clang
+    CPP: /home/runner/work/llvm/bin/clang-cpp
+    CXX: /home/runner/work/llvm/bin/clang++
+    LD: /home/runner/work/llvm/bin/ld.lld
     GEN: ninja
     BUILD_TPCH: 1
     BUILD_TPCDS: 1
@@ -143,8 +147,10 @@ jobs:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
   env:
-    CC: gcc-10
-    CXX: g++-10
+    CC: /home/runner/work/llvm/bin/clang
+    CPP: /home/runner/work/llvm/bin/clang-cpp
+    CXX: /home/runner/work/llvm/bin/clang++
+    LD: /home/runner/work/llvm/bin/ld.lld
     GEN: ninja
 
   steps:
@@ -210,8 +216,10 @@ jobs:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
   env:
-    CC: gcc-10
-    CXX: g++-10
+    CC: /home/runner/work/llvm/bin/clang
+    CPP: /home/runner/work/llvm/bin/clang-cpp
+    CXX: /home/runner/work/llvm/bin/clang++
+    LD: /home/runner/work/llvm/bin/ld.lld
     GEN: ninja
     BUILD_TPCH: 1
     BUILD_HTTPFS: 1
