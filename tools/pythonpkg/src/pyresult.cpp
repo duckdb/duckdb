@@ -68,7 +68,7 @@ Optional<py::tuple> DuckDBPyResult::Fetchone() {
 		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx]);
 	}
 	chunk_offset++;
-	return std::move(res);
+	return res;
 }
 
 py::list DuckDBPyResult::Fetchmany(idx_t size) {

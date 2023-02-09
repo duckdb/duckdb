@@ -1096,7 +1096,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::dict config_options) {
+                                                           const py::dict &config_options) {
 	auto config_dict = TransformPyConfigDict(config_options);
 	DBConfig config(config_dict, read_only);
 
