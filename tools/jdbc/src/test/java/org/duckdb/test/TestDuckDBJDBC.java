@@ -1810,6 +1810,27 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_getTables_paramBinding_for_tableTypes() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		ResultSet rs = databaseMetaData.getTables(null, null, null, new String[] {
+			"') UNION ALL " +
+			"SELECT" + 
+			" 'fake catalog'" +
+			", ?" +
+			", ?" + 
+			", 'fake table type'" +
+			", 'fake remarks'" +
+			", 'fake type cat'" + 
+			", 'fake type schem'" +
+			", 'fake type name'" +
+			", 'fake self referencing col name'" +
+			", 'fake ref generation' -- "
+		});
+		assertFalse(rs.next());
+		rs.close();
+	}
+	
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));
@@ -2540,7 +2561,7 @@ public class TestDuckDBJDBC {
 		}
 		assertTrue(p.containsKey("duckdb.read_only"));
 	}
-
+	
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
