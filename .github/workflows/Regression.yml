@@ -39,6 +39,11 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+        directory: '/home/runner/work/llvm'
 
     - uses: actions/setup-python@v2
       with:
@@ -115,6 +120,11 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+        directory: '/home/runner/work/llvm'
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
@@ -157,6 +167,11 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+        directory: '/home/runner/work/llvm'
 
     - uses: actions/setup-python@v2
       with:
@@ -228,6 +243,11 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "14.0"
+        directory: '/home/runner/work/llvm'
 
     - uses: actions/setup-python@v2
       with:
