@@ -145,6 +145,15 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	SetOption(nullptr, option, value);
 }
 
+void DBConfig::SetOptionByName(const string &name, const Value &value) {
+	auto option = DBConfig::GetOptionByName(name);
+	if (option) {
+		SetOption(*option, value);
+	} else {
+		options.unrecognized_options[name] = value;
+	}
+}
+
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
