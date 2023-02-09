@@ -89,8 +89,8 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, idx_t de
 	auto &description = descriptions[0];
 	if (description.type == LogicalTypeId::VARCHAR && description.candidate_types.empty()) {
 		// We loop through the candidate types and format templates from back to front
-		description.candidate_types = {LogicalTypeId::TIME, LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP,
-		                               LogicalTypeId::UUID};
+		description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
+		                               LogicalTypeId::TIME};
 	}
 	for (auto &child : description.children) {
 		child.InitializeCandidateTypes(max_depth, depth + 1);

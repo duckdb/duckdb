@@ -11,8 +11,12 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 
 namespace duckdb {
+
+class Binder;
+struct BoundStatement;
 class ExecutionContext;
 
 struct LocalFunctionData {
@@ -25,6 +29,7 @@ struct GlobalFunctionData {
 	}
 };
 
+typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &names,
                                                    vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
@@ -49,10 +54,14 @@ typedef bool (*copy_to_is_parallel_t)(ClientContext &context, FunctionData &bind
 class CopyFunction : public Function {
 public:
 	explicit CopyFunction(string name)
-	    : Function(name), copy_to_bind(nullptr), copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
-	      copy_to_sink(nullptr), copy_to_combine(nullptr), copy_to_finalize(nullptr), parallel(nullptr),
-	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
+	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
+	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
+	      copy_to_finalize(nullptr), parallel(nullptr), serialize(nullptr), deserialize(nullptr),
+	      copy_from_bind(nullptr) {
 	}
+
+	//! Plan rewrite copy function
+	copy_to_plan_t plan;
 
 	copy_to_bind_t copy_to_bind;
 	copy_to_initialize_local_t copy_to_initialize_local;

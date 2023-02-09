@@ -81,6 +81,24 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 	}
 }
 
+void JSONScanData::InitializeFormats() {
+	// Set defaults for date/timestamp formats if we need to
+	if (!auto_detect && date_format.empty()) {
+		date_format = "%Y-%m-%d";
+	}
+	if (!auto_detect && timestamp_format.empty()) {
+		timestamp_format = "%Y-%m-%dT%H:%M:%S.%fZ";
+	}
+
+	// Initialize date_format_map if anything was specified
+	if (!date_format.empty()) {
+		date_format_map.AddFormat(LogicalTypeId::DATE, date_format);
+	}
+	if (!timestamp_format.empty()) {
+		date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, timestamp_format);
+	}
+}
+
 void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteField<JSONScanType>(type);
 	options.Serialize(writer);
@@ -93,6 +111,8 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(max_depth);
 	writer.WriteField<bool>(objects);
+	writer.WriteString(date_format);
+	writer.WriteString(timestamp_format);
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -107,6 +127,8 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	names = reader.ReadRequiredList<string>();
 	max_depth = reader.ReadRequired<idx_t>();
 	objects = reader.ReadRequired<bool>();
+	date_format = reader.ReadRequired<string>();
+	timestamp_format = reader.ReadRequired<string>();
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
