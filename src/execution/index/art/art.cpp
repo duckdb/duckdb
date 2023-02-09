@@ -275,7 +275,6 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySect
 		// check for possible constraint violation
 		auto single_row_id = num_row_ids == 1;
 		if (has_constraint && !single_row_id) {
-			//			throw ConstraintException("New data contains duplicates on indexed column(s)");
 			return false;
 		}
 
