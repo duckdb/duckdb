@@ -9,6 +9,11 @@ namespace duckdb {
 PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle)
     : FileHandle(file_system, path), handle(handle) {
 }
+PythonFileHandle::~PythonFileHandle() {
+	PythonGILWrapper gil;
+	handle.dec_ref();
+	handle.release();
+}
 
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
@@ -31,7 +36,9 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 		throw InvalidInputException("%s: unsupported file flags", GetName());
 	}
 
-	const auto &handle = filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s));
+	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
+	const auto &handle =
+	    filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s), py::arg("seekable") = true);
 	return make_unique<PythonFileHandle>(*this, path, handle);
 }
 

@@ -38,6 +38,11 @@ public:
 public:
 	PythonImportCacheItem Dataset;
 	PythonImportCacheItem Scanner;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 struct ArrowCacheItem : public PythonImportCacheItem {

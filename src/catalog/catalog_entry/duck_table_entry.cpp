@@ -286,7 +286,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.TypeMutable(), catalog->GetName(), schema->name);
+	Binder::BindLogicalType(context, info.new_column.TypeMutable(), catalog, schema->name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
@@ -298,6 +298,95 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
 	return make_unique<DuckTableEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+}
+
+void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index,
+                                                   const vector<LogicalIndex> &adjusted_indices,
+                                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
+                                                   bool is_generated) {
+	// handle constraints for the new table
+	D_ASSERT(constraints.size() == bound_constraints.size());
+
+	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
+		auto &constraint = constraints[constr_idx];
+		auto &bound_constraint = bound_constraints[constr_idx];
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
+			auto not_null_index = columns.PhysicalToLogical(not_null_constraint.index);
+			if (not_null_index != removed_index) {
+				// the constraint is not about this column: we need to copy it
+				// we might need to shift the index back by one though, to account for the removed column
+				auto new_index = adjusted_indices[not_null_index.index];
+				create_info.constraints.push_back(make_unique<NotNullConstraint>(new_index));
+			}
+			break;
+		}
+		case ConstraintType::CHECK: {
+			// Generated columns can not be part of an index
+			// CHECK constraint
+			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
+			// check if the removed column is part of the check constraint
+			if (is_generated) {
+				// generated columns can not be referenced by constraints, we can just add the constraint back
+				create_info.constraints.push_back(constraint->Copy());
+				break;
+			}
+			auto physical_index = columns.LogicalToPhysical(removed_index);
+			if (bound_check.bound_columns.find(physical_index) != bound_check.bound_columns.end()) {
+				if (bound_check.bound_columns.size() > 1) {
+					// CHECK constraint that concerns mult
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
+					    info.removed_column);
+				} else {
+					// CHECK constraint that ONLY concerns this column, strip the constraint
+				}
+			} else {
+				// check constraint does not concern the removed column: simply re-add it
+				create_info.constraints.push_back(constraint->Copy());
+			}
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			auto copy = constraint->Copy();
+			auto &unique = (UniqueConstraint &)*copy;
+			if (unique.index.index != DConstants::INVALID_INDEX) {
+				if (unique.index == removed_index) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
+					    info.removed_column);
+				}
+				unique.index = adjusted_indices[unique.index.index];
+			}
+			create_info.constraints.push_back(std::move(copy));
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto copy = constraint->Copy();
+			auto &fk = (ForeignKeyConstraint &)*copy;
+			vector<string> columns = fk.pk_columns;
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				columns = fk.fk_columns;
+			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
+					columns.push_back(fk.fk_columns[i]);
+				}
+			}
+			for (idx_t i = 0; i < columns.size(); i++) {
+				if (columns[i] == info.removed_column) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
+					    info.removed_column);
+				}
+			}
+			create_info.constraints.push_back(std::move(copy));
+			break;
+		}
+		default:
+			throw InternalException("Unsupported constraint for entry!");
+		}
+	}
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
@@ -319,8 +408,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (!removed_columns.empty() && !info.cascade) {
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
+	bool dropped_column_is_generated = false;
 	for (auto &col : columns.Logical()) {
 		if (col.Logical() == removed_index || removed_columns.count(col.Logical())) {
+			if (col.Generated()) {
+				dropped_column_is_generated = true;
+			}
 			continue;
 		}
 		create_info->columns.AddColumn(col.Copy());
@@ -329,82 +422,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
 	auto adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.LogicalColumnCount());
-	// handle constraints for the new table
-	D_ASSERT(constraints.size() == bound_constraints.size());
-	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
-		auto &constraint = constraints[constr_idx];
-		auto &bound_constraint = bound_constraints[constr_idx];
-		switch (constraint->type) {
-		case ConstraintType::NOT_NULL: {
-			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
-			auto not_null_index = columns.PhysicalToLogical(not_null_constraint.index);
-			if (not_null_index != removed_index) {
-				// the constraint is not about this column: we need to copy it
-				// we might need to shift the index back by one though, to account for the removed column
-				auto new_index = adjusted_indices[not_null_index.index];
-				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
-			}
-			break;
-		}
-		case ConstraintType::CHECK: {
-			// CHECK constraint
-			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
-			// check if the removed column is part of the check constraint
-			auto physical_index = columns.LogicalToPhysical(removed_index);
-			if (bound_check.bound_columns.find(physical_index) != bound_check.bound_columns.end()) {
-				if (bound_check.bound_columns.size() > 1) {
-					// CHECK constraint that concerns mult
-					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
-					    info.removed_column);
-				} else {
-					// CHECK constraint that ONLY concerns this column, strip the constraint
-				}
-			} else {
-				// check constraint does not concern the removed column: simply re-add it
-				create_info->constraints.push_back(constraint->Copy());
-			}
-			break;
-		}
-		case ConstraintType::UNIQUE: {
-			auto copy = constraint->Copy();
-			auto &unique = (UniqueConstraint &)*copy;
-			if (unique.index.index != DConstants::INVALID_INDEX) {
-				if (unique.index == removed_index) {
-					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
-					    info.removed_column);
-				}
-				unique.index = adjusted_indices[unique.index.index];
-			}
-			create_info->constraints.push_back(std::move(copy));
-			break;
-		}
-		case ConstraintType::FOREIGN_KEY: {
-			auto copy = constraint->Copy();
-			auto &fk = (ForeignKeyConstraint &)*copy;
-			vector<string> columns = fk.pk_columns;
-			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-				columns = fk.fk_columns;
-			} else if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-				for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
-					columns.push_back(fk.fk_columns[i]);
-				}
-			}
-			for (idx_t i = 0; i < columns.size(); i++) {
-				if (columns[i] == info.removed_column) {
-					throw CatalogException(
-					    "Cannot drop column \"%s\" because there is a FOREIGN KEY constraint that depends on it",
-					    info.removed_column);
-				}
-			}
-			create_info->constraints.push_back(std::move(copy));
-			break;
-		}
-		default:
-			throw InternalException("Unsupported constraint for entry!");
-		}
-	}
+
+	UpdateConstraintsOnColumnDrop(removed_index, adjusted_indices, info, *create_info, dropped_column_is_generated);
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));

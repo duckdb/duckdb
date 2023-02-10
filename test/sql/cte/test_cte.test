@@ -117,3 +117,15 @@ SELECT max(d) FROM cte;
 ----
 1
 
+# test CTE with nested aliases in where clause
+query II
+with cte (a) as (
+    select 1
+)
+select
+    a as alias1,
+    alias1 as alias2
+from cte
+where alias2 > 0;
+----
+1	1

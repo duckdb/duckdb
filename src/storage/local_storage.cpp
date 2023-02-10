@@ -596,20 +596,14 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &verify_chunk) {
+void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids,
+                              DataChunk &chunk, ColumnFetchState &fetch_state) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
 		throw InternalException("LocalStorage::FetchChunk - local storage not found");
 	}
 
-	ColumnFetchState fetch_state;
-	vector<column_t> col_ids;
-	vector<LogicalType> types = storage->table->GetTypes();
-	for (idx_t i = 0; i < types.size(); i++) {
-		col_ids.push_back(i);
-	}
-	verify_chunk.Initialize(storage->allocator, types);
-	storage->row_groups->Fetch(transaction, verify_chunk, col_ids, row_ids, count, fetch_state);
+	storage->row_groups->Fetch(transaction, chunk, col_ids, row_ids, count, fetch_state);
 }
 
 TableIndexList &LocalStorage::GetIndexes(DataTable *table) {

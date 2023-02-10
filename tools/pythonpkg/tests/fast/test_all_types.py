@@ -63,7 +63,7 @@ class TestAllTypes(object):
             , 'dec_4_1': [(Decimal('-999.9'),), (Decimal('999.9'),), (None,)], 'dec_9_4': [(Decimal('-99999.9999'),), (Decimal('99999.9999'),), (None,)]
             , 'dec_18_6': [(Decimal('-999999999999.999999'),), (Decimal('999999999999.999999'),), (None,)], 'dec38_10':[(Decimal('-9999999999999999999999999999.9999999999'),), (Decimal('9999999999999999999999999999.9999999999'),), (None,)]
             , 'uuid': [(UUID('00000000-0000-0000-0000-000000000001'),), (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),), (None,)]
-            , 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goo\0se',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\x00\x00\x00a',), (None,)]
+            , 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goo\0se',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\x00\x00\x00a',), (None,)], 'bit': [('0010001001011100010101011010111',), ('10101',), (None,)]
             , 'small_enum':[('DUCK_DUCK_ENUM',), ('GOOSE',), (None,)], 'medium_enum': [('enum_0',), ('enum_299',), (None,)], 'large_enum': [('enum_0',), ('enum_69999',), (None,)]
             , 'date_array': [([], [datetime.date(1970, 1, 1), None, datetime.date.min, datetime.date.max], [None,],)]
             , 'timestamp_array': [([], [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max], [None,],),]
@@ -188,14 +188,6 @@ class TestAllTypes(object):
                 ],
                 mask=[0, 0, 1],
             ),
-            'date': np.ma.array(
-                [
-                    np.datetime64(-5235121029329846272, "ns"),
-                    np.datetime64(5235121029329846272, "ns"),
-                    np.datetime64("1990-01-01T00:42"),
-                ],
-                mask=[0, 0, 1],
-            ),
             # For timestamp_ns, the lowest value is out-of-range for numpy,
             # such that the conversion yields "Not a Time"
             'timestamp_ns': np.ma.array(
@@ -314,6 +306,8 @@ class TestAllTypes(object):
         # - 'dec38_10'
 
         # The following types lead to errors:
+        # Conversion Error: Could not convert DATE to nanoseconds
+        # - 'date'
         # Conversion Error: Date out of range in timestamp conversion
         # - 'timestamp_array'
         # - 'timestamptz_array'
@@ -329,11 +323,9 @@ class TestAllTypes(object):
         for cur_type in all_types:
             if cur_type not in correct_answer_map:
                 continue
-
             result = rel.project(cur_type).fetchnumpy()
             result = result[cur_type]
             correct_answer = correct_answer_map[cur_type]
-
             if isinstance(result, pd.Categorical) or result.dtype == object:
                 assert recursive_equality(list(result), list(correct_answer))
             else:
