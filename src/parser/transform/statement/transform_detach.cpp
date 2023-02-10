@@ -10,7 +10,7 @@ unique_ptr<DetachStatement> Transformer::TransformDetach(duckdb_libpgquery::PGNo
 	auto result = make_unique<DetachStatement>();
 	auto info = make_unique<DetachInfo>();
 	info->name = stmt->db_name;
-	info->error_if_not_exist = !stmt->missing_ok;
+	info->if_exists = stmt->missing_ok;
 
 	result->info = std::move(info);
 	return result;

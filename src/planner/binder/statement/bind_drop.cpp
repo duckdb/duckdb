@@ -47,16 +47,10 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {
-		// use DuckDB default impl if no storage extension is registered to handle this functionality
 		auto &base = (DropInfo &)*stmt.info;
 		string database_name = base.name;
 
 		auto &config = DBConfig::GetConfig(context);
-
-		if (config.storage_extensions.empty()) {
-			// attaching and detaching is read-only
-			stmt.info->catalog = SYSTEM_CATALOG;
-		}
 		// for now assume only one storage extension provides the custom drop_database impl
 		for (auto &extension_entry : config.storage_extensions) {
 			if (extension_entry.second->drop_database != nullptr) {
@@ -68,10 +62,14 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			if (drop_database_function_ref) {
 				auto bound_drop_database_func = Bind(*drop_database_function_ref);
 				result.plan = CreatePlan(*bound_drop_database_func);
-				break;
+				result.names = {"Success"};
+				result.types = {LogicalType::BOOLEAN};
+				properties.allow_stream_result = false;
+				properties.return_type = StatementReturnType::NOTHING;
+				return result;
 			}
 		}
-		break;
+		throw BinderException("Drop is not supported for this database!");
 	}
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
