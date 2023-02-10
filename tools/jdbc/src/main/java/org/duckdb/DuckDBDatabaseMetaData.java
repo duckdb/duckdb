@@ -662,8 +662,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			stringBuilder.append("'");
 			if (first) {
 				stringBuilder.append(" AS 'TABLE_TYPE'");
+				first = false;
 			}
-			first = false;
 		}
 		stringBuilder.append("\nORDER BY TABLE_TYPE");
 		return conn.createStatement().executeQuery(stringBuilder.toString());
