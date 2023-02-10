@@ -1569,16 +1569,18 @@ Sets the total size of the underlying child-vector of a list vector.
 
 * vector: The list vector.
 * size: The size of the child list.
+* returns: The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
-DUCKDB_API void duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
+DUCKDB_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
 
 /*!
 Sets the total capacity of the underlying child-vector of a list.
 
 * vector: The list vector.
 * required_capacity: the total capacity to reserve.
+* return: The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
-DUCKDB_API void duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
+DUCKDB_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
 /*!
 Retrieves the child vector of a struct vector.
