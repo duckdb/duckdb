@@ -385,13 +385,15 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
+static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
+	auto context = rel->context.GetContext();
+	py::gil_scoped_release release;
+	auto pending_query = context->PendingQuery(rel, false);
+	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
+}
+
 unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
-	{
-		auto context = rel->context.GetContext();
-		py::gil_scoped_release release;
-		auto pending_query = context->PendingQuery(rel, false);
-		return DuckDBPyConnection::CompletePendingQuery(*pending_query);
-	}
+	return PyExecuteRelation(rel);
 }
 
 void DuckDBPyRelation::ExecuteOrThrow() {
@@ -531,7 +533,8 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 		options["compression"] = {Value(py::str(compression))};
 	}
 
-	rel->WriteParquet(filename, std::move(options));
+	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));
+	PyExecuteRelation(write_parquet);
 }
 
 void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, const py::object &na_rep,
@@ -628,7 +631,8 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 		options["compression"] = {Value(py::str(compression))};
 	}
 
-	rel->WriteCSV(filename, std::move(options));
+	auto write_csv = rel->WriteCSVRel(filename, std::move(options));
+	PyExecuteRelation(write_csv);
 }
 
 void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
@@ -711,13 +715,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, cons
 
 void DuckDBPyRelation::InsertInto(const string &table) {
 	auto parsed_info = QualifiedName::Parse(table);
-	if (parsed_info.schema.empty()) {
-		//! No Schema Defined, we use default schema.
-		rel->Insert(table);
-	} else {
-		//! Schema defined, we try to insert into it.
-		rel->Insert(parsed_info.schema, parsed_info.name);
-	}
+	auto insert = rel->InsertRel(parsed_info.schema, parsed_info.name);
+	PyExecuteRelation(insert);
 }
 
 static bool IsAcceptedInsertRelationType(const Relation &relation) {
@@ -729,13 +728,15 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
+
 	py::gil_scoped_release release;
 	rel->Insert(values);
 }
 
 void DuckDBPyRelation::Create(const string &table) {
-	py::gil_scoped_release release;
-	rel->Create(table);
+	auto parsed_info = QualifiedName::Parse(table);
+	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name);
+	PyExecuteRelation(create);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
