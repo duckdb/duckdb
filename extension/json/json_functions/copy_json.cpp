@@ -65,6 +65,9 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 
 	bind_data->file_paths.emplace_back(info.file_path);
 	bind_data->names = expected_names;
+	for (idx_t col_idx = 0; col_idx < expected_names.size(); col_idx++) {
+		bind_data->valid_cols.emplace_back(col_idx);
+	}
 
 	auto it = info.options.find("dateformat");
 	if (it == info.options.end()) {

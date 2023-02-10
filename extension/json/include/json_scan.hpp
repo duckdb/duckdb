@@ -100,6 +100,8 @@ public:
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
 	//! Column names (in order)
 	vector<string> names;
+	//! Valid cols (ROW_TYPE cols are considered invalid)
+	vector<idx_t> valid_cols;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 	//! Whether we're parsing objects (usually), or something else like arrays

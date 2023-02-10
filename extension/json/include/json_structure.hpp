@@ -40,7 +40,8 @@ private:
 	                               vector<StrpTimeFormat> &formats);
 
 public:
-	string key;
+	unique_ptr<string> key;
+	bool initialized = false;
 	vector<JSONStructureDescription> descriptions;
 };
 

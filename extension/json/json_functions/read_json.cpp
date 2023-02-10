@@ -187,7 +187,6 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
 	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
-	D_ASSERT(output.ColumnCount() == gstate.bind_data.names.size());
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
@@ -195,9 +194,10 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	vector<Vector *> result_vectors;
 	result_vectors.reserve(output.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		result_vectors.push_back(&output.data[col_idx]);
+	for (auto &valid_col_idx : gstate.bind_data.valid_cols) {
+		result_vectors.push_back(&output.data[valid_col_idx]);
 	}
+	D_ASSERT(result_vectors.size() == gstate.bind_data.names.size());
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
 	bool success;
@@ -209,10 +209,10 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		                                   lstate.transform_options);
 	}
 	if (!success) {
-		string hint =
-		    gstate.bind_data.auto_detect
-		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', or specifying 'columns' manually."
-		        : "";
+		string hint = gstate.bind_data.auto_detect
+		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
+		                    "or setting 'ignore_errors' to true."
+		                  : "";
 		lstate.ThrowTransformError(count, lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}
