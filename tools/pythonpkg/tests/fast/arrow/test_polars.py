@@ -3,9 +3,9 @@ import pytest
 
 class TestPolars(object):
     def test_polars(self,duckdb_cursor):
-        pd = pytest.importorskip("pandas")
         pl = pytest.importorskip("polars")
-        df = pd.DataFrame(
+        pl_testing = pytest.importorskip("polars.testing")
+        df = pl.DataFrame(
             {
                 "A": [1, 2, 3, 4, 5],
                 "fruits": ["banana", "banana", "apple", "apple", "banana"],
@@ -14,15 +14,14 @@ class TestPolars(object):
             }
         )
         # scan plus return a polars dataframe
-        polars_df = pl.DataFrame(df)
-        polars_result = duckdb.sql('SELECT * FROM polars_df').pl()
-        pd.testing.assert_frame_equal(polars_df.to_pandas(), polars_result.to_pandas())
+        polars_result = duckdb.sql('SELECT * FROM df').pl()
+        pl_testing.assert_frame_equal(df, polars_result)
 
         # now do the same for a lazy dataframe
-        lazy_df = polars_df.lazy()
+        lazy_df = df.lazy()
         lazy_result = duckdb.sql('SELECT * FROM lazy_df').pl()
-        pd.testing.assert_frame_equal(polars_df.to_pandas(), lazy_result.to_pandas())
+        pl_testing.assert_frame_equal(df, lazy_result)
 
         con = duckdb.connect()
-        con_result = con.execute('SELECT * FROM polars_df').pl()
-        pd.testing.assert_frame_equal(polars_df.to_pandas(), con_result.to_pandas())
+        con_result = con.execute('SELECT * FROM df').pl()
+        pl_testing.assert_frame_equal(df, con_result)

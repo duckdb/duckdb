@@ -20,7 +20,7 @@ struct PythonImportCache {
 public:
 	explicit PythonImportCache() {
 #ifdef WIN32
- 		py::gil_scoped_acquire acquire;
+		py::gil_scoped_acquire acquire;
 		numpy();
 		datetime();
 		decimal();
