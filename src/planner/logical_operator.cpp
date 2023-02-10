@@ -338,6 +338,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_DETACH:
+		throw SerializationException("Logical Detach does not support serialization");
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(state, reader);
 		break;
