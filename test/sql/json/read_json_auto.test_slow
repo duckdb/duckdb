@@ -9,7 +9,7 @@ require json
 # instead of adding all of these files to data/test we just create them on the fly here
 # whenever we add a '' at the end it's just to check we skip the newline at the end that's sometimes there
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (quote '');
+copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '');
 
 query II
 select * from '__TEST_DIR__/my_file.json'
@@ -17,7 +17,7 @@ select * from '__TEST_DIR__/my_file.json'
 1	2
 
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query I
 select * from '__TEST_DIR__/my_file.json'
@@ -27,7 +27,7 @@ select * from '__TEST_DIR__/my_file.json'
 3
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query III
 select * from '__TEST_DIR__/my_file.json'
@@ -36,7 +36,7 @@ select * from '__TEST_DIR__/my_file.json'
 4	5	6
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query IIII
 select * from '__TEST_DIR__/my_file.json'
@@ -46,7 +46,7 @@ select * from '__TEST_DIR__/my_file.json'
 
 # mixed types that cannot be resolved, defaults to JSON (column 3)
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query IIIII
 select * from '__TEST_DIR__/my_file.json'
@@ -57,7 +57,7 @@ NULL	-5	foo	NULL	true
 
 # mixed types are resolved to DOUBLE here
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query II
 select typeof(a), a from '__TEST_DIR__/my_file.json'
@@ -68,7 +68,7 @@ DOUBLE	-23.456
 DOUBLE	NULL
 
 statement ok
-copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query II
 select * from '__TEST_DIR__/my_file.json'
