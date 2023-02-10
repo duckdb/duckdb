@@ -3,6 +3,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection.hpp"
@@ -315,6 +316,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
 		return py::bytes(StringValue::Get(val));
+	case LogicalTypeId::BIT:
+		return py::cast(Bit::ToString(StringValue::Get(val)));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
