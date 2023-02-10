@@ -380,7 +380,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
-	auto res = ExecuteInternal(query, params, many);
+	auto res = ExecuteInternal(query, std::move(params), many);
 	if (res) {
 		auto py_result = make_unique<DuckDBPyResult>();
 		py_result->result = std::move(res);
