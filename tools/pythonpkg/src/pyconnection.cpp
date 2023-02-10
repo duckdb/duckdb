@@ -372,7 +372,9 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 			}
 		}
 
-		return res;
+		if (!many) {
+			return res;
+		}
 	}
 	return nullptr;
 }
