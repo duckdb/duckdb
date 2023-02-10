@@ -1595,7 +1595,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			}
 			// Try the DB Path as a catalog name
 			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
-			bool found_enum = false;
 			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
 				extra_info = Catalog::GetType(client_context, catalog_name, schema_name, enum_name).GetAuxInfoShrPtr();
 				break;
