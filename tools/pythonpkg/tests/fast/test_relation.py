@@ -230,3 +230,11 @@ class TestRelation(object):
             # invalid conversion of negative integer to UINTEGER
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
+
+    def test_relation_print(self, duckdb_cursor):
+        con = duckdb.connect()
+        con.execute("Create table t1 as select * from range(1000000)")
+        rel1 = con.table('t1')
+        text1 = str(rel1)
+        assert '? rows' in text1
+        assert '>9999 rows' in text1

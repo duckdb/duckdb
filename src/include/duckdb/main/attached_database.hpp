@@ -19,6 +19,9 @@ class Catalog;
 class DatabaseInstance;
 class StorageManager;
 class TransactionManager;
+class StorageExtension;
+
+struct AttachInfo;
 
 enum class AttachedDatabaseType {
 	READ_WRITE_DATABASE,
@@ -34,6 +37,9 @@ public:
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
+	//! Create an attached database instance with the specified storage extension
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, string name, AttachInfo &info,
+	                 AccessMode access_mode);
 	~AttachedDatabase();
 
 	void Initialize();

@@ -1,6 +1,5 @@
 #include "duckdb/common/dl.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
@@ -12,6 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_fun_t)(void);
+typedef void (*ext_storage_init_t)(DBConfig &);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -121,14 +121,13 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	return res;
 }
 
-void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	auto &db = DatabaseInstance::GetDatabase(context);
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
 	auto &loaded_extensions = db.LoadedExtensions();
 	if (loaded_extensions.find(extension) != loaded_extensions.end()) {
 		return;
 	}
 
-	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), opener, extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -141,38 +140,27 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 		                            init_fun_name, res.filename, e.what());
 	}
 
-	DatabaseInstance::GetDatabase(context).SetExtensionLoaded(extension);
+	db.SetExtensionLoaded(extension);
 }
 
-unique_ptr<ReplacementOpenData> ExtensionHelper::ReplacementOpenPre(const string &extension, DBConfig &config) {
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
+}
 
+void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
+	extension = ExtensionHelper::ApplyExtensionAlias(extension);
 	auto res = InitialLoad(config, nullptr, extension); // TODO opener
-	auto init_fun_name = res.basename + "_replacement_open_pre";
+	auto storage_fun_name = res.basename + "_storage_init";
 
-	replacement_open_pre_t open_pre_fun;
-	open_pre_fun = LoadFunctionFromDLL<replacement_open_pre_t>(res.lib_hdl, init_fun_name, res.filename);
-
-	try {
-		return (*open_pre_fun)(config, nullptr);
-	} catch (std::exception &e) {
-		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, e.what());
-	}
-}
-
-void ExtensionHelper::ReplacementOpenPost(ClientContext &context, const string &extension, DatabaseInstance &instance,
-                                          ReplacementOpenData *open_data) {
-	auto res = InitialLoad(DBConfig::GetConfig(context), FileSystem::GetFileOpener(context), extension);
-	auto init_fun_name = res.basename + "_replacement_open_post";
-
-	replacement_open_post_t open_post_fun;
-	open_post_fun = LoadFunctionFromDLL<replacement_open_post_t>(res.lib_hdl, init_fun_name, res.filename);
+	ext_storage_init_t storage_init_fun;
+	storage_init_fun = LoadFunctionFromDLL<ext_storage_init_t>(res.lib_hdl, storage_fun_name, res.filename);
 
 	try {
-		(*open_post_fun)(instance, open_data);
+		(*storage_init_fun)(config);
 	} catch (std::exception &e) {
-		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, e.what());
+		throw InvalidInputException(
+		    "Storage initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"", storage_fun_name,
+		    res.filename, e.what());
 	}
 }
 
@@ -188,6 +176,10 @@ string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
 		if (!isalnum(ch) && ch != '_') {
 			return "";
 		}
+	}
+	if (extension == "http" || extension == "https" || extension == "s3") {
+		// these are not extensions
+		return "";
 	}
 	return extension;
 }

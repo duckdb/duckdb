@@ -199,7 +199,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
 		if (column.DefaultValue()) {
@@ -282,7 +282,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), result->schema->catalog->GetName());
+		BindLogicalType(context, column.TypeMutable(), result->schema->catalog);
 		// We add a catalog dependency
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {

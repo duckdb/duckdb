@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class TableRef;
+struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
 
@@ -62,6 +64,8 @@ class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
+	                                                ReplacementScanData *data);
 	static void RegisterCastFunctions(CastFunctionSet &casts);
 
 private:
@@ -82,6 +86,7 @@ private:
 
 	static CreateScalarFunctionInfo GetArrayLengthFunction();
 	static CreateScalarFunctionInfo GetContainsFunction();
+	static CreateScalarFunctionInfo GetKeysFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 
@@ -97,6 +102,10 @@ private:
 	// Table functions
 	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
 	static CreateTableFunctionInfo GetReadNDJSONObjectsFunction();
+	static CreateTableFunctionInfo GetReadJSONFunction();
+	static CreateTableFunctionInfo GetReadNDJSONFunction();
+	static CreateTableFunctionInfo GetReadJSONAutoFunction();
+	static CreateTableFunctionInfo GetReadNDJSONAutoFunction();
 };
 
 } // namespace duckdb

@@ -52,7 +52,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = (LogicalCreateIndex &)op;
-		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.LogicalColumnCount());
+		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
 		VisitOperatorExpressions(op);
 		return;
 	} else if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -67,7 +67,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		if (insert_op.action_type != OnConflictAction::THROW) {
 			VisitOperatorChildren(op);
 			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(
-			    insert_op.excluded_table_index, insert_op.table->columns.PhysicalColumnCount());
+			    insert_op.excluded_table_index, insert_op.table->GetColumns().PhysicalColumnCount());
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
 			if (insert_op.on_conflict_condition) {
 				VisitExpression(&insert_op.on_conflict_condition);

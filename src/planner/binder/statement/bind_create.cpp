@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -37,6 +38,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 
 namespace duckdb {
 
@@ -207,7 +209,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog *catalog, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
@@ -239,10 +241,31 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
-		type = Catalog::GetType(context, catalog, schema, UserType::GetTypeName(type));
+		auto &user_type_name = UserType::GetTypeName(type);
+		if (catalog) {
+			type = catalog->GetType(context, schema, user_type_name, true);
+			if (type.id() == LogicalTypeId::INVALID) {
+				// look in the system catalog if the type was not found
+				type = Catalog::GetType(context, SYSTEM_CATALOG, schema, user_type_name);
+			}
+		} else {
+			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+		}
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
-		auto enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, catalog, schema, enum_type_name, true);
+		TypeCatalogEntry *enum_type_catalog;
+		if (catalog) {
+			enum_type_catalog = catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, true);
+			if (!enum_type_catalog) {
+				// look in the system catalog if the type was not found
+				enum_type_catalog =
+				    Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name, true);
+			}
+		} else {
+			enum_type_catalog =
+			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);
+		}
+
 		LogicalType::SetCatalog(type, enum_type_catalog);
 	}
 }
@@ -413,6 +436,35 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	return false;
 }
 
+unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+                                                         TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
+	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
+	auto &base = (CreateIndexInfo &)*stmt.info;
+
+	auto &get = (LogicalGet &)*plan;
+	// bind the index expressions
+	vector<unique_ptr<Expression>> expressions;
+	IndexBinder index_binder(binder, binder.context);
+	for (auto &expr : base.expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
+	for (auto &column_id : get.column_ids) {
+		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+			throw BinderException("Cannot create an index on the rowid!");
+		}
+		create_index_info->scan_types.push_back(get.returned_types[column_id]);
+	}
+	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
+	create_index_info->names = get.names;
+	create_index_info->column_ids = get.column_ids;
+
+	// the logical CREATE INDEX also needs all fields to scan the referenced table
+	return make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
+	                                       std::move(expressions), table, std::move(get.function));
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -457,44 +509,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
-			throw BinderException("Can only delete from base table!");
+			throw BinderException("Can only create an index over a base table!");
 		}
 		auto &table_binding = (BoundBaseTableRef &)*bound_table;
 		auto table = table_binding.table;
-
-		// bind the index expressions
-		vector<unique_ptr<Expression>> expressions;
-		IndexBinder binder(*this, context);
-		for (auto &expr : base.expressions) {
-			expressions.push_back(binder.Bind(expr));
+		if (table->temporary) {
+			stmt.info->temporary = true;
 		}
-
+		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		auto &get = (LogicalGet &)*plan;
-		for (auto &column_id : get.column_ids) {
-			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-				throw BinderException("Cannot create an index on the rowid!");
-			}
-		}
-		if (table->temporary) {
-			stmt.info->temporary = true;
-		}
-
-		auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-		for (auto &index : get.column_ids) {
-			create_index_info->scan_types.push_back(get.returned_types[index]);
-		}
-		create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
-		create_index_info->names = get.names;
-		create_index_info->column_ids = get.column_ids;
-
-		// the logical CREATE INDEX also needs all fields to scan the referenced table
-		result.plan = make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
-		                                              std::move(expressions), *table, std::move(get.function));
+		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -524,11 +552,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				auto pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr->schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->constraints, fk);
-				FindForeignKeyIndexes(pk_table_entry_ptr->columns, fk.pk_columns, fk.info.pk_keys);
-				CheckForeignKeyTypes(pk_table_entry_ptr->columns, create_info.columns, fk);
-				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
-				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->GetColumns(), pk_table_entry_ptr->GetConstraints(),
+				                              fk);
+				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
+				CheckForeignKeyTypes(pk_table_entry_ptr->GetColumns(), create_info.columns, fk);
+				auto &storage = pk_table_entry_ptr->GetStorage();
+				auto index = storage.info->indexes.FindForeignKeyIndex(fk.info.pk_keys,
+				                                                       ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
 				if (!index) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "

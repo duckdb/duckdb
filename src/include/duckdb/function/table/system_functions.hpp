@@ -37,10 +37,6 @@ struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct PragmaDatabaseList {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaDatabaseSize {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -54,6 +50,10 @@ struct DuckDBColumnsFun {
 };
 
 struct DuckDBConstraintsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBDatabasesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

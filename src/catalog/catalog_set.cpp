@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -11,6 +11,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -39,8 +40,9 @@ private:
 	EntryIndex &entry_index;
 };
 
-CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
-    : catalog(catalog), defaults(std::move(defaults)) {
+CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
+    : catalog((DuckCatalog &)catalog_p), defaults(std::move(defaults)) {
+	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {
 }
@@ -85,7 +87,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		}
 	}
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
 	unique_lock<mutex> read_lock(catalog_lock);
 
@@ -134,14 +136,15 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	value->set = this;
 
 	// now add the dependency set of this object to the dependency manager
-	catalog.dependency_manager->AddObject(transaction, value.get(), dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, value.get(), dependencies);
 
 	auto value_ptr = value.get();
 	EntryIndex entry_index(*this, index);
 	PutEntry(std::move(entry_index), std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(value_ptr->child.get());
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 	return true;
 }
@@ -193,14 +196,14 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		return false;
 	}
 
-	catalog.dependency_manager->AddOwnership(transaction, owner_entry, entry);
+	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, entry);
 
 	return true;
 }
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo *alter_info) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
@@ -260,15 +263,15 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(),
-		                                          serialized_alter.size);
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	// Note that we do this AFTER the new entry has been entirely set up in the catalog set
 	// that is because in case the alter fails because of a dependency conflict, we need to be able to cleanly roll back
 	// to the old entry.
-	catalog.dependency_manager->AlterObject(transaction, entry, new_entry);
+	catalog.GetDependencyManager().AlterObject(transaction, entry, new_entry);
 
 	return true;
 }
@@ -282,7 +285,8 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	entry_index.GetEntry()->deleted = true;
 
 	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(transaction, &entry, cascade);
+	D_ASSERT(entry.catalog->IsDuckCatalog());
+	((DuckCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, &entry, cascade);
 
 	// dropper destructor is called here
 	// the destructor makes sure to return the value to the previous state
@@ -305,13 +309,14 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		transaction.transaction->PushCatalogEntry(value_ptr->child.get());
+		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		dtransaction.PushCatalogEntry(value_ptr->child.get());
 	}
 }
 
 bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, bool cascade, bool allow_drop_internal) {
 	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// we can only delete an entry that exists
 	EntryIndex entry_index;
 	CatalogEntry *entry;
@@ -331,7 +336,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return DropEntry(catalog.GetCatalogTransaction(context), name, cascade, allow_drop_internal);
 }
 
-Catalog &CatalogSet::GetCatalog() {
+DuckCatalog &CatalogSet::GetCatalog() {
 	return catalog;
 }
 
@@ -339,11 +344,12 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 	// destroy the backed up entry: it is no longer required
 	D_ASSERT(catalog_entry->parent);
 	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
-		lock_guard<mutex> write_lock(catalog.write_lock);
+		lock_guard<mutex> write_lock(catalog.GetWriteLock());
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry->deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
-			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+			D_ASSERT(catalog_entry->catalog->IsDuckCatalog());
+			((DuckCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(catalog_entry);
 		}
 		auto parent = catalog_entry->parent;
 		parent->child = std::move(catalog_entry->child);
@@ -446,23 +452,22 @@ CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
 	return current;
 }
 
-pair<string, idx_t> CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
+SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
-	string result;
-	idx_t current_score = (idx_t)-1;
+	SimilarCatalogEntry result;
 	for (auto &kv : mapping) {
 		auto mapping_value = GetMapping(transaction, kv.first);
 		if (mapping_value && !mapping_value->deleted) {
 			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
-			if (ldist < current_score) {
-				current_score = ldist;
-				result = kv.first;
+			if (ldist < result.distance) {
+				result.distance = ldist;
+				result.name = kv.first;
 			}
 		}
 	}
-	return {result, current_score};
+	return result;
 }
 
 CatalogEntry *CatalogSet::CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry) {
@@ -543,12 +548,13 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 void CatalogSet::AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
 	CatalogEntry *user_type_catalog = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
 	if (user_type_catalog) {
+		auto &dependency_manager = catalog.GetDependencyManager();
 		if (remove) {
-			catalog.dependency_manager->dependents_map[user_type_catalog].erase(entry->parent);
-			catalog.dependency_manager->dependencies_map[entry->parent].erase(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].erase(entry->parent);
+			dependency_manager.dependencies_map[entry->parent].erase(user_type_catalog);
 		} else {
-			catalog.dependency_manager->dependents_map[user_type_catalog].insert(entry);
-			catalog.dependency_manager->dependencies_map[entry].insert(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].insert(entry);
+			dependency_manager.dependencies_map[entry].insert(user_type_catalog);
 		}
 	}
 }
@@ -557,7 +563,7 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
                                   bool remove) {
 	bool found = false;
 	if (column.Type().id() == LogicalTypeId::ENUM) {
-		for (auto &old_column : table->columns.Logical()) {
+		for (auto &old_column : table->GetColumns().Logical()) {
 			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;
@@ -568,7 +574,7 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		}
 	} else if (!(column.Type().GetAlias().empty())) {
 		auto alias = column.Type().GetAlias();
-		for (auto &old_column : table->columns.Logical()) {
+		for (auto &old_column : table->GetColumns().Logical()) {
 			auto old_alias = old_column.Type().GetAlias();
 			if (old_column.Name() == column.Name() && old_alias != alias) {
 				AdjustUserDependency(entry, column, remove);
@@ -587,20 +593,19 @@ void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
 		auto old_table = (TableCatalogEntry *)entry->parent;
 		auto new_table = (TableCatalogEntry *)entry;
 
-		for (idx_t i = 0; i < new_table->columns.LogicalColumnCount(); i++) {
-			auto &new_column = new_table->columns.GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < new_table->GetColumns().LogicalColumnCount(); i++) {
+			auto &new_column = new_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, old_table, new_column, false);
 		}
-		for (idx_t i = 0; i < old_table->columns.LogicalColumnCount(); i++) {
-			auto &old_column = old_table->columns.GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < old_table->GetColumns().LogicalColumnCount(); i++) {
+			auto &old_column = old_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, new_table, old_column, true);
 		}
 	}
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
-	lock_guard<mutex> write_lock(catalog.write_lock);
-
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored
@@ -613,7 +618,8 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	if (!to_be_removed_node->deleted) {
 		// delete the entry from the dependency manager as well
-		catalog.dependency_manager->EraseObject(to_be_removed_node);
+		auto &dependency_manager = catalog.GetDependencyManager();
+		dependency_manager.EraseObject(to_be_removed_node);
 	}
 	if (entry->name != to_be_removed_node->name) {
 		// rename: clean up the new name when the rename is rolled back

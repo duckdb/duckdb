@@ -59,10 +59,10 @@ COUNT(DISTINCT CASE WHEN product_0.access."productQuantity">0 THEN CONCAT(ga_ses
 FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM 'data/parquet-testing/test_unnest_rewriter.parquet' as x) as ga_sessions,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(ga_sessions.hits)) as x(access)) as hits_0,
 (SELECT GEN_RANDOM_UUID() as __row_id, x.access FROM (SELECT UNNEST(hits_0.access.product)) as x(access)) as product_0
-GROUP BY 1 LIMIT 2;
+GROUP BY 1 ORDER BY 1, 2, 3 LIMIT 2;
 ----
-Electronics | Google Merchandise Store	6	0
-Men's Outerwear | Apparel | Google Merchandise Store	4	0
+Accessories | Electronics | Google Merchandise Store	1	0
+Accessories | Google Merchandise Store	1	0
 
 # now test that the unnest optimizer rewrote the plan
 

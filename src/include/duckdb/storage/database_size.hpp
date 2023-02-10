@@ -1,20 +1,24 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/extension_helper.hpp
+// duckdb/storage/database_size.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/function/replacement_open.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
-class ExtensionPrefixReplacementOpen : public ReplacementOpen {
-public:
-	ExtensionPrefixReplacementOpen();
+struct DatabaseSize {
+	idx_t total_blocks = 0;
+	idx_t block_size = 0;
+	idx_t free_blocks = 0;
+	idx_t used_blocks = 0;
+	idx_t bytes = 0;
+	idx_t wal_size = 0;
 };
 
 } // namespace duckdb
