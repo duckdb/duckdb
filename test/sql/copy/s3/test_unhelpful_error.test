@@ -9,43 +9,43 @@ require parquet
 statement error
 SELECT * FROM read_parquet('https://<domain>/path/to/file.parquet');
 ----
-IO Error: No files found that match the pattern "https://<domain>/path/to/file.parquet", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "https://<domain>/path/to/file.parquet", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 ##single, non-existent table, s3
 statement error
 SELECT * FROM parquet_scan('s3://bucket/file.extension');
 ----
-IO Error: No files found that match the pattern "s3://bucket/file.extension", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "s3://bucket/file.extension", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 ##single, existent table, https, parquet
 statement error
 SELECT * FROM read_parquet('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 ----
-IO Error: No files found that match the pattern "https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 ##multiple tables, https
 statement error
 SELECT * FROM read_parquet(['https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet', 'https://github.com/lverdoes/duckdb/blob/master/data/parquet-testing/complex.parquet']);
 ----
-IO Error: No files found that match the pattern "https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 ##multiple tables, http, parquet
 statement error
 SELECT * FROM read_parquet(['http://github.com/lverdoes/duckdb/blob/master/data/parquet-testing/complex.parquet', 'https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet']);
 ----
-IO Error: No files found that match the pattern "http://github.com/lverdoes/duckdb/blob/master/data/parquet-testing/complex.parquet", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "http://github.com/lverdoes/duckdb/blob/master/data/parquet-testing/complex.parquet", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 statement error
 Select * FROM 'https://github.com/lverdoes/duckdb/blob/master/data/csv/customer.csv';
 ----
-IO Error: No files found that match the pattern "https://github.com/lverdoes/duckdb/blob/master/data/csv/customer.csv", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "https://github.com/lverdoes/duckdb/blob/master/data/csv/customer.csv", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 require json
 
 statement error
 select * from read_json_objects('https://github.com/lverdoes/duckdb/blob/master/data/json/example_n.ndjson');
 ----
-IO Error: No files found that match the pattern "https://github.com/lverdoes/duckdb/blob/master/data/json/example_n.ndjson", because the httpfs extension is not loaded
+IO Error: No files found that match the pattern "https://github.com/lverdoes/duckdb/blob/master/data/json/example_n.ndjson", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS
 
 
 

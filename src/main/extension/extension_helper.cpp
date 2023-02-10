@@ -458,16 +458,4 @@ const vector<string> ExtensionHelper::GetPublicKeys() {
 	return public_keys;
 }
 
-bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(filepath, prefix)) {
-			if (!context.db->LoadedExtensions().count("httpfs")) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 } // namespace duckdb

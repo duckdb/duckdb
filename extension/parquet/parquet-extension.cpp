@@ -33,7 +33,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/main/extension_helper.hpp"
 
 #endif
 
@@ -223,12 +222,7 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = fs.Glob(info.file_path, context);
 		if (files.empty()) {
-			if (MissingExtensionHttpfs(info.file_path, context)) {
-				throw MissingExtensionException(
-				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded",
-				    info.file_path);
-			}
-			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
+			throw FileSystem::MissingFileException(info.file_path, context);
 		}
 
 		// The most likely path (Parquet read without union by name option)
@@ -370,11 +364,7 @@ public:
 		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
 
 		if (files.empty()) {
-			if (MissingExtensionHttpfs(glob, context)) {
-				throw MissingExtensionException(
-				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded", glob);
-			}
-			throw IOException("No files found that match the pattern \"%s\"", glob);
+			throw FileSystem::MissingFileException(glob, context);
 		}
 		return files;
 	}

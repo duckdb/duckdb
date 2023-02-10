@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-JSONScanData::JSONScanData() {
+JSONScanData::JSONScanData() { 
 }
 
 unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
@@ -69,12 +69,7 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
-			if (MissingExtensionHttpfs(file_pattern, context)) {
-				throw MissingExtensionException(
-				    "No files found that match the pattern \"%s\", because the httpfs extension is not loaded",
-				    file_pattern);
-			}
-			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+			throw FileSystem::MissingFileException(file_pattern, context);
 		}
 		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());
 	}

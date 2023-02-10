@@ -76,6 +76,4 @@ private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
 };
 
-bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context);
-
 } // namespace duckdb
