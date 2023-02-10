@@ -1584,6 +1584,10 @@ bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
 	return TryCastAs(set, get_input, target_type, strict);
 }
 
+void Value::Reinterpret(LogicalType new_type) {
+	this->type_ = std::move(new_type);
+}
+
 void Value::Serialize(Serializer &main_serializer) const {
 	FieldWriter writer(main_serializer);
 	writer.WriteSerializable(type_);
