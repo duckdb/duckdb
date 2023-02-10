@@ -34,8 +34,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		if (table_func) {
 			throw BinderException(binder.FormatError(
 			    function,
-			    StringUtil::Format("Function \"%s\" is a table-function but it is used as a scalar function. This "
-			                       "function has to be called a FROM clause (similar to a table).",
+			    StringUtil::Format("Function \"%s\" is a table function but it was used as a scalar function. This "
+			                       "function has to be called in a FROM clause (similar to a table).",
 			                       function.function_name)));
 		}
 		// not a table function - search again without if_exists to throw the error
