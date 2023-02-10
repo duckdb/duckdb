@@ -88,28 +88,31 @@ class TestRAPIQuery(object):
 
     def test_query_non_select_result(self):
         with pytest.raises(duckdb.ParserException, match="syntax error"):
-            duckdb.sql('selec 42')
+            duckdb.query('selec 42')
 
-        res = duckdb.sql('explain select 42').fetchall()
+        res = duckdb.query('explain select 42').fetchall()
         assert len(res) > 0
 
-        res = duckdb.sql('describe select 42::INT AS column_name').fetchall()
+        res = duckdb.query('describe select 42::INT AS column_name').fetchall()
         assert res[0][0] == 'column_name'
 
-        res = duckdb.sql('create or replace table integers(i integer)')
+        res = duckdb.query('create or replace table integers(i integer)')
         assert res is None
 
-        res = duckdb.sql('insert into integers values (42)')
+        res = duckdb.query('insert into integers values (42)')
         assert res is None
 
-        res = duckdb.sql('insert into integers values (84) returning *').fetchall()
+        res = duckdb.query('insert into integers values (84) returning *').fetchall()
         assert res == [(84,)]
 
-        res = duckdb.sql('select * from integers').fetchall()
+        res = duckdb.query('select * from integers').fetchall()
         assert res == [(42,), (84,)]
 
-        res = duckdb.sql('show tables').fetchall()
+        res = duckdb.query('insert into integers select * from range(10000) returning *').fetchall()
+        assert len(res) == 10000
+
+        res = duckdb.query('show tables').fetchall()
         assert len(res) > 0
 
-        res = duckdb.sql('drop table integers')
+        res = duckdb.query('drop table integers')
         assert res is None

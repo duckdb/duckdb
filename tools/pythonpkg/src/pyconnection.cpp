@@ -651,32 +651,32 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
 	auto res = ExecuteInternal(query);
-	if (res) {
-		if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
-			return nullptr;
-		}
-		// FIXME: we should add support for a relation object over a column data collection to make this more efficient
-		vector<vector<Value>> values;
-		vector<string> names = res->names;
-		while (true) {
-			auto chunk = res->Fetch();
-			if (!chunk || chunk->size() == 0) {
-				break;
-			}
-			for (idx_t r = 0; r < chunk->size(); r++) {
-				vector<Value> row;
-				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
-					row.push_back(chunk->data[c].GetValue(r));
-				}
-				values.push_back(std::move(row));
-			}
-		}
-		if (values.empty()) {
-			return nullptr;
-		}
-		return make_unique<DuckDBPyRelation>(make_unique<ValueRelation>(connection->context, values, names));
+	if (!res) {
+		return nullptr;
 	}
-	return nullptr;
+	if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
+		return nullptr;
+	}
+	// FIXME: we should add support for a relation object over a column data collection to make this more efficient
+	vector<vector<Value>> values;
+	vector<string> names = res->names;
+	while (true) {
+		auto chunk = res->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			break;
+		}
+		for (idx_t r = 0; r < chunk->size(); r++) {
+			vector<Value> row;
+			for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
+				row.push_back(chunk->data[c].GetValue(r));
+			}
+			values.push_back(std::move(row));
+		}
+	}
+	if (values.empty()) {
+		return nullptr;
+	}
+	return make_unique<DuckDBPyRelation>(make_unique<ValueRelation>(connection->context, values, names));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
