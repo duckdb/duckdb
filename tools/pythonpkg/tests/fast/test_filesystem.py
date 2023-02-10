@@ -131,8 +131,6 @@ class TestPythonFilesystem:
         db_path = str(tmp_path / 'hello.db')
 
         # setup a database to attach later
-
-        breakpoint()
         with duckdb.connect(db_path) as conn:
             conn.execute('''
                 CREATE TABLE t (id int);
