@@ -237,6 +237,7 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 
 TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
     REQUIRE(duckdb_list_vector_reserve(nullptr, 100) == duckdb_state::DuckDBError);
+    REQUIRE(duckdb_list_vector_set_size(nullptr, 200) == duckdb_state::DuckDBError);
 
     auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
     auto list_type = duckdb_create_list_type(elem_type);
