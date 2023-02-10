@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-JSONScanData::JSONScanData() { 
+JSONScanData::JSONScanData() {
 }
 
 unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {

@@ -340,9 +340,9 @@ IOException FileSystem::MissingFileException(const string &file_path, ClientCont
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(file_path, prefix)) {
 			if (!context.db->LoadedExtensions().count("httpfs")) {
-				return MissingExtensionException(
-					"No files found that match the pattern \"%s\", because the httpfs extension is not loaded. Try loading the extension: LOAD HTTPFS",
-					file_path);
+				return MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs "
+				                                 "extension is not loaded. Try loading the extension: LOAD HTTPFS",
+				                                 file_path);
 			}
 		}
 	}
