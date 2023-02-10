@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/parse_info.hpp"
+
 namespace duckdb {
 
 struct DetachInfo : public ParseInfo {
