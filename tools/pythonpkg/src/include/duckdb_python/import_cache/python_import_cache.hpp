@@ -19,9 +19,15 @@ namespace duckdb {
 struct PythonImportCache {
 public:
 	explicit PythonImportCache() {
-#ifdef WIN32
+ 		py::gil_scoped_acquire acquire;
 		numpy();
-#endif
+		datetime();
+		decimal();
+		uuid();
+		pandas();
+		arrow();
+		IPython();
+		ipywidgets();
 	}
 	~PythonImportCache();
 
