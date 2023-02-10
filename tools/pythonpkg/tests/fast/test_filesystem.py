@@ -2,7 +2,8 @@ import logging
 import sys
 from pathlib import Path
 from shutil import copyfileobj
-from typing import Callable
+from typing import Callable, List
+from os.path import exists
 
 import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
@@ -11,10 +12,25 @@ from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
+from fsspec.implementations.local import LocalFileOpener
 
 FILENAME = 'integers.csv'
 
 logging.basicConfig(level=logging.DEBUG)
+
+
+def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
+    error_occured = []
+    orig = getattr(obj, name)
+
+    def ceptor(*args,**kwargs):
+        try:
+            return orig(*args,**kwargs)
+        except Exception as e:
+            error_occured.append(e)
+            raise e
+    monkeypatch.setattr(obj, name, ceptor)
+    return error_occured
 
 
 @fixture()
@@ -126,8 +142,7 @@ class TestPythonFilesystem:
 
         assert duckdb_cursor.fetchall() == [(1, 2, 3), (4, 5, 6)]
 
-
-    def test_database_attach(self, tmp_path: Path):
+    def test_database_attach(self, tmp_path: Path, monkeypatch: MonkeyPatch):
         db_path = str(tmp_path / 'hello.db')
 
         # setup a database to attach later
@@ -137,11 +152,19 @@ class TestPythonFilesystem:
                 INSERT INTO t VALUES (0)
             ''')
 
+        assert exists(db_path)
+
         with duckdb.connect() as conn:
-            conn.register_filesystem(filesystem('file', skip_instance_cache=True))
+            fs = filesystem('file', skip_instance_cache=True)
+            write_errors = intercept(monkeypatch, LocalFileOpener, 'write')
+            conn.register_filesystem(fs)
             conn.execute(f"ATTACH 'file://{db_path}'")
 
-            conn.execute('INSERT INTO t VALUES (1)')
+            conn.execute('INSERT INTO hello.t VALUES (1)')
 
             conn.execute('FROM hello.t')
             assert conn.fetchall() == [(0, ), (1, )]
+
+        # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
+        # isn't happening
+        assert not write_errors

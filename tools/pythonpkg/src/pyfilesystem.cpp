@@ -28,7 +28,7 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 		flags_s = "w+";
 	} else if (read && write && append) {
 		flags_s = "a+";
-	} else if (read && write && create) {
+	} else if (read && write) {
 		flags_s = "r+";
 	} else if (read) {
 		flags_s = "r";
