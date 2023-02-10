@@ -316,14 +316,6 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		get = GetLogicalGet(op->children.at(0).get());
 		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
-		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
-			auto child = join->children.at(0).get();
-			get = GetLogicalGet(child);
-		}
-		break;
-	}
 	default:
 		// return null pointer, maybe there is no logical get under this child
 		break;
