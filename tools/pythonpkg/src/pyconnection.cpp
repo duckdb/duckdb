@@ -28,6 +28,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 
 #include <random>
 
@@ -295,7 +296,7 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -311,7 +312,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
-			return shared_from_this();
+			return nullptr;
 		}
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
@@ -359,21 +360,29 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 			                            py::len(single_query_params));
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
-		auto res = make_unique<DuckDBPyResult>();
+		unique_ptr<QueryResult> res;
 		{
 			py::gil_scoped_release release;
 			unique_lock<std::mutex> lock(py_connection_lock);
 			auto pending_query = prep->PendingQuery(args);
-			res->result = CompletePendingQuery(*pending_query);
+			res = CompletePendingQuery(*pending_query);
 
-			if (res->result->HasError()) {
-				res->result->ThrowError();
+			if (res->HasError()) {
+				res->ThrowError();
 			}
 		}
 
-		if (!many) {
-			result = make_unique<DuckDBPyRelation>(std::move(res));
-		}
+		return res;
+	}
+	return nullptr;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
+	auto res = ExecuteInternal(query, params, many);
+	if (res) {
+		auto py_result = make_unique<DuckDBPyResult>();
+		py_result->result = std::move(res);
+		result = make_unique<DuckDBPyRelation>(std::move(py_result));
 	}
 	return shared_from_this();
 }
@@ -641,9 +650,31 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 		return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(
 		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
-	Execute(query);
-	if (result) {
-		FetchAll();
+	auto res = ExecuteInternal(query);
+	if (res) {
+		if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
+			return nullptr;
+		}
+		// FIXME: we should add support for a relation object over a column data collection to make this more efficient
+		vector<vector<Value>> values;
+		vector<string> names = res->names;
+		while (true) {
+			auto chunk = res->Fetch();
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				vector<Value> row;
+				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
+					row.push_back(chunk->data[c].GetValue(r));
+				}
+				values.push_back(std::move(row));
+			}
+		}
+		if (values.empty()) {
+			return nullptr;
+		}
+		return make_unique<DuckDBPyRelation>(make_unique<ValueRelation>(connection->context, values, names));
 	}
 	return nullptr;
 }
