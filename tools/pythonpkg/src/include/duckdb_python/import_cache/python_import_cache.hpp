@@ -19,7 +19,9 @@ namespace duckdb {
 struct PythonImportCache {
 public:
 	explicit PythonImportCache() {
+#ifdef WIN32
 		numpy();
+#endif
 	}
 	~PythonImportCache();
 
