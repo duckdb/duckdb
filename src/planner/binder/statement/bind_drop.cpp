@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			}
 			auto &storage_extension = extension_entry.second;
 			auto drop_database_function_ref =
-			    storage_extension->drop_database(context, database_name, storage_extension->storage_info.get());
+			    storage_extension->drop_database(storage_extension->storage_info.get(), context, database_name);
 			if (drop_database_function_ref) {
 				auto bound_drop_database_func = Bind(*drop_database_function_ref);
 				result.plan = CreatePlan(*bound_drop_database_func);

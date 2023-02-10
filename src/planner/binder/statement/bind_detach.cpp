@@ -8,8 +8,6 @@ namespace duckdb {
 BoundStatement Binder::Bind(DetachStatement &stmt) {
 	BoundStatement result;
 
-	auto &config = DBConfig::GetConfig(context);
-
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DETACH, std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
