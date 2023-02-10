@@ -21,9 +21,11 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
@@ -1627,18 +1629,6 @@ public class TestDuckDBJDBC {
 		DatabaseMetaData md = conn.getMetaData();
 		ResultSet rs;
 
-		rs = md.getTableTypes();
-		assertTrue(rs.next());
-		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
-		assertEquals(rs.getString(1), "BASE TABLE");
-
-		assertTrue(rs.next());
-		assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
-		assertEquals(rs.getString(1), "VIEW");
-
-		assertFalse(rs.next());
-		rs.close();
-
 		rs = md.getCatalogs();
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);
@@ -1810,7 +1800,7 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	public static void test_getTables_paramBinding_for_tableTypes() throws Exception {
+	public static void test_get_tables_param_binding_for_table_types() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		DatabaseMetaData databaseMetaData = conn.getMetaData();
 		ResultSet rs = databaseMetaData.getTables(null, null, null, new String[] {
@@ -1830,7 +1820,29 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 	}
-	
+
+	public static void test_get_table_types() throws Exception {
+		String[] tableTypesArray = new String[]{"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
+		List<String> tableTypesList = new ArrayList<String>(Arrays.asList(tableTypesArray));
+		tableTypesList.sort(Comparator.naturalOrder());
+
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		ResultSet rs = databaseMetaData.getTableTypes();
+
+		for (int i = 0; i < tableTypesArray.length; i++) {
+			assertTrue(rs.next(), "Expected a row from table types resultset");
+			String tableTypeFromResultSet = rs.getString("TABLE_TYPE");
+			String tableTypeFromList = tableTypesList.get(i);
+			assertTrue(
+				tableTypeFromList.equals(tableTypeFromResultSet), 
+				"Error in tableTypes at row " + (i+1) + ": " +
+				"value from list " + tableTypeFromList + " should equal " +
+				"value from resultset " + tableTypeFromResultSet
+			);
+		}
+	}
+  
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));

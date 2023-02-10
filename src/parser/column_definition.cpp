@@ -162,6 +162,9 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 		dependencies.push_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		if (expr.type == ExpressionType::LAMBDA) {
+			throw NotImplementedException("Lambda functions are currently not supported in generated columns.");
+		}
 		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);
 	});
 }
