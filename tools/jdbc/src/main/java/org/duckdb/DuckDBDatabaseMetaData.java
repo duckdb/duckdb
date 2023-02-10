@@ -266,7 +266,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsLikeEscapeClause() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override

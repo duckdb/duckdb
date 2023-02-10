@@ -2562,6 +2562,15 @@ public class TestDuckDBJDBC {
 		assertTrue(p.containsKey("duckdb.read_only"));
 	}
 	
+	public static void test_supportsLikeEscapeClause_shouldBe_true() throws Exception {
+		Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+		DatabaseMetaData databaseMetaData = connection.getMetaData();
+		assertTrue(
+			databaseMetaData.supportsLikeEscapeClause(),
+			"DatabaseMetaData.supportsLikeEscapeClause() should be true."
+		);
+	}
+	
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
