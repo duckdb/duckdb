@@ -10,6 +10,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <limits>
 
@@ -21,18 +22,6 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const BufferedCSVReaderOptions &optio
 	auto file_handle = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 	                               options.compression, opener);
 	return make_unique<CSVFileHandle>(std::move(file_handle));
-}
-
-static bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(filepath, prefix)) {
-			if (!context.db->LoadedExtensions().count("httpfs")) {
-				return true;
-			}
-		}
-	}
-	return false;
 }
 
 void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &patterns) {

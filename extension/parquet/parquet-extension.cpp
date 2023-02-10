@@ -33,6 +33,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/main/extension_helper.hpp"
+
 #endif
 
 namespace duckdb {
@@ -723,18 +725,6 @@ public:
 			}
 		}
 
-		return false;
-	}
-
-	static bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
-		const string prefixes[] = {"http://", "https://", "s3://"};
-		for (auto &prefix : prefixes) {
-			if (StringUtil::StartsWith(filepath, prefix)) {
-				if (!context.db->LoadedExtensions().count("httpfs")) {
-					return true;
-				}
-			}
-		}
 		return false;
 	}
 };

@@ -4,6 +4,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -63,17 +64,6 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	return std::move(result);
 }
 
-static bool MissingExtensionHttpfs(const string &filepath, const ClientContext &context) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(filepath, prefix)) {
-			if (!context.db->LoadedExtensions().count("httpfs")) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
 void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<string> &patterns,
                                        vector<string> &file_paths) {
 	auto &fs = FileSystem::GetFileSystem(context);
