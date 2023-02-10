@@ -3,7 +3,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
