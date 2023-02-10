@@ -170,6 +170,8 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 		ExpressionIterator::EnumerateChildren(
 		    *expr, [&](unique_ptr<Expression> &child) { CaptureLambdaColumns(captures, list_child_type, child); });
 	}
+
+	expr->Verify();
 }
 
 } // namespace duckdb

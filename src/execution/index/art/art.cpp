@@ -251,7 +251,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<Key> &keys, Key
 	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
-void Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
+bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
                bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
@@ -275,40 +275,43 @@ void Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySect
 		// check for possible constraint violation
 		auto single_row_id = num_row_ids == 1;
 		if (has_constraint && !single_row_id) {
-			throw ConstraintException("New data contains duplicates on indexed column(s)");
+			return false;
 		}
 
 		if (single_row_id) {
 			node = Leaf::New(start_key, prefix_start, row_ids[key_section.start]);
-			art.memory_size += node->MemorySize(art, false);
-			return;
+		} else {
+			node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 		}
-		node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 		art.memory_size += node->MemorySize(art, false);
+		return true;
+	}
+	// create a new node and recurse
 
-	} else { // create a new node and recurse
+	// we will find at least two child entries of this node, otherwise we'd have reached a leaf
+	vector<KeySection> child_sections;
+	GetChildSections(child_sections, keys, key_section);
 
-		// we will find at least two child entries of this node, otherwise we'd have reached a leaf
-		vector<KeySection> child_sections;
-		GetChildSections(child_sections, keys, key_section);
+	auto node_type = Node::GetTypeBySize(child_sections.size());
+	Node::New(node_type, node);
 
-		auto node_type = Node::GetTypeBySize(child_sections.size());
-		Node::New(node_type, node);
+	auto prefix_length = key_section.depth - prefix_start;
+	node->prefix = Prefix(start_key, prefix_start, prefix_length);
+	art.memory_size += node->MemorySize(art, false);
 
-		auto prefix_length = key_section.depth - prefix_start;
-		node->prefix = Prefix(start_key, prefix_start, prefix_length);
-		art.memory_size += node->MemorySize(art, false);
-
-		// recurse on each child section
-		for (auto &child_section : child_sections) {
-			Node *new_child = nullptr;
-			Construct(art, keys, row_ids, new_child, child_section, has_constraint);
-			Node::InsertChild(art, node, child_section.key_byte, new_child);
+	// recurse on each child section
+	for (auto &child_section : child_sections) {
+		Node *new_child = nullptr;
+		auto no_violation = Construct(art, keys, row_ids, new_child, child_section, has_constraint);
+		Node::InsertChild(art, node, child_section.key_byte, new_child);
+		if (!no_violation) {
+			return false;
 		}
 	}
+	return true;
 }
 
-void ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
+bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers) {
 
 	// prepare the row_identifiers
 	row_identifiers.Flatten(count);
@@ -316,7 +319,7 @@ void ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	Construct(*this, keys, row_ids, this->tree, key_section, has_constraint);
+	return Construct(*this, keys, row_ids, this->tree, key_section, has_constraint);
 }
 
 //===--------------------------------------------------------------------===//

@@ -35,7 +35,7 @@ query I
 select (select 5) a where (select (select 3) b where (select b) > (select a));
 ----
 
-# Similar to the above test case but its a positive case
+# Similar to the above test case but it is a positive case
 query II
 select (select 5) a, (select 7) c where (select (select 3) b where (select a) > (select b) and (select c) > (select a));
 ----
