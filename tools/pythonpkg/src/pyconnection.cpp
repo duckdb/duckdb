@@ -648,7 +648,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, 
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
 statement into a Relation object.
-Use duckdb.query to run arbitrary SQL queries.)";
+Use duckdb.sql to run arbitrary SQL queries.)";
 	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
 }
 

@@ -34,8 +34,8 @@ class TestSimpleDBAPI(object):
         assert_result_equal(list_of_results)
         res = duckdb_cursor.fetchmany(2)
         assert(len(res) == 0)
-        with pytest.raises(duckdb.InvalidInputException):
-            res = duckdb_cursor.fetchmany(3)
+        res = duckdb_cursor.fetchmany(3)
+        assert(len(res) == 0)
 
     def test_fetchmany(self, duckdb_cursor):
         # Get truth value
@@ -59,8 +59,8 @@ class TestSimpleDBAPI(object):
         assert(iteration_count == expected_iteration_count)
         assert(len(list_of_results) == truth_value)
         assert_result_equal(list_of_results)
-        with pytest.raises(duckdb.InvalidInputException):
-            res = duckdb_cursor.fetchmany(3)
+        res = duckdb_cursor.fetchmany(3)
+        assert(len(res) == 0)
 
     def test_fetchmany_too_many(self, duckdb_cursor):
         truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
@@ -70,8 +70,8 @@ class TestSimpleDBAPI(object):
         assert_result_equal(res)
         res = duckdb_cursor.fetchmany(2)
         assert(len(res) == 0)
-        with pytest.raises(duckdb.InvalidInputException):
-            res = duckdb_cursor.fetchmany(3)
+        res = duckdb_cursor.fetchmany(3)
+        assert(len(res) == 0)
 
     def test_numpy_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
