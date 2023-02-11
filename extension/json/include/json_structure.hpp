@@ -55,6 +55,12 @@ public:
 struct JSONStructureDescription {
 public:
 	explicit JSONStructureDescription(LogicalTypeId type_p);
+	//! Disable copy constructors
+	JSONStructureDescription(const JSONStructureDescription &other) = delete;
+	JSONStructureDescription &operator=(const JSONStructureDescription &) = delete;
+	//! Enable move constructors
+	JSONStructureDescription(JSONStructureDescription &&other) noexcept;
+	JSONStructureDescription &operator=(JSONStructureDescription &&) noexcept;
 
 	JSONStructureNode &GetOrCreateChild();
 	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val);

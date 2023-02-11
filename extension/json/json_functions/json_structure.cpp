@@ -318,6 +318,21 @@ bool JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_ve
 JSONStructureDescription::JSONStructureDescription(LogicalTypeId type_p) : type(type_p) {
 }
 
+JSONStructureDescription::JSONStructureDescription(JSONStructureDescription &&other) noexcept {
+	std::swap(type, other.type);
+	std::swap(key_map, other.key_map);
+	std::swap(children, other.children);
+	std::swap(candidate_types, other.candidate_types);
+}
+
+JSONStructureDescription &JSONStructureDescription::operator=(JSONStructureDescription &&other) noexcept {
+	std::swap(type, other.type);
+	std::swap(key_map, other.key_map);
+	std::swap(children, other.children);
+	std::swap(candidate_types, other.candidate_types);
+	return *this;
+}
+
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	D_ASSERT(type == LogicalTypeId::LIST);
 	if (children.empty()) {
