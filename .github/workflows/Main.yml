@@ -365,6 +365,7 @@ jobs:
  odbc:
     name: ODBC
     runs-on: ubuntu-22.04
+    needs: linux-debug
     env:
       BUILD_ODBC: 1
       GEN: ninja
