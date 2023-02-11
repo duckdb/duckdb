@@ -78,6 +78,10 @@
 #include "inet-extension.hpp"
 #endif
 
+#if defined(BUILD_MACADDR_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "macaddr-extension.hpp"
+#endif
+
 // Load the generated header file containing our list of extension headers
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
 #include "extension_oote_loader.hpp"
@@ -101,6 +105,7 @@ static DefaultExtension internal_extensions[] = {
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
+    {"macaddr", "Adds support for MAC Address data types and functions", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -135,7 +140,7 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts",  "httpfs",
-	                                  "visualizer", "json", "excel", "sqlsmith", "inet", "jemalloc"};
+	                                  "visualizer", "json", "excel", "sqlsmith", "inet", "jemalloc", "macaddr"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -248,6 +253,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	} else if (extension == "inet") {
 #if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<INETExtension>();
+#else
+		// inet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "macaddr") {
+#if defined(BUILD_MACADDR_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+		db.LoadExtension<MACAddrExtension>();
 #else
 		// inet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

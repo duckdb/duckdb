@@ -45,3 +45,7 @@ endif()
 if(${BUILD_INET_EXTENSION})
   add_subdirectory(inet)
 endif()
+
+if(${BUILD_MACADDR_EXTENSION})
+  add_subdirectory(macaddr)
+endif()

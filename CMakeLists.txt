@@ -299,6 +299,7 @@ option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
 option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." ${JEMALLOC_DEFAULT_BUILD})
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
+option(BUILD_MACADDR_EXTENSION "Build the macaddr extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -619,6 +620,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
 
+  if(${BUILD_MACADDR_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/macaddr/include)
+    add_definitions(-DBUILD_MACADDR_EXTENSION=${BUILD_MACADDR_EXTENSION})
+  endif()
+
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
@@ -680,6 +686,11 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} inet_extension)
   endif()
 
+  if(${BUILD_MACADDR_EXTENSION})
+    add_dependencies(${LIBRARY} macaddr_extension)
+  endif()
+
+
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     add_dependencies(${LIBRARY} ${OOTE_NAME}_extension)
   endforeach()
@@ -739,6 +750,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_INET_EXTENSION})
     target_link_libraries(${LIBRARY} inet_extension)
+  endif()
+
+  if(${BUILD_MACADDR_EXTENSION})
+    target_link_libraries(${LIBRARY} macaddr_extension)
   endif()
 
   # Now link against any registered out-of-tree extensions
