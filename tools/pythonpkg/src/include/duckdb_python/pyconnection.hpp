@@ -80,6 +80,8 @@ public:
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
+	unique_ptr<QueryResult> ExecuteInternal(const string &query, py::object params = py::list(), bool many = false);
+
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
 	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
@@ -147,10 +149,10 @@ public:
 
 	py::dict FetchNumpy();
 	DataFrame FetchDF(bool date_as_object);
-
 	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
+	PolarsDataFrame FetchPolars(idx_t chunk_size);
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 

@@ -37,14 +37,18 @@ struct DateFormatMap {
 public:
 	void Initialize(const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> &format_templates) {
 		for (const auto &entry : format_templates) {
-			auto &formats = candidate_formats.emplace(entry.first, vector<StrpTimeFormat>()).first->second;
-			formats.reserve(entry.second.size());
-			for (const auto &format : entry.second) {
-				formats.emplace_back();
-				formats.back().format_specifier = format;
-				StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+			const auto &type = entry.first;
+			for (const auto &format_string : entry.second) {
+				AddFormat(type, format_string);
 			}
 		}
+	}
+
+	void AddFormat(LogicalTypeId type, const string &format_string) {
+		auto &formats = candidate_formats[type];
+		formats.emplace_back();
+		formats.back().format_specifier = format_string;
+		StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
 	}
 
 	bool HasFormats(LogicalTypeId type) const {
@@ -70,6 +74,7 @@ public:
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
 	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
+	void InitializeFormats();
 
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
@@ -95,10 +100,15 @@ public:
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
 	//! Column names (in order)
 	vector<string> names;
+	//! Valid cols (ROW_TYPE cols are considered invalid)
+	vector<idx_t> valid_cols;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 	//! Whether we're parsing objects (usually), or something else like arrays
 	bool objects = true;
+	//! Forced date/timestamp formats
+	string date_format;
+	string timestamp_format;
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;

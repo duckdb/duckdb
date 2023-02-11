@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <ctype.h>
 #include <algorithm>
@@ -65,7 +66,10 @@ static string_t RightScalarFunction(Vector &result, const string_t str, int64_t 
 		return OP::Substring(result, str, start, len);
 	}
 
-	int64_t len = num_characters - MinValue<int64_t>(num_characters, -pos);
+	int64_t len = 0;
+	if (pos != std::numeric_limits<int64_t>::min()) {
+		len = num_characters - MinValue<int64_t>(num_characters, -pos);
+	}
 	int64_t start = num_characters - len + 1;
 	return OP::Substring(result, str, start, len);
 }

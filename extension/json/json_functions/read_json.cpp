@@ -21,7 +21,16 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	};
 
 	// Populate possible date/timestamp formats, assume this is consistent across columns
-	bind_data.date_format_map.Initialize(FORMAT_TEMPLATES);
+	for (auto &kv : FORMAT_TEMPLATES) {
+		const auto &type = kv.first;
+		if (bind_data.date_format_map.HasFormats(type)) {
+			continue; // Already populated
+		}
+		const auto &format_strings = kv.second;
+		for (auto &format_string : format_strings) {
+			bind_data.date_format_map.AddFormat(type, format_string);
+		}
+	}
 
 	// Read for the specified sample size
 	JSONStructureNode node;
@@ -117,6 +126,30 @@ void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_dat
 			} else {
 				bind_data.max_depth = arg;
 			}
+		} else if (loption == "dateformat" || loption == "date_format") {
+			auto format_string = StringValue::Get(kv.second);
+			if (StringUtil::Lower(format_string) == "iso") {
+				format_string = "%Y-%m-%d";
+			}
+			bind_data.date_format = format_string;
+
+			StrpTimeFormat format;
+			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+			}
+		} else if (loption == "timestampformat" || loption == "timestamp_format") {
+			auto format_string = StringValue::Get(kv.second);
+			if (StringUtil::Lower(format_string) == "iso") {
+				format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
+			}
+			bind_data.timestamp_format = format_string;
+
+			StrpTimeFormat format;
+			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+			}
 		}
 	}
 }
@@ -130,10 +163,12 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	JSONScan::InitializeBindData(context, bind_data, input.named_parameters, names, return_types);
 
 	if (!bind_data.names.empty()) {
-		bind_data.auto_detect = false; // override auto-detect when columns are specified
+		bind_data.auto_detect = false; // override auto_detect when columns are specified
 	} else if (!bind_data.auto_detect) {
 		throw BinderException("read_json \"columns\" parameter is required when auto_detect is false");
 	}
+
+	bind_data.InitializeFormats();
 
 	if (bind_data.auto_detect) {
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
@@ -153,7 +188,6 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
 	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
-	D_ASSERT(output.ColumnCount() == gstate.bind_data.names.size());
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
@@ -161,9 +195,10 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	vector<Vector *> result_vectors;
 	result_vectors.reserve(output.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		result_vectors.push_back(&output.data[col_idx]);
+	for (auto &valid_col_idx : gstate.bind_data.valid_cols) {
+		result_vectors.push_back(&output.data[valid_col_idx]);
 	}
+	D_ASSERT(result_vectors.size() == gstate.bind_data.names.size());
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
 	bool success;
@@ -175,17 +210,17 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		                                   lstate.transform_options);
 	}
 	if (!success) {
-		string hint =
-		    gstate.bind_data.auto_detect
-		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', or specifying 'columns' manually."
-		        : "";
+		string hint = gstate.bind_data.auto_detect
+		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
+		                    "or setting 'ignore_errors' to true."
+		                  : "";
 		lstate.ThrowTransformError(count, lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}
 	output.SetCardinality(count);
 }
 
-TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
+TableFunction JSONFunctions::GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
 	TableFunction table_function({parameter}, ReadJSONFunction, ReadJSONBind, JSONGlobalTableFunctionState::Init,
 	                             JSONLocalTableFunctionState::Init);
@@ -194,6 +229,10 @@ TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanI
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
+	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 
 	table_function.projection_pushdown = true;
 
@@ -203,7 +242,7 @@ TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanI
 }
 
 TableFunction GetReadJSONAutoTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
-	auto table_function = GetReadJSONTableFunction(list_parameter, std::move(function_info));
+	auto table_function = JSONFunctions::GetReadJSONTableFunction(list_parameter, std::move(function_info));
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	return table_function;
 }
@@ -211,16 +250,16 @@ TableFunction GetReadJSONAutoTableFunction(bool list_parameter, shared_ptr<JSONS
 CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 	TableFunctionSet function_set("read_json");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, false);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
+	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 	TableFunctionSet function_set("read_ndjson");
 	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, false);
-	function_set.AddFunction(GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONTableFunction(true, function_info));
+	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
+	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
 }
 

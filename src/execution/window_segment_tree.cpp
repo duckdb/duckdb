@@ -98,7 +98,7 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
 	D_ASSERT(begin <= end);
-	if (begin == end) {
+	if (begin == end || inputs.ColumnCount() == 0) {
 		return;
 	}
 
@@ -107,6 +107,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
 		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+		D_ASSERT(inputs.data.size() > 0);
 		aggregate.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
 		// find out where the states begin
