@@ -214,7 +214,7 @@ py::list DuckDBPyRelation::Description() {
 }
 
 struct DescribeAggregateInfo {
-	DescribeAggregateInfo(string name_p, bool numeric_only = false)
+	explicit DescribeAggregateInfo(string name_p, bool numeric_only = false)
 	    : name(std::move(name_p)), numeric_only(numeric_only) {
 	}
 
