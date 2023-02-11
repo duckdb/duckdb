@@ -21,6 +21,13 @@ public:
 	JSONStructureNode();
 	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p);
 
+	//! Disable copy constructors
+	JSONStructureNode(const JSONStructureNode &other) = delete;
+	JSONStructureNode &operator=(const JSONStructureNode &) = delete;
+	//! Enable move constructors
+	JSONStructureNode(JSONStructureNode &&other) noexcept;
+	JSONStructureNode &operator=(JSONStructureNode &&) noexcept;
+
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
 
 	bool ContainsVarchar() const;

@@ -18,13 +18,26 @@ static inline LogicalTypeId MaxNumericType(LogicalTypeId &a, LogicalTypeId &b) {
 	return LogicalTypeId::BIGINT;
 }
 
-JSONStructureNode::JSONStructureNode() {
+JSONStructureNode::JSONStructureNode() : initialized(false) {
 }
 
 JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p)
-    : key(make_unique<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))) {
+    : key(make_unique<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))), initialized(false) {
 	D_ASSERT(yyjson_is_str(key_p));
 	JSONStructure::ExtractStructure(val_p, *this);
+}
+
+JSONStructureNode::JSONStructureNode(JSONStructureNode &&other) noexcept {
+	std::swap(key, other.key);
+	std::swap(initialized, other.initialized);
+	std::swap(descriptions, other.descriptions);
+}
+
+JSONStructureNode &JSONStructureNode::operator=(JSONStructureNode &&other) noexcept {
+	std::swap(key, other.key);
+	std::swap(initialized, other.initialized);
+	std::swap(descriptions, other.descriptions);
+	return *this;
 }
 
 JSONStructureDescription &JSONStructureNode::GetOrCreateDescription(LogicalTypeId type) {
