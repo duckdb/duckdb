@@ -98,6 +98,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("arrow", &PyConnectionWrapper::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
+	    .def("pl", &PyConnectionWrapper::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
+	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
 	    .def("begin", &PyConnectionWrapper::Begin, "Start a new transaction", py::arg("connection") = py::none())
 	    .def("commit", &PyConnectionWrapper::Commit, "Commit changes performed within a transaction",
 	         py::arg("connection") = py::none())
@@ -132,14 +134,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none())
-	    .def("query", &PyConnectionWrapper::RunQuery,
-	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
-	         "otherwise run the query as-is.",
-	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none())
 	    .def("from_df", &PyConnectionWrapper::FromDF, "Create a relation object from the DataFrame in df",
 	         py::arg("df") = py::none(), py::arg("connection") = py::none())
 	    .def("from_arrow", &PyConnectionWrapper::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"), py::arg("connection") = py::none());
+
+	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
+	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
+	             "otherwise run the query as-is.",
+	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
 
 	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
 	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),

@@ -14,6 +14,9 @@ namespace duckdb {
 
 struct NumpyCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "numpy";
+
+public:
 	~NumpyCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

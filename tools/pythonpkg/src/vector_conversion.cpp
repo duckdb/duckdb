@@ -315,10 +315,10 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (import_cache.pandas.libs.NAType.IsLoaded()) {
+				if (import_cache.pandas().libs.NAType.IsLoaded()) {
 					// If pandas is imported, check if the type is NAType
 					auto val_type = Py_TYPE(val);
-					auto na_type = (PyTypeObject *)import_cache.pandas.libs.NAType().ptr();
+					auto na_type = (PyTypeObject *)import_cache.pandas().libs.NAType().ptr();
 					if (val_type == na_type) {
 						out_mask.SetInvalid(row);
 						continue;

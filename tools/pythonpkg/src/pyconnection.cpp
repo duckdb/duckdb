@@ -39,6 +39,12 @@ DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
+template <class T>
+static bool ModuleIsLoaded() {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
+}
+
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
@@ -46,10 +52,13 @@ void DuckDBPyConnection::DetectEnvironment() {
 		return;
 	}
 	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
+	if (!ModuleIsLoaded<IPythonCacheItem>()) {
+		return;
+	}
 
 	// Check to see if we are in a Jupyter Notebook
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto get_ipython = import_cache.IPython.get_ipython();
+	auto get_ipython = import_cache.IPython().get_ipython();
 	if (get_ipython.ptr() == nullptr) {
 		// Could either not load the IPython module, or it has no 'get_ipython' attribute
 		return;
@@ -104,6 +113,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::kw_only(), py::arg("date_as_object") = false)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
+	    .def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
@@ -127,13 +138,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none())
-	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
-	         py::arg("query"), py::arg("alias") = "query_relation")
-	    .def("query", &DuckDBPyConnection::RunQuery,
-	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
-	         "otherwise run the query as-is.",
-	         py::arg("query"), py::arg("alias") = "query_relation");
+	         py::arg("parameters") = py::none());
+
+	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
+	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
+	             "otherwise run the query as-is.",
+	             py::arg("query"), py::arg("alias") = "query_relation");
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -979,6 +989,7 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
+
 DataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
@@ -1000,12 +1011,34 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	return result->ToArrowTable(chunk_size);
 }
 
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
+	auto arrow = FetchArrow(chunk_size);
+	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
+}
+
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
+
+static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
+                            vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
+	string name = "arrow_" + GenerateRandomName();
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
+	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
+
+	table_function.function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
+	table_function.external_dependency =
+	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+}
+
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
                                            py::object &current_frame) {
 	if (!dict.contains(table_name)) {
@@ -1023,18 +1056,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
 		                                                                      make_unique<RegisteredObject>(new_df));
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
-		string name = "arrow_" + GenerateRandomName();
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
-		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
-
-		table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
-		table_function->external_dependency =
-		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
+		CreateArrowScan(entry, *table_function, children, config);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
@@ -1043,6 +1065,13 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 
 		auto subquery = make_unique<SubqueryRef>(std::move(select));
 		return std::move(subquery);
+	} else if (PolarsDataFrame::IsDataFrame(entry)) {
+		auto arrow_dataset = entry.attr("to_arrow")();
+		CreateArrowScan(arrow_dataset, *table_function, children, config);
+	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
+		auto materialized = entry.attr("collect")();
+		auto arrow_dataset = materialized.attr("to_arrow")();
+		CreateArrowScan(arrow_dataset, *table_function, children, config);
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
@@ -1214,17 +1243,39 @@ void DuckDBPyConnection::Cleanup() {
 	import_cache.reset();
 }
 
-bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
+bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.pandas.DataFrame.IsInstance(object);
+	return import_cache.polars().DataFrame.IsInstance(object);
+}
+
+bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.polars().LazyFrame.IsInstance(object);
+}
+
+bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
+	if (!ModuleIsLoaded<PandasCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.pandas().DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.arrow.lib.Table.IsInstance(object) ||
-	       import_cache.arrow.lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache.arrow.dataset.Dataset.IsInstance(object) ||
-	       import_cache.arrow.dataset.Scanner.IsInstance(object);
+	return import_cache.arrow().lib.Table.IsInstance(object) ||
+	       import_cache.arrow().lib.RecordBatchReader.IsInstance(object) ||
+	       import_cache.arrow().dataset.Dataset.IsInstance(object) ||
+	       import_cache.arrow().dataset.Scanner.IsInstance(object);
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {

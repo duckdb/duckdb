@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/ipython_module.hpp
+// duckdb_python/import_cache/modules/polars_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,19 +12,22 @@
 
 namespace duckdb {
 
-struct IpywidgetsCacheItem : public PythonImportCacheItem {
+struct PolarsCacheItem : public PythonImportCacheItem {
 public:
-	static constexpr const char *Name = "ipywidgets";
+	static constexpr const char *Name = "polars";
 
 public:
-	~IpywidgetsCacheItem() override {
+	~PolarsCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		FloatProgress.LoadAttribute("FloatProgress", cache, *this);
+		DataFrame.LoadAttribute("DataFrame", cache, *this);
+		LazyFrame.LoadAttribute("LazyFrame", cache, *this);
 	}
 
 public:
-	PythonImportCacheItem FloatProgress;
+	//! pandas.DataFrame
+	PythonImportCacheItem DataFrame;
+	PythonImportCacheItem LazyFrame;
 
 protected:
 	bool IsRequired() const override final {
