@@ -388,7 +388,16 @@ jobs:
       shell: bash
       run: |
         wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.14.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+        mkdir nanodbc
+        tar xvf nanodbc.tgz -C nanodbc --strip-components=1
+        cd nanodbc
+        wget https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp
+        cp catch.hpp nanodbc/test/catch/catch.hpp
+        sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt
+        mkdir build
+        cd build
+        cmake -DNANODBC_DISABLE_TESTS=OFF ..
+        cmake --build .
 
     - name: Install psqlodbc
       shell: bash
