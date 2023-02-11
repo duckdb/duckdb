@@ -19,17 +19,6 @@ namespace duckdb {
 struct PythonImportCache {
 public:
 	explicit PythonImportCache() {
-#ifdef WIN32
-		py::gil_scoped_acquire acquire;
-		numpy();
-		datetime();
-		decimal();
-		uuid();
-		pandas();
-		arrow();
-		IPython();
-		ipywidgets();
-#endif
 	}
 	~PythonImportCache();
 
@@ -55,6 +44,8 @@ public:
 		return LazyLoadModule(uuid_module);
 	}
 	PandasCacheItem &pandas() {
+		// make sure NumPy is loaded before pandas
+		numpy();
 		return LazyLoadModule(pandas_module);
 	}
 	PolarsCacheItem &polars() {
