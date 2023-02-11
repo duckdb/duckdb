@@ -125,20 +125,12 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 	}
 	// read all the chunks
 	ColumnDataScanState temp_scan_state;
-	collection.InitializeScan(temp_scan_state);
+	collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 	while (true) {
 		auto chunk = make_unique<DataChunk>();
 		collection.InitializeScanChunk(*chunk);
 		if (!collection.Scan(temp_scan_state, *chunk)) {
 			break;
-		}
-		// we keep the BufferHandles that are needed for the materialized collection pinned in the supplied scan_state
-		auto &temp_handles = temp_scan_state.current_chunk_state.handles;
-		auto &scan_handles = scan_state.current_chunk_state.handles;
-		for (auto &temp_handle_pair : temp_handles) {
-			auto handle_copy =
-			    make_pair<uint32_t, BufferHandle>(scan_handles.size(), std::move(temp_handle_pair.second));
-			scan_state.current_chunk_state.handles.insert(std::move(handle_copy));
 		}
 		chunks.push_back(std::move(chunk));
 	}

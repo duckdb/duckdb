@@ -341,6 +341,11 @@ outstr = open(outfile,'rb').read()
 if b'42' not in outstr:
      raise Exception('.output test failed')
 
+# issue 6204
+test('''
+.output foo.txt
+select * from range(2049);
+''')
 
 outfile = tf()
 test('''
