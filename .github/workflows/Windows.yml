@@ -6,6 +6,7 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/pythonpkg/**'
