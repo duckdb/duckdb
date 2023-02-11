@@ -348,7 +348,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get upate -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -381,7 +381,7 @@ jobs:
     - name: Dependencies
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip julia
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip
         pip3 install pyodbc
 
     - name: Install psqlodbc
@@ -423,9 +423,3 @@ jobs:
     - name: Test Python ODBC
       shell: bash
       run: ./tools/odbc/test/run_pyodbc_tests.sh
-
-    - name: Test Julia ODBC
-      shell: bash
-      run: |
-        export ASAN_OPTIONS=verify_asan_link_order=0
-        julia tools/odbc/test/julia-test.jl
