@@ -430,7 +430,7 @@ SELECT * FROM t1;
 duckdb_nonsense_db = 'duckdbtest_nonsensedb.db'
 with open(duckdb_nonsense_db, 'w+') as f:
      f.write('blablabla')
-test('', err='The file is not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
+test('', err='not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
 os.remove(duckdb_nonsense_db)
 
 # enable_profiling doesn't result in any output
