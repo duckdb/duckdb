@@ -214,21 +214,16 @@ py::list DuckDBPyRelation::Description() {
 }
 
 struct DescribeAggregateInfo {
-	DescribeAggregateInfo(string name_p) : name(std::move(name_p)) {
-	}
-	DescribeAggregateInfo(string name_p, string parameter_p, string alias_p, bool distinct = false)
-	    : name(std::move(name_p)), parameter(std::move(parameter_p)), alias(std::move(alias_p)), distinct(distinct) {
+	DescribeAggregateInfo(string name_p, bool numeric_only = false)
+	    : name(std::move(name_p)), numeric_only(numeric_only) {
 	}
 
 	string name;
-	string parameter;
-	string alias;
-	bool distinct;
+	bool numeric_only;
 };
 
 vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
-                                    const vector<DescribeAggregateInfo> &aggregates,
-                                    const vector<bool> &include_columns, bool cast_to_varchar) {
+                                    const vector<DescribeAggregateInfo> &aggregates) {
 	vector<string> expressions;
 	expressions.reserve(columns.size());
 
@@ -238,11 +233,7 @@ vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
 			aggr_names += ", ";
 		}
 		aggr_names += "'";
-		if (!aggregates[i].alias.empty()) {
-			aggr_names += aggregates[i].alias;
-		} else {
-			aggr_names += aggregates[i].name;
-		}
+		aggr_names += aggregates[i].name;
 		aggr_names += "'";
 	}
 	aggr_names += "])";
@@ -250,25 +241,22 @@ vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
 	expressions.push_back(aggr_names);
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
-		if (!include_columns[c]) {
-			continue;
-		}
 		string expr = "UNNEST([";
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			if (i > 0) {
 				expr += ", ";
 			}
+			if (aggregates[i].numeric_only && !col.GetType().IsNumeric()) {
+				expr += "NULL";
+				continue;
+			}
 			expr += aggregates[i].name;
 			expr += "(";
-			if (aggregates[i].distinct) {
-				expr += "DISTINCT ";
-			}
 			expr += KeywordHelper::WriteOptionallyQuoted(col.GetName());
-			if (!aggregates[i].parameter.empty()) {
-				expr += ", " + aggregates[i].parameter;
-			}
 			expr += ")";
-			if (cast_to_varchar) {
+			if (col.GetType().IsNumeric()) {
+				expr += "::DOUBLE";
+			} else {
 				expr += "::VARCHAR";
 			}
 		}
@@ -282,34 +270,10 @@ vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	auto &columns = rel->Columns();
 	vector<DescribeAggregateInfo> aggregates;
-	bool any_numeric;
-	vector<bool> is_numeric;
-	for (auto &col : columns) {
-		if (col.GetType().IsNumeric()) {
-			is_numeric.push_back(true);
-			any_numeric = true;
-		} else {
-			is_numeric.push_back(false);
-		}
-	}
-	if (any_numeric) {
-		// numeric describe
-		aggregates = {DescribeAggregateInfo("count"),
-		              DescribeAggregateInfo("mean"),
-		              DescribeAggregateInfo("stddev"),
-		              DescribeAggregateInfo("min"),
-		              DescribeAggregateInfo("quantile_cont", "0.25", "25%"),
-		              DescribeAggregateInfo("quantile_cont", "0.5", "50%"),
-		              DescribeAggregateInfo("quantile_cont", "0.75", "75%"),
-		              DescribeAggregateInfo("max")};
-	} else {
-		// non-numeric describe
-		aggregates = {DescribeAggregateInfo("count"), DescribeAggregateInfo("mode", "", "top"),
-		              DescribeAggregateInfo("count", "", "unique", true)};
-		is_numeric.clear();
-		is_numeric.resize(columns.size(), true);
-	}
-	auto expressions = CreateExpressionList(columns, aggregates, is_numeric, !any_numeric);
+	aggregates = {DescribeAggregateInfo("count"),        DescribeAggregateInfo("mean", true),
+	              DescribeAggregateInfo("stddev", true), DescribeAggregateInfo("min"),
+	              DescribeAggregateInfo("max"),          DescribeAggregateInfo("median", true)};
+	auto expressions = CreateExpressionList(columns, aggregates);
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expressions));
 }
 
