@@ -392,7 +392,7 @@ jobs:
         tar xvf nanodbc.tgz -C nanodbc --strip-components=1
         cd nanodbc
         wget https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp
-        cp catch.hpp nanodbc/test/catch/catch.hpp
+        cp catch.hpp test/catch/catch.hpp
         sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt
         mkdir build
         cd build
