@@ -182,13 +182,11 @@ jobs:
         fi
 
    osx-python3:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
       name: Python 3 OSX
       runs-on: macos-latest
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
-      needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
@@ -253,7 +251,6 @@ jobs:
             python_build: 'cp39-*'
           - isRelease: false
             python_build: 'cp311-*'
-      needs: linux-python3-9
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}

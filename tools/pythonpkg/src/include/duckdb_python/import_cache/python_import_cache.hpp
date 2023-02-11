@@ -44,8 +44,6 @@ public:
 		return LazyLoadModule(uuid_module);
 	}
 	PandasCacheItem &pandas() {
-		// make sure NumPy is loaded before pandas
-		numpy();
 		return LazyLoadModule(pandas_module);
 	}
 	PolarsCacheItem &polars() {
