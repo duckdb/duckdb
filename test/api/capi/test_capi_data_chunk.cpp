@@ -262,8 +262,10 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	entries[2].offset = 100;
 	entries[2].length = 23;
 
-	auto vector = (Vector &)(*list_type);
-	REQUIRE(ListVector::GetListCapacity(vector) == 123);
+	auto vector = (Vector &)(*list_vector);
+	for (int i = 0; i < 123; i++) {
+		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
+	}
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
