@@ -106,7 +106,7 @@ string CopyStatement::ToString() const {
 		} else {
 			result += TablePart(*info);
 		}
-		result += " TO";
+		result += " TO ";
 		result += StringUtil::Format("'%s'", info->file_path);
 		result += CopyOptionsToString(info->format, info->options);
 	}
