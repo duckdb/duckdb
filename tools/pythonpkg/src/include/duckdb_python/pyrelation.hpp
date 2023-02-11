@@ -250,6 +250,7 @@ private:
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;
 	void AssertResultOpen() const;
+	void AssertRelation() const;
 	void ExecuteOrThrow();
 	unique_ptr<QueryResult> ExecuteInternal();
 

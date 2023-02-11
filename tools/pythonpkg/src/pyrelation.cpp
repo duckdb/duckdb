@@ -186,6 +186,12 @@ void DuckDBPyRelation::AssertResult() const {
 	}
 }
 
+void DuckDBPyRelation::AssertRelation() const {
+	if (!rel) {
+		throw InvalidInputException("This relation was created from a result");
+	}
+}
+
 void DuckDBPyRelation::AssertResultOpen() const {
 	if (result && result->IsClosed()) {
 		throw InvalidInputException("No open result set");
@@ -193,22 +199,118 @@ void DuckDBPyRelation::AssertResultOpen() const {
 }
 
 py::list DuckDBPyRelation::Description() {
-	if (!result) {
-		ExecuteOrThrow();
+	if (rel) {
+		auto &columns = rel->Columns();
+		vector<string> names;
+		vector<LogicalType> types;
+		for (auto &col : columns) {
+			names.push_back(col.GetName());
+			types.push_back(col.GetType());
+		}
+		return DuckDBPyResult::GetDescription(names, types);
 	}
 	AssertResultOpen();
 	return result->Description();
 }
 
+struct DescribeAggregateInfo {
+	DescribeAggregateInfo(string name_p) : name(std::move(name_p)) {
+	}
+	DescribeAggregateInfo(string name_p, string parameter_p, string alias_p, bool distinct = false)
+	    : name(std::move(name_p)), parameter(std::move(parameter_p)), alias(std::move(alias_p)), distinct(distinct) {
+	}
+
+	string name;
+	string parameter;
+	string alias;
+	bool distinct;
+};
+
+vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
+                                    const vector<DescribeAggregateInfo> &aggregates,
+                                    const vector<bool> &include_columns, bool cast_to_varchar) {
+	vector<string> expressions;
+	expressions.reserve(columns.size());
+
+	string aggr_names = "UNNEST([";
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (i > 0) {
+			aggr_names += ", ";
+		}
+		aggr_names += "'";
+		if (!aggregates[i].alias.empty()) {
+			aggr_names += aggregates[i].alias;
+		} else {
+			aggr_names += aggregates[i].name;
+		}
+		aggr_names += "'";
+	}
+	aggr_names += "])";
+	aggr_names += " AS aggr";
+	expressions.push_back(aggr_names);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		auto &col = columns[c];
+		if (!include_columns[c]) {
+			continue;
+		}
+		string expr = "UNNEST([";
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			if (i > 0) {
+				expr += ", ";
+			}
+			expr += aggregates[i].name;
+			expr += "(";
+			if (aggregates[i].distinct) {
+				expr += "DISTINCT ";
+			}
+			expr += KeywordHelper::WriteOptionallyQuoted(col.GetName());
+			if (!aggregates[i].parameter.empty()) {
+				expr += ", " + aggregates[i].parameter;
+			}
+			expr += ")";
+			if (cast_to_varchar) {
+				expr += "::VARCHAR";
+			}
+		}
+		expr += "])";
+		expr += " AS " + KeywordHelper::WriteOptionallyQuoted(col.GetName());
+		expressions.push_back(expr);
+	}
+	return expressions;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	auto &columns = rel->Columns();
-	vector<string> column_list;
-	column_list.reserve(columns.size());
-	for (auto &column_rel : columns) {
-		column_list.push_back(column_rel.Name());
+	vector<DescribeAggregateInfo> aggregates;
+	bool any_numeric;
+	vector<bool> is_numeric;
+	for (auto &col : columns) {
+		if (col.GetType().IsNumeric()) {
+			is_numeric.push_back(true);
+			any_numeric = true;
+		} else {
+			is_numeric.push_back(false);
+		}
 	}
-	auto expr = GenerateExpressionList("stats", column_list);
-	return make_unique<DuckDBPyRelation>(rel->Project(expr)->Limit(1));
+	if (any_numeric) {
+		// numeric describe
+		aggregates = {DescribeAggregateInfo("count"),
+		              DescribeAggregateInfo("mean"),
+		              DescribeAggregateInfo("stddev"),
+		              DescribeAggregateInfo("min"),
+		              DescribeAggregateInfo("quantile_cont", "0.25", "25%"),
+		              DescribeAggregateInfo("quantile_cont", "0.5", "50%"),
+		              DescribeAggregateInfo("quantile_cont", "0.75", "75%"),
+		              DescribeAggregateInfo("max")};
+	} else {
+		// non-numeric describe
+		aggregates = {DescribeAggregateInfo("count"), DescribeAggregateInfo("mode", "", "top"),
+		              DescribeAggregateInfo("count", "", "unique", true)};
+		is_numeric.clear();
+		is_numeric.resize(columns.size(), true);
+	}
+	auto expressions = CreateExpressionList(columns, aggregates, is_numeric, !any_numeric);
+	return make_unique<DuckDBPyRelation>(rel->Aggregate(expressions));
 }
 
 string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
@@ -386,6 +488,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 }
 
 static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
+	if (!rel) {
+		return nullptr;
+	}
 	auto context = rel->context.GetContext();
 	py::gil_scoped_release release;
 	auto pending_query = context->PendingQuery(rel, false);
@@ -399,6 +504,9 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
 void DuckDBPyRelation::ExecuteOrThrow() {
 	auto tmp_result = make_unique<DuckDBPyResult>();
 	tmp_result->result = ExecuteInternal();
+	if (!tmp_result->result) {
+		throw InternalException("ExecuteOrThrow - no query available to execute");
+	}
 	if (tmp_result->result->HasError()) {
 		tmp_result->result->ThrowError();
 	}
@@ -407,9 +515,14 @@ void DuckDBPyRelation::ExecuteOrThrow() {
 
 DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
+	if (result->IsClosed()) {
+		return py::none();
+	}
 	auto df = result->FetchDF(date_as_object);
 	result = nullptr;
 	return df;
@@ -417,25 +530,41 @@ DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 
 py::object DuckDBPyRelation::FetchOne() {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
+	if (result->IsClosed()) {
+		return py::none();
+	}
 	return result->Fetchone();
 }
 
 py::object DuckDBPyRelation::FetchMany(idx_t size) {
 	if (!result) {
+		if (!rel) {
+			return py::list();
+		}
 		ExecuteOrThrow();
+		D_ASSERT(result);
 	}
-	AssertResultOpen();
+	if (result->IsClosed()) {
+		return py::list();
+	}
 	return result->Fetchmany(size);
 }
 
 py::object DuckDBPyRelation::FetchAll() {
 	if (!result) {
+		if (!rel) {
+			return py::list();
+		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
+	if (result->IsClosed()) {
+		return py::list();
+	}
 	auto res = result->Fetchall();
 	result = nullptr;
 	return std::move(res);
@@ -443,9 +572,14 @@ py::object DuckDBPyRelation::FetchAll() {
 
 py::dict DuckDBPyRelation::FetchNumpy() {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
+	if (result->IsClosed()) {
+		return py::none();
+	}
 	auto res = result->FetchNumpy();
 	result = nullptr;
 	return res;
@@ -453,6 +587,9 @@ py::dict DuckDBPyRelation::FetchNumpy() {
 
 py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
@@ -464,6 +601,9 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 //! Should this also keep track of when the result is empty and set result->result_closed accordingly?
 DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
@@ -472,6 +612,9 @@ DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_o
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
@@ -482,6 +625,9 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
@@ -490,6 +636,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 
 void DuckDBPyRelation::Close() {
 	if (!result) {
+		if (!rel) {
+			return;
+		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
@@ -698,9 +847,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 }
 
 DuckDBPyRelation &DuckDBPyRelation::Execute() {
-	if (!rel) {
-		throw InvalidInputException("This relation was created from a result");
-	}
+	AssertRelation();
 	ExecuteOrThrow();
 	return *this;
 }
@@ -714,6 +861,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, cons
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
+	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
 	auto insert = rel->InsertRel(parsed_info.schema, parsed_info.name);
 	PyExecuteRelation(insert);
@@ -724,6 +872,7 @@ static bool IsAcceptedInsertRelationType(const Relation &relation) {
 }
 
 void DuckDBPyRelation::Insert(const py::object &params) {
+	AssertRelation();
 	if (!IsAcceptedInsertRelationType(*this->rel)) {
 		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
 	}
@@ -734,12 +883,14 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 }
 
 void DuckDBPyRelation::Create(const string &table) {
+	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
 	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name);
 	PyExecuteRelation(create);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
+	AssertRelation();
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
 	auto relation = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
@@ -748,6 +899,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 }
 
 string DuckDBPyRelation::Print() {
+	AssertRelation();
 	if (rendered_result.empty()) {
 		idx_t limit_rows = 10000;
 		BoxRenderer renderer;
@@ -763,15 +915,18 @@ string DuckDBPyRelation::Print() {
 }
 
 string DuckDBPyRelation::Explain() {
+	AssertRelation();
 	return rel->ToString(0);
 }
 
 // TODO: RelationType to a python enum
 py::str DuckDBPyRelation::Type() {
+	AssertRelation();
 	return py::str(RelationTypeToString(rel->type));
 }
 
 py::list DuckDBPyRelation::Columns() {
+	AssertRelation();
 	py::list res;
 	for (auto &col : rel->Columns()) {
 		res.append(col.Name());
@@ -780,6 +935,7 @@ py::list DuckDBPyRelation::Columns() {
 }
 
 py::list DuckDBPyRelation::ColumnTypes() {
+	AssertRelation();
 	py::list res;
 	for (auto &col : rel->Columns()) {
 		res.append(col.Type().ToString());
