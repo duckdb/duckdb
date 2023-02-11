@@ -348,7 +348,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get upate -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -381,14 +381,14 @@ jobs:
     - name: Dependencies
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip 
         pip3 install pyodbc
 
     - name: Install psqlodbc
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 178899d431e1d635d59b8e82a070ff6db0e8a092 && make debug)
+        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
