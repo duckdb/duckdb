@@ -675,29 +675,36 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		if (catalog != null && !catalog.isEmpty()) {
 			throw new SQLException("Actual catalog argument is not supported, got " + catalog);
 		}
-		String table_type_str = "";
-		if (types != null && types.length > 0) {
-			table_type_str = "table_type IN (";
-			for (int i = 0; i < types.length; i++) {
-				table_type_str += "'" + types[i] + "'";
-				if (i < types.length - 1) {
-					table_type_str += ',';
-				}
-			}
-			table_type_str += ") AND ";
-		}
 		if (schemaPattern == null) {
 			schemaPattern = "%";
 		}
 		if (tableNamePattern == null) {
 			tableNamePattern = "%";
 		}
+		String table_type_str = "";
+		if (types != null && types.length > 0) {
+			for (int i = 0; i < types.length; i++) {
+				if (i > 0) {
+					table_type_str += ',';
+				}
+				table_type_str += "?";
+			}
+			table_type_str = " AND table_type IN (" + table_type_str + ")";
+		}
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema.tables WHERE "
-						+ table_type_str
-						+ " table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
+			"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME'" +
+			", table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM'" +
+			", NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' " +
+			"FROM information_schema.tables WHERE table_schema LIKE ? AND table_name LIKE ? " + table_type_str +
+			"ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\""
+		);
 		ps.setString(1, schemaPattern);
 		ps.setString(2, tableNamePattern);
+		if (types != null && types.length > 0) {
+			for (int i = 0; i < types.length; i++) {
+			  ps.setString(3 + i, types[i]);
+			}
+		}
 		return ps.executeQuery();
 
 	}

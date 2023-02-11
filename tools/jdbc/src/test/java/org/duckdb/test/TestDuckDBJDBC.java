@@ -1800,6 +1800,27 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_get_tables_param_binding_for_table_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		ResultSet rs = databaseMetaData.getTables(null, null, null, new String[] {
+			"') UNION ALL " +
+			"SELECT" + 
+			" 'fake catalog'" +
+			", ?" +
+			", ?" + 
+			", 'fake table type'" +
+			", 'fake remarks'" +
+			", 'fake type cat'" + 
+			", 'fake type schem'" +
+			", 'fake type name'" +
+			", 'fake self referencing col name'" +
+			", 'fake ref generation' -- "
+		});
+		assertFalse(rs.next());
+		rs.close();
+	}
+
 	public static void test_get_table_types() throws Exception {
 		String[] tableTypesArray = new String[]{"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
 		List<String> tableTypesList = new ArrayList<String>(Arrays.asList(tableTypesArray));
@@ -1808,9 +1829,9 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		DatabaseMetaData databaseMetaData = conn.getMetaData();
 		ResultSet rs = databaseMetaData.getTableTypes();
-		
+
 		for (int i = 0; i < tableTypesArray.length; i++) {
-			assertTrue(rs.next(), "Expected a row from table");
+			assertTrue(rs.next(), "Expected a row from table types resultset");
 			String tableTypeFromResultSet = rs.getString("TABLE_TYPE");
 			String tableTypeFromList = tableTypesList.get(i);
 			assertTrue(
@@ -1820,9 +1841,8 @@ public class TestDuckDBJDBC {
 				"value from resultset " + tableTypeFromResultSet
 			);
 		}
-		rs.close();
 	}
-	
+  
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));
