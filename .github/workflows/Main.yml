@@ -365,7 +365,6 @@ jobs:
  odbc:
     name: ODBC
     runs-on: ubuntu-20.04
-    needs: linux-debug
     env:
       BUILD_ODBC: 1
       GEN: ninja
@@ -382,7 +381,7 @@ jobs:
     - name: Dependencies
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-common unixodbc-dev python3 python3-pip julia
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip julia
         pip3 install pyodbc
 
     - name: Install nanodbc
