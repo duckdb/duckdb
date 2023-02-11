@@ -117,18 +117,26 @@ public:
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
 
 	//! Insert the data from this relation into a table
+	DUCKDB_API shared_ptr<Relation> InsertRel(const string &schema_name, const string &table_name);
 	DUCKDB_API void Insert(const string &table_name);
 	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name);
 	DUCKDB_API void Create(const string &table_name);
 	DUCKDB_API void Create(const string &schema_name, const string &table_name);
 
 	//! Write a relation to a CSV file
+	DUCKDB_API shared_ptr<Relation>
+	WriteCSVRel(const string &csv_file,
+	            case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
 	DUCKDB_API void WriteCSV(const string &csv_file,
 	                         case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
 	//! Write a relation to a Parquet file
+	DUCKDB_API shared_ptr<Relation>
+	WriteParquetRel(const string &parquet_file,
+	                case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
 	DUCKDB_API void
 	WriteParquet(const string &parquet_file,
 	             case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());

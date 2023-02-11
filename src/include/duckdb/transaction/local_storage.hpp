@@ -171,7 +171,8 @@ public:
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable *old_dt, DataTable *new_dt);
-	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, DataChunk &chunk);
+	void FetchChunk(DataTable *table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids, DataChunk &chunk,
+	                ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable *table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);

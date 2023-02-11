@@ -266,7 +266,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsLikeEscapeClause() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -650,8 +650,23 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getTableTypes() throws SQLException {
-		return conn.createStatement().executeQuery(
-				"SELECT DISTINCT table_type AS 'TABLE_TYPE' FROM information_schema.tables ORDER BY \"TABLE_TYPE\"");
+		String[] tableTypesArray = new String[]{"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
+		StringBuilder stringBuilder = new StringBuilder();
+		boolean first = true;
+		for (String tableType : tableTypesArray) {
+			if (!first) {
+				stringBuilder.append("\nUNION ALL\n");
+			}
+			stringBuilder.append("SELECT '");
+			stringBuilder.append(tableType);
+			stringBuilder.append("'");
+			if (first) {
+				stringBuilder.append(" AS 'TABLE_TYPE'");
+				first = false;
+			}
+		}
+		stringBuilder.append("\nORDER BY TABLE_TYPE");
+		return conn.createStatement().executeQuery(stringBuilder.toString());
 	}
 
 	@Override
