@@ -23,6 +23,8 @@ struct UpdateNode;
 class UpdateSegment {
 public:
 	UpdateSegment(ColumnData &column_data);
+	// Construct a duplicate of 'other' with 'new_owner' as it's column data
+	UpdateSegment(UpdateSegment &other, ColumnData &new_owner);
 	~UpdateSegment();
 
 	ColumnData &column_data;
@@ -47,7 +49,8 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics();
 	StringHeap &GetStringHeap() {
-		return heap;
+		D_ASSERT(heap);
+		return *heap;
 	}
 
 private:
@@ -62,7 +65,7 @@ private:
 	//! Internal type size
 	idx_t type_size;
 	//! String heap, only used for strings
-	StringHeap heap;
+	unique_ptr<StringHeap> heap;
 
 public:
 	typedef void (*initialize_update_function_t)(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
