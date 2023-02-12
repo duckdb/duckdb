@@ -195,8 +195,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
-	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print);
+	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data")
+	    .def("__str__", &DuckDBPyRelation::ToString)
+	    .def("__repr__", &DuckDBPyRelation::ToString);
 }
 
 } // namespace duckdb

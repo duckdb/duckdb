@@ -237,7 +237,8 @@ public:
 	py::list Columns();
 	py::list ColumnTypes();
 
-	string Print();
+	string ToString();
+	void Print();
 
 	string Explain();
 
