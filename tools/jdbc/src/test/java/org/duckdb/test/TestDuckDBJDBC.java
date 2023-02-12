@@ -1107,57 +1107,79 @@ public class TestDuckDBJDBC {
 	public static void test_lots_of_decimals() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
+		// Create the table
 		stmt.execute(
-				"CREATE TABLE q (id DECIMAL(4,0), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+			"CREATE TABLE q (id	DECIMAL(4,0),dec32 DECIMAL(9,4),dec64 DECIMAL(18,7),dec128 DECIMAL(38,10))"
+		);
 		stmt.close();
 
+		// Create the INSERT prepared statement we will use
 		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec32, dec64, dec128) VALUES (?, ?, ?, ?)");
-		ps1.setObject(1, new BigDecimal("1"));
 
+		// Create the Java decimals we will be inserting
+		BigDecimal id_org = new BigDecimal("1");
 		BigDecimal dec32_org = new BigDecimal("99999.9999");
 		BigDecimal dec64_org = new BigDecimal("99999999999.9999999");
 		BigDecimal dec128_org = new BigDecimal("9999999999999999999999999999.9999999999");
 
+		// Insert the initial values
+		ps1.setObject(1, id_org);
 		ps1.setObject(2, dec32_org);
 		ps1.setObject(3, dec64_org);
 		ps1.setObject(4, dec128_org);
-		ps1.execute();
+		// This does not have a result set
+		assertFalse(ps1.execute());
 
+		// Create the SELECT prepared statement we will use
 		PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM q WHERE id = ?");
 		BigDecimal multiplicant = new BigDecimal("0.987");
 
+		BigDecimal dec32;
+		BigDecimal dec64;
+		BigDecimal dec128;
+
+		ResultSet select_result;
+
 		for (int i = 2; i < 10000; i++) {
 			ps2.setObject(1, new BigDecimal(i - 1));
-			ResultSet rs = ps2.executeQuery();
-			assertTrue(rs.next());
 
-			BigDecimal dec32 = rs.getObject(2, BigDecimal.class);
-			BigDecimal dec64 = rs.getObject(3, BigDecimal.class);
-			BigDecimal dec128 = rs.getObject(4, BigDecimal.class);
+			// Verify that both the 'getObject' and the 'getBigDecimal' methods return the same value\
+
+			select_result = ps2.executeQuery();
+			assertTrue(select_result.next());
+			dec32 = select_result.getObject(2, BigDecimal.class);
+			dec64 = select_result.getObject(3, BigDecimal.class);
+			dec128 = select_result.getObject(4, BigDecimal.class);
 			assertEquals(dec32_org, dec32);
 			assertEquals(dec64_org, dec64);
 			assertEquals(dec128_org, dec128);
+			select_result.close();
 
-			dec32 = rs.getBigDecimal(2);
-			dec64 = rs.getBigDecimal(3);
-			dec128 = rs.getBigDecimal(4);
+			select_result = ps2.executeQuery();
+			assertTrue(select_result.next());
+			dec32 = select_result.getBigDecimal(2);
+			dec64 = select_result.getBigDecimal(3);
+			dec128 = select_result.getBigDecimal(4);
 			assertEquals(dec32_org, dec32);
 			assertEquals(dec64_org, dec64);
 			assertEquals(dec128_org, dec128);
-			rs.close();
+			select_result.close();
 
-			dec32_org = dec32.multiply(multiplicant).setScale(4, java.math.RoundingMode.HALF_EVEN);
-			dec64_org = dec64.multiply(multiplicant).setScale(7, java.math.RoundingMode.HALF_EVEN);
-			dec128_org = dec128.multiply(multiplicant).setScale(10, java.math.RoundingMode.HALF_EVEN);
+			// Apply the modification for the next iteration
+
+			dec32_org = dec32_org.multiply(multiplicant).setScale(4, java.math.RoundingMode.HALF_EVEN);
+			dec64_org = dec64_org.multiply(multiplicant).setScale(7, java.math.RoundingMode.HALF_EVEN);
+			dec128_org = dec128_org.multiply(multiplicant).setScale(10, java.math.RoundingMode.HALF_EVEN);
 
 			ps1.clearParameters();
 			ps1.setObject(1, new BigDecimal(i));
 			ps1.setObject(2, dec32_org);
 			ps1.setObject(3, dec64_org);
 			ps1.setObject(4, dec128_org);
-			ps1.execute();
-		}
+			assertFalse(ps1.execute());
 
+			ps2.clearParameters();
+		}
 		ps1.close();
 		ps2.close();
 		conn.close();
