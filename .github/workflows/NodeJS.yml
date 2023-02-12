@@ -31,7 +31,7 @@ jobs:
     name: node.js Linux
     runs-on: ubuntu-20.04
     env:
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -121,7 +121,7 @@ jobs:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
