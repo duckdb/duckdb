@@ -253,6 +253,13 @@ public:
 
 struct JSONScan {
 public:
+	static void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+	                       vector<string> &names);
+
+	static void InitializeBindData(ClientContext &context, JSONScanData &bind_data,
+	                               const named_parameter_map_t &named_parameters, vector<string> &names,
+	                               vector<LogicalType> &return_types);
+
 	static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                               const GlobalTableFunctionState *global_state) {
 		auto &gstate = ((JSONGlobalTableFunctionState &)*global_state).state;

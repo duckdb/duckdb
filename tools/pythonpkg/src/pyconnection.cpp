@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 
 #include <random>
@@ -138,7 +140,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("values"))
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none());
+	         py::arg("parameters") = py::none())
+	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
+	         py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
+	         py::arg("maximum_depth") = py::none());
 
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
@@ -445,6 +450,68 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
 	}
 	return shared_from_this();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,
+                                                          const py::object &sample_size,
+                                                          const py::object &maximum_depth) {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+
+	named_parameter_map_t options;
+
+	if (!py::none().is(columns)) {
+		if (!py::isinstance<py::dict>(columns)) {
+			throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
+		}
+		py::dict columns_dict = columns;
+		child_list_t<Value> struct_fields;
+
+		for (auto &kv : columns_dict) {
+			auto &name = kv.first;
+			auto &type = kv.second;
+			if (!py::isinstance<py::str>(name)) {
+				string actual_type = py::str(name.get_type());
+				throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
+			}
+			if (!py::isinstance<py::str>(type)) {
+				string actual_type = py::str(name.get_type());
+				throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
+			}
+			struct_fields.push_back(make_pair(py::str(name), Value(py::str(type))));
+		}
+		auto dtype_struct = Value::STRUCT(std::move(struct_fields));
+		options["columns"] = std::move(dtype_struct);
+	}
+
+	if (!py::none().is(sample_size)) {
+		if (!py::isinstance<py::int_>(sample_size)) {
+			string actual_type = py::str(sample_size.get_type());
+			throw InvalidInputException("read_json only accepts 'sample_size' as an integer, not '%s'", actual_type);
+		}
+		options["sample_size"] = Value::INTEGER(py::int_(sample_size));
+	}
+
+	if (!py::none().is(maximum_depth)) {
+		if (!py::isinstance<py::int_>(maximum_depth)) {
+			string actual_type = py::str(maximum_depth.get_type());
+			throw InvalidInputException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
+		}
+		options["maximum_depth"] = Value::INTEGER(py::int_(maximum_depth));
+	}
+
+	bool auto_detect = false;
+	if (!options.count("columns")) {
+		options["auto_detect"] = Value::BOOLEAN(true);
+		auto_detect = true;
+	}
+
+	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
+	if (read_json_relation == nullptr) {
+		throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
+	}
+	return make_unique<DuckDBPyRelation>(std::move(read_json_relation));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
