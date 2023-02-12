@@ -48,6 +48,7 @@ private:
 		}
 		return input;
 	}
+	std::string DecodeFlags(uint8_t flags);
 
 public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)

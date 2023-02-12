@@ -8,6 +8,8 @@ on:
       - '**.md'
       - 'examples/**'
       - 'test/**'
+      - 'tools/odbc/**'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/rpkg/**'

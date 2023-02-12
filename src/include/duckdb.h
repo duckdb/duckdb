@@ -193,6 +193,11 @@ typedef struct {
 } duckdb_blob;
 
 typedef struct {
+	uint64_t offset;
+	uint64_t length;
+} duckdb_list_entry;
+
+typedef struct {
 #if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 	void *data;
 	bool *nullmask;
@@ -1560,6 +1565,24 @@ Returns the size of the child vector of the list
 * returns: The size of the child list
 */
 DUCKDB_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
+
+/*!
+Sets the total size of the underlying child-vector of a list vector.
+
+* vector: The list vector.
+* size: The size of the child list.
+* returns: The duckdb state. Returns DuckDBError if the vector is nullptr.
+*/
+DUCKDB_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
+
+/*!
+Sets the total capacity of the underlying child-vector of a list.
+
+* vector: The list vector.
+* required_capacity: the total capacity to reserve.
+* return: The duckdb state. Returns DuckDBError if the vector is nullptr.
+*/
+DUCKDB_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
 /*!
 Retrieves the child vector of a struct vector.

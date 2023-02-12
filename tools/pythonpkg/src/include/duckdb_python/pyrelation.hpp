@@ -192,6 +192,8 @@ public:
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
+	PolarsDataFrame ToPolars(idx_t batch_size);
+
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
@@ -250,6 +252,7 @@ private:
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;
 	void AssertResultOpen() const;
+	void AssertRelation() const;
 	void ExecuteOrThrow();
 	unique_ptr<QueryResult> ExecuteInternal();
 

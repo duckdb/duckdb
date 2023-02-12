@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/transaction/transaction_manager.hpp
+// duckdb/transaction/duck_transaction_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//

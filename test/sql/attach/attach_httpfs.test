@@ -6,6 +6,8 @@ require skip_reload
 
 require httpfs
 
+mode skip
+
 # ATTACH a DuckDB database over HTTPFS
 statement ok
 ATTACH 'https://github.com/duckdb/duckdb/raw/master/test/sql/storage_version/storage_version.db' AS db;
