@@ -866,6 +866,9 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 			}
 		}
 	}
+	if (result.empty() && StringUtil::Lower(path).compare(0, 4, "http") == 0) {
+		throw IOException("Path starts with 'http', perhaps you forgot to install and load the httpfs extension.");
+	}
 	return result;
 }
 
