@@ -369,19 +369,11 @@ bool Value::StringIsValid(const char *str, idx_t length) {
 }
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
-	D_ASSERT(width <= Decimal::MAX_WIDTH_INT16);
-	Value result(LogicalType::DECIMAL(width, scale));
-	result.value_.smallint = value;
-	result.is_null = false;
-	return result;
+	return Value::DECIMAL(int64_t(value), width, scale);
 }
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
-	D_ASSERT(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
-	Value result(LogicalType::DECIMAL(width, scale));
-	result.value_.integer = value;
-	result.is_null = false;
-	return result;
+	return Value::DECIMAL(int64_t(value), width, scale);
 }
 
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
