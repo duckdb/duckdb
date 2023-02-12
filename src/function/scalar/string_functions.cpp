@@ -41,6 +41,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<LevenshteinFun>();
 	Register<JaccardFun>();
 	Register<JaroWinklerFun>();
+	Register<XXHashFun>();
 
 	// blob functions
 	Register<Base64Fun>();
