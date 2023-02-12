@@ -867,7 +867,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	return relation;
 }
 
-string DuckDBPyRelation::Print() {
+string DuckDBPyRelation::ToString() {
 	AssertRelation();
 	if (rendered_result.empty()) {
 		idx_t limit_rows = 10000;
@@ -881,6 +881,10 @@ string DuckDBPyRelation::Print() {
 		rendered_result = res->ToBox(*context, config);
 	}
 	return rendered_result;
+}
+
+void DuckDBPyRelation::Print() {
+	py::print(py::str(ToString()));
 }
 
 string DuckDBPyRelation::Explain() {
