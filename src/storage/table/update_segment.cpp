@@ -21,8 +21,7 @@ static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(P
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : column_data(column_data), stats(column_data.type),
-      heap(make_unique<StringHeap>(BufferAllocator::Get(column_data.GetDatabase()))) {
+    : column_data(column_data), stats(column_data.type), heap(BufferAllocator::Get(column_data.GetDatabase())) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -38,8 +37,10 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 }
 
 UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
-    : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size),
-      heap(std::move(other.heap)) {
+    : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
+
+	other.heap.Move(this->heap);
+
 	initialize_update_function = other.initialize_update_function;
 	merge_update_function = other.merge_update_function;
 	fetch_update_function = other.fetch_update_function;
@@ -56,8 +57,7 @@ UpdateSegment::~UpdateSegment() {
 void UpdateSegment::ClearUpdates() {
 	stats.Reset();
 	root.reset();
-	D_ASSERT(heap);
-	heap->Destroy();
+	heap.Destroy();
 }
 
 //===--------------------------------------------------------------------===//

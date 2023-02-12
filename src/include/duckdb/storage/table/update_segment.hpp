@@ -49,8 +49,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics();
 	StringHeap &GetStringHeap() {
-		D_ASSERT(heap);
-		return *heap;
+		return heap;
 	}
 
 private:
@@ -65,7 +64,7 @@ private:
 	//! Internal type size
 	idx_t type_size;
 	//! String heap, only used for strings
-	unique_ptr<StringHeap> heap;
+	StringHeap heap;
 
 public:
 	typedef void (*initialize_update_function_t)(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
