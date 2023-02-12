@@ -1821,6 +1821,18 @@ public class TestDuckDBJDBC {
 
 		conn.close();
 	}
+	
+	public static void test_get_tables_with_catalog() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		String catalog = conn.getCatalog();
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		try {
+			databaseMetaData.getTables(catalog, null, "%", null);
+		}
+		catch (SQLException ex) {
+			assertFalse(ex.getMessage().startsWith("Actual catalog argument is not supported"));
+		}
+	}
 
 	public static void test_get_tables_param_binding_for_table_types() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");

@@ -2,6 +2,9 @@ package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -672,41 +675,94 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types)
 			throws SQLException {
-		if (catalog != null && !catalog.isEmpty()) {
-			throw new SQLException("Actual catalog argument is not supported, got " + catalog);
-		}
-		if (schemaPattern == null) {
-			schemaPattern = "%";
-		}
+		StringWriter stringWriter = new StringWriter();
+		PrintWriter pw = new PrintWriter(stringWriter);
+
+		pw.println("SELECT table_catalog AS 'TABLE_CAT'");
+		pw.println(", table_schema AS 'TABLE_SCHEM'");
+		pw.println(", table_name AS 'TABLE_NAME'");
+		pw.println(", table_type AS 'TABLE_TYPE'");
+		pw.println(", NULL::VARCHAR AS 'REMARKS'");
+		pw.println(", NULL::VARCHAR AS 'TYPE_CAT'");
+		pw.println(", NULL::VARCHAR AS 'TYPE_SCHEM'");
+		pw.println(", NULL::VARCHAR AS 'TYPE_NAME'");
+		pw.println(", NULL::VARCHAR AS 'SELF_REFERENCING_COL_NAME'");
+		pw.println(", NULL::VARCHAR AS 'REF_GENERATION'");
+		pw.println("FROM information_schema.tables");
+
+		// tableNamePattern - a table name pattern; must match the table name as it is stored in the database
 		if (tableNamePattern == null) {
+			// non-standard behavior.
 			tableNamePattern = "%";
 		}
-		String table_type_str = "";
+		pw.println("WHERE table_name LIKE ?");
+
+		// catalog - a catalog name; must match the catalog name as it is stored in the database; 
+		// "" retrieves those without a catalog; 
+		// null means that the catalog name should not be used to narrow the search
+		boolean hasCatalogParam = false;
+		if (catalog != null) {
+			pw.print("AND table_catalog ");
+			if (catalog.isEmpty()) {
+				pw.println("IS NULL");
+			}
+			else {
+				pw.println("= ?");
+				hasCatalogParam = true;
+			}
+		}
+
+		// schemaPattern - a schema name pattern; must match the schema name as it is stored in the database; 
+		// "" retrieves those without a schema; 
+		// null means that the schema name should not be used to narrow the search
+		boolean hasSchemaParam = false;
+		if (schemaPattern != null) {
+			pw.print("AND table_schema ");
+			if (schemaPattern.isEmpty()) {
+				pw.println("IS NULL");
+			}
+			else {
+				pw.println("LIKE ?");
+				hasSchemaParam = true;
+			}
+		}
+
 		if (types != null && types.length > 0) {
+			pw.print("AND table_type IN (");
 			for (int i = 0; i < types.length; i++) {
 				if (i > 0) {
-					table_type_str += ',';
+					pw.print(",");
 				}
-				table_type_str += "?";
+				pw.print("?");
 			}
-			table_type_str = " AND table_type IN (" + table_type_str + ")";
+			pw.println(")");
 		}
-		PreparedStatement ps = conn.prepareStatement(
-			"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME'" +
-			", table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM'" +
-			", NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' " +
-			"FROM information_schema.tables WHERE table_schema LIKE ? AND table_name LIKE ? " + table_type_str +
-			"ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\""
-		);
-		ps.setString(1, schemaPattern);
-		ps.setString(2, tableNamePattern);
+
+		// ordered by TABLE_TYPE, TABLE_CAT, TABLE_SCHEM and TABLE_NAME.
+		pw.println("ORDER BY table_type");
+		pw.println(", table_catalog");
+		pw.println(", table_schema");
+		pw.println(", table_name");
+		
+		PreparedStatement ps = conn.prepareStatement(stringWriter.toString());
+		
+		int paramOffset = 1;
+		ps.setString(paramOffset++, tableNamePattern);
+		
+		if (hasCatalogParam) {
+			ps.setString(paramOffset++, catalog);
+		}
+		if (hasSchemaParam) {
+			ps.setString(paramOffset++, schemaPattern);
+		}
+
 		if (types != null && types.length > 0) {
 			for (int i = 0; i < types.length; i++) {
-			  ps.setString(3 + i, types[i]);
+			  ps.setString(paramOffset + i, types[i]);
 			}
 		}
-		return ps.executeQuery();
 
+		return ps.executeQuery();
 	}
 
 	@Override
