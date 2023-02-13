@@ -1,9 +1,8 @@
 import * as duckdb from '..';
-import {Database, TableData} from '..';
+import {Database, DuckDbError, HttpError, TableData} from '..';
 import * as fs from 'fs';
 import * as assert from 'assert';
 import * as path from 'path';
-import {Done} from "mocha";
 
 const extension_base_path = "../../../build/release/extension";
 
@@ -22,45 +21,54 @@ if (fs.existsSync(extension_full_path)) {
 }
 
 // Note: test will pass on http request failing due to connection issues.
-const test_httpfs = async function (db: duckdb.Database, done: Done) {
-    db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;", function(err: null | Error, rows: TableData) {
+const test_httpfs = async function (db: duckdb.Database) {
+    await new Promise<void>((resolve, reject) => db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;", function (err: null | Error, rows: TableData) {
         if (err) {
             if (err.message.startsWith("Unable to connect to URL")) {
                 console.warn("Warning: HTTP request failed in extension.test.js");
-                done();
+                resolve();
             } else {
-                throw err;
+                reject(err);
             }
         } else {
             assert.deepEqual(rows, [
-                { id: 1, first_name: 'Amanda', last_name: 'Jordan'},
-                { id: 2, first_name: 'Albert', last_name: 'Freeman'},
-                { id: 3, first_name: 'Evelyn', last_name: 'Morgan'},
+                {id: 1, first_name: 'Amanda', last_name: 'Jordan'},
+                {id: 2, first_name: 'Albert', last_name: 'Freeman'},
+                {id: 3, first_name: 'Evelyn', last_name: 'Morgan'},
             ]);
-            done();
+            resolve();
         }
-    });
+    }));
+
+    await new Promise<void>((resolve) => {
+        db.exec("select * from read_csv_auto('https://example.com/hello.csv')", (err: DuckDbError | null) => {
+            assert.ok(err);
+            assert.equal(err.errorType, 'HTTP');
+            assert.equal(err.statusCode, 404);
+
+            resolve();
+        });
+    })
 };
 
-const test_tpch = async function (db: Database, done:Done) {
-    db.all("CALL DBGEN(sf=0.01);", function(err: null | Error) {
+const test_tpch = async function (db: Database) {
+    await new Promise<void>((resolve, reject) => db.all("CALL DBGEN(sf=0.01);", function (err: null | Error) {
         if (err) {
-            throw err;
+            reject(err);
         }
-        done();
-    });
+        resolve();
+    }));
 };
 
-const test_extension = function(extension_name: string, db: duckdb.Database, done: Done) {
-    switch(extension_name) {
+const test_extension = async function (extension_name: string, db: duckdb.Database) {
+    switch (extension_name) {
         case 'httpfs.duckdb_extension':
-            test_httpfs(db, done);
+            await test_httpfs(db);
             break;
         case 'tpch.duckdb_extension':
-            test_tpch(db, done);
+            await test_tpch(db);
             break;
         default:
-            done();
             break;
     }
 };
@@ -79,13 +87,15 @@ describe('Extension loading', function() {
             continue;
         }
 
-        it(extension_name, function(done) {
-            db.run(`LOAD '${extension_path}';`, function(err: null | Error) {
+        it(extension_name, async function () {
+            await new Promise<void>((resolve, reject) => db.run(`LOAD '${extension_path}';`, function (err: null | Error) {
                 if (err) {
-                    throw err;
+                    reject(err);
                 }
-                test_extension(extension_name, db, done);
-            });
+                resolve()
+            }));
+
+            await test_extension(extension_name, db);
         });
     }
 });
