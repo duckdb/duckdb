@@ -117,10 +117,47 @@ public:
 
 	void Verify() const;
 	void VerifyNull() const;
+
+	struct StringComparisonOperators {
+		static inline bool Equals(const string_t a, const string_t b) {
+			if (a.IsInlined()) {
+				// small string: compare entire string
+				if (memcmp(&a, &b, sizeof(string_t)) == 0) {
+					// entire string is equal
+					return true;
+				}
+			} else {
+				// large string: first check prefix and length
+				if (memcmp(&a, &b, string_t::HEADER_SIZE) == 0) {
+					// prefix and length are equal: check main string
+					if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
+						// entire string is equal
+						return true;
+					}
+				}
+			}
+			// not equal
+			return false;
+		}
+	};
+
+	bool operator==(const string_t &r) const {
+		return StringComparisonOperators::Equals(*this, r);
+	}
+
+	// compare up to shared length. if still the same, compare lengths
+	static bool string_compare_greater_than(string_t left, string_t right) {
+		auto memcmp_res =
+		    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), std::min(left.GetSize(), right.GetSize()));
+		auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
+		return final_res;
+	}
+
+	bool operator>(const string_t &r) const {
+		return string_compare_greater_than(*this, r);
+	}
 	bool operator<(const string_t &r) const {
-		auto this_str = this->GetString();
-		auto r_str = r.GetString();
-		return this_str < r_str;
+		return r > *this;
 	}
 
 private:
