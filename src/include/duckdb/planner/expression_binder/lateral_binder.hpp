@@ -28,8 +28,6 @@ public:
 
 	static void ReduceExpressionDepth(LogicalOperator &op, const vector<CorrelatedColumnInfo> &info);
 
-	vector<CorrelatedColumnInfo> correlated_columns;
-
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
@@ -41,6 +39,7 @@ private:
 	void ExtractCorrelatedColumns(Expression &expr);
 
 private:
+	vector<CorrelatedColumnInfo> correlated_columns;
 };
 
 } // namespace duckdb
