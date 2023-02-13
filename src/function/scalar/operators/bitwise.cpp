@@ -107,7 +107,6 @@ void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseANDOperation));
-
 	set.AddFunction(functions);
 }
 

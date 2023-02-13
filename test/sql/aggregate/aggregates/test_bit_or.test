@@ -56,3 +56,14 @@ SELECT BIT_OR(1, 2, 3)
 statement error
 SELECT BIT_OR(BIT_AND(1))
 
+#test on bit types
+statement ok
+CREATE TABLE bits(b BIT);
+
+statement ok
+INSERT INTO bits VALUES ('1110101001'), ('0111010101'), ('0101011101'), ('1111111101'), ('0100010001'), ('1100110001')
+
+query IIII
+SELECT BIT_OR(b) FROM bits
+----
+0100000001

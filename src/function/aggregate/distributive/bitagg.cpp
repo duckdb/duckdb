@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/common/types/bit.hpp"
 
 namespace duckdb {
 
@@ -48,10 +49,10 @@ struct BitAndOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
-			state->is_set = true;
-			state->value = input[idx];
+            OP::template Assign(state, input[idx]);
+            state->is_set = true;
 		} else {
-			state->value &= input[idx];
+            OP::template Execute(state, input[idx]);
 		}
 	}
 
@@ -59,17 +60,18 @@ struct BitAndOperation {
 	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		//  count is not relevant
-		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+        OP::template Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = state->value;
-		}
-	}
+    template <class INPUT_TYPE, class STATE>
+    static void Assign(STATE *state, INPUT_TYPE input){
+        state->value = input;
+    }
+
+    template <class INPUT_TYPE, class STATE>
+    static void Execute(STATE *state, INPUT_TYPE input){
+        state->value &= input;
+    }
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
@@ -79,15 +81,63 @@ struct BitAndOperation {
 		}
 		if (!target->is_set) {
 			// target is NULL, use source value directly.
-			*target = source;
+            OP::template Assign(target, source.value);
+            target->is_set = true;
 		} else {
-			target->value &= source.value;
+            OP::template Execute(target, source.value);
 		}
 	}
+
+    template <class T, class STATE>
+    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+        if (!state->is_set) {
+            mask.SetInvalid(idx);
+        } else {
+            target[idx] = state->value;
+        }
+    }
 
 	static bool IgnoreNull() {
 		return true;
 	}
+};
+
+struct BitStringAndOperation : public BitAndOperation{
+    template <class STATE>
+    static void Destroy(STATE *state) {
+        if (state->is_set && !state->value.IsInlined()) {
+            delete[] state->value.GetDataUnsafe();
+        }
+    }
+
+    template <class INPUT_TYPE, class STATE>
+    static void Assign(STATE *state, INPUT_TYPE input) {
+        D_ASSERT(state->is_set == false);
+        if (input.IsInlined()) {
+            state->value = input;
+        } else {
+            // non-inlined string, need to allocate space for it
+            auto len = input.GetSize();
+            auto ptr = new char[len];
+            memcpy(ptr, input.GetDataUnsafe(), len);
+
+            state->value = string_t(ptr, len);
+        }
+    }
+
+    template <class INPUT_TYPE, class STATE>
+    static void Execute(STATE *state, INPUT_TYPE input) {
+        Bit::BitwiseAnd(input, state->value, state->value);
+    }
+
+    template <class T, class STATE>
+    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+        if (!state->is_set) {
+            mask.SetInvalid(idx);
+        } else {
+            target[idx] = StringVector::AddStringOrBlob(result, state->value);
+        }
+    }
 };
 
 void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
@@ -95,7 +145,9 @@ void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
-	set.AddFunction(bit_and);
+
+    bit_and.AddFunction(AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(LogicalType::BIT, LogicalType::BIT));
+    set.AddFunction(bit_and);
 }
 
 struct BitOrOperation {
