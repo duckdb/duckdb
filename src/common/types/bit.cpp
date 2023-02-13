@@ -5,19 +5,19 @@
 namespace duckdb {
 
 void Bit::BitString(const string_t &input, const idx_t &len, string_t &result) {
-    char *res_buf = result.GetDataWriteable();
-    const char *buf = input.GetDataUnsafe();
+	char *res_buf = result.GetDataWriteable();
+	const char *buf = input.GetDataUnsafe();
 
-    res_buf[0] = len % 8 ? 8 - (len % 8) : 0;
+	res_buf[0] = len % 8 ? 8 - (len % 8) : 0;
 
-    for (idx_t i = 0; i < Bit::BitLength(result); i++) {
-        if (i < len - input.GetSize()) {
-            Bit::SetBit(result, i, 0);
-        } else {
-            idx_t bit = buf[i - (len - input.GetSize())] == '1' ? 1 : 0;
-            Bit::SetBit(result, i, bit);
-        }
-    }
+	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
+		if (i < len - input.GetSize()) {
+			Bit::SetBit(result, i, 0);
+		} else {
+			idx_t bit = buf[i - (len - input.GetSize())] == '1' ? 1 : 0;
+			Bit::SetBit(result, i, bit);
+		}
+	}
 }
 
 void Bit::SetEmptyBitString(string_t &target, string_t &input) {

@@ -72,3 +72,8 @@ query I
 SELECT BIT_OR(b) FROM bits WHERE get_bit(b, 3) = 0;
 ----
 1010111001
+
+query I
+SELECT BIT_OR('111010'::BIT)
+----
+111010

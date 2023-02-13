@@ -72,3 +72,8 @@ query I
 SELECT BIT_AND(b) FROM bits WHERE get_bit(b, 2) = 1;
 ----
 0110000001
+
+query I
+SELECT BIT_AND('010110'::BIT)
+----
+010110
