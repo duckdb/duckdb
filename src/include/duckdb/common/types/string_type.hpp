@@ -119,7 +119,15 @@ public:
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
-		static inline bool Equals(const string_t a, const string_t b) {
+		static inline bool Equals(const string_t &a, const string_t &b) {
+			uint64_t A;
+			uint64_t B;
+			memcpy(&A, &a, 8u);
+			memcpy(&B, &b, 8u);
+			if (A != B) {
+				// Either lenght or prefix are different -> not equal
+				return false;
+			}
 			if (a.IsInlined()) {
 				// small string: compare entire string
 				if (memcmp(&a, &b, sizeof(string_t)) == 0) {
