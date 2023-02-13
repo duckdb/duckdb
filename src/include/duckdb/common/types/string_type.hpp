@@ -135,23 +135,15 @@ public:
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
 			}
-			if (a.IsInlined()) {
-				// small string: compare entire string
-				if (memcmp(&a, &b, sizeof(string_t)) == 0) {
-					// entire string is equal
+			if (!a.IsInlined()) {
+				// 'long' strings of the same length -> compare pointed value
+				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					return true;
 				}
-			} else {
-				// large string: first check prefix and length
-				if (memcmp(&a, &b, string_t::HEADER_SIZE) == 0) {
-					// prefix and length are equal: check main string
-					if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
-						// entire string is equal
-						return true;
-					}
-				}
 			}
-			// not equal
+			// either they are short string of same lenght but different content
+			//     or they point to string with different content
+			//     either way, they can't represent the same underlying string
 			return false;
 		}
 	};
