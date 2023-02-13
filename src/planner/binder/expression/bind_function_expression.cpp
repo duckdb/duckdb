@@ -26,7 +26,23 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		return BindUnnest(function, depth);
 	}
 	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-	                              function.function_name, false, error_context);
+	                              function.function_name, true, error_context);
+	if (!func) {
+		// function was not found - check if we this is a table function
+		auto table_func = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog,
+		                                    function.schema, function.function_name, true, error_context);
+		if (table_func) {
+			throw BinderException(binder.FormatError(
+			    function,
+			    StringUtil::Format("Function \"%s\" is a table function but it was used as a scalar function. This "
+			                       "function has to be called in a FROM clause (similar to a table).",
+			                       function.function_name)));
+		}
+		// not a table function - search again without if_exists to throw the error
+		Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                  function.function_name, false, error_context);
+		throw InternalException("Catalog::GetEntry for scalar function did not throw a second time");
+	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
 	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {

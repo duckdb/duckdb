@@ -31,6 +31,9 @@ protected:
 
 struct PandasCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "pandas";
+
+public:
 	~PandasCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

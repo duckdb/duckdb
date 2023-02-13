@@ -17,6 +17,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -37,12 +38,8 @@ DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_on
 	for (auto &kv : config_dict) {
 		string key = kv.first;
 		string val = kv.second;
-		auto config_property = DBConfig::GetOptionByName(key);
-		if (!config_property) {
-			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
-		}
 		auto opt_val = Value(val);
-		DBConfig::SetOption(*config_property, opt_val);
+		DBConfig::SetOptionByName(key, opt_val);
 	}
 }
 
@@ -220,6 +217,27 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	if (!database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
+	}
+
+	if (!config.options.unrecognized_options.empty()) {
+		// check if all unrecognized options can be handled by the loaded extension(s)
+		for (auto &unrecognized_option : config.options.unrecognized_options) {
+			auto entry = config.extension_parameters.find(unrecognized_option.first);
+			if (entry == config.extension_parameters.end()) {
+				throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option.first);
+			}
+		}
+
+		// if so - set the options
+		Connection con(*this);
+		con.BeginTransaction();
+		for (auto &unrecognized_option : config.options.unrecognized_options) {
+			auto entry = config.extension_parameters.find(unrecognized_option.first);
+			D_ASSERT(entry != config.extension_parameters.end());
+			PhysicalSet::SetExtensionVariable(*con.context, entry->second, unrecognized_option.first, SetScope::GLOBAL,
+			                                  unrecognized_option.second);
+		}
+		con.Commit();
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise

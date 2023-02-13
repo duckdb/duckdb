@@ -14,9 +14,9 @@ class TestDuckDBQuery(object):
         rel = duckdb.query('select * from v3')
         assert rel.fetchall()[0][0] == 168;
 
-        # we can run multiple select statements, but we get no result
-        res = duckdb.query('select 42; select 84;');
-        assert res is None
+        # we can run multiple select statements - we get only the last result
+        res = duckdb.query('select 42; select 84;').fetchall()
+        assert res == [(84,)]
 
     def test_duckdb_from_query(self, duckdb_cursor):
         # duckdb.from_query cannot be used to run arbitrary queries

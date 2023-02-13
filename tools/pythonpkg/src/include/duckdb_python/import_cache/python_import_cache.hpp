@@ -19,27 +19,56 @@ namespace duckdb {
 struct PythonImportCache {
 public:
 	explicit PythonImportCache() {
-		py::gil_scoped_acquire acquire;
-		numpy.LoadModule("numpy", *this);
-		datetime.LoadModule("datetime", *this);
-		decimal.LoadModule("decimal", *this);
-		uuid.LoadModule("uuid", *this);
-		pandas.LoadModule("pandas", *this);
-		arrow.LoadModule("pyarrow", *this);
-		IPython.LoadModule("IPython", *this);
-		ipywidgets.LoadModule("ipywidgets", *this);
 	}
 	~PythonImportCache();
 
 public:
-	NumpyCacheItem numpy;
-	DatetimeCacheItem datetime;
-	DecimalCacheItem decimal;
-	UUIDCacheItem uuid;
-	PandasCacheItem pandas;
-	ArrowCacheItem arrow;
-	IPythonCacheItem IPython;
-	IpywidgetsCacheItem ipywidgets;
+	template <class T>
+	T &LazyLoadModule(T &module) {
+		if (!module.LoadAttempted()) {
+			module.LoadModule(T::Name, *this);
+		}
+		return module;
+	}
+
+	NumpyCacheItem &numpy() {
+		return LazyLoadModule(numpy_module);
+	}
+	DatetimeCacheItem &datetime() {
+		return LazyLoadModule(datetime_module);
+	}
+	DecimalCacheItem &decimal() {
+		return LazyLoadModule(decimal_module);
+	}
+	UUIDCacheItem &uuid() {
+		return LazyLoadModule(uuid_module);
+	}
+	PandasCacheItem &pandas() {
+		return LazyLoadModule(pandas_module);
+	}
+	PolarsCacheItem &polars() {
+		return LazyLoadModule(polars_module);
+	}
+	ArrowCacheItem &arrow() {
+		return LazyLoadModule(arrow_module);
+	}
+	IPythonCacheItem &IPython() {
+		return LazyLoadModule(IPython_module);
+	}
+	IpywidgetsCacheItem &ipywidgets() {
+		return LazyLoadModule(ipywidgets_module);
+	}
+
+private:
+	NumpyCacheItem numpy_module;
+	DatetimeCacheItem datetime_module;
+	DecimalCacheItem decimal_module;
+	UUIDCacheItem uuid_module;
+	PandasCacheItem pandas_module;
+	PolarsCacheItem polars_module;
+	ArrowCacheItem arrow_module;
+	IPythonCacheItem IPython_module;
+	IpywidgetsCacheItem ipywidgets_module;
 
 public:
 	PyObject *AddCache(py::object item);

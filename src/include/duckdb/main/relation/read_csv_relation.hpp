@@ -17,14 +17,13 @@ struct BufferedCSVReaderOptions;
 
 class ReadCSVRelation : public TableFunctionRelation {
 public:
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file, vector<ColumnDefinition> columns,
-	                string alias = string());
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file, BufferedCSVReaderOptions options,
-	                string alias = string());
+	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+	                vector<ColumnDefinition> columns, string alias = string());
+	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+	                BufferedCSVReaderOptions options, string alias = string());
 
 	string alias;
 	bool auto_detect;
-	string csv_file;
 
 public:
 	string GetAlias() override;

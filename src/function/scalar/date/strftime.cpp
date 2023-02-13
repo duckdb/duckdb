@@ -259,7 +259,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 }
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
-                                             char *target) {
+                                             size_t tz_len, char *target) {
 	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec, [7] utc
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
@@ -338,7 +338,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	}
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
-			strcpy(target, tz_name);
+			memcpy(target, tz_name, tz_len);
 			target += strlen(tz_name);
 		}
 		break;
@@ -391,7 +391,8 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_n
 		if (is_date_specifier[i]) {
 			target = WriteDateSpecifier(specifiers[i], date, target);
 		} else {
-			target = WriteStandardSpecifier(specifiers[i], data, tz_name, target);
+			auto tz_len = tz_name ? strlen(tz_name) : 0;
+			target = WriteStandardSpecifier(specifiers[i], data, tz_name, tz_len, target);
 		}
 	}
 	// copy the final literal into the target

@@ -8,19 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -77,7 +77,8 @@ class Binder : public std::enable_shared_from_this<Binder> {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr,
+	                                                  bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -102,8 +103,8 @@ public:
 	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
-	BoundStatement Bind(SQLStatement &statement);
-	BoundStatement Bind(QueryNode &node);
+	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
+	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);

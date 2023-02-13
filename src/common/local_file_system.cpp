@@ -489,7 +489,7 @@ public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
 	    : FileHandle(file_system, path), position(0), fd(fd) {
 	}
-	virtual ~WindowsFileHandle() {
+	~WindowsFileHandle() override {
 		Close();
 	}
 
