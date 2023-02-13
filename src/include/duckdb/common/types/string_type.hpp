@@ -128,6 +128,13 @@ public:
 				// Either lenght or prefix are different -> not equal
 				return false;
 			}
+			// they have the same length and same prefix!
+			memcpy(&A, ((const char *)&a + 8u), 8u);
+			memcpy(&B, ((const char *)&b + 8u), 8u);
+			if (A == B) {
+				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
+				return true;
+			}
 			if (a.IsInlined()) {
 				// small string: compare entire string
 				if (memcmp(&a, &b, sizeof(string_t)) == 0) {
