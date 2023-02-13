@@ -93,6 +93,8 @@ const char *ToString(SetOperationType value) {
 		return "INTERSECT";
 	case SetOperationType::UNION_BY_NAME:
 		return "UNION_BY_NAME";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

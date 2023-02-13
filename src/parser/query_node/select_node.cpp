@@ -200,6 +200,8 @@ const char *ToString(AggregateHandling value) {
 		return "NO_AGGREGATES_ALLOWED";
 	case AggregateHandling::FORCE_AGGREGATES:
 		return "FORCE_AGGREGATES";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

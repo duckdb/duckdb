@@ -92,6 +92,8 @@ const char *ToString(JoinRefType value) {
 		return "CROSS";
 	case JoinRefType::POSITIONAL:
 		return "POSITIONAL";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

@@ -849,6 +849,8 @@ const char *ToString(ExtraTypeInfoType value) {
 		return "USER_TYPE_INFO";
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		return "AGGREGATE_STATE_TYPE_INFO";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 
