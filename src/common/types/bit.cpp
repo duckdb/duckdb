@@ -20,7 +20,6 @@ void Bit::BitString(const string_t &input, const idx_t &len, string_t &result) {
     }
 }
 
-
 void Bit::SetEmptyBitString(string_t &target, string_t &input) {
 	char *res_buf = target.GetDataWriteable();
 	const char *buf = input.GetDataUnsafe();
