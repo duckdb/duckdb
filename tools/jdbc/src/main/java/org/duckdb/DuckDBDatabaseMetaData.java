@@ -662,7 +662,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			if (catalog != null) {
 				pw.print("AND ");
 			}
-			if (catalog.isEmpty()) {
+			if (schemaPattern.isEmpty()) {
 				pw.println("schema_name IS NULL");
 			}
 			else {
