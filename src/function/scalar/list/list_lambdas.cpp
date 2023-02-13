@@ -368,8 +368,9 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
 	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
 	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
-		bound_lambda_expr.lambda_expr = std::move(BoundCastExpression::AddCastToType(
-		    context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN));
+		auto cast_lambda_expr =
+		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
+		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
 	}
 
 	bound_function.return_type = arguments[0]->return_type;

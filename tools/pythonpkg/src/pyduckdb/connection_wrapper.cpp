@@ -221,6 +221,16 @@ py::object PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }
 
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn,
+                                                           const py::object &columns, const py::object &sample_size,
+                                                           const py::object &maximum_depth) {
+
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ReadJSON(filename, columns, sample_size, maximum_depth);
+}
+
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(
     const string &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header, const py::object &compression,
     const py::object &sep, const py::object &delimiter, const py::object &dtype, const py::object &na_values,
@@ -277,6 +287,13 @@ duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t chunk_size, shared_
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->FetchArrow(chunk_size);
+}
+
+PolarsDataFrame PyConnectionWrapper::FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FetchPolars(chunk_size);
 }
 
 duckdb::pyarrow::RecordBatchReader PyConnectionWrapper::FetchRecordBatchReader(const idx_t chunk_size,

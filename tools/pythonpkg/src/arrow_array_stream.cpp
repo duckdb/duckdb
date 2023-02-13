@@ -16,7 +16,7 @@ namespace duckdb {
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.arrow.dataset.IsLoaded()) {
+	if (!import_cache.arrow().dataset.IsLoaded()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
@@ -24,10 +24,10 @@ void VerifyArrowDatasetLoaded() {
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
-	auto scanner_class = import_cache.arrow.dataset.Scanner();
-	auto table_class = import_cache.arrow.lib.Table();
-	auto record_batch_reader_class = import_cache.arrow.lib.RecordBatchReader();
-	auto dataset_class = import_cache.arrow.dataset.Dataset();
+	auto scanner_class = import_cache.arrow().dataset.Scanner();
+	auto table_class = import_cache.arrow().lib.Table();
+	auto record_batch_reader_class = import_cache.arrow().lib.RecordBatchReader();
+	auto dataset_class = import_cache.arrow().dataset.Dataset();
 
 	if (py::isinstance(obj, scanner_class)) {
 		return PyArrowObjectType::Scanner;

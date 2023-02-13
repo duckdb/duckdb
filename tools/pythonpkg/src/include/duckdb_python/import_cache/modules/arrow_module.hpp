@@ -47,6 +47,9 @@ protected:
 
 struct ArrowCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "pyarrow";
+
+public:
 	~ArrowCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

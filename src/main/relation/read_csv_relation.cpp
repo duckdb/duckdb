@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
                                  vector<ColumnDefinition> columns_p, string alias_p)
-    : TableFunctionRelation(context, "read_csv", {Value(csv_file_p)}, nullptr, false), alias(std::move(alias_p)),
-      auto_detect(false), csv_file(std::move(csv_file_p)) {
+    : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
+      auto_detect(false) {
 
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];
@@ -31,10 +31,10 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, string csv_file_p,
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
                                  BufferedCSVReaderOptions options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file_p)}, nullptr, false), alias(std::move(alias_p)),
-      auto_detect(true), csv_file(std::move(csv_file_p)) {
+    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
+      auto_detect(true) {
 
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];

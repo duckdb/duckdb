@@ -588,7 +588,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	auto value = GetValueInternal(v_p, index_p);
 	// set the alias of the type to the correct value, if there is a type alias
 	if (v_p.GetType().HasAlias()) {
-		value.type().CopyAuxInfo(v_p.GetType());
+		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
 

@@ -137,7 +137,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	}
 	if (!success && options.strict_cast) {
 		options.error_message =
-		    StringUtil::Format("Failed to cast value to numerical: %s", JSONCommon::ValToString(val));
+		    StringUtil::Format("Failed to cast value to numerical: %s", JSONCommon::ValToString(val, 50));
 	}
 	return success;
 }
@@ -173,7 +173,8 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		throw InternalException("Unknown yyjson tag in GetValueString");
 	}
 	if (!success && options.strict_cast) {
-		options.error_message = StringUtil::Format("Failed to cast value to decimal: %s", JSONCommon::ValToString(val));
+		options.error_message =
+		    StringUtil::Format("Failed to cast value to decimal: %s", JSONCommon::ValToString(val, 50));
 	}
 	return success;
 }
@@ -259,7 +260,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 			validity.SetInvalid(i);
 		} else if (options.strict_cast && !unsafe_yyjson_is_str(val)) {
 			options.error_message = StringUtil::Format("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()),
-			                                           JSONCommon::ValToString(val));
+			                                           JSONCommon::ValToString(val, 50));
 			options.object_index = i;
 			return false;
 		} else {
@@ -275,7 +276,7 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		return false;
 	}
 
-	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message, options.strict_cast) &&
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
 	    options.strict_cast) {
 		options.object_index = 0; // Can't get line number information here
 		options.error_message += " (line/object number information is approximate)";
@@ -390,7 +391,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 					if (options.error_duplicate_key && found_keys[col_idx]) {
 						options.error_message =
 						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
-						                       JSONCommon::ValToString(objects[i]));
+						                       JSONCommon::ValToString(objects[i], 50));
 						options.object_index = i;
 						success = false;
 						break;
@@ -401,7 +402,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				} else if (options.error_unknown_key) {
 					options.error_message =
 					    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-					                       JSONCommon::ValToString(objects[i]));
+					                       JSONCommon::ValToString(objects[i], 50));
 					options.object_index = i;
 					success = false;
 				}
@@ -414,7 +415,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 						if (options.error_missing_key) {
 							options.error_message =
 							    StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-							                       JSONCommon::ValToString(objects[i]));
+							                       JSONCommon::ValToString(objects[i], 50));
 							options.object_index = i;
 							success = false;
 						} else {
