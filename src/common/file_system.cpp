@@ -10,7 +10,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/exception.hpp"
 
 #include <cstdint>
 #include <cstdio>
