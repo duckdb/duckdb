@@ -99,7 +99,9 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
 	                            storage.db, false);
-	art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers);
+	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
+		throw ConstraintException("Data contains duplicates on indexed column(s)");
+	}
 
 	// merge into the local ART
 	if (!lstate.local_index->MergeIndexes(art.get())) {

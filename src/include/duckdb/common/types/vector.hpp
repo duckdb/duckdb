@@ -116,10 +116,10 @@ public:
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;
-	DUCKDB_API void Print(idx_t count);
+	DUCKDB_API void Print(idx_t count) const;
 
 	DUCKDB_API string ToString() const;
-	DUCKDB_API void Print();
+	DUCKDB_API void Print() const;
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	DUCKDB_API void Flatten(idx_t count);

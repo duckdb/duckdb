@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_extract.test
-# description: Test JSON typed extract
+# description: Test JSON extract
 # group: [json]
 
 require json

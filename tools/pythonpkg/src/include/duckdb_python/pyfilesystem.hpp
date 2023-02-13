@@ -22,7 +22,7 @@ public:
 class PythonFileHandle : public FileHandle {
 public:
 	PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle);
-
+	~PythonFileHandle() override;
 	void Close() override {
 		PythonGILWrapper gil;
 		handle.attr("close")();
@@ -48,6 +48,7 @@ private:
 		}
 		return input;
 	}
+	std::string DecodeFlags(uint8_t flags);
 
 public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)

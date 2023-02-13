@@ -98,13 +98,29 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("arrow", &PyConnectionWrapper::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
+	    .def("pl", &PyConnectionWrapper::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
+	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
 	    .def("begin", &PyConnectionWrapper::Begin, "Start a new transaction", py::arg("connection") = py::none())
 	    .def("commit", &PyConnectionWrapper::Commit, "Commit changes performed within a transaction",
 	         py::arg("connection") = py::none())
 	    .def("rollback", &PyConnectionWrapper::Rollback, "Roll back changes performed within a transaction",
 	         py::arg("connection") = py::none())
-	    .def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
-	         py::arg("table_name"), py::arg("df"), py::arg("connection") = py::none())
+	    .def("read_json", &PyConnectionWrapper::ReadJSON, "Create a relation object from the JSON file in 'name'",
+	         py::arg("name"), py::arg("connection") = py::none(), py::arg("columns") = py::none(),
+	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none());
+
+	DefineMethod(
+	    {"read_csv", "from_csv_auto"}, m, &PyConnectionWrapper::ReadCSV,
+	    "Create a relation object from the CSV file in 'name'", py::arg("name"), py::arg("connection") = py::none(),
+	    py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
+	    py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
+	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
+	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
+	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
+	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+
+	m.def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
+	      py::arg("table_name"), py::arg("df"), py::arg("connection") = py::none())
 	    .def("register", &PyConnectionWrapper::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
 	         py::arg("python_object"), py::arg("connection") = py::none())
@@ -121,29 +137,30 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
 	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none())
-	    .def("query", &PyConnectionWrapper::RunQuery,
-	         "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
-	         "otherwise run the query as-is.",
-	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none())
 	    .def("from_df", &PyConnectionWrapper::FromDF, "Create a relation object from the DataFrame in df",
 	         py::arg("df") = py::none(), py::arg("connection") = py::none())
 	    .def("from_arrow", &PyConnectionWrapper::FromArrow, "Create a relation object from an Arrow object",
-	         py::arg("arrow_object"), py::arg("connection") = py::none())
-	    .def("from_csv_auto", &PyConnectionWrapper::FromCsvAuto,
-	         "Create a relation object from the CSV file in file_name", py::arg("file_name"),
-	         py::arg("connection") = py::none())
-	    .def("from_parquet", &PyConnectionWrapper::FromParquet,
-	         "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
-	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
-	         py::arg("connection") = py::none())
-	    .def("from_parquet", &PyConnectionWrapper::FromParquets,
-	         "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
-	         py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
-	         py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
-	         py::arg("connection") = py::none())
-	    .def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Create a query object from protobuf plan",
-	         py::arg("proto"), py::arg("connection") = py::none())
+	         py::arg("arrow_object"), py::arg("connection") = py::none());
+
+	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
+	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
+	             "otherwise run the query as-is.",
+	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+
+	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
+	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
+	             py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	             py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
+	             py::arg("compression") = py::none(), py::arg("connection") = py::none());
+
+	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquets,
+	             "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
+	             py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
+	             py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
+	             py::arg("compression") = py::none(), py::arg("connection") = py::none());
+
+	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Create a query object from protobuf plan",
+	      py::arg("proto"), py::arg("connection") = py::none())
 	    .def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
 	         py::arg("connection") = py::none())
 	    .def("get_substrait_json", &PyConnectionWrapper::GetSubstraitJSON,
@@ -212,8 +229,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
 	      "run the query as-is.",
 	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
-	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
-	      py::arg("file_name"), py::arg("connection") = py::none());
 	m.def("from_substrait", &DuckDBPyRelation::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),

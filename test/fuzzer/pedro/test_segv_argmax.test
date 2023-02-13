@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/test_segv_argmax.test
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1 (
+	c0 VARCHAR,
+	c1 TINYINT
+);
+
+statement ok
+INSERT INTO t1(c0,c1) VALUES ('test1',43);
+
+statement ok
+delete from t1;
+
+statement ok
+INSERT INTO t1(c0,c1) VALUES ('test2',52);
+
+query I
+SELECT argmax(c1,c0) FROM t1 group by c0;
+----
+52

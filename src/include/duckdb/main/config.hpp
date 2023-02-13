@@ -24,7 +24,6 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/replacement_open.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
@@ -146,6 +145,8 @@ struct DBConfigOptions {
 	bool experimental_parallel_csv_reader = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
+	//! The set of unrecognized (other) options
+	unordered_map<string, Value> unrecognized_options;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -162,9 +163,6 @@ public:
 	mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
-
-	//! Replacement open handlers are callbacks that run pre and post database initialization
-	vector<ReplacementOpen> replacement_opens;
 
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
@@ -209,6 +207,7 @@ public:
 
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);

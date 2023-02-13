@@ -45,16 +45,15 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
-
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                bool union_by_name, const py::object &compression = py::none(),
+	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
 	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 bool union_by_name, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                                                 bool union_by_name, const py::object &compression = py::none(),
+	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -88,6 +87,21 @@ public:
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn = nullptr,
+	                                             const py::object &columns = py::none(),
+	                                             const py::object &sample_size = py::none(),
+	                                             const py::object &maximum_depth = py::none());
+	static unique_ptr<DuckDBPyRelation>
+	ReadCSV(const string &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
+	        const py::object &compression = py::none(), const py::object &sep = py::none(),
+	        const py::object &delimiter = py::none(), const py::object &dtype = py::none(),
+	        const py::object &na_values = py::none(), const py::object &skiprows = py::none(),
+	        const py::object &quotechar = py::none(), const py::object &escapechar = py::none(),
+	        const py::object &encoding = py::none(), const py::object &parallel = py::none(),
+	        const py::object &date_format = py::none(), const py::object &timestamp_format = py::none(),
+	        const py::object &sample_size = py::none(), const py::object &all_varchar = py::none(),
+	        const py::object &normalize_names = py::none(), const py::object &filename = py::none());
+
 	static py::list FetchAll(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::dict FetchNumpy(shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -101,6 +115,8 @@ public:
 
 	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size,
 	                                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static PolarsDataFrame FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static void RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn);
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);

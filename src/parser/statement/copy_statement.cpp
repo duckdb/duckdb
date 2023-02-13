@@ -22,7 +22,7 @@ string ConvertOptionValueToString(const Value &val) {
 }
 
 string CopyStatement::CopyOptionsToString(const string &format,
-                                          const unordered_map<string, vector<Value>> &options) const {
+                                          const case_insensitive_map_t<vector<Value>> &options) const {
 	if (format.empty() && options.empty()) {
 		return string();
 	}
@@ -106,7 +106,7 @@ string CopyStatement::ToString() const {
 		} else {
 			result += TablePart(*info);
 		}
-		result += " TO";
+		result += " TO ";
 		result += StringUtil::Format("'%s'", info->file_path);
 		result += CopyOptionsToString(info->format, info->options);
 	}

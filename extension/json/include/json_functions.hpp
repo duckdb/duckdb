@@ -8,14 +8,19 @@
 
 #pragma once
 
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
 
+class TableRef;
+struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
+struct JSONScanInfo;
+class BuiltinFunctions;
 
 // Scalar function stuff
 struct JSONReadFunctionData : public FunctionData {
@@ -62,6 +67,10 @@ class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
+	                                                ReplacementScanData *data);
+	static TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info);
+	static CreateCopyFunctionInfo GetJSONCopyFunction();
 	static void RegisterCastFunctions(CastFunctionSet &casts);
 
 private:
@@ -82,12 +91,13 @@ private:
 
 	static CreateScalarFunctionInfo GetArrayLengthFunction();
 	static CreateScalarFunctionInfo GetContainsFunction();
+	static CreateScalarFunctionInfo GetKeysFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
 	static CreateScalarFunctionInfo GetSerializeSqlFunction();
 
 	template <class FUNCTION_INFO>
-	static void AddAliases(vector<string> names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
+	static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
 			fun.name = name;
 			functions.push_back(fun);
@@ -98,6 +108,10 @@ private:
 	// Table functions
 	static CreateTableFunctionInfo GetReadJSONObjectsFunction();
 	static CreateTableFunctionInfo GetReadNDJSONObjectsFunction();
+	static CreateTableFunctionInfo GetReadJSONFunction();
+	static CreateTableFunctionInfo GetReadNDJSONFunction();
+	static CreateTableFunctionInfo GetReadJSONAutoFunction();
+	static CreateTableFunctionInfo GetReadNDJSONAutoFunction();
 };
 
 } // namespace duckdb

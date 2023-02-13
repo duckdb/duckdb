@@ -341,6 +341,11 @@ outstr = open(outfile,'rb').read()
 if b'42' not in outstr:
      raise Exception('.output test failed')
 
+# issue 6204
+test('''
+.output foo.txt
+select * from range(2049);
+''')
 
 outfile = tf()
 test('''
@@ -425,7 +430,7 @@ SELECT * FROM t1;
 duckdb_nonsense_db = 'duckdbtest_nonsensedb.db'
 with open(duckdb_nonsense_db, 'w+') as f:
      f.write('blablabla')
-test('', err='The file is not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
+test('', err='not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
 os.remove(duckdb_nonsense_db)
 
 # enable_profiling doesn't result in any output
@@ -980,6 +985,19 @@ select * from mytable;
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}''')
+
+     test('''create table mytable as select * from
+read_json_auto('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''id|name
+1|O Brother, Where Art Thou?
+2|Home for the Holidays
+3|The Firm
+4|Broadcast News
+5|Raising Arizona''')
 
      test('''
      COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');

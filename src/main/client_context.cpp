@@ -1151,4 +1151,11 @@ ClientProperties ClientContext::GetClientProperties() const {
 	return properties;
 }
 
+bool ClientContext::ExecutionIsFinished() {
+	if (!active_query || !active_query->executor) {
+		return false;
+	}
+	return active_query->executor->ExecutionIsFinished();
+}
+
 } // namespace duckdb

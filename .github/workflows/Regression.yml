@@ -6,6 +6,8 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - 'tools/odbc/**'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/rpkg/**'
@@ -50,6 +52,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -122,6 +125,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -159,6 +163,12 @@ jobs:
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         pip install numpy pytest pandas mypy psutil pyarrow
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build Current Version
       shell: bash
@@ -225,6 +235,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash

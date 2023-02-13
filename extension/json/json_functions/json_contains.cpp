@@ -33,7 +33,7 @@ static inline bool JSONObjectFuzzyEquals(yyjson_val *haystack, yyjson_val *needl
 	size_t idx, max;
 	yyjson_val *key, *needle_child;
 	yyjson_obj_foreach(needle, idx, max, key, needle_child) {
-		auto haystack_child = yyjson_obj_get(haystack, yyjson_get_str(key));
+		auto haystack_child = yyjson_obj_getn(haystack, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		if (!haystack_child || !JSONFuzzyEquals(haystack_child, needle_child)) {
 			return false;
 		}
