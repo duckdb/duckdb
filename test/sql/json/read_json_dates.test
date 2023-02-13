@@ -85,4 +85,4 @@ endloop
 query II
 select typeof(createdAt), createdAt from 'data/json/timestamp_example.json'
 ----
-TIMESTAMP	2023-02-07T19:12:28Z
+TIMESTAMP	2023-02-07 19:12:28
