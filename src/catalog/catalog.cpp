@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -249,6 +251,20 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationIn
 CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry *schema,
                                        CreateCollationInfo *info) {
 	return schema->CreateCollation(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Index
+//===--------------------------------------------------------------------===//
+CatalogEntry *Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info) {
+	auto &context = transaction.GetContext();
+	return CreateIndex(context, info);
+}
+
+CatalogEntry *Catalog::CreateIndex(ClientContext &context, CreateIndexInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	auto table = GetEntry<TableCatalogEntry>(context, schema->name, info->table->table_name);
+	return schema->CreateIndex(context, info, table);
 }
 
 //===--------------------------------------------------------------------===//

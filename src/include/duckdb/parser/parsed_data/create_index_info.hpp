@@ -21,11 +21,11 @@ struct CreateIndexInfo : public CreateInfo {
 	CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY) {
 	}
 
-	//! Index Type (e.g., B+-tree, Skip-List, ...)
+	//! Index type (e.g., ART, B+-tree, Skip-List, ...)
 	IndexType index_type;
-	//! Name of the Index
+	//! Name of the index
 	string index_name;
-	//! Index Constraint Type
+	//! Index constraint type
 	IndexConstraintType constraint_type;
 	//! The table to create the index on
 	unique_ptr<BaseTableRef> table;

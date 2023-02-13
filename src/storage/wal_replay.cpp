@@ -154,6 +154,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TABLE_MACRO:
 		ReplayDropTableMacro();
 		break;
+	case WALType::CREATE_INDEX:
+		ReplayCreateIndex();
+		break;
+	case WALType::DROP_INDEX:
+		ReplayDropIndex();
+		break;
 	case WALType::USE_TABLE:
 		ReplayUseTable();
 		break;
@@ -377,6 +383,40 @@ void ReplayState::ReplayDropTableMacro() {
 	}
 
 	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Index
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateIndex() {
+	// TODO
+
+	//	auto info = IndexCatalogEntry::Deserialize(source, context);
+	//	if (deserialize_only) {
+	//		return;
+	//	}
+	//
+	//	auto &catalog = Catalog::GetCatalog(context);
+	//	current_table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	//
+	//	catalog.CreateIndex(context, info.get(), current_table);
+	//	D_ASSERT(current_table);
+}
+
+void ReplayState::ReplayDropIndex() {
+	// TODO
+
+	//	DropInfo info;
+	//
+	//	info.type = CatalogType::INDEX_ENTRY;
+	//	info.schema = source.Read<string>();
+	//	info.name = source.Read<string>();
+	//	if (deserialize_only) {
+	//		return;
+	//	}
+	//
+	//	auto &catalog = Catalog::GetCatalog(context);
+	//	catalog.DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//

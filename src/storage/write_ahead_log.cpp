@@ -46,7 +46,7 @@ void WriteAheadLog::Delete() {
 }
 
 //===--------------------------------------------------------------------===//
-// Write Entries
+// WRITE ENTRIES
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
 	writer->Write<WALType>(WALType::CHECKPOINT);
@@ -119,7 +119,7 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 }
 
 //===--------------------------------------------------------------------===//
-// MACRO'S
+// MACROS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(ScalarMacroCatalogEntry *entry) {
 	if (skip_writing) {
@@ -156,7 +156,28 @@ void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
 }
 
 //===--------------------------------------------------------------------===//
-// Custom Types
+// INDEXES
+//===--------------------------------------------------------------------===//
+
+void WriteAheadLog::WriteCreateIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_INDEX);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_INDEX);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
+// CUSTOM TYPES
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateType(TypeCatalogEntry *entry) {
 	if (skip_writing) {
@@ -259,7 +280,7 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 }
 
 //===--------------------------------------------------------------------===//
-// Write ALTER Statement
+// WRITE ALTER STATEMENT
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteAlter(AlterInfo &info) {
 	if (skip_writing) {
