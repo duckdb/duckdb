@@ -18,6 +18,8 @@ const char *ToString(QueryNodeType value) {
 		return "BOUND_SUBQUERY_NODE";
 	case RECURSIVE_CTE_NODE:
 		return "RECURSIVE_CTE_NODE";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

@@ -84,6 +84,8 @@ const char *ToString(SubqueryType value) {
 		return "NOT_EXISTS";
 	case SubqueryType::ANY:
 		return "ANY";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

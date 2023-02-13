@@ -70,6 +70,8 @@ const char *ToString(TableReferenceType value) {
 		return "CTE";
 	case TableReferenceType::EMPTY:
 		return "EMPTY";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

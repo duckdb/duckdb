@@ -23,6 +23,8 @@ inline const char *ToString(OrderType value) {
 		return "ASCENDING";
 	case OrderType::DESCENDING:
 		return "DESCENDING";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 
@@ -37,6 +39,8 @@ inline const char *ToString(OrderByNullType value) {
 		return "NULLS_FIRST";
 	case OrderByNullType::NULLS_LAST:
 		return "NULLS_LAST";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

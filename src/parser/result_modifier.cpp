@@ -14,6 +14,8 @@ const char *ToString(ResultModifierType value) {
 		return "DISTINCT_MODIFIER";
 	case LIMIT_PERCENT_MODIFIER:
 		return "LIMIT_PERCENT_MODIFIER";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 

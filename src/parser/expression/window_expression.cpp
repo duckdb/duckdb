@@ -159,6 +159,8 @@ const char *ToString(WindowBoundary value) {
 		return "EXPR_PRECEDING_RANGE";
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		return "EXPR_FOLLOWING_RANGE";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
 
