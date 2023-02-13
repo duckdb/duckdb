@@ -386,7 +386,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsCatalogsInDataManipulation() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -396,12 +396,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsCatalogsInTableDefinitions() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean supportsCatalogsInIndexDefinitions() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override

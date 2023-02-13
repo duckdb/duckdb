@@ -1,5 +1,6 @@
 package org.duckdb.test;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -2605,6 +2606,248 @@ public class TestDuckDBJDBC {
 		);
 	}
 	
+	public static void test_supports_catalogs_in_table_definitions() throws Exception {
+		final Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+		final Statement statement = connection.createStatement();
+		final DatabaseMetaData databaseMetaData = connection.getMetaData();
+		final String CATALOG_NAME = "tmp";
+		final String TABLE_NAME = "t1";
+		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
+		ResultSet resultSet = null;
+		try {
+			final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
+			file.delete();
+			statement.execute("ATTACH '" + file.getAbsolutePath() + "' AS \"" + CATALOG_NAME + "\"");
+			file.deleteOnExit();
+			
+			final boolean supportsCatalogsInTableDefinitions = databaseMetaData.supportsCatalogsInTableDefinitions();
+			try {
+				statement.execute("CREATE TABLE " + qualifiedTableName + "(id int)");
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInTableDefinitions) {
+					fail(
+						"supportsCatalogsInTableDefinitions is true but CREATE TABLE in attached database is not allowed. "+
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			resultSet = statement.executeQuery(
+				"SELECT * FROM information_schema.tables "+
+				"WHERE table_catalog = '" + CATALOG_NAME + "' " +
+				"AND table_name = '" + TABLE_NAME + "' "
+			);
+			assertTrue(resultSet.next(), "Expected exactly 1 row from information_schema.tables, got 0");
+			assertFalse(resultSet.next());
+			resultSet.close();
+
+			try {
+				statement.execute("DROP TABLE " + qualifiedTableName);
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInTableDefinitions) {
+					fail(
+						"supportsCatalogsInTableDefinitions is true but DROP TABLE in attached database is not allowed. " + 
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			resultSet = statement.executeQuery(
+				"SELECT * FROM information_schema.tables "+
+				"WHERE table_catalog = '" + CATALOG_NAME + "' " +
+				"AND table_name = '" + TABLE_NAME + "' "
+			);
+			assertTrue(resultSet.next() == false, "Expected exactly 0 rows from information_schema.tables, got > 0");
+			resultSet.close();
+
+			assertTrue(supportsCatalogsInTableDefinitions, "supportsCatalogsInTableDefinitions should return true.");
+		} 
+		finally {
+			if (resultSet != null) {
+				resultSet.close();
+			}
+			statement.close();
+			connection.close();
+		}
+	}
+
+	public static void test_supports_catalogs_in_data_manipulation() throws Exception {
+		final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
+		final String filePath = file.getAbsolutePath();
+		final String CATALOG_NAME = "tmp";
+		final String TABLE_NAME = "t1";
+		final String COLUMN_NAME = "id";
+		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
+		file.delete();
+		Connection connection = null;
+		Statement statement = null;
+		
+		connection = DriverManager.getConnection("jdbc:duckdb:" + filePath);
+		file.deleteOnExit();
+		statement = connection.createStatement();
+		statement.execute("CREATE TABLE " + TABLE_NAME + "(" + COLUMN_NAME + " int)");
+		statement.close();
+		connection.close();
+		
+		Thread.currentThread().sleep(1000);
+		
+		connection = DriverManager.getConnection("jdbc:duckdb:");
+		final DatabaseMetaData databaseMetaData = connection.getMetaData();
+		statement = connection.createStatement();
+		ResultSet resultSet = null;
+		try {
+			statement.execute("ATTACH '" + filePath + "' AS \"" + CATALOG_NAME + "\"");
+			
+			final boolean supportsCatalogsInDataManipulation = databaseMetaData.supportsCatalogsInDataManipulation();
+			try {
+				statement.execute("INSERT INTO " + qualifiedTableName + " VALUES(1)");
+				resultSet = statement.executeQuery("SELECT * FROM "+ qualifiedTableName);
+				assertTrue(resultSet.next(), "Expected exactly 1 row from " + qualifiedTableName + ", got 0");
+				assertTrue(resultSet.getInt(COLUMN_NAME) == 1, "Value for " + COLUMN_NAME + " should be 1");
+				resultSet.close();
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInDataManipulation) {
+					fail(
+						"supportsCatalogsInDataManipulation is true but INSERT in " + qualifiedTableName + " is not allowed." + 
+						ex.getMessage()
+				  );
+					ex.printStackTrace();
+				}
+			}
+			
+			try {
+				statement.execute(
+					"UPDATE " + qualifiedTableName + " SET " + COLUMN_NAME + " = 2 " +
+					"WHERE " + COLUMN_NAME + " = 1"
+				);
+				resultSet = statement.executeQuery("SELECT * FROM "+ qualifiedTableName);
+				assertTrue(resultSet.next(), "Expected exactly 1 row from " + qualifiedTableName + ", got 0");
+				assertTrue(resultSet.getInt(COLUMN_NAME) == 2, "Value for " + COLUMN_NAME + " should be 2");
+				resultSet.close();
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInDataManipulation) {
+					fail(
+						"supportsCatalogsInDataManipulation is true but UPDATE of " + qualifiedTableName + " is not allowed. "+
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			
+			try {
+				statement.execute("DELETE FROM " + qualifiedTableName + " WHERE ID = 2");
+				resultSet = statement.executeQuery("SELECT * FROM "+ qualifiedTableName);
+				assertTrue(resultSet.next() == false, "Expected 0 rows from " + qualifiedTableName + ", got > 0");
+				resultSet.close();
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInDataManipulation) {
+					fail(
+						"supportsCatalogsInDataManipulation is true but UPDATE of " + qualifiedTableName + " is not allowed. "+
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			
+			assertTrue(supportsCatalogsInDataManipulation, "supportsCatalogsInDataManipulation should return true.");
+		} 
+		finally {
+			if (resultSet != null) {
+				resultSet.close();
+			}
+			statement.close();
+			connection.close();
+		}
+	}
+
+	public static void test_supports_catalogs_in_index_definitions() throws Exception {
+		final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
+		final String filePath = file.getAbsolutePath();
+		final String CATALOG_NAME = "tmp";
+		final String TABLE_NAME = "t1";
+		final String INDEX_NAME = "idx1";
+		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
+		final String qualifiedIndexName = CATALOG_NAME + "." + INDEX_NAME;
+		file.delete();
+		Connection connection = null;
+		Statement statement = null;
+		
+		connection = DriverManager.getConnection("jdbc:duckdb:" + filePath);
+		file.deleteOnExit();
+		statement = connection.createStatement();
+		statement.execute("CREATE TABLE " + TABLE_NAME + "(id int)");
+		statement.close();
+		connection.close();
+		
+		Thread.currentThread().sleep(1000);
+		
+		connection = DriverManager.getConnection("jdbc:duckdb:");
+		final DatabaseMetaData databaseMetaData = connection.getMetaData();
+		statement = connection.createStatement();
+		ResultSet resultSet = null;
+		try {
+			statement.execute("ATTACH '" + filePath + "' AS \"" + CATALOG_NAME + "\"");
+			
+			final boolean supportsCatalogsInIndexDefinitions = databaseMetaData.supportsCatalogsInIndexDefinitions();
+			try {
+				statement.execute("CREATE INDEX " + INDEX_NAME + " ON " + qualifiedTableName + "(ID)");
+				resultSet = statement.executeQuery(
+					"SELECT * FROM duckdb_indexes() " +
+					"WHERE database_name = '" + CATALOG_NAME + "' " +
+					"AND table_name = '" + TABLE_NAME + "' " +
+					"AND index_name = '" + INDEX_NAME + "' "
+				);
+				assertTrue(resultSet.next(), "Expected exactly 1 row from duckdb_indexes(), got 0");
+				resultSet.close();
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInIndexDefinitions) {
+					fail(
+						"supportsCatalogsInIndexDefinitions is true but " +
+						"CREATE INDEX on " + qualifiedTableName + " is not allowed. " +
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			
+			try {
+				statement.execute("DROP index " + qualifiedIndexName);
+				resultSet = statement.executeQuery(
+					"SELECT * FROM duckdb_indexes() " +
+					"WHERE database_name = '" + CATALOG_NAME + "' " +
+					"AND table_name = '" + TABLE_NAME + "' " +
+					"AND index_name = '" + INDEX_NAME + "' "
+				);
+				assertFalse(resultSet.next());
+				resultSet.close();
+			}
+			catch (SQLException ex) {
+				if (supportsCatalogsInIndexDefinitions) {
+					fail(
+						"supportsCatalogsInIndexDefinitions is true but DROP of " + qualifiedIndexName + " is not allowed." +
+						ex.getMessage()
+					);
+					ex.printStackTrace();
+				}
+			}
+			
+			assertTrue(supportsCatalogsInIndexDefinitions, "supportsCatalogsInIndexDefinitions should return true.");
+		} 
+		finally {
+			if (resultSet != null) {
+				resultSet.close();
+			}
+			statement.close();
+			connection.close();
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
