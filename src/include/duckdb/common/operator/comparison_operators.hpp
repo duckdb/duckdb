@@ -153,32 +153,9 @@ inline bool LessThan::Operation(bool left, bool right) {
 //===--------------------------------------------------------------------===//
 // Specialized String Comparison Operations
 //===--------------------------------------------------------------------===//
-struct StringComparisonOperators {
-	static inline bool Equals(const string_t a, const string_t b) {
-		if (a.IsInlined()) {
-			// small string: compare entire string
-			if (memcmp(&a, &b, sizeof(string_t)) == 0) {
-				// entire string is equal
-				return true;
-			}
-		} else {
-			// large string: first check prefix and length
-			if (memcmp(&a, &b, string_t::HEADER_SIZE) == 0) {
-				// prefix and length are equal: check main string
-				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
-					// entire string is equal
-					return true;
-				}
-			}
-		}
-		// not equal
-		return false;
-	}
-};
-
 template <>
 inline bool Equals::Operation(string_t left, string_t right) {
-	return StringComparisonOperators::Equals(left, right);
+	return left == right;
 }
 template <>
 inline bool NotEquals::Operation(string_t left, string_t right) {
@@ -187,24 +164,16 @@ inline bool NotEquals::Operation(string_t left, string_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (left_null && right_null) || (!left_null && !right_null && StringComparisonOperators::Equals(left, right));
+	return (left_null && right_null) || (!left_null && !right_null && (left == right));
 }
 template <>
 inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
 	return !NotDistinctFrom::Operation(left, right, left_null, right_null);
 }
 
-// compare up to shared length. if still the same, compare lengths
-static bool string_compare_greater_than(string_t left, string_t right) {
-	auto memcmp_res =
-	    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), MinValue<idx_t>(left.GetSize(), right.GetSize()));
-	auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
-	return final_res;
-}
-
 template <>
 inline bool GreaterThan::Operation(string_t left, string_t right) {
-	return string_compare_greater_than(left, right);
+	return left > right;
 }
 
 template <>
