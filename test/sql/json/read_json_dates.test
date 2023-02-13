@@ -81,9 +81,8 @@ TIMESTAMP	1996-03-27 07:42:33
 
 endloop
 
-# we can't detect this as timestamp because we don't have this specific format in our auto-detection
-# however, we shouldn't error when reading it!
+# test this format too
 query II
 select typeof(createdAt), createdAt from 'data/json/timestamp_example.json'
 ----
-VARCHAR	2023-02-07T19:12:28Z
+TIMESTAMP	2023-02-07T19:12:28Z
