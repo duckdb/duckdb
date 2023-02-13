@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include <type_traits>
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/types/string_type.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
@@ -58,11 +59,11 @@ public:
 	}
 
 	// Serialize a range
-	template<class T>
-	typename std::enable_if<std::is_pointer<T>::value, void>::type
-	WriteProperty(const char* tag, const T start, idx_t count) {
-			WriteTag(tag);
-		    WriteValue(start, count);
+	template <class T>
+	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteProperty(const char *tag, const T start,
+	                                                                             idx_t count) {
+		WriteTag(tag);
+		WriteValue(start, count);
 	}
 
 	// Serialize an enum
@@ -92,13 +93,12 @@ public:
 		}
 	}
 
-
 protected:
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
 		WriteValue(ptr.get());
-	};
+	}
 
 	// Pointer
 	template <typename T>
@@ -117,7 +117,7 @@ protected:
 	void WriteValue(data_ptr_t ptr, idx_t count) {
 		BeginWriteList(count);
 		auto end = ptr + count;
-		while(ptr != end) {
+		while (ptr != end) {
 			WriteValue(*ptr);
 			ptr++;
 		}
@@ -127,7 +127,7 @@ protected:
 	void WriteValue(const_data_ptr_t ptr, idx_t count) {
 		BeginWriteList(count);
 		auto end = ptr + count;
-		while(ptr != end) {
+		while (ptr != end) {
 			WriteValue(*ptr);
 			ptr++;
 		}
@@ -202,13 +202,13 @@ protected:
 	// Hooks for subclasses to override (if they want to)
 	virtual void BeginWriteList(idx_t count) {
 		(void)count;
-	};
+	}
 	virtual void EndWriteList(idx_t count) {
 		(void)count;
-	};
+	}
 	virtual void BeginWriteMap(idx_t count) {
 		(void)count;
-	};
+	}
 	virtual void EndWriteMap(idx_t count) {
 		(void)count;
 	}
@@ -218,13 +218,15 @@ protected:
 	virtual void EndWriteOptional(bool present) {
 		(void)present;
 	}
-	virtual void BeginWriteObject() {};
-	virtual void EndWriteObject() {};
+	virtual void BeginWriteObject() {
+	}
+	virtual void EndWriteObject() {
+	}
 
 	// Handle writing a "tag" (optional)
 	virtual void WriteTag(const char *tag) {
 		(void)tag;
-	};
+	}
 
 	// Handle primitive types
 	virtual void WriteValue(uint8_t value) = 0;
@@ -263,7 +265,7 @@ public:
 
 	void WriteValue(uint8_t value) override {
 		writer->WriteField(value);
-	};
+	}
 
 	void WriteValue(int8_t value) override {
 		writer->WriteField(value);
@@ -273,7 +275,7 @@ public:
 		writer->WriteString(value);
 	}
 	void WriteValue(const string_t value) override {
-		writer->WriteStringLen(reinterpret_cast<const unsigned char*>(value.GetDataUnsafe()), value.GetSize());
+		writer->WriteStringLen(reinterpret_cast<const unsigned char *>(value.GetDataUnsafe()), value.GetSize());
 	}
 
 	void WriteValue(const char *value) override {

@@ -968,7 +968,8 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(),
+		                         flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
