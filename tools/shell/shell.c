@@ -13668,6 +13668,7 @@ static const char *(azHelp[]) = {
   "     html      HTML <table> code",
   "     insert    SQL insert statements for TABLE",
   "     json      Results in a JSON array",
+  "     jsonlines Results in a NDJSON",
   "     latex     LaTeX tabular environment code",
   "     line      One value per line",
   "     list      Values delimited by \"|\"",
@@ -18320,8 +18321,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
-         "ascii box column csv duckbox html insert json latex line list "
-         "markdown quote table tabs tcl trash \n");
+         "ascii box column csv duckbox html insert json jsonlines latex line "
+         "list markdown quote table tabs tcl trash \n");
       rc = 1;
     }
     p->cMode = p->mode;
