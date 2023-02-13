@@ -39,7 +39,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
     : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
 
-	other.heap.Move(this->heap);
+	this->heap.Move(other.heap);
 
 	initialize_update_function = other.initialize_update_function;
 	merge_update_function = other.merge_update_function;
