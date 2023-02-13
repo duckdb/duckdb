@@ -282,7 +282,8 @@ void FileSystem::RemoveDirectory(const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
-bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                           FileOpener *opener) {
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 

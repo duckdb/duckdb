@@ -102,7 +102,7 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
-        if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
+        if 'extension_helper.cpp' in fpath and (included_file.endswith('-extension.hpp') or included_file == 'extension_oote_loader.hpp'):
             continue
         if 'allocator.cpp' in fpath and included_file.endswith('jemalloc-extension.hpp'):
             continue

@@ -74,6 +74,7 @@ struct NumericLimits<int32_t> {
 		return 10;
 	}
 };
+
 template <>
 struct NumericLimits<int64_t> {
 	DUCKDB_API static constexpr int64_t Minimum() {
@@ -104,6 +105,7 @@ struct NumericLimits<hugeint_t> {
 		return 39;
 	}
 };
+
 template <>
 struct NumericLimits<uint8_t> {
 	DUCKDB_API static constexpr uint8_t Minimum() {
@@ -119,6 +121,7 @@ struct NumericLimits<uint8_t> {
 		return 3;
 	}
 };
+
 template <>
 struct NumericLimits<uint16_t> {
 	DUCKDB_API static constexpr uint16_t Minimum() {

@@ -3,6 +3,10 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -136,6 +140,7 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	// Other
 	functions.push_back(GetArrayLengthFunction());
 	functions.push_back(GetContainsFunction());
+	functions.push_back(GetKeysFunction());
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
 
@@ -149,7 +154,27 @@ vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadJSONObjectsFunction());
 	functions.push_back(GetReadNDJSONObjectsFunction());
 
+	// Read JSON as columnar data
+	functions.push_back(GetReadJSONFunction());
+	functions.push_back(GetReadNDJSONFunction());
+	functions.push_back(GetReadJSONAutoFunction());
+	functions.push_back(GetReadNDJSONAutoFunction());
+
 	return functions;
+}
+
+unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
+                                                        ReplacementScanData *data) {
+	auto lower_name = StringUtil::Lower(table_name);
+	if (!StringUtil::EndsWith(lower_name, ".json") && !StringUtil::Contains(lower_name, ".json?") &&
+	    !StringUtil::EndsWith(lower_name, ".ndjson") && !StringUtil::Contains(lower_name, ".ndjson?")) {
+		return nullptr;
+	}
+	auto table_function = make_unique<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
+	table_function->function = make_unique<FunctionExpression>("read_json_auto", std::move(children));
+	return std::move(table_function);
 }
 
 static unique_ptr<FunctionLocalState> InitJSONCastLocalState(ClientContext &context) {

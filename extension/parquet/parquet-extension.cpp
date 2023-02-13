@@ -33,7 +33,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #endif
 
 namespace duckdb {
@@ -174,6 +174,7 @@ public:
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;

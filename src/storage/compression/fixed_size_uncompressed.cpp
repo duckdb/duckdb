@@ -55,7 +55,7 @@ struct UncompressedCompressState : public CompressionState {
 
 UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer)
     : checkpointer(checkpointer) {
-	CreateEmptySegment(checkpointer.GetRowGroup().start);
+	UncompressedCompressState::CreateEmptySegment(checkpointer.GetRowGroup().start);
 }
 
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {

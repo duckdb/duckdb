@@ -112,7 +112,8 @@ protected:
 	char *WritePadded(char *target, uint32_t value, size_t padding);
 	bool IsDateSpecifier(StrTimeSpecifier specifier);
 	char *WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target);
-	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name, char *target);
+	char *WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name, size_t tz_len,
+	                             char *target);
 };
 
 struct StrpTimeFormat : public StrTimeFormat {
@@ -138,8 +139,8 @@ public:
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result);
 
-	bool TryParseDate(string_t str, date_t &result, string &error_message);
-	bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message);
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
 
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);

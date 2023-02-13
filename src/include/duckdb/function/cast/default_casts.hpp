@@ -116,7 +116,7 @@ public:
 
 struct MapBoundCastData : public BoundCastData {
 	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
-	    : key_cast(move(key_cast)), value_cast(move(value_cast)) {
+	    : key_cast(std::move(key_cast)), value_cast(std::move(value_cast)) {
 	}
 
 	BoundCastInfo key_cast;
@@ -141,6 +141,7 @@ struct DefaultCasts {
 
 private:
 	static BoundCastInfo BlobCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo BitCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo DateCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo DecimalCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);

@@ -16,7 +16,7 @@
 #include <functional>
 
 namespace duckdb {
-class Catalog;
+class DuckCatalog;
 class ClientContext;
 class DependencyList;
 
@@ -25,7 +25,7 @@ class DependencyManager {
 	friend class CatalogSet;
 
 public:
-	explicit DependencyManager(Catalog &catalog);
+	explicit DependencyManager(DuckCatalog &catalog);
 
 	//! Erase the object from the DependencyManager; this should only happen when the object itself is destroyed
 	void EraseObject(CatalogEntry *object);
@@ -36,7 +36,7 @@ public:
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry *owner, CatalogEntry *entry);
 
 private:
-	Catalog &catalog;
+	DuckCatalog &catalog;
 	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
 	//! are deleted.
 	unordered_map<CatalogEntry *, dependency_set_t> dependents_map;

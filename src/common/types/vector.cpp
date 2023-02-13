@@ -541,6 +541,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
+	case LogicalTypeId::BIT: {
+		auto str = ((string_t *)data)[index];
+		return Value::BIT((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
+	}
 	case LogicalTypeId::MAP: {
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
@@ -584,9 +588,10 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	auto value = GetValueInternal(v_p, index_p);
 	// set the alias of the type to the correct value, if there is a type alias
 	if (v_p.GetType().HasAlias()) {
-		value.type().CopyAuxInfo(v_p.GetType());
+		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
+
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;
@@ -652,7 +657,7 @@ string Vector::ToString(idx_t count) const {
 	return retval;
 }
 
-void Vector::Print(idx_t count) {
+void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
@@ -676,7 +681,7 @@ string Vector::ToString() const {
 	return retval;
 }
 
-void Vector::Print() {
+void Vector::Print() const {
 	Printer::Print(ToString());
 }
 // LCOV_EXCL_STOP
@@ -1129,6 +1134,25 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 	}
 
+	if (type.id() == LogicalTypeId::BIT) {
+		switch (vtype) {
+		case VectorType::FLAT_VECTOR: {
+			auto &validity = FlatVector::Validity(*vector);
+			auto strings = FlatVector::GetData<string_t>(*vector);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel->get_index(i);
+				if (validity.RowIsValid(oidx)) {
+					auto buf = strings[oidx].GetDataUnsafe();
+					D_ASSERT(*buf >= 0 && *buf < 8);
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
@@ -1322,6 +1346,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		vector.validity.Set(0, true);
 		break;
 	}
 	default:

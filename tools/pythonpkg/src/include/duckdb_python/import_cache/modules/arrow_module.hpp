@@ -38,9 +38,17 @@ public:
 public:
 	PythonImportCacheItem Dataset;
 	PythonImportCacheItem Scanner;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 struct ArrowCacheItem : public PythonImportCacheItem {
+public:
+	static constexpr const char *Name = "pyarrow";
+
 public:
 	~ArrowCacheItem() override {
 	}

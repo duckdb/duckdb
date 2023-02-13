@@ -27,6 +27,9 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase *db) {
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		auto new_transaction = db->GetTransactionManager().StartTransaction(context);
+		if (!new_transaction) {
+			throw InternalException("StartTransaction did not return a valid transaction");
+		}
 		new_transaction->active_query = active_query;
 		all_transactions.push_back(db);
 		transactions[db] = new_transaction;

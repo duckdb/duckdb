@@ -220,11 +220,23 @@ struct BlobConvert {
 	}
 };
 
+struct BitConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(string_t val) {
+		return PyBytes_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return nullptr;
+	}
+};
+
 struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(hugeint_t val) {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
+		py::handle h = import_cache.uuid().UUID()(UUID::ToString(val)).release();
 		return h.ptr();
 	}
 
@@ -509,6 +521,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::LIST:
@@ -574,6 +587,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
@@ -722,6 +736,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	case LogicalTypeId::BLOB:
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
+		break;
+	case LogicalTypeId::BIT:
+		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BitConvert>(current_offset, dataptr,
+		                                                                                   maskptr, idata, count);
 		break;
 	case LogicalTypeId::LIST:
 		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,

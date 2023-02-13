@@ -123,7 +123,7 @@ public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
-		Close();
+		UnixFileHandle::Close();
 	}
 
 	int fd;
@@ -407,7 +407,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -488,7 +489,7 @@ public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
 	    : FileHandle(file_system, path), position(0), fd(fd) {
 	}
-	virtual ~WindowsFileHandle() {
+	~WindowsFileHandle() override {
 		Close();
 	}
 
@@ -734,7 +735,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());

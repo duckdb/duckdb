@@ -1,9 +1,9 @@
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/statement/copy_statement.hpp"
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 #include <cstring>
 
@@ -72,6 +72,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *
 	}
 	if (StringUtil::EndsWith(info.file_path, ".parquet")) {
 		info.format = "parquet";
+	} else if (StringUtil::EndsWith(info.file_path, ".json") || StringUtil::EndsWith(info.file_path, ".ndjson")) {
+		info.format = "json";
 	} else {
 		info.format = "csv";
 	}
