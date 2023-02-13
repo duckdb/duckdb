@@ -208,14 +208,14 @@ const char *ToString(AggregateHandling value) {
 void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty("select_list", select_list);
-	serializer.WriteProperty("from_table", from_table);
-	serializer.WriteProperty("where_clause", where_clause);
+	serializer.WriteOptionalProperty("from_table", from_table);
+	serializer.WriteOptionalProperty("where_clause", where_clause);
 	serializer.WriteProperty("group_expressions", groups.group_expressions);
 	serializer.WriteProperty("group_sets", groups.grouping_sets);
 	serializer.WriteProperty("aggregate_handling", aggregate_handling, duckdb::ToString);
-	serializer.WriteProperty("having", having);
-	serializer.WriteProperty("sample", sample);
-	serializer.WriteProperty("qualify", qualify);
+	serializer.WriteOptionalProperty("having", having);
+	serializer.WriteOptionalProperty("sample", sample);
+	serializer.WriteOptionalProperty("qualify", qualify);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {

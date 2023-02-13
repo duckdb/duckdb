@@ -101,7 +101,7 @@ void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
 	serializer.WriteProperty("left", *left);
 	serializer.WriteProperty("right", *right);
-	serializer.WriteProperty("condition", condition);
+	serializer.WriteOptionalProperty("condition", condition);
 	serializer.WriteProperty("join_type", type, JoinTypeToString);
 	serializer.WriteProperty("ref_type", ref_type, duckdb::ToString);
 	serializer.WriteProperty("using_columns", using_columns);

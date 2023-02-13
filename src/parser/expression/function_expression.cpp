@@ -127,7 +127,7 @@ void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("function_name", function_name);
 	serializer.WriteProperty("schema", schema);
 	serializer.WriteProperty("children", children);
-	serializer.WriteProperty("filter", filter);
+	serializer.WriteOptionalProperty("filter", filter);
 	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
 	serializer.WriteProperty("distinct", distinct);
 	serializer.WriteProperty("is_operator", is_operator);

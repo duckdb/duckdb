@@ -173,12 +173,12 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("orders", orders);
 	serializer.WriteProperty("start", start, duckdb::ToString);
 	serializer.WriteProperty("end", end, duckdb::ToString);
-	serializer.WriteProperty("start_expr", start_expr);
-	serializer.WriteProperty("end_expr", end_expr);
-	serializer.WriteProperty("offset_expr", offset_expr);
-	serializer.WriteProperty("default_expr", default_expr);
+	serializer.WriteOptionalProperty("start_expr", start_expr);
+	serializer.WriteOptionalProperty("end_expr", end_expr);
+	serializer.WriteOptionalProperty("offset_expr", offset_expr);
+	serializer.WriteOptionalProperty("default_expr", default_expr);
 	serializer.WriteProperty("ignore_nulls", ignore_nulls);
-	serializer.WriteProperty("filter_expr", filter_expr);
+	serializer.WriteOptionalProperty("filter_expr", filter_expr);
 	serializer.WriteProperty("catalog", catalog);
 }
 

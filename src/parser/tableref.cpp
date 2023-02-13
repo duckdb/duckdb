@@ -78,7 +78,7 @@ const char *ToString(TableReferenceType value) {
 void TableRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("type", type, duckdb::ToString);
 	serializer.WriteProperty("alias", alias);
-	serializer.WriteProperty("sample", sample);
+	serializer.WriteOptionalProperty("sample", sample);
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {

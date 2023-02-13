@@ -92,7 +92,7 @@ const char *ToString(SubqueryType value) {
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type, duckdb::ToString);
-	serializer.WriteProperty("child", child);
+	serializer.WriteOptionalProperty("child", child);
 	serializer.WriteProperty("comparison_type", comparison_type, duckdb::ExpressionTypeToString);
 }
 

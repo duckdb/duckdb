@@ -9,6 +9,7 @@ private:
 	yyjson_mut_doc *doc;
 	yyjson_mut_val *current_tag;
 	vector<yyjson_mut_val *> stack;
+	bool skip_if_null = false;
 
 	inline yyjson_mut_val *Current() {
 		return stack.back();
@@ -33,7 +34,7 @@ private:
 	}
 
 public:
-	explicit JsonSerializer(yyjson_mut_doc *doc) : doc(doc), stack({yyjson_mut_obj(doc)}) {
+	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null) : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null) {
 		serialize_enum_as_string = true;
 	}
 
@@ -43,9 +44,11 @@ public:
 	};
 
 	void BeginWriteOptional(bool present) override {
-	}
-
-	void EndWriteOptional(bool present) override {
+		// Always write the tag for optional values, just set the value to null if not present.
+		if(!present) {
+			WriteNull();
+		}
+		// TODO: allow skipping writing null properties
 	}
 
 	void BeginWriteList(idx_t count) override {
@@ -80,7 +83,12 @@ public:
 
 	void WriteTag(const char *tag) override {
 		current_tag = yyjson_mut_strcpy(doc, tag);
-	};
+	}
+
+	void WriteNull() override {
+	    auto val = yyjson_mut_null(doc);
+		push_value(val);
+	}
 
 	void WriteValue(uint8_t value) override {
 		auto val = yyjson_mut_uint(doc, value);
@@ -91,44 +99,55 @@ public:
 		auto val = yyjson_mut_sint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(uint16_t value) override {
 		auto val = yyjson_mut_uint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(int16_t value) override {
 		auto val = yyjson_mut_sint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(uint32_t value) override {
 		auto val = yyjson_mut_uint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(int32_t value) override {
 		auto val = yyjson_mut_int(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(uint64_t value) override {
 		auto val = yyjson_mut_uint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(int64_t value) override {
 		auto val = yyjson_mut_sint(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(hugeint_t value) override {
 		throw NotImplementedException("Cannot serialize hugeint to json yet!");
 	}
+
 	void WriteValue(float value) override {
 		auto val = yyjson_mut_real(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(double value) override {
 		auto val = yyjson_mut_real(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(interval_t value) override {
 		throw NotImplementedException("Cannot serialize interval_t to json yet!");
 	}
+
 	void WriteValue(const string &value) override {
 		auto val = yyjson_mut_strcpy(doc, value.c_str());
 		push_value(val);
@@ -139,10 +158,12 @@ public:
 		auto val = yyjson_mut_strcpy(doc, str.c_str());
 		push_value(val);
 	}
+
 	void WriteValue(const char *value) override {
 		auto val = yyjson_mut_strcpy(doc, value);
 		push_value(val);
 	}
+
 	void WriteValue(bool value) override {
 		auto val = yyjson_mut_bool(doc, value);
 		push_value(val);
@@ -150,7 +171,7 @@ public:
 };
 
 static yyjson_mut_val *Serialize(SelectStatement &stmt, yyjson_mut_doc *doc) {
-	auto serialize = JsonSerializer(doc);
+	auto serialize = JsonSerializer(doc, false);
 	stmt.FormatSerialize(serialize);
 	return serialize.GetRootObject();
 }

@@ -40,7 +40,6 @@ constexpr bool has_serialize_v() {
 class FormatSerializer {
 protected:
 	bool serialize_enum_as_string = false;
-
 public:
 	// Pass by value
 	template <class T>
@@ -52,8 +51,8 @@ public:
 
 	// Pass by reference
 	template <class T>
-	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type WriteProperty(const char *tag,
-	                                                                                         T &value) {
+	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
+	WriteProperty(const char *tag, T &value) {
 		WriteTag(tag);
 		WriteValue(value);
 	}
@@ -93,7 +92,40 @@ public:
 		}
 	}
 
+	// Optional, by value
+	template <class T>
+	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
+	WriteOptionalProperty(const char *tag, T ptr) {
+		WriteTag(tag);
+		BeginWriteOptional(false);
+		if(ptr == nullptr) {
+			BeginWriteOptional(false);
+			EndWriteOptional(false);
+		} else {
+			BeginWriteOptional(true);
+			WriteValue(*ptr);
+			EndWriteOptional(true);
+		}
+	}
+
+	// Optional, by ref (required for unique_ptr)
+	template <class T>
+	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
+	WriteOptionalProperty(const char *tag, T& ptr) {
+		WriteTag(tag);
+		BeginWriteOptional(false);
+		if(ptr == nullptr) {
+			BeginWriteOptional(false);
+			EndWriteOptional(false);
+		} else {
+			BeginWriteOptional(true);
+			WriteValue(*ptr);
+			EndWriteOptional(true);
+		}
+	}
+
 protected:
+
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
@@ -104,12 +136,9 @@ protected:
 	template <typename T>
 	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteValue(const T ptr) {
 		if (ptr == nullptr) {
-			BeginWriteOptional(false);
-			EndWriteOptional(false);
+			WriteNull();
 		} else {
-			BeginWriteOptional(true);
 			WriteValue(*ptr);
-			EndWriteOptional(true);
 		}
 	}
 
@@ -203,23 +232,30 @@ protected:
 	virtual void BeginWriteList(idx_t count) {
 		(void)count;
 	}
+
 	virtual void EndWriteList(idx_t count) {
 		(void)count;
 	}
+
 	virtual void BeginWriteMap(idx_t count) {
 		(void)count;
 	}
+
 	virtual void EndWriteMap(idx_t count) {
 		(void)count;
 	}
+
 	virtual void BeginWriteOptional(bool present) {
 		(void)present;
 	}
+
 	virtual void EndWriteOptional(bool present) {
 		(void)present;
 	}
+
 	virtual void BeginWriteObject() {
 	}
+
 	virtual void EndWriteObject() {
 	}
 
@@ -228,7 +264,8 @@ protected:
 		(void)tag;
 	}
 
-	// Handle primitive types
+	// Handle primitive types, a serializer needs to implement these.
+	virtual void WriteNull() = 0;
 	virtual void WriteValue(uint8_t value) = 0;
 	virtual void WriteValue(int8_t value) = 0;
 	virtual void WriteValue(uint16_t value) = 0;
@@ -245,78 +282,6 @@ protected:
 	virtual void WriteValue(const string_t value) = 0;
 	virtual void WriteValue(const char *value) = 0;
 	virtual void WriteValue(bool value) = 0;
-};
-
-struct BinarySerializer : FormatSerializer {
-protected:
-	std::unique_ptr<FieldWriter> writer;
-
-public:
-	explicit BinarySerializer(std::unique_ptr<FieldWriter> writer_p) : writer(std::move(writer_p)) {
-	}
-
-	void BeginWriteList(idx_t count) override {
-		writer->WriteField((uint32_t)count);
-	}
-
-	void BeginWriteMap(idx_t count) override {
-		writer->WriteField((uint32_t)count);
-	}
-
-	void WriteValue(uint8_t value) override {
-		writer->WriteField(value);
-	}
-
-	void WriteValue(int8_t value) override {
-		writer->WriteField(value);
-	}
-
-	void WriteValue(const string &value) override {
-		writer->WriteString(value);
-	}
-	void WriteValue(const string_t value) override {
-		writer->WriteStringLen(reinterpret_cast<const unsigned char *>(value.GetDataUnsafe()), value.GetSize());
-	}
-
-	void WriteValue(const char *value) override {
-		writer->WriteString(value);
-	}
-
-	void WriteValue(uint64_t value) override {
-		writer->WriteField(value);
-	}
-
-	void WriteValue(uint16_t value) override {
-		writer->WriteField(value);
-	}
-
-	void WriteValue(int16_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(uint32_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(int32_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(int64_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(hugeint_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(float value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(double value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(interval_t value) override {
-		writer->WriteField(value);
-	}
-	void WriteValue(bool value) override {
-		writer->WriteField(value);
-	}
 };
 
 } // namespace duckdb
