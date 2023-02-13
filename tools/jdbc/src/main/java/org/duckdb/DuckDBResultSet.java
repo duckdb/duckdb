@@ -196,6 +196,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getJsonObject(columnIndex);
 		case INTERVAL:
 			return getLazyString(columnIndex);
+		case BLOB:
+			return getBlob(columnIndex);
 		default:
 			throw new SQLException("Not implemented type: " + meta.column_types_string[columnIndex - 1]);
 		}

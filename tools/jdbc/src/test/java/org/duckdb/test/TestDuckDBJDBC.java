@@ -2382,6 +2382,12 @@ public class TestDuckDBJDBC {
 		rs.getBlob("b");
 		assertTrue(rs.wasNull());
 
+		assertEquals(blob_to_string(((Blob) rs.getObject(1))), test_str1);
+		assertEquals(blob_to_string(((Blob) rs.getObject("a"))), test_str1);
+		assertEquals(blob_to_string(((Blob) rs.getObject("c"))), test_str2);
+		assertNull(rs.getObject(2));
+		assertNull(rs.getObject("b"));
+
 		rs.close();
 		stmt.close();
 		conn.close();
