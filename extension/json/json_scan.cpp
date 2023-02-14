@@ -395,7 +395,9 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Unopened file
 		current_reader->OpenJSONFile();
 		batch_index = gstate.batch_index++;
-		if (options.format == JSONFormat::UNSTRUCTURED) {
+		if (options.format == JSONFormat::UNSTRUCTURED || (options.format == JSONFormat::NEWLINE_DELIMITED &&
+		                                                   options.compression != FileCompressionType::UNCOMPRESSED &&
+		                                                   gstate.file_index < gstate.json_readers.size())) {
 			gstate.file_index++; // UNSTRUCTURED necessitates single-threaded read
 		}
 		if (options.format != JSONFormat::AUTO_DETECT) {
@@ -586,6 +588,11 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 }
 
 void JSONScanLocalState::ReadUnstructured(idx_t &count) {
+	// yyjson does not always return YYJSON_READ_ERROR_UNEXPECTED_END properly
+	// if a different error code happens within the last 50 bytes
+	// we assume it should be YYJSON_READ_ERROR_UNEXPECTED_END instead
+	static constexpr idx_t END_BOUND = 50;
+
 	const auto max_obj_size = reconstruct_buffer.GetSize();
 	yyjson_read_err error;
 	for (; count < STANDARD_VECTOR_SIZE; count++) {
@@ -611,8 +618,7 @@ void JSONScanLocalState::ReadUnstructured(idx_t &count) {
 		} else if (error.pos > max_obj_size) {
 			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, error,
 			                                "Try increasing \"maximum_object_size\".");
-
-		} else if (error.code == YYJSON_READ_ERROR_UNEXPECTED_END && !is_last) {
+		} else if (!is_last && (error.code == YYJSON_READ_ERROR_UNEXPECTED_END || remaining - error.pos < END_BOUND)) {
 			// Copy remaining to reconstruct_buffer
 			const auto reconstruct_ptr = reconstruct_buffer.get();
 			memcpy(reconstruct_ptr, obj_copy_start, remaining);

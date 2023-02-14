@@ -147,21 +147,21 @@ SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 query III
 SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 ----
-1	JSON[]	O
-1	JSON[]	Brother,
-1	JSON[]	Where
-1	JSON[]	Art
-1	JSON[]	Thou?
-2	JSON[]	Home
-2	JSON[]	for
-2	JSON[]	the
-2	JSON[]	Holidays
-3	JSON[]	The
-3	JSON[]	Firm
-4	JSON[]	Broadcast
-4	JSON[]	News
-5	JSON[]	Raising
-5	JSON[]	Arizona
+1	JSON[]	"O"
+1	JSON[]	"Brother,"
+1	JSON[]	"Where"
+1	JSON[]	"Art"
+1	JSON[]	"Thou?"
+2	JSON[]	"Home"
+2	JSON[]	"for"
+2	JSON[]	"the"
+2	JSON[]	"Holidays"
+3	JSON[]	"The"
+3	JSON[]	"Firm"
+4	JSON[]	"Broadcast"
+4	JSON[]	"News"
+5	JSON[]	"Raising"
+5	JSON[]	"Arizona"
 
 # with depth 1 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
