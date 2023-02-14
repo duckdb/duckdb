@@ -214,13 +214,14 @@ struct ICUStrptime : public ICUDateFunc {
 		return true;
 	}
 
+	template <bool DEFAULT_TIMEZONE = false>
 	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,
 	                                         const LogicalType &target) {
 		if (!input.context) {
 			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context, DEFAULT_TIMEZONE));
 
 		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
@@ -230,7 +231,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
-		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP, BindCastFromVarchar);
+		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP, BindCastFromVarchar<true>);
 	}
 };
 

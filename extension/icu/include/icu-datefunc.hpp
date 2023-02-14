@@ -20,7 +20,7 @@ struct ICUDateFunc {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
 
 	struct BindData : public FunctionData {
-		explicit BindData(ClientContext &context);
+		explicit BindData(ClientContext &context, bool default_tz = false);
 		BindData(const BindData &other);
 
 		string tz_setting;
