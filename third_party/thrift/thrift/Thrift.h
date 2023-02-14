@@ -41,6 +41,7 @@
 #include <vector>
 #include <exception>
 #include <typeinfo>
+#include <cstddef>
 
 #include "thrift/TLogging.h"
 //#include <thrift/TOutput.h>
@@ -53,7 +54,7 @@ namespace thrift {
 class TEnumIterator {
 public:
   using value_type = std::pair<int, const char*>;
-  using difference_type = ptrdiff_t;
+  using difference_type = std::ptrdiff_t;
   using pointer = value_type*;
   using reference = value_type&;
   using iterator_category = std::forward_iterator_tag;
