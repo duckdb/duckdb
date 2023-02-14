@@ -127,14 +127,14 @@ template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, const SelectionVector *sel,
                                                           idx_t count, SelectionVector *true_sel,
                                                           SelectionVector *false_sel) {
-	return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::GreaterThan(right, left, sel, count, true_sel, false_sel);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                                 idx_t count, SelectionVector *true_sel,
                                                                 SelectionVector *false_sel) {
-	return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::GreaterThanEquals(right, left, sel, count, true_sel, false_sel);
 }
 
 static void ComparesNotNull(UnifiedVectorFormat &ldata, UnifiedVectorFormat &rdata, ValidityMask &vresult,
@@ -272,7 +272,7 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &re
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::LessThanEquals>(left, right, result, count);
+	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(right, left, result, count);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
@@ -280,7 +280,7 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, 
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::LessThan>(left, right, result, count);
+	ComparisonExecutor::Execute<duckdb::GreaterThan>(right, left, result, count);
 }
 
 } // namespace duckdb
