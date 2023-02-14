@@ -396,43 +396,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 }
 
-void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
-                                                    unordered_map<idx_t, idx_t> *relation_mapping) {
-	//#ifdef debug
-	for (idx_t i = 0; i < node_ops->size(); i++) {
-		auto join_node = (*node_ops)[i].node.get();
-		auto op = (*node_ops)[i].op;
-		auto relation_id = join_node->set->relations[0];
-		// some relations are non-reorderable joins so they may have multiple tables within them that
-		// we need to add to our names
-		vector<idx_t> tables_in_relation;
-		for (auto &it : *relation_mapping) {
-			if (it.second == relation_id) {
-				tables_in_relation.push_back(it.first);
-			}
-		}
-
-		TableCatalogEntry *catalog_table = nullptr;
-		LogicalGet *get = nullptr;
-		for (auto &table_index : tables_in_relation) {
-			get = GetLogicalGet(op, table_index);
-			if (get) {
-				catalog_table = GetCatalogTableEntry(get);
-			}
-			if (catalog_table) {
-				// add original name for debugging. If the relation represents a non reorderable join
-				// Get the table information of each table underneath.
-				if (relation_attributes[relation_id].original_name.length() == 0) {
-					relation_attributes[relation_id].original_name += catalog_table->name;
-				} else {
-					relation_attributes[relation_id].original_name += ", " + catalog_table->name;
-				}
-			}
-		}
-	}
-	//#endif
-}
-
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();

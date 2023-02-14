@@ -1020,7 +1020,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);
-	cardinality_estimator.UpdateRelationTableNames(&nodes_ops, &relation_mapping);
 
 	for (auto &node_op : nodes_ops) {
 		D_ASSERT(node_op.node);
