@@ -121,6 +121,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UUID,
 	// union type, only useful as logical type
 	DUCKDB_TYPE_UNION,
+	// duckdb_bit
+	DUCKDB_TYPE_BIT,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -189,6 +191,11 @@ typedef struct {
 	void *data;
 	idx_t size;
 } duckdb_blob;
+
+typedef struct {
+	uint64_t offset;
+	uint64_t length;
+} duckdb_list_entry;
 
 typedef struct {
 #if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
@@ -1560,6 +1567,24 @@ Returns the size of the child vector of the list
 DUCKDB_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
 /*!
+Sets the total size of the underlying child-vector of a list vector.
+
+* vector: The list vector.
+* size: The size of the child list.
+* returns: The duckdb state. Returns DuckDBError if the vector is nullptr.
+*/
+DUCKDB_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
+
+/*!
+Sets the total capacity of the underlying child-vector of a list.
+
+* vector: The list vector.
+* required_capacity: the total capacity to reserve.
+* return: The duckdb state. Returns DuckDBError if the vector is nullptr.
+*/
+DUCKDB_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
+
+/*!
 Retrieves the child vector of a struct vector.
 
 The resulting vector is valid as long as the parent vector is valid.
@@ -2286,6 +2311,13 @@ on the task state.
 * state: The task state to clean up
 */
 DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
+
+/*!
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+*/
+DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
 
 #ifdef __cplusplus
 }

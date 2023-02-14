@@ -1,9 +1,8 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite imdb
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
 
 all: release
 opt: release
 unit: unittest
-imdb: third_party/imdb/data
 
 GENERATOR=
 FORCE_COLOR=
@@ -172,7 +171,7 @@ clean-python:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 release:
@@ -276,9 +275,6 @@ format-master:
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
-
-third_party/imdb/data:
-	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull

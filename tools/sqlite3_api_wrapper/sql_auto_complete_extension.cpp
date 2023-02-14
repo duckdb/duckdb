@@ -223,8 +223,8 @@ static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
 	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY",    "HAVING", "QUALIFY",
 	                                               "LIMIT",  "SET",   "USING", "ON"};
-	case_insensitive_set_t table_name_keywords = {"FROM",   "JOIN",  "INSERT", "UPDATE",
-	                                              "DELETE", "ALTER", "DROP",   "CALL"};
+	case_insensitive_set_t table_name_keywords = {"FROM",  "JOIN", "INSERT", "UPDATE",  "DELETE",
+	                                              "ALTER", "DROP", "CALL",   "DESCRIBE"};
 	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
 	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
 	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};

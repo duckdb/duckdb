@@ -2,6 +2,8 @@
 # description: Test parallel read CSV function with different settings of new lines
 # group: [parallel]
 
+require vector_size 512
+
 statement ok
 SET experimental_parallel_csv=true;
 

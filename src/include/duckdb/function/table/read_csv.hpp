@@ -21,7 +21,8 @@ namespace duckdb {
 
 class ReadCSV {
 public:
-	static unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options, ClientContext &context);
+	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, FileCompressionType compression,
+	                                         ClientContext &context);
 };
 
 struct BaseCSVData : public TableFunctionData {

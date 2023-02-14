@@ -64,13 +64,13 @@ public:
 public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, Value value,
+	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
 	                                                         ExpressionType expression_type) override;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two predicates
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, Value low_value,
-	                                                       ExpressionType low_expression_type, Value high_value,
+	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
+	                                                       ExpressionType low_expression_type, const Value &high_value,
 	                                                       ExpressionType high_expression_type) override;
 
 	//! Perform a lookup on the index
@@ -92,7 +92,7 @@ public:
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
-	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
+	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);

@@ -1,15 +1,16 @@
-#include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/function/copy_function.hpp"
-#include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/common/bind_helpers.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+
 #include <limits>
 
 namespace duckdb {
@@ -164,12 +165,14 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 		}
 
 		// check for delimiter
-		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		if (options.delimiter.length() != 0 &&
+		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
 		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		if (options.quote.length() != 0 &&
+		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
 		                      options.quote.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
@@ -196,13 +199,15 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 					break;
 				}
 			}
-		} else if (options.quote.length() != 0) {
+		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			if (options.quote.length() != 0 &&
+			    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
 			                      options.quote.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
-			} else if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			} else if (options.escape.length() != 0 &&
+			           ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
 			                             options.escape.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			}

@@ -48,6 +48,7 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
+	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 	py::list Description();
 
 	void Close();

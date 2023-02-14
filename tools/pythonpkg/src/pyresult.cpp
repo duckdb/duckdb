@@ -327,6 +327,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
 		return py::str("BINARY");
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -363,17 +364,19 @@ py::str GetTypeToPython(const LogicalType &type) {
 	}
 }
 
-py::list DuckDBPyResult::Description() {
-	const auto names = result->names;
-
-	py::list desc(names.size());
+py::list DuckDBPyResult::GetDescription(const vector<string> &names, const vector<LogicalType> &types) {
+	py::list desc;
 
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		auto py_name = py::str(names[col_idx]);
-		auto py_type = GetTypeToPython(result->types[col_idx]);
-		desc[col_idx] = py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none());
+		auto py_type = GetTypeToPython(types[col_idx]);
+		desc.append(py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none()));
 	}
 	return desc;
+}
+
+py::list DuckDBPyResult::Description() {
+	return GetDescription(result->names, result->types);
 }
 
 void DuckDBPyResult::Close() {
