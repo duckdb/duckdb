@@ -60,7 +60,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
 		// Unless we have a header
-		if (options.header && options.auto_detect) {
+		if (options.header) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					bool carrier_return = (*buffer)[position_buffer] == '\r';
