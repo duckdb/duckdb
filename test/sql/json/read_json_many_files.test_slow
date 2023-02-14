@@ -1,0 +1,23 @@
+# name: test/sql/json/read_json_many_files.test_slow
+# description: Read > 1000 json files (issue #6249)
+# group: [json]
+
+require json
+
+statement ok
+create table input as select 'Laurens' as name;
+
+loop i 0 2000
+
+statement ok
+copy input to '__TEST_DIR__/input${i}.json';
+
+endloop
+
+statement ok
+pragma threads=1
+
+query T
+select count(*) from read_json_auto('__TEST_DIR__/input*.json');
+----
+2000

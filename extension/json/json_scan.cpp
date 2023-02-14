@@ -173,11 +173,6 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	// Perform projection pushdown
 	if (bind_data.type == JSONScanType::READ_JSON) {
 		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
-		if (bind_data.auto_detect && input.column_ids.size() < bind_data.names.size()) {
-			// If we are auto-detecting, but don't need all columns present in the file,
-			// then we don't need to throw an error if we encounter an unseen column
-			bind_data.transform_options.error_unknown_key = false;
-		}
 		vector<string> names;
 		names.reserve(input.column_ids.size());
 		for (idx_t i = 0; i < input.column_ids.size(); i++) {
@@ -187,6 +182,11 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 			}
 			names.push_back(std::move(bind_data.names[id]));
 			bind_data.valid_cols.push_back(i);
+		}
+		if (names.size() < bind_data.names.size()) {
+			// If we are auto-detecting, but don't need all columns present in the file,
+			// then we don't need to throw an error if we encounter an unseen column
+			bind_data.transform_options.error_unknown_key = false;
 		}
 		bind_data.names = std::move(names);
 	}
@@ -449,9 +449,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	auto json_buffer_handle = make_unique<JSONBufferHandle>(buffer_index, readers, std::move(buffer), buffer_size);
 	current_buffer_handle = json_buffer_handle.get();
 	current_reader->InsertBuffer(buffer_index, std::move(json_buffer_handle));
-	if (!current_reader->GetFileHandle().PlainFileSource() && gstate.bind_data.type == JSONScanType::SAMPLE) {
-		// TODO: store buffer
-	}
 
 	buffer_offset = 0;
 	prev_buffer_remainder = 0;
@@ -470,6 +467,11 @@ void JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, idx_t &buff
 		ReadNextBufferSeek(gstate, buffer_index);
 	} else {
 		ReadNextBufferNoSeek(gstate, buffer_index);
+	}
+
+	if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
+		// Close files that are done if we're not sampling
+		current_reader->CloseJSONFile();
 	}
 }
 
@@ -507,16 +509,18 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &
 }
 
 void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index) {
-	auto &file_handle = current_reader->GetFileHandle();
-
 	idx_t request_size = gstate.buffer_capacity - prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	idx_t read_size;
 	{
 		lock_guard<mutex> reader_guard(current_reader->lock);
 		buffer_index = current_reader->GetBufferIndex();
 
-		read_size = file_handle.Read(buffer_ptr + prev_buffer_remainder, request_size,
-		                             gstate.bind_data.type == JSONScanType::SAMPLE);
+		if (current_reader->IsOpen()) {
+			read_size = current_reader->GetFileHandle().Read(buffer_ptr + prev_buffer_remainder, request_size,
+			                                                 gstate.bind_data.type == JSONScanType::SAMPLE);
+		} else {
+			read_size = 0;
+		}
 		is_last = read_size < request_size;
 
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
