@@ -750,11 +750,6 @@ function(link_threads LIBRARY)
 endfunction()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
-  #  skip building extensions on mingw because its weird
-  if(WIN32 AND NOT MSVC)
-    return()
-  endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
