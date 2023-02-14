@@ -13664,9 +13664,12 @@ static const char *(azHelp[]) = {
   "     box       Tables using unicode box-drawing characters",
   "     csv       Comma-separated values",
   "     column    Output in columns.  (See .width)",
+  "     duckbox   Tables with extensive features",
   "     html      HTML <table> code",
   "     insert    SQL insert statements for TABLE",
   "     json      Results in a JSON array",
+  "     jsonlines Results in a NDJSON",
+  "     latex     LaTeX tabular environment code",
   "     line      One value per line",
   "     list      Values delimited by \"|\"",
   "     markdown  Markdown table format",
@@ -13674,6 +13677,7 @@ static const char *(azHelp[]) = {
   "     table     ASCII-art table",
   "     tabs      Tab-separated values",
   "     tcl       TCL list elements",
+  "     trash     No output",
   ".nullvalue STRING        Use STRING in place of NULL values",
   ".once ?OPTIONS? ?FILE?   Output for the next SQL command only to FILE",
   "     If FILE begins with '|' then open as a pipe",
@@ -18317,8 +18321,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
-         "ascii duckbox box column csv html insert json line list markdown "
-         "quote table tabs tcl latex trash \n");
+         "ascii box column csv duckbox html insert json jsonlines latex line "
+         "list markdown quote table tabs tcl trash \n");
       rc = 1;
     }
     p->cMode = p->mode;
