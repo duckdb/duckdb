@@ -155,13 +155,12 @@ inline bool LessThan::Operation(bool left, bool right) {
 // Specialized String Comparison Operations
 //===--------------------------------------------------------------------===//
 struct StringComparisonOperators {
-	template <bool INVERSE>
-	static inline bool EqualsOrNot(const string_t a, const string_t b) {
+	static inline bool Equals(const string_t a, const string_t b) {
 		if (a.IsInlined()) {
 			// small string: compare entire string
 			if (memcmp(&a, &b, sizeof(string_t)) == 0) {
 				// entire string is equal
-				return INVERSE ? false : true;
+				return true;
 			}
 		} else {
 			// large string: first check prefix and length
@@ -169,18 +168,18 @@ struct StringComparisonOperators {
 				// prefix and length are equal: check main string
 				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal
-					return INVERSE ? false : true;
+					return true;
 				}
 			}
 		}
 		// not equal
-		return INVERSE ? true : false;
+		return false;
 	}
 };
 
 template <>
 inline bool Equals::Operation(string_t left, string_t right) {
-	return StringComparisonOperators::EqualsOrNot<false>(left, right);
+	return StringComparisonOperators::Equals(left, right);
 }
 template <>
 inline bool NotEquals::Operation(string_t left, string_t right) {
@@ -189,8 +188,7 @@ inline bool NotEquals::Operation(string_t left, string_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (left_null && right_null) ||
-	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<false>(left, right));
+	return (left_null && right_null) || (!left_null && !right_null && StringComparisonOperators::Equals(left, right));
 }
 template <>
 inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
