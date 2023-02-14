@@ -211,17 +211,17 @@ inline bool GreaterThan::Operation(string_t left, string_t right) {
 
 template <>
 inline bool GreaterThanEquals::Operation(string_t left, string_t right) {
-	return templated_string_compare_op<GreaterThanEquals>(left, right);
+	return !GreaterThan::Operation(right, left);
 }
 
 template <>
 inline bool LessThan::Operation(string_t left, string_t right) {
-	return templated_string_compare_op<LessThan>(left, right);
+	return GreaterThan::Operation(right, left);
 }
 
 template <>
 inline bool LessThanEquals::Operation(string_t left, string_t right) {
-	return templated_string_compare_op<LessThanEquals>(left, right);
+	return !GreaterThan::Operation(left, right);
 }
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators
@@ -280,14 +280,14 @@ inline bool GreaterThan::Operation(hugeint_t left, hugeint_t right) {
 }
 template <>
 inline bool GreaterThanEquals::Operation(hugeint_t left, hugeint_t right) {
-	return Hugeint::GreaterThanEquals(left, right);
+	return !GreaterThan::Operation(right, left);
 }
 template <>
 inline bool LessThan::Operation(hugeint_t left, hugeint_t right) {
-	return Hugeint::LessThan(left, right);
+	return GreaterThan::Operation(right, left);
 }
 template <>
 inline bool LessThanEquals::Operation(hugeint_t left, hugeint_t right) {
-	return Hugeint::LessThanEquals(left, right);
+	return !GreaterThan::Operation(left, right);
 }
 } // namespace duckdb
