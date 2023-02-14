@@ -549,6 +549,21 @@ py::dict DuckDBPyRelation::FetchNumpy() {
 	return res;
 }
 
+py::dict DuckDBPyRelation::FetchPyTorch() {
+	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
+		ExecuteOrThrow();
+	}
+	if (result->IsClosed()) {
+		return py::none();
+	}
+	auto res = result->FetchPyTorch();
+	result = nullptr;
+	return res;
+}
+
 py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		if (!rel) {

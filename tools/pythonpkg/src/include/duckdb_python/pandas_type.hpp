@@ -24,6 +24,9 @@ public:
 	using py::object::object;
 
 public:
+	static bool check_(const py::handle &object) {
+		return !object.is_none();
+	}
 	static bool IsDataFrame(const py::handle &object);
 	static bool IsLazyFrame(const py::handle &object);
 };

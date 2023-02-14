@@ -93,6 +93,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("date_as_object") = false, py::arg("connection") = py::none())
 	    .def("fetch_arrow_table", &PyConnectionWrapper::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
+	    .def("torch", &PyConnectionWrapper::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()", py::arg("connection") = py::none())
 	    .def("fetch_record_batch", &PyConnectionWrapper::FetchRecordBatchReader,
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000,
 	         py::arg("connection") = py::none())

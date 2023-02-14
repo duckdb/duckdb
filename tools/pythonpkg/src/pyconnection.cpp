@@ -123,6 +123,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
+	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -1076,6 +1078,13 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 		throw InvalidInputException("No open result set");
 	}
 	return result->ToArrowTable(chunk_size);
+}
+
+py::dict DuckDBPyConnection::FetchPyTorch() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchPyTorch();
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
