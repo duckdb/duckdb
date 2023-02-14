@@ -113,15 +113,14 @@ struct DistinctGreaterThanNullsFirst {
 struct DistinctGreaterThanEquals {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return left_null || (!left_null && !right_null && GreaterThanEquals::Operation(left, right));
+		return !DistinctGreaterThan::Operation(right, left, right_null, left_null);
 	}
 };
 
 struct DistinctLessThan {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return LessThan::Operation(left_null, right_null) ||
-		       (!left_null && !right_null && LessThan::Operation(left, right));
+		return DistinctGreaterThan::Operation(right, left, right_null, left_null);
 	}
 };
 
@@ -136,7 +135,7 @@ struct DistinctLessThanNullsFirst {
 struct DistinctLessThanEquals {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return right_null || (!left_null && !right_null && LessThanEquals::Operation(left, right));
+		return !DistinctGreaterThan::Operation(left, right, left_null, right_null);
 	}
 };
 
