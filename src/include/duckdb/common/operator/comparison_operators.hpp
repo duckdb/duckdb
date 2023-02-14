@@ -195,17 +195,16 @@ inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_nul
 }
 
 // compare up to shared length. if still the same, compare lengths
-template <class OP>
-static bool templated_string_compare_op(string_t left, string_t right) {
+static bool string_compare_greater_than(string_t left, string_t right) {
 	auto memcmp_res =
 	    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), MinValue<idx_t>(left.GetSize(), right.GetSize()));
-	auto final_res = memcmp_res == 0 ? OP::Operation(left.GetSize(), right.GetSize()) : OP::Operation(memcmp_res, 0);
+	auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
 	return final_res;
 }
 
 template <>
 inline bool GreaterThan::Operation(string_t left, string_t right) {
-	return templated_string_compare_op<GreaterThan>(left, right);
+	return string_compare_greater_than(left, right);
 }
 
 template <>
