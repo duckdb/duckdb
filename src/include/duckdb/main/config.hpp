@@ -31,6 +31,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
+class BufferPool;
 class CastFunctionSet;
 class ClientContext;
 class ErrorManager;
@@ -187,6 +188,8 @@ public:
 	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
 	//! Extensions made to binder to implement the create_database functionality
 	vector<CreateDatabaseExtension> create_database_extensions;
+	//! A buffer pool can be shared across multiple databases (if desired).
+	shared_ptr<BufferPool> buffer_pool;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
