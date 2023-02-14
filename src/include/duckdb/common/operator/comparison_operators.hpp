@@ -44,7 +44,7 @@ struct GreaterThan {
 struct GreaterThanEquals {
 	template <class T>
 	DUCKDB_API static inline bool Operation(T left, T right) {
-		return left >= right;
+		return !GreaterThan::Operation(right, left);
 	}
 };
 
@@ -58,7 +58,7 @@ struct LessThan {
 struct LessThanEquals {
 	template <class T>
 	DUCKDB_API static inline bool Operation(T left, T right) {
-		return GreaterThanEquals::Operation(right, left);
+		return !GreaterThan::Operation(left, right);
 	}
 };
 
