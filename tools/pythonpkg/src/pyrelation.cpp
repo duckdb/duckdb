@@ -889,7 +889,10 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain() {
 	AssertRelation();
-	return rel->ToString(0);
+	auto res = rel->Explain();
+
+	auto context = rel->context.GetContext();
+	return res->ToString();
 }
 
 // TODO: RelationType to a python enum
