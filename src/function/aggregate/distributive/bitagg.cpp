@@ -39,10 +39,10 @@ static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	}
 }
 
-struct BitAndOperation {
+struct BitwiseOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		//  If there are no matching rows, BIT_AND() returns a null value.
+		//  If there are no matching rows, returns a null value.
 		state->is_set = false;
 	}
 
@@ -68,11 +68,6 @@ struct BitAndOperation {
 		state->value = input;
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value &= input;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.is_set) {
@@ -102,7 +97,36 @@ struct BitAndOperation {
 	}
 };
 
-struct BitStringAndOperation : public BitAndOperation {
+struct BitAndOperation : public BitwiseOperation {
+    template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		state->value &= input;
+	}
+};
+
+struct BitOrOperation : public BitwiseOperation{
+    template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		state->value |= input;
+	}
+};
+
+struct BitXorOperation : public BitwiseOperation{
+    template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		state->value ^= input;
+	}
+
+    template <class INPUT_TYPE, class STATE, class OP>
+    static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+                                  ValidityMask &mask, idx_t count) {
+        for (idx_t i = 0; i < count; i++) {
+            Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+        }
+    }
+};
+
+struct BitStringBitwiseOperation : public BitwiseOperation {
 	template <class STATE>
 	static void Destroy(STATE *state) {
 		if (state->is_set && !state->value.IsInlined()) {
@@ -125,11 +149,6 @@ struct BitStringAndOperation : public BitAndOperation {
 		}
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseAnd(input, state->value, state->value);
-	}
-
 	template <class T, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
@@ -138,6 +157,37 @@ struct BitStringAndOperation : public BitAndOperation {
 			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}
 	}
+};
+
+struct BitStringAndOperation : public BitStringBitwiseOperation {
+
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		Bit::BitwiseAnd(input, state->value, state->value);
+	}
+};
+
+struct BitStringOrOperation : public BitStringBitwiseOperation{
+
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		Bit::BitwiseOr(input, state->value, state->value);
+	}
+};
+
+struct BitStringXorOperation : public BitStringBitwiseOperation{
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		Bit::BitwiseXor(input, state->value, state->value);
+	}
+
+    template <class INPUT_TYPE, class STATE, class OP>
+    static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+                                  ValidityMask &mask, idx_t count) {
+        for (idx_t i = 0; i < count; i++) {
+            Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+        }
+    }
 };
 
 void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
@@ -152,107 +202,6 @@ void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(bit_and);
 }
 
-struct BitOrOperation {
-	template <class STATE>
-	static void Initialize(STATE *state) {
-		//  If there are no matching rows, BIT_OR() returns a null value.
-		state->is_set = false;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			OP::template Assign(state, input[idx]);
-			state->is_set = true;
-		} else {
-			OP::template Execute(state, input[idx]);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		state->value = input;
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value |= input;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (!source.is_set) {
-			// source is NULL, nothing to do.
-			return;
-		}
-		if (!target->is_set) {
-			// target is NULL, use source value directly.
-			OP::template Assign(target, source.value);
-			target->is_set = true;
-		} else {
-			OP::template Execute(target, source.value);
-		}
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = state->value;
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
-
-struct BitStringOrOperation : public BitOrOperation {
-	template <class STATE>
-	static void Destroy(STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		D_ASSERT(state->is_set == false);
-		if (input.IsInlined()) {
-			state->value = input;
-		} else {
-			// non-inlined string, need to allocate space for it
-			auto len = input.GetSize();
-			auto ptr = new char[len];
-			memcpy(ptr, input.GetDataUnsafe(), len);
-
-			state->value = string_t(ptr, len);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseOr(input, state->value, state->value);
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
-		}
-	}
-};
-
 void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_or("bit_or");
 	for (auto &type : LogicalType::Integral()) {
@@ -263,108 +212,6 @@ void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 	        LogicalType::BIT, LogicalType::BIT));
 	set.AddFunction(bit_or);
 }
-
-struct BitXorOperation {
-	template <class STATE>
-	static void Initialize(STATE *state) {
-		//  If there are no matching rows, BIT_XOR() returns a null value.
-		state->is_set = false;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			OP::template Assign(state, input[idx]);
-			state->is_set = true;
-		} else {
-			OP::template Execute(state, input[idx]);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		state->value = input;
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value ^= input;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (!source.is_set) {
-			// source is NULL, nothing to do.
-			return;
-		}
-		if (!target->is_set) {
-			// target is NULL, use source value directly.
-			OP::template Assign(target, source.value);
-			target->is_set = true;
-		} else {
-			OP::template Execute(target, source.value);
-		}
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = state->value;
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
-
-struct BitStringXorOperation : public BitXorOperation {
-	template <class STATE>
-	static void Destroy(STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		D_ASSERT(state->is_set == false);
-		if (input.IsInlined()) {
-			state->value = input;
-		} else {
-			// non-inlined string, need to allocate space for it
-			auto len = input.GetSize();
-			auto ptr = new char[len];
-			memcpy(ptr, input.GetDataUnsafe(), len);
-
-			state->value = string_t(ptr, len);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseXor(input, state->value, state->value);
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
-		}
-	}
-};
 
 void BitXorFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_xor("bit_xor");
