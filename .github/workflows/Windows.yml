@@ -6,6 +6,7 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/nodejs/**'
       - 'tools/pythonpkg/**'
@@ -211,7 +212,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 178899d431e1d635d59b8e82a070ff6db0e8a092 && make release)
+        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
 
     - name: Test psqlodbc
       shell: bash

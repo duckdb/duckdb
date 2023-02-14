@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/between_type_mismatch.test
+# description: Between type mismatch
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE t0 (c1 USMALLINT);
+
+statement ok
+SELECT 1 FROM (SELECT 1) t1(c0) JOIN t0 ON c1 BETWEEN c0 AND 1;

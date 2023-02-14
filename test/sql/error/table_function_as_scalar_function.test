@@ -1,0 +1,8 @@
+# name: test/sql/error/table_function_as_scalar_function.test
+# description: Use a table function as a scalar function
+# group: [error]
+
+statement error
+SELECT read_csv('test.csv')
+----
+FROM

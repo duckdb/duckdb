@@ -14,6 +14,9 @@ namespace duckdb {
 
 struct DatetimeCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "datetime";
+
+public:
 	~DatetimeCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

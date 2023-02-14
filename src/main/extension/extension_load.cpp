@@ -170,16 +170,18 @@ string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
 		return "";
 	}
 	auto extension = path.substr(0, first_colon);
+
+	if (path.substr(first_colon, 3) == "://") {
+		// these are not extensions
+		return "";
+	}
+
 	D_ASSERT(extension.size() > 1);
 	// needs to be alphanumeric
 	for (auto &ch : extension) {
 		if (!isalnum(ch) && ch != '_') {
 			return "";
 		}
-	}
-	if (extension == "http" || extension == "https" || extension == "s3") {
-		// these are not extensions
-		return "";
 	}
 	return extension;
 }

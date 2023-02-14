@@ -92,7 +92,7 @@ public:
 	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
-	void ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
+	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Search Equal and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);

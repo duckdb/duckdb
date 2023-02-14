@@ -445,6 +445,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
+		return nullptr;
 	}
 	auto res_ref = make_unique<ResultHolder>();
 	vector<Value> duckdb_params;
@@ -489,6 +490,18 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else if (env->IsInstanceOf(param, J_Decimal)) {
 				jint precision = env->CallIntMethod(param, J_Decimal_precision);
 				jint scale = env->CallIntMethod(param, J_Decimal_scale);
+
+				// Java BigDecimal type can have scale that exceeds the precision
+				// Which our DECIMAL type does not support (assert(width >= scale))
+				if (scale > precision) {
+					precision = scale;
+				}
+
+				// DECIMAL scale is unsigned, so negative values are not supported
+				if (scale < 0) {
+					env->ThrowNew(J_SQLException, "Converting from a BigDecimal with negative scale is not supported");
+					return nullptr;
+				}
 
 				if (precision <= 18) { // normal sizes -> avoid string processing
 					jobject no_point_dec = env->CallObjectMethod(param, J_Decimal_scaleByPowTen, scale);

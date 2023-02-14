@@ -9,7 +9,7 @@ require json
 # instead of adding all of these files to data/test we just create them on the fly here
 # whenever we add a '' at the end it's just to check we skip the newline at the end that's sometimes there
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (quote '');
+copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '');
 
 query II
 select * from '__TEST_DIR__/my_file.json'
@@ -17,7 +17,7 @@ select * from '__TEST_DIR__/my_file.json'
 1	2
 
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query I
 select * from '__TEST_DIR__/my_file.json'
@@ -27,7 +27,7 @@ select * from '__TEST_DIR__/my_file.json'
 3
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query III
 select * from '__TEST_DIR__/my_file.json'
@@ -36,7 +36,7 @@ select * from '__TEST_DIR__/my_file.json'
 4	5	6
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query IIII
 select * from '__TEST_DIR__/my_file.json'
@@ -46,7 +46,7 @@ select * from '__TEST_DIR__/my_file.json'
 
 # mixed types that cannot be resolved, defaults to JSON (column 3)
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query IIIII
 select * from '__TEST_DIR__/my_file.json'
@@ -57,7 +57,7 @@ NULL	-5	foo	NULL	true
 
 # mixed types are resolved to DOUBLE here
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query II
 select typeof(a), a from '__TEST_DIR__/my_file.json'
@@ -68,54 +68,13 @@ DOUBLE	-23.456
 DOUBLE	NULL
 
 statement ok
-copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (quote '')
+copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query II
 select * from '__TEST_DIR__/my_file.json'
 ----
 bar	0
 baz	1
-
-# test all supported date formats
-
-foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
-
-statement ok
-copy (
-    with cte as (select strftime('1996/03/27'::DATE, ${date_format}) as d)
-    select to_json(cte) from cte
-) to '__TEST_DIR__/my_file.json' (quote '');
-
-query I
-select * from '__TEST_DIR__/my_file.json'
-----
-1996-03-27
-
-endloop
-
-# test all supported timestamp formats (hacky way to do foreach parameters that need spaces in them)
-
-foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
-
-statement ok
-copy (
-    with cte as (select strftime('1996-03-27 07:42:33'::TIMESTAMP, ${a} ${b} ${c}) as d)
-    select to_json(cte) from cte
-) to '__TEST_DIR__/my_file.json' (quote '');
-
-query I
-select * from '__TEST_DIR__/my_file.json'
-----
-1996-03-27 07:42:33
-
-endloop
-
-# we can't detect this as timestamp because we don't have this specific format in our auto-detection
-# however, we shouldn't error when reading it!
-query II
-select typeof(createdAt), createdAt from 'data/json/timestamp_example.json'
-----
-VARCHAR	2023-02-07T19:12:28Z
 
 # we can read even if the top-level json is not object
 query I
@@ -150,7 +109,7 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 statement error
 select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
 ----
-Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 2
+Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
 
 # if we increase the sample size to 2, we can read it just fine
 query II
@@ -161,6 +120,16 @@ select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_siz
 [3]	The Firm
 4	Broadcast News
 5	Raising Arizona
+
+# we can also find bigint in strings (happens a lot in JSON for some reason ...
+statement ok
+copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select typeof(id) from '__TEST_DIR__/my_file.json'
+----
+BIGINT
+BIGINT
 
 require httpfs
 

@@ -24,35 +24,41 @@ static DefaultMacro json_macros[] = {
 void JSONExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	auto &context = *con.context;
+	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// JSON type
 	auto json_type = JSONCommon::JSONType();
 	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);
 	type_info.temporary = true;
 	type_info.internal = true;
-	catalog.CreateType(*con.context, &type_info);
+	catalog.CreateType(context, &type_info);
 
 	// JSON casts
-	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(*con.context).GetCastFunctions());
+	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
 
 	// JSON scalar functions
 	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
-		catalog.CreateFunction(*con.context, &fun);
+		catalog.CreateFunction(context, &fun);
 	}
 
 	// JSON table functions
 	for (auto &fun : JSONFunctions::GetTableFunctions()) {
-		catalog.CreateTableFunction(*con.context, &fun);
+		catalog.CreateTableFunction(context, &fun);
 	}
 
+	// JSON replacement scan
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.replacement_scans.emplace_back(JSONFunctions::ReadJSONReplacement);
+
+	// JSON copy function
+	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
+	catalog.CreateCopyFunction(context, &copy_fun);
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
-		catalog.CreateFunction(*con.context, info.get());
+		catalog.CreateFunction(context, info.get());
 	}
 
 	con.Commit();

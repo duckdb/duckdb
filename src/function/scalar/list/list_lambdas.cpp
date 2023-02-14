@@ -5,6 +5,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 namespace duckdb {
 
@@ -362,6 +364,15 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
+
+	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
+		auto cast_lambda_expr =
+		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
+		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
+	}
+
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
