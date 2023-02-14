@@ -230,6 +230,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP, BindCastFromVarchar);
 	}
 };
 

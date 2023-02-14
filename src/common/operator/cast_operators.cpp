@@ -1554,16 +1554,22 @@ dtime_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
-		HandleCastError::AssignError(Timestamp::ConversionError(input), error_message);
-		return false;
+	auto cast_result = Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
+	if (cast_result == TimestampCastResult::SUCCESS) {
+		return true;
 	}
-	return true;
+	if (cast_result == TimestampCastResult::ERROR_INCORRECT_FORMAT) {
+		HandleCastError::AssignError(Timestamp::ConversionError(input), error_message);
+	} else {
+		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), error_message);
+	}
+	return false;
 }
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
+	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result) ==
+	       TimestampCastResult::SUCCESS;
 }
 
 template <>
