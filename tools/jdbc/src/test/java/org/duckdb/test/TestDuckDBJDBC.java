@@ -2615,11 +2615,8 @@ public class TestDuckDBJDBC {
 		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
 		ResultSet resultSet = null;
 		try {
-			final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
-			file.delete();
-			statement.execute("ATTACH '" + file.getAbsolutePath() + "' AS \"" + CATALOG_NAME + "\"");
-			file.deleteOnExit();
-			
+			statement.execute("ATTACH '' AS \"" + CATALOG_NAME + "\"");
+
 			final boolean supportsCatalogsInTableDefinitions = databaseMetaData.supportsCatalogsInTableDefinitions();
 			try {
 				statement.execute("CREATE TABLE " + qualifiedTableName + "(id int)");
@@ -2674,31 +2671,18 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_supports_catalogs_in_data_manipulation() throws Exception {
-		final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
-		final String filePath = file.getAbsolutePath();
 		final String CATALOG_NAME = "tmp";
 		final String TABLE_NAME = "t1";
 		final String COLUMN_NAME = "id";
 		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
-		file.delete();
-		Connection connection = null;
-		Statement statement = null;
-		
-		connection = DriverManager.getConnection("jdbc:duckdb:" + filePath);
-		file.deleteOnExit();
-		statement = connection.createStatement();
-		statement.execute("CREATE TABLE " + TABLE_NAME + "(" + COLUMN_NAME + " int)");
-		statement.close();
-		connection.close();
-		
-		Thread.currentThread().sleep(1000);
-		
-		connection = DriverManager.getConnection("jdbc:duckdb:");
+
+		final Connection connection = DriverManager.getConnection("jdbc:duckdb:");
 		final DatabaseMetaData databaseMetaData = connection.getMetaData();
-		statement = connection.createStatement();
+		final Statement statement = connection.createStatement();
 		ResultSet resultSet = null;
 		try {
-			statement.execute("ATTACH '" + filePath + "' AS \"" + CATALOG_NAME + "\"");
+			statement.execute("ATTACH '' AS \"" + CATALOG_NAME + "\"");
+			statement.execute("CREATE TABLE " + qualifiedTableName + "(" + COLUMN_NAME + " int)");
 			
 			final boolean supportsCatalogsInDataManipulation = databaseMetaData.supportsCatalogsInDataManipulation();
 			try {
@@ -2766,35 +2750,22 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_supports_catalogs_in_index_definitions() throws Exception {
-		final File file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb").toFile();
-		final String filePath = file.getAbsolutePath();
 		final String CATALOG_NAME = "tmp";
 		final String TABLE_NAME = "t1";
 		final String INDEX_NAME = "idx1";
 		final String qualifiedTableName = CATALOG_NAME + "." + TABLE_NAME;
 		final String qualifiedIndexName = CATALOG_NAME + "." + INDEX_NAME;
-		file.delete();
-		Connection connection = null;
-		Statement statement = null;
 		
-		connection = DriverManager.getConnection("jdbc:duckdb:" + filePath);
-		file.deleteOnExit();
-		statement = connection.createStatement();
-		statement.execute("CREATE TABLE " + TABLE_NAME + "(id int)");
-		statement.close();
-		connection.close();
-		
-		Thread.currentThread().sleep(1000);
-		
-		connection = DriverManager.getConnection("jdbc:duckdb:");
+		final Connection connection = DriverManager.getConnection("jdbc:duckdb:");
 		final DatabaseMetaData databaseMetaData = connection.getMetaData();
-		statement = connection.createStatement();
+		final Statement statement = connection.createStatement();
 		ResultSet resultSet = null;
 		try {
-			statement.execute("ATTACH '" + filePath + "' AS \"" + CATALOG_NAME + "\"");
+			statement.execute("ATTACH '' AS \"" + CATALOG_NAME + "\"");
 			
 			final boolean supportsCatalogsInIndexDefinitions = databaseMetaData.supportsCatalogsInIndexDefinitions();
 			try {
+				statement.execute("CREATE TABLE " + qualifiedTableName + "(id int)");
 				statement.execute("CREATE INDEX " + INDEX_NAME + " ON " + qualifiedTableName + "(ID)");
 				resultSet = statement.executeQuery(
 					"SELECT * FROM duckdb_indexes() " +
