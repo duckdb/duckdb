@@ -90,7 +90,7 @@ struct DistinctFrom {
 struct NotDistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return (left_null && right_null) || (!left_null && !right_null && Equals::Operation(left, right));
+		return !DistinctFrom::Operation(left, right, left_null, right_null);
 	}
 };
 
@@ -184,7 +184,7 @@ inline bool Equals::Operation(string_t left, string_t right) {
 }
 template <>
 inline bool NotEquals::Operation(string_t left, string_t right) {
-	return StringComparisonOperators::EqualsOrNot<true>(left, right);
+	return !Equals::Operation(left, right);
 }
 
 template <>
@@ -194,8 +194,7 @@ inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_
 }
 template <>
 inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (left_null != right_null) ||
-	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<true>(left, right));
+	return !NotDistinctFrom::Operation(left, right, left_null, right_null);
 }
 
 // compare up to shared length. if still the same, compare lengths
