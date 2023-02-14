@@ -8,7 +8,6 @@ PRAGMA enable_verification
 statement ok
 CREATE VIEW v1 AS SELECT * FROM (VALUES (1, {'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}), (2, NULL), (3, {'a': NULL, 'b': [4, 5, NULL]})) tbl (a, b);
 
-
 # cross product
 query IIII
 SELECT * FROM v1 v, v1 w ORDER BY v.a, w.a;

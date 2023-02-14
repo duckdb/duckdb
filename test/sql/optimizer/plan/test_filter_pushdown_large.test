@@ -15,8 +15,6 @@ CREATE TABLE vals2(k INTEGER, l INTEGER)
 statement ok
 INSERT INTO vals2 SELECT * FROM vals1
 
-mode skip
-
 # pushdown filters into subqueries
 query II
 SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i
@@ -163,8 +161,6 @@ SELECT * FROM (SELECT 0=1 AS cond FROM vals1, vals2 GROUP BY 1) a1 WHERE cond OR
 query I
 SELECT * FROM (SELECT 1 AS a FROM vals1, vals2 GROUP BY a) a1 WHERE a=0 ORDER BY 1
 ----
-
-mode unskip
 
 # duplicate filters across equivalency sets and pushdown cross product
 query I
