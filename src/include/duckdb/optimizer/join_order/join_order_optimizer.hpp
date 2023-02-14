@@ -105,6 +105,13 @@ private:
 
 	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
+
+	//! Used for debugging. Does not print a pretty tree, but gives enough information
+	//! to tell someone debugging what is being joined with what
+	//! Prints tree as
+	//! (table1, table2, table3) <- (table1) JOIN (table2, table3)
+	//! (table2, table3) <- (table2) JOIN (table3)
+	string HumanReadableJoinTree(JoinNode *node);
 };
 
 } // namespace duckdb

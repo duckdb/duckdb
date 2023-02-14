@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-
+#include "iostream"
 #include <algorithm>
 
 namespace std {
@@ -160,9 +160,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
-//			if (child->has_estimated_cardinality) {
-//				max_child_cardinality = MaxValue(max_child_cardinality, child->estimated_cardinality);
-//			}
 			// save the relation bindings from the optimized child. These later all get added to the
 			// parent cardinality_estimator relation column binding map.
 			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
@@ -230,12 +227,25 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto proj = (LogicalProjection *)op;
-		// we run the join order optimizer witin the subquery as well
+		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[proj->table_index] = relations.size();
+		auto relation_id = relations.size();
+		// push one child column binding map back.
+		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
+		child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
+		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
+		// This logical projection may sit on top of a logical comparison join that has been pushed down
+		// we want to copy the binding info of both tables
+		relation_mapping[proj->table_index] = relation_id;
+		for (auto &binding_info : child_binding_maps.at(0)) {
+			cardinality_estimator.AddRelationToColumnMapping(ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index, binding_info.second.column_index);
+		}
+//		relation_mapping[proj->table_index] = relation_id;
+		// grab the bindings in child join order optimizer and merge them with the bindings of the current optimizer
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -1011,6 +1021,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);
+	cardinality_estimator.UpdateRelationTableNames(&nodes_ops, &relation_mapping);
 
 	for (auto &node_op : nodes_ops) {
 		D_ASSERT(node_op.node);
@@ -1043,6 +1054,30 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now perform the actual reordering
 	return RewritePlan(std::move(plan), final_plan->second.get());
+}
+
+string JoinOrderOptimizer::HumanReadableJoinTree(JoinNode *node) {
+	if (!node || node->set->count == 1) {
+		return "";
+	}
+	string res = "(";
+	for(idx_t i = 0; i < node->set->count; i++) {
+		res += cardinality_estimator.GetTableName(node->set->relations[i]) + ", ";
+	}
+	res += ")";
+	// building left
+	res += " <- (";
+	for(idx_t i = 0; i < node->left->set->count; i++) {
+		res += cardinality_estimator.GetTableName(node->left->set->relations[i]) + ", ";;
+	}
+	res += ") JOIN (";
+	for(idx_t i = 0; i < node->right->set->count; i++) {
+		res += cardinality_estimator.GetTableName(node->right->set->relations[i]) + ", ";;
+	}
+	res += ") ";
+	res += HumanReadableJoinTree(node->left);
+	res += HumanReadableJoinTree(node->right);
+	return res;
 }
 
 } // namespace duckdb

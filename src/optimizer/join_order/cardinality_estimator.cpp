@@ -12,6 +12,9 @@
 namespace duckdb {
 
 static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
+	if (!op) {
+		return nullptr;
+	}
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto get = (LogicalGet *)op;
 	TableCatalogEntry *entry = get->GetTable();
@@ -311,8 +314,8 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		// We should never be calling GetLogicalGet without a valid table_index.
-		// We are attempting to get the catalog table for a relation, and a logical join
-		// means there is a non-reorderable relation in the join plan. This means we need
+		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
+		// A logical join means there is a non-reorderable relation in the join plan. This means we need
 		// to know the exact table index to return.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
 		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
@@ -393,6 +396,43 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 }
 
+void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
+                                                    unordered_map<idx_t, idx_t> *relation_mapping) {
+//#ifdef debug
+	for (idx_t i = 0; i < node_ops->size(); i++) {
+		auto join_node = (*node_ops)[i].node.get();
+		auto op = (*node_ops)[i].op;
+		auto relation_id = join_node->set->relations[0];
+		// some relations are non-reorderable joins so they may have multiple tables within them that
+		// we need to add to our names
+		vector<idx_t> tables_in_relation;
+		for (auto &it : *relation_mapping) {
+			if (it.second == relation_id) {
+				tables_in_relation.push_back(it.first);
+			}
+		}
+
+		TableCatalogEntry *catalog_table = nullptr;
+		LogicalGet *get = nullptr;
+		for (auto &table_index : tables_in_relation) {
+			get = GetLogicalGet(op, table_index);
+			if (get) {
+				catalog_table = GetCatalogTableEntry(get);
+			}
+			if (catalog_table) {
+				// add original name for debugging. If the relation represents a non reorderable join
+				// Get the table information of each table underneath.
+				if (relation_attributes[relation_id].original_name.length() == 0) {
+					relation_attributes[relation_id].original_name += catalog_table->name;
+				} else {
+					relation_attributes[relation_id].original_name += ", " + catalog_table->name;
+				}
+			}
+		}
+	}
+//#endif
+}
+
 
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
@@ -400,7 +440,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
 	TableCatalogEntry *catalog_table = nullptr;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
-	unordered_set<idx_t>::iterator ite;
 	idx_t distinct_count = node->GetBaseTableCardinality();
 
 	bool direct_filter = false;
@@ -410,9 +449,9 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
-		auto actual_binding = relation_column_to_original_column[key];
-		if (!get || get->table_index != actual_binding.table_index) {
-			get = GetLogicalGet(op, actual_binding.table_index);
+		auto actual_binding = relation_column_to_original_column.find(key);
+		if (actual_binding != relation_column_to_original_column.end() && (!get || get->table_index != actual_binding->second.table_index)) {
+			get = GetLogicalGet(op, actual_binding->second.table_index);
 		} else {
 			get_updated = false;
 		}
@@ -424,9 +463,8 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		}
 
 		if (catalog_table) {
-			relation_attributes[relation_id].original_name = catalog_table->name;
 			// Get HLL stats here
-			auto base_stats = catalog_table->GetStatistics(context, actual_binding.column_index);
+			auto base_stats = catalog_table->GetStatistics(context, actual_binding->second.column_index);
 			if (base_stats) {
 				distinct_count = base_stats->GetDistinctCount();
 			}
@@ -483,16 +521,9 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	}
 }
 
-TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
-	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		// otherwise get the LogicalGet
-		auto get = GetLogicalGet(op);
-		return get ? &get->table_filters : nullptr;
-	}
-	// we don't need to inspect filters for a logical comparison join
-	// The operator is a logical comparison join if it is a non-reorderable join.
-	// So the optimizations and cardinality have already been estimated.
-	return nullptr;
+TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op, idx_t table_index) {
+	auto get = GetLogicalGet(op, table_index);
+	return get ? &get->table_filters : nullptr;
 }
 
 idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *filter,
@@ -553,9 +584,9 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	return cardinality_after_filters;
 }
 
-idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
+idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index) {
 	idx_t cardinality_after_filters = cardinality;
-	auto get = GetLogicalGet(op);
+	auto get = GetLogicalGet(op, table_index);
 	unique_ptr<BaseStatistics> column_statistics;
 	for (auto &it : table_filters->filters) {
 		column_statistics = nullptr;
@@ -586,17 +617,38 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 
 void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op) {
 	auto has_logical_filter = IsLogicalFilter(op);
-	auto table_filters = GetTableFilters(op);
+	D_ASSERT(node->set->count == 1);
+	auto relation_id = node->set->relations[0];
 
-	auto card_after_filters = node->GetBaseTableCardinality();
-	if (table_filters) {
-		double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters);
-		card_after_filters = MinValue(inspect_result, (double)card_after_filters);
+	TableFilterSet* table_filters = nullptr;
+
+	double lowest_card_found = NumericLimits<double>::Maximum();
+	for (auto &column : relation_attributes[relation_id].columns) {
+		auto card_after_filters = node->GetBaseTableCardinality();
+		ColumnBinding key = ColumnBinding(relation_id, column);
+		auto actual_binding = relation_column_to_original_column.find(key);
+		if (actual_binding != relation_column_to_original_column.end()) {
+			table_filters = GetTableFilters(op, actual_binding->second.table_index);
+		}
+
+		if (table_filters) {
+			double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters, actual_binding->second.table_index);
+			card_after_filters = MinValue(inspect_result, (double)card_after_filters);
+		}
+		if (has_logical_filter) {
+			card_after_filters *= DEFAULT_SELECTIVITY;
+		}
+		lowest_card_found = MinValue(card_after_filters, lowest_card_found);
 	}
-	if (has_logical_filter) {
-		card_after_filters *= DEFAULT_SELECTIVITY;
+	node->SetEstimatedCardinality(lowest_card_found);
+}
+
+string CardinalityEstimator::GetTableName(idx_t relation_id) {
+	auto attributes = relation_attributes.find(relation_id);
+	if (attributes == relation_attributes.end()) {
+		return "UNKNOWN " + to_string(relation_id);
 	}
-	node->SetEstimatedCardinality(card_after_filters);
+	return attributes->second.original_name;
 }
 
 } // namespace duckdb

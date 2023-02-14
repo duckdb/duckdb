@@ -95,6 +95,10 @@ public:
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
 	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
 
+	string GetTableName(idx_t relation_id);
+	//! For debugging purposes
+	void UpdateRelationTableNames(vector<NodeOp> *node_ops, unordered_map<idx_t, idx_t> *relation_mapping);
+
 private:
 	bool SingleColumnFilter(FilterInfo *filter_info);
 	//! Filter & bindings -> list of indexes into the equivalent_relations array.
@@ -106,7 +110,7 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	TableFilterSet *GetTableFilters(LogicalOperator *op);
+	TableFilterSet *GetTableFilters(LogicalOperator *op, idx_t table_index);
 
 	void AddRelationTdom(FilterInfo *filter_info);
 	bool EmptyFilter(FilterInfo *filter_info);
@@ -115,7 +119,8 @@ private:
 	                            unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
 	                           unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters);
+	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index);
+
 };
 
 } // namespace duckdb
