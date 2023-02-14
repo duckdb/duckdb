@@ -65,33 +65,33 @@ inline bool ValuePositionComparator::Final<duckdb::NotEquals>(const Value &lhs, 
 // Non-strict inequalities must use strict comparisons for Definite
 template <>
 bool ValuePositionComparator::Definite<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return ValueOperations::DistinctLessThan(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return ValueOperations::DistinctLessThanEquals(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Definite<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return ValueOperations::DistinctGreaterThan(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return ValueOperations::DistinctGreaterThanEquals(lhs, rhs);
-}
-
-// Strict inequalities just use strict for both Definite and Final
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThan>(const Value &lhs, const Value &rhs) {
-	return ValueOperations::DistinctLessThan(lhs, rhs);
+	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(lhs, rhs);
 }
 
 template <>
 bool ValuePositionComparator::Final<duckdb::GreaterThan>(const Value &lhs, const Value &rhs) {
 	return ValueOperations::DistinctGreaterThan(lhs, rhs);
+}
+
+template <>
+bool ValuePositionComparator::Final<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
+	return !ValuePositionComparator::Final<duckdb::GreaterThan>(lhs, rhs);
+}
+
+template <>
+bool ValuePositionComparator::Definite<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
+	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(rhs, lhs);
+}
+
+template <>
+bool ValuePositionComparator::Final<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
+	return !ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
+}
+
+// Strict inequalities just use strict for both Definite and Final
+template <>
+bool ValuePositionComparator::Final<duckdb::LessThan>(const Value &lhs, const Value &rhs) {
+	return ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
 }
 
 template <class OP>
@@ -194,10 +194,7 @@ bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
-	if (left.IsNull() || right.IsNull()) {
-		throw InternalException("Comparison on NULL values");
-	}
-	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
+	return !ValueOperations::GreaterThan(right, left);
 }
 
 bool ValueOperations::LessThan(const Value &left, const Value &right) {
@@ -205,7 +202,7 @@ bool ValueOperations::LessThan(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::LessThanEquals(const Value &left, const Value &right) {
-	return ValueOperations::GreaterThanEquals(right, left);
+	return !ValueOperations::GreaterThan(left, right);
 }
 
 bool ValueOperations::NotDistinctFrom(const Value &left, const Value &right) {
