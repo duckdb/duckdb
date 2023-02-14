@@ -277,6 +277,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expressions));
 }
 
+string DuckDBPyRelation::ToSQL() {
+	if (!rel) {
+		// This relation is just a wrapper around a result set, can't figure out what the SQL was
+		return "";
+	}
+	try {
+		return rel->GetQueryNode()->ToString();
+	} catch (const std::exception &e) {
+		return "";
+	}
+}
+
 string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
                                                 const string &groups, const string &function_parameter,
                                                 const string &projected_columns, const string &window_function) {
