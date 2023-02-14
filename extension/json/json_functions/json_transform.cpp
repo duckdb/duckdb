@@ -253,6 +253,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
                                     Vector &string_vector, JSONTransformOptions &options) {
 	auto data = (string_t *)FlatVector::GetData(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
+	validity.SetAllValid(count);
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
