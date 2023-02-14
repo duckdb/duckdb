@@ -1,0 +1,23 @@
+# name: test/sql/join/semianti/anti.test
+# description: Test positional joins
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE one (a INTEGER);
+
+statement ok
+INSERT INTO one VALUES(42), (43);
+
+statement ok
+CREATE TABLE two (a INTEGER);
+
+statement ok
+INSERT INTO two VALUES(42);
+
+query I
+SELECT * FROM one ANTI JOIN two ON one.a = two.a;
+----
+43
