@@ -57,6 +57,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
+	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result.emplace_back(table_idx, i);
 	}
@@ -84,6 +85,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
+			D_ASSERT(index < bindings.size());
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;

@@ -301,6 +301,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		insert.on_conflict_condition = std::move(condition);
 	}
 
+	auto bindings = insert.children[0]->GetColumnBindings();
 	idx_t projection_index = DConstants::INVALID_INDEX;
 	std::vector<unique_ptr<LogicalOperator>> *insert_child_operators;
 	insert_child_operators = &insert.children;
