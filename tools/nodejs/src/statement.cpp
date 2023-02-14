@@ -34,7 +34,37 @@ struct PrepareTask : public Task {
 
 	void DoWork() override {
 		auto &statement = Get<Statement>();
-		statement.statement = statement.connection_ref->connection->Prepare(statement.sql);
+
+		auto &connection = statement.connection_ref->connection;
+		std::vector<std::unique_ptr<duckdb::SQLStatement>> statements;
+		try {
+			if (connection == nullptr) {
+				throw duckdb::ConnectionException("Connection was never established or has been closed already");
+			}
+			statements = connection->ExtractStatements(statement.sql);
+			if (statements.empty()) {
+				throw duckdb::InvalidInputException("No statement to prepare!");
+			}
+		} catch (const duckdb::Exception &ex) {
+			statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+			return;
+		} catch (std::exception &ex) {
+			statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+			return;
+		}
+
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto pending_query = connection->PendingQuery(std::move(statements[i]));
+			auto res = pending_query->Execute();
+
+			if (res->HasError()) {
+				res->ThrowError();
+			}
+		}
+
+		statement.statement = connection->Prepare(std::move(statements.back()));
 	}
 
 	void Callback() override {
