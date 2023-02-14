@@ -244,8 +244,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			cardinality_estimator.AddRelationToColumnMapping(ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
 			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index, binding_info.second.column_index);
 		}
-//		relation_mapping[proj->table_index] = relation_id;
-		// grab the bindings in child join order optimizer and merge them with the bindings of the current optimizer
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -1054,30 +1052,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now perform the actual reordering
 	return RewritePlan(std::move(plan), final_plan->second.get());
-}
-
-string JoinOrderOptimizer::HumanReadableJoinTree(JoinNode *node) {
-	if (!node || node->set->count == 1) {
-		return "";
-	}
-	string res = "(";
-	for(idx_t i = 0; i < node->set->count; i++) {
-		res += cardinality_estimator.GetTableName(node->set->relations[i]) + ", ";
-	}
-	res += ")";
-	// building left
-	res += " <- (";
-	for(idx_t i = 0; i < node->left->set->count; i++) {
-		res += cardinality_estimator.GetTableName(node->left->set->relations[i]) + ", ";;
-	}
-	res += ") JOIN (";
-	for(idx_t i = 0; i < node->right->set->count; i++) {
-		res += cardinality_estimator.GetTableName(node->right->set->relations[i]) + ", ";;
-	}
-	res += ") ";
-	res += HumanReadableJoinTree(node->left);
-	res += HumanReadableJoinTree(node->right);
-	return res;
 }
 
 } // namespace duckdb

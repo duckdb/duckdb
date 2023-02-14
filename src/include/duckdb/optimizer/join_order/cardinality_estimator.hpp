@@ -95,10 +95,6 @@ public:
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
 	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
 
-	string GetTableName(idx_t relation_id);
-	//! For debugging purposes
-	void UpdateRelationTableNames(vector<NodeOp> *node_ops, unordered_map<idx_t, idx_t> *relation_mapping);
-
 private:
 	bool SingleColumnFilter(FilterInfo *filter_info);
 	//! Filter & bindings -> list of indexes into the equivalent_relations array.

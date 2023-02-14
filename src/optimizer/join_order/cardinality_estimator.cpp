@@ -643,12 +643,4 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	node->SetEstimatedCardinality(lowest_card_found);
 }
 
-string CardinalityEstimator::GetTableName(idx_t relation_id) {
-	auto attributes = relation_attributes.find(relation_id);
-	if (attributes == relation_attributes.end()) {
-		return "UNKNOWN " + to_string(relation_id);
-	}
-	return attributes->second.original_name;
-}
-
 } // namespace duckdb
