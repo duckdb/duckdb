@@ -28,7 +28,16 @@ has a timestamp that is not UTC
 
 require icu
 
-query I
+# FIXME: we should be able to make this work
+statement error
 SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
 ----
-2021-05-25 09:55:03.382494
+has a timestamp that is not UTC
+
+statement ok
+SET TimeZone='UTC'
+
+query I
+SELECT TIMESTAMPTZ '2021-05-25 04:55:03.382494 EST';
+----
+2021-05-25 09:55:03.382494+00

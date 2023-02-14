@@ -13,12 +13,18 @@ timestamp that is not UTC
 
 require icu
 
-# with ICU loaded this works though
+# we can load this into a timestamptz table
 statement ok
-COPY tbl FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+CREATE TABLE tbl_tz(id int, ts timestamptz);
+
+statement ok
+COPY tbl_tz FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+
+statement ok
+SET TimeZone='UTC'
 
 query II
-SELECT * FROM tbl
+SELECT * FROM tbl_tz
 ----
-1	2021-05-25 04:55:03.382494
-2	2021-05-25 09:55:03.382494
+1	2021-05-25 04:55:03.382494+00
+2	2021-05-25 09:55:03.382494+00

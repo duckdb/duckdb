@@ -118,8 +118,8 @@ string Timestamp::ConversionError(const string &str) {
 }
 
 string Timestamp::UnsupportedTimezoneError(const string &str) {
-	return StringUtil::Format("timestamp field value \"%s\" has a timestamp that is not UTC. This cannot be converted "
-	                          "without the ICU extension load. Try INSTALL icu, LOAD icu.",
+	return StringUtil::Format("timestamp field value \"%s\" has a timestamp that is not UTC.\nUse the TIMESTAMPTZ type "
+	                          "with the ICU extension loaded to handle non-UTC timestamps.",
 	                          str);
 }
 
