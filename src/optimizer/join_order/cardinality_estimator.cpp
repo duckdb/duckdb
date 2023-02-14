@@ -398,7 +398,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 
 void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
                                                     unordered_map<idx_t, idx_t> *relation_mapping) {
-//#ifdef debug
+	//#ifdef debug
 	for (idx_t i = 0; i < node_ops->size(); i++) {
 		auto join_node = (*node_ops)[i].node.get();
 		auto op = (*node_ops)[i].op;
@@ -430,10 +430,8 @@ void CardinalityEstimator::UpdateRelationTableNames(vector<NodeOp> *node_ops,
 			}
 		}
 	}
-//#endif
+	//#endif
 }
-
-
 
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
@@ -443,14 +441,15 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	idx_t distinct_count = node->GetBaseTableCardinality();
 
 	bool direct_filter = false;
-	LogicalGet* get = nullptr;
+	LogicalGet *get = nullptr;
 	bool get_updated = true;
 	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		auto actual_binding = relation_column_to_original_column.find(key);
-		if (actual_binding != relation_column_to_original_column.end() && (!get || get->table_index != actual_binding->second.table_index)) {
+		if (actual_binding != relation_column_to_original_column.end() &&
+		    (!get || get->table_index != actual_binding->second.table_index)) {
 			get = GetLogicalGet(op, actual_binding->second.table_index);
 		} else {
 			get_updated = false;
@@ -584,7 +583,8 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	return cardinality_after_filters;
 }
 
-idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index) {
+idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters,
+                                                idx_t table_index) {
 	idx_t cardinality_after_filters = cardinality;
 	auto get = GetLogicalGet(op, table_index);
 	unique_ptr<BaseStatistics> column_statistics;
@@ -620,7 +620,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	D_ASSERT(node->set->count == 1);
 	auto relation_id = node->set->relations[0];
 
-	TableFilterSet* table_filters = nullptr;
+	TableFilterSet *table_filters = nullptr;
 
 	double lowest_card_found = NumericLimits<double>::Maximum();
 	for (auto &column : relation_attributes[relation_id].columns) {
@@ -632,7 +632,8 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 		}
 
 		if (table_filters) {
-			double inspect_result = (double)InspectTableFilters(card_after_filters, op, table_filters, actual_binding->second.table_index);
+			double inspect_result =
+			    (double)InspectTableFilters(card_after_filters, op, table_filters, actual_binding->second.table_index);
 			card_after_filters = MinValue(inspect_result, (double)card_after_filters);
 		}
 		if (has_logical_filter) {

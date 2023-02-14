@@ -116,7 +116,6 @@ private:
 	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
 	                           unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index);
-
 };
 
 } // namespace duckdb
