@@ -37,13 +37,10 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 ClientContext &MetaBlockReader::GetContext() {
-	auto &db = block_manager.buffer_manager.GetDatabase();
-	auto &conn_manager = db.GetConnectionManager();
-	auto client_context = conn_manager.GetConnection(&db);
-	if (!client_context) {
-		throw InternalException("Database Instance without Client Context");
+	if (!context) {
+		throw InternalException("Meta Block Reader is missing context");
 	}
-	return *client_context;
+	return *context;
 }
 Catalog *MetaBlockReader::GetCatalog() {
 	return catalog;
@@ -65,6 +62,16 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	next_block = Load<block_id_t>(handle.Ptr());
 	D_ASSERT(next_block >= -1);
 	offset = sizeof(block_id_t);
+}
+
+void MetaBlockReader::SetCatalog(Catalog *catalog_p) {
+	D_ASSERT(!catalog);
+	catalog = catalog_p;
+}
+
+void MetaBlockReader::SetContext(ClientContext *context_p) {
+	D_ASSERT(!context);
+	context = context_p;
 }
 
 } // namespace duckdb
