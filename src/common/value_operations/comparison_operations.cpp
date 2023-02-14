@@ -231,12 +231,7 @@ bool ValueOperations::DistinctGreaterThan(const Value &left, const Value &right)
 }
 
 bool ValueOperations::DistinctGreaterThanEquals(const Value &left, const Value &right) {
-	if (left.IsNull()) {
-		return true;
-	} else if (right.IsNull()) {
-		return false;
-	}
-	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
+	return !ValueOperations::DistinctGreaterThan(right, left);
 }
 
 bool ValueOperations::DistinctLessThan(const Value &left, const Value &right) {
@@ -244,7 +239,7 @@ bool ValueOperations::DistinctLessThan(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::DistinctLessThanEquals(const Value &left, const Value &right) {
-	return ValueOperations::DistinctGreaterThanEquals(right, left);
+	return !ValueOperations::DistinctGreaterThan(left, right);
 }
 
 } // namespace duckdb
