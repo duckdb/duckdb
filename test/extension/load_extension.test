@@ -2,6 +2,8 @@
 # description: Try loading a shared object with an extension
 # group: [extension]
 
+require notmingw
+
 require skip_reload
 
 statement ok
