@@ -30,6 +30,7 @@ JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &
 
 void JSONFileHandle::Close() {
 	file_handle->Close();
+	cached_buffers.clear();
 }
 
 idx_t JSONFileHandle::FileSize() const {
