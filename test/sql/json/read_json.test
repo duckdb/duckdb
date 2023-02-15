@@ -4,13 +4,8 @@
 
 require json
 
-#statement ok
-#pragma enable_verification
-
 statement ok
-pragma threads=1
-
-mode skip
+pragma enable_verification
 
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
@@ -198,24 +193,30 @@ select * from read_json('data/json/top_level_array.json', columns={conclusion: '
 cancelled
 cancelled
 
-mode unskip
-
 # test that we can read a list of longer than STANDARD_VECTOR_SIZE properly
 statement ok
 copy (select list(to_json({duck: 42})) from range(10000)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array_of_objects')
+----
+10000
 
 query T
 select sum(duck) = 42*10000 from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array_of_objects')
 ----
 true
 
-# read_json_auto also understands
+# read_json_auto also understands array of objects
+query T
+select count(*) from '__TEST_DIR__/my_file.json'
+----
+10000
+
 query T
 select sum(duck) = 42*10000 from '__TEST_DIR__/my_file.json'
 ----
 true
-
-mode skip
 
 statement ok
 pragma disable_verification

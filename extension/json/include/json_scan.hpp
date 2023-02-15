@@ -316,7 +316,6 @@ public:
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;
 
-		// TODO: might be able to do some of these
 		table_function.projection_pushdown = false;
 		table_function.filter_pushdown = false;
 		table_function.filter_prune = false;
