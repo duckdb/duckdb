@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "iostream"
 #include <algorithm>
 
 namespace std {
