@@ -79,6 +79,7 @@ void JSONFileHandle::ReadAtPosition(const char *pointer, idx_t size, idx_t posit
 
 	if (!cached_buffers.empty() || position < cached_size) {
 		ReadFromCache(pointer, size, position);
+		actual_reads++;
 	}
 	if (size != 0) {
 		file_handle->Read((void *)pointer, size, position);
@@ -263,6 +264,8 @@ void BufferedJSONReader::Reset() {
 
 void JSONFileHandle::Reset() {
 	read_position = 0;
+	requested_reads = 0;
+	actual_reads = 0;
 	if (plain_file_source) {
 		file_handle->Reset();
 	}

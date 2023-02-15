@@ -183,7 +183,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &b
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
       json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
-      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+      is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON objects when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size + YYJSON_PADDING_SIZE);
@@ -367,6 +367,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	if (current_reader) {
 		D_ASSERT(current_buffer_handle);
 		current_reader->SetBufferLineOrObjectCount(current_buffer_handle->buffer_index, lines_or_objects_in_buffer);
+		if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
+			// Close files that are done if we're not sampling
+			current_reader->CloseJSONFile();
+		}
 	}
 
 	AllocatedData buffer;
@@ -501,11 +505,6 @@ void JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate, idx_t &buff
 		ReadNextBufferSeek(gstate, buffer_index);
 	} else {
 		ReadNextBufferNoSeek(gstate, buffer_index);
-	}
-
-	if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
-		// Close files that are done if we're not sampling
-		current_reader->CloseJSONFile();
 	}
 }
 

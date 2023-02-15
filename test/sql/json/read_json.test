@@ -166,7 +166,7 @@ SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.j
 5	JSON[]	"Raising"
 5	JSON[]	"Arizona"
 
-# with depth 1 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
+# with depth 0 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
 SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
 ----
