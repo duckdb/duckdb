@@ -3,6 +3,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -75,7 +76,7 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+			throw FileSystem::MissingFileException(file_pattern, context);
 		}
 		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());
 	}
