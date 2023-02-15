@@ -146,20 +146,12 @@ template <>
 inline bool GreaterThan::Operation(bool left, bool right) {
 	return !right && left;
 }
-template <>
-inline bool LessThan::Operation(bool left, bool right) {
-	return !left && right;
-}
 //===--------------------------------------------------------------------===//
 // Specialized String Comparison Operations
 //===--------------------------------------------------------------------===//
 template <>
 inline bool Equals::Operation(string_t left, string_t right) {
 	return left == right;
-}
-template <>
-inline bool NotEquals::Operation(string_t left, string_t right) {
-	return !Equals::Operation(left, right);
 }
 
 template <>
@@ -176,20 +168,6 @@ inline bool GreaterThan::Operation(string_t left, string_t right) {
 	return left > right;
 }
 
-template <>
-inline bool GreaterThanEquals::Operation(string_t left, string_t right) {
-	return !GreaterThan::Operation(right, left);
-}
-
-template <>
-inline bool LessThan::Operation(string_t left, string_t right) {
-	return GreaterThan::Operation(right, left);
-}
-
-template <>
-inline bool LessThanEquals::Operation(string_t left, string_t right) {
-	return !GreaterThan::Operation(left, right);
-}
 //===--------------------------------------------------------------------===//
 // Specialized Interval Comparison Operators
 //===--------------------------------------------------------------------===//
@@ -198,24 +176,8 @@ inline bool Equals::Operation(interval_t left, interval_t right) {
 	return Interval::Equals(left, right);
 }
 template <>
-inline bool NotEquals::Operation(interval_t left, interval_t right) {
-	return !Equals::Operation(left, right);
-}
-template <>
 inline bool GreaterThan::Operation(interval_t left, interval_t right) {
 	return Interval::GreaterThan(left, right);
-}
-template <>
-inline bool GreaterThanEquals::Operation(interval_t left, interval_t right) {
-	return Interval::GreaterThanEquals(left, right);
-}
-template <>
-inline bool LessThan::Operation(interval_t left, interval_t right) {
-	return GreaterThan::Operation(right, left);
-}
-template <>
-inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
-	return GreaterThanEquals::Operation(right, left);
 }
 
 template <>
@@ -244,17 +206,5 @@ inline bool NotEquals::Operation(hugeint_t left, hugeint_t right) {
 template <>
 inline bool GreaterThan::Operation(hugeint_t left, hugeint_t right) {
 	return Hugeint::GreaterThan(left, right);
-}
-template <>
-inline bool GreaterThanEquals::Operation(hugeint_t left, hugeint_t right) {
-	return !GreaterThan::Operation(right, left);
-}
-template <>
-inline bool LessThan::Operation(hugeint_t left, hugeint_t right) {
-	return GreaterThan::Operation(right, left);
-}
-template <>
-inline bool LessThanEquals::Operation(hugeint_t left, hugeint_t right) {
-	return !GreaterThan::Operation(left, right);
 }
 } // namespace duckdb
