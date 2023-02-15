@@ -28,6 +28,9 @@ InsertStatement::InsertStatement(const InsertStatement &other)
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog) {
 	cte_map = other.cte_map.Copy();
+	if (other.table_ref) {
+		table_ref = other.table_ref->Copy();
+	}
 	if (other.on_conflict_info) {
 		on_conflict_info = other.on_conflict_info->Copy();
 	}
