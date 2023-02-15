@@ -17,7 +17,17 @@ SELECT '${val}'::${type} + 1
 nan
 
 query I
+SELECT '${val}'::${type} + 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} - 1
+----
+nan
+
+query I
+SELECT '${val}'::${type} - 'inf'::${type}
 ----
 nan
 
@@ -27,12 +37,27 @@ SELECT '${val}'::${type} * 1
 nan
 
 query I
+SELECT '${val}'::${type} * 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} / 1
 ----
 nan
 
 query I
+SELECT '${val}'::${type} / 'inf'::${type}
+----
+nan
+
+query I
 SELECT '${val}'::${type} % 1
+----
+nan
+
+query I
+SELECT '${val}'::${type} % 'inf'::${type}
 ----
 nan
 
@@ -47,120 +72,106 @@ endloop
 
 
 foreach type FLOAT DOUBLE
-
-foreach val inf
-
 # any arithmetic on a nan value will result in a nan value
 
 query I
-SELECT '${val}'::${type} + 1
+SELECT 'inf'::${type} + 1
 ----
 inf
-
 
 # inf + inf = inf
 query I
-SELECT '${val}'::${type} + '${val}'::${type} 
+SELECT 'inf'::${type} + 'inf'::${type} 
 ----
 inf
 
-
 query I
-SELECT '${val}'::${type} - 1
+SELECT 'inf'::${type} - 1
 ----
 inf
 
 # inf - inf = nan
 query I
-SELECT '${val}'::${type} - '${val}'::${type} 
+SELECT 'inf'::${type} - 'inf'::${type} 
 ----
 nan
 
-
 query I
-SELECT '${val}'::${type} * 1
+SELECT 'inf'::${type} * 1
 ----
 inf
 
 # inf * inf = inf
 query I
-SELECT '${val}'::${type} * '${val}'::${type}
+SELECT 'inf'::${type} * 'inf'::${type}
 ----
 inf
 
-# inf * -inf = nan
+# inf * -inf = -inf
 query I
-SELECT '${val}'::${type} * '-${val}'::${type}
+SELECT 'inf'::${type} * '-inf'::${type}
 ----
 -inf
 
 query I
-SELECT '${val}'::${type} / 1
+SELECT 'inf'::${type} / 1
 ----
 inf
 
 query I
-SELECT 1 / '${val}'::${type}
+SELECT 1 / 'inf'::${type}
 ----
 0
 
 query I
-SELECT '${val}'::${type} % 1
+SELECT 'inf'::${type} % 1
 ----
 nan
 
 query I
-SELECT 1 % '${val}'::${type}
+SELECT 1 % 'inf'::${type}
 ----
 1
 
 query I
-SELECT -('${val}'::${type})
+SELECT -('inf'::${type})
 ----
 -inf
-
-endloop
 
 endloop
 
 
 foreach type FLOAT DOUBLE
 
-foreach val -inf
-
-# any arithmetic on a nan value will result in a nan value
-
 query I
-SELECT '${val}'::${type} + 1
+SELECT '-inf'::${type} + 1
 ----
 -inf
 
 query I
-SELECT '${val}'::${type} - 1
+SELECT '-inf'::${type} - 1
 ----
 -inf
 
 query I
-SELECT '${val}'::${type} * 1
+SELECT '-inf'::${type} * 1
 ----
 -inf
 
 query I
-SELECT '${val}'::${type} / 1
+SELECT '-inf'::${type} / 1
 ----
 -inf
 
 query I
-SELECT '${val}'::${type} % 1
+SELECT '-inf'::${type} % 1
 ----
 nan
 
 query I
-SELECT -('${val}'::${type})
+SELECT -('-inf'::${type})
 ----
 inf
-
-endloop
 
 endloop
 
