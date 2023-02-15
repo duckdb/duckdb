@@ -146,22 +146,22 @@ public:
 			//     either way, they can't represent the same underlying string
 			return false;
 		}
+		// compare up to shared length. if still the same, compare lengths
+		static bool GreaterThan(const string_t &left, const string_t &right) {
+			auto memcmp_res =
+			    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), std::min(left.GetSize(), right.GetSize()));
+			auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
+			return final_res;
+		}
+
 	};
 
 	bool operator==(const string_t &r) const {
 		return StringComparisonOperators::Equals(*this, r);
 	}
 
-	// compare up to shared length. if still the same, compare lengths
-	static bool string_compare_greater_than(string_t left, string_t right) {
-		auto memcmp_res =
-		    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), std::min(left.GetSize(), right.GetSize()));
-		auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
-		return final_res;
-	}
-
 	bool operator>(const string_t &r) const {
-		return string_compare_greater_than(*this, r);
+		return StringComparisonOperators::GreaterThan(*this, r);
 	}
 	bool operator<(const string_t &r) const {
 		return r > *this;
