@@ -14,8 +14,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float SubtractOperator::Operation(float left, float right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
+		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::SUBTRACT);
 	}
 	auto result = left - right;
 	if (!Value::FloatIsFinite(result)) {
@@ -26,8 +26,8 @@ float SubtractOperator::Operation(float left, float right) {
 
 template <>
 double SubtractOperator::Operation(double left, double right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
+		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::SUBTRACT);
 	}
 	auto result = left - right;
 	if (!Value::DoubleIsFinite(result)) {

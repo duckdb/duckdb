@@ -265,15 +265,6 @@ public:
 	}
 	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 
-	// Values are not Nan, +inf, -inf, or NULL
-	template <class T>
-	static bool OperationIsSimple(T a, T b) {
-		return false;
-	}
-	template <class T>
-	static T HandleSpecialArithemetic(T a, T b) {
-		throw Exception("should not be calling Handle special operation on value of type");
-	}
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
 	}

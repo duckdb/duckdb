@@ -15,8 +15,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float MultiplyOperator::Operation(float left, float right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
+		return NanInfHandler::HandleMult(left, right);
 	}
 	auto result = left * right;
 	if (!Value::FloatIsFinite(result)) {
@@ -27,8 +27,8 @@ float MultiplyOperator::Operation(float left, float right) {
 
 template <>
 double MultiplyOperator::Operation(double left, double right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
+		return NanInfHandler::HandleMult(left, right);
 	}
 	auto result = left * right;
 	if (!Value::DoubleIsFinite(result)) {

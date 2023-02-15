@@ -422,11 +422,11 @@ struct NegateOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		auto cast = (TR)input;
+		if (!Value::IsFinite(input)) {
+			return NanInfHandler::HandleNegate(input);
+		}
 		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
-		}
-		if (Value::IsNan(input)) {
-			return input;
 		}
 		return -cast;
 	}
@@ -805,8 +805,8 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float DivideOperator::Operation(float left, float right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
+		return NanInfHandler::HandleDiv(left, right);
 	}
 	auto result = left / right;
 	if (!Value::FloatIsFinite(result)) {
@@ -817,8 +817,8 @@ float DivideOperator::Operation(float left, float right) {
 
 template <>
 double DivideOperator::Operation(double left, double right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
+		return NanInfHandler::HandleDiv(left, right);
 	}
 	auto result = left / right;
 	if (!Value::DoubleIsFinite(result)) {
@@ -953,10 +953,10 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float ModuloOperator::Operation(float left, float right) {
-	D_ASSERT(right != 0);
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
+		return NanInfHandler::HandleMod(left, right);
 	}
+	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in modulo of float!");
@@ -966,10 +966,10 @@ float ModuloOperator::Operation(float left, float right) {
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
-	}
 	D_ASSERT(right != 0);
+	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
+		return NanInfHandler::HandleMod(left, right);
+	}
 	auto result = std::fmod(left, right);
 	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in modulo of double!");

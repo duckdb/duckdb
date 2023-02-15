@@ -333,58 +333,6 @@ bool Value::DoubleIsFinite(double value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
 
-template<>
-bool Value::OperationIsSimple(float a, float b) {
-	return (Value::FloatIsFinite(a) && Value::FloatIsFinite(b));
-}
-
-template<>
-bool Value::OperationIsSimple(double a, double b) {
-	return (Value::DoubleIsFinite(a) && Value::DoubleIsFinite(b));
-}
-
-template<>
-bool Value::OperationIsSimple(double a) {
-	return (Value::DoubleIsFinite(a));
-}
-
-template<>
-bool Value::OperationIsSimple(float a) {
-	return (Value::DoubleIsFinite(a));
-}
-
-template<>
-double Value::HandleSpecialArithemetic(double a, double b) {
-	// is any input is a NAN return a NAN
-	if(std::isnan(a) || std::isnan(b)) {
-		return std::nan("");
-	}
-	// if inputs aren't nan they are inf
-	// Other systems just return NULL, but unsure how to trigger that behavior
-	if (std::isinf(a) || std::isinf(b)) {
-		return a;
-	}
-	throw ConversionException("cannot operate on doubles " + to_string(a) + " and " + to_string(b));
-}
-
-template<>
-float Value::HandleSpecialArithemetic(float a, float b) {
-	// is any input is a NAN return a NAN
-	if(std::isnan(a) || std::isnan(b)) {
-		return std::nan("");
-	}
-	// if inputs aren't nan they are inf
-	// Other systems just return NULL, but unsure how to trigger that behavior
-	if (std::isinf(a) || std::isinf(b)) {
-		return a;
-	}
-	throw ConversionException("cannot operate on floats " + to_string(a) + " and " + to_string(b));
-}
-
-Value Value::nan() {
-	return std::nan("");
-}
-
 template <>
 bool Value::IsNan(float input) {
 	return std::isnan(input);

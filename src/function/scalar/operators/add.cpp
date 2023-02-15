@@ -7,9 +7,11 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/operator/nan_inf_handling.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
+#include <cmath>
 
 namespace duckdb {
 
@@ -18,10 +20,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float AddOperator::Operation(float left, float right) {
-	// if either left or right is 'nan' or 'inf' return that value;
-	// prefer left operator values (so +inf -
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
+		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::ADD);
 	}
 	auto result = left + right;
 	if (!Value::FloatIsFinite(result)) {
@@ -32,8 +32,8 @@ float AddOperator::Operation(float left, float right) {
 
 template <>
 double AddOperator::Operation(double left, double right) {
-	if (!Value::OperationIsSimple(left, right)) {
-		return Value::HandleSpecialArithemetic(left, right);
+	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
+		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::ADD);
 	}
 	auto result = left + right;
 	if (!Value::DoubleIsFinite(result)) {

@@ -44,3 +44,126 @@ nan
 endloop
 
 endloop
+
+
+foreach type FLOAT DOUBLE
+
+foreach val inf
+
+# any arithmetic on a nan value will result in a nan value
+
+query I
+SELECT '${val}'::${type} + 1
+----
+inf
+
+
+# inf + inf = inf
+query I
+SELECT '${val}'::${type} + '${val}'::${type} 
+----
+inf
+
+
+query I
+SELECT '${val}'::${type} - 1
+----
+inf
+
+# inf - inf = nan
+query I
+SELECT '${val}'::${type} - '${val}'::${type} 
+----
+nan
+
+
+query I
+SELECT '${val}'::${type} * 1
+----
+inf
+
+# inf * inf = inf
+query I
+SELECT '${val}'::${type} * '${val}'::${type}
+----
+inf
+
+# inf * -inf = nan
+query I
+SELECT '${val}'::${type} * '-${val}'::${type}
+----
+-inf
+
+query I
+SELECT '${val}'::${type} / 1
+----
+inf
+
+query I
+SELECT 1 / '${val}'::${type}
+----
+0
+
+query I
+SELECT '${val}'::${type} % 1
+----
+nan
+
+query I
+SELECT 1 % '${val}'::${type}
+----
+1
+
+query I
+SELECT -('${val}'::${type})
+----
+-inf
+
+endloop
+
+endloop
+
+
+foreach type FLOAT DOUBLE
+
+foreach val -inf
+
+# any arithmetic on a nan value will result in a nan value
+
+query I
+SELECT '${val}'::${type} + 1
+----
+-inf
+
+query I
+SELECT '${val}'::${type} - 1
+----
+-inf
+
+query I
+SELECT '${val}'::${type} * 1
+----
+-inf
+
+query I
+SELECT '${val}'::${type} / 1
+----
+-inf
+
+query I
+SELECT '${val}'::${type} % 1
+----
+nan
+
+query I
+SELECT -('${val}'::${type})
+----
+inf
+
+endloop
+
+endloop
+
+
+
+
