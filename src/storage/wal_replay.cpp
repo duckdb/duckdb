@@ -443,9 +443,6 @@ void ReplayState::ReplayDropIndex() {
 	}
 
 	catalog.DropEntry(context, &info);
-
-	// TODO: where to physically drop the index?
-	// TODO: do we actually have to do this manually? Or does it happen implicitly when dropping the entry?
 }
 
 //===--------------------------------------------------------------------===//

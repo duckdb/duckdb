@@ -27,7 +27,9 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			// find the col_idx in the index.column_ids
 			auto col_id_idx = DConstants::INVALID_INDEX;
 			for (idx_t i = 0; i < info->column_ids.size(); i++) {
-				col_id_idx = i;
+				if (col_idx.index == info->column_ids[i]) {
+					col_id_idx = i;
+				}
 			}
 
 			if (col_id_idx == DConstants::INVALID_INDEX) {

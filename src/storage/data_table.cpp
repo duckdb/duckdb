@@ -1154,6 +1154,13 @@ void DataTable::InitializeWALCreateIndexScan(CreateIndexScanState &state, const 
 
 void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
                             const vector<unique_ptr<Expression>> &expressions) {
+
+	// if the data table is empty
+	if (row_groups->IsEmpty()) {
+		info->indexes.AddIndex(std::move(index));
+		return;
+	}
+
 	auto &allocator = Allocator::Get(db);
 
 	DataChunk result;
