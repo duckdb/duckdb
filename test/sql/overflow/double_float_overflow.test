@@ -1,5 +1,7 @@
-# name: test/sql/overflow/bigint_overflow.test
-# description: Test handling of overflow bigint; this is tested extra because the multiply overflow detection code is tricky
+# name: test/sql/overflow/double_float_overflow.test
+# description: Test handling of overflow doubles and floats; 
+#              this is tested extra because floats and doubles can represent inf and nan as well. And we 
+#				want to make sure we still catch overflows for these functions
 # group: [overflow]
 
 statement ok
@@ -11,7 +13,27 @@ SELECT 1e308::DOUBLE + 1e308::DOUBLE;
 Out of Range Error: Overflow
 
 statement error
+SELECT 1e308::DOUBLE * 1e308::DOUBLE;
+----
+Out of Range Error: Overflow
+
+statement error
+SELECT 1e308::DOUBLE / 0.1;
+----
+Out of Range Error: Overflow
+
+statement error
 SELECT 2e38::FLOAT + 2e38::FLOAT;
+----
+Out of Range Error: Overflow
+
+statement error
+SELECT 2e38::FLOAT * 2e38::FLOAT;
+----
+Out of Range Error: Overflow
+
+statement error
+SELECT 2e38::FLOAT / 0.1;
 ----
 Out of Range Error: Overflow
 
