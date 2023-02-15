@@ -16,6 +16,8 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 #include <algorithm>
 

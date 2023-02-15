@@ -18,6 +18,8 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 
 namespace duckdb {
 

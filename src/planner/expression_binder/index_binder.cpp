@@ -1,6 +1,8 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -15,7 +17,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 		return BindResult("window functions are not allowed in index expressions");
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in index expressions");
-	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::COLUMN_REF: {
 		if (table) {
 			// WAL replay
 			// we assume that the parsed expressions have qualified column names
@@ -41,6 +43,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			return BindResult(std::move(bound_column_ref));
 		}
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
+	}
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
