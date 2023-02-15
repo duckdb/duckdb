@@ -10,6 +10,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <limits>
 
@@ -29,7 +30,7 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 	for (auto &file_pattern : patterns) {
 		auto found_files = fs.Glob(file_pattern, context);
 		if (found_files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
+			throw FileSystem::MissingFileException(file_pattern, context);
 		}
 		files.insert(files.end(), found_files.begin(), found_files.end());
 	}
