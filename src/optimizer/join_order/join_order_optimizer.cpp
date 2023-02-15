@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+
 #include <algorithm>
 
 namespace std {
@@ -151,10 +152,9 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
-		// Keep track of all of the filter bindings the new join order optimizer makes
+		// Keep track of all filter bindings the new join order optimizer makes
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
-		//		idx_t max_child_cardinality = 0;
 		for (auto &child : op->children) {
 			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 			JoinOrderOptimizer optimizer(context);
@@ -164,7 +164,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
 			child_bindings_it += 1;
 		}
-
 		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
 		// however the join refers to multiple base relations
 		// enumerate all base relations obtained from this join and add them to the relation mapping
@@ -172,8 +171,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// get the left and right bindings
 		unordered_set<idx_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
-		// Estimate the cardinality of the join.
-		//		input_op.EstimateCardinality(context);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();

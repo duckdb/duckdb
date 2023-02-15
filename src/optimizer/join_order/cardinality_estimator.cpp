@@ -411,6 +411,11 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		auto actual_binding = relation_column_to_original_column.find(key);
+		// each relation has columns that are either projected or used as filters
+		// In order to get column statistics we need to make sure the actual binding still
+		// refers to the same base table relation, as non-reorderable joins may involve 2+
+		// base table relations and therefore the columns may also refer to 2 different
+		// base table relations
 		if (actual_binding != relation_column_to_original_column.end() &&
 		    (!get || get->table_index != actual_binding->second.table_index)) {
 			get = GetLogicalGet(op, actual_binding->second.table_index);
@@ -418,8 +423,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			get_updated = false;
 		}
 
-		// If the operator type is a logical comparison join, the relation represents a
-		// non-reorderable join. The GetLogicalGet call above gets the left mos
 		if (get_updated) {
 			catalog_table = GetCatalogTableEntry(get);
 		}
@@ -444,18 +447,15 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 				distinct_count = node->GetBaseTableCardinality();
 			}
 		} else {
-			// No HLL. So if we know there is a direct filter, reduce the distinct count to cardinality
-			// with filter effects otherwise assume the distinct count is still the cardinality
+			// No HLL. So if we know there is a direct filter, reduce the distinct count to the cardinality
+			// with filter effects. Otherwise assume the distinct count is still the cardinality
 			if (direct_filter) {
 				distinct_count = node->GetCardinality<idx_t>();
 			} else {
 				distinct_count = node->GetBaseTableCardinality();
 			}
 		}
-
-		// Update the relation_to_tdom set with the estimated distinct count (or tdom)
-		// calculated above
-
+		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		for (auto &relation_to_tdom : relations_to_tdoms) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.count(key) != 1) {
