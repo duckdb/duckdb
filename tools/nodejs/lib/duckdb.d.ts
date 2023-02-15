@@ -50,14 +50,14 @@ export type ExceptionType =
  * Standard error shape for DuckDB errors
  */
 export interface _DuckDbError extends Error {
-    errno: -1; // value of ERROR
-    code: 'DUCKDB_NODEJS_ERROR';
-    errorType: ExceptionType;
+  errno: -1; // value of ERROR
+  code: 'DUCKDB_NODEJS_ERROR';
+  errorType: ExceptionType;
 }
 
 export interface HttpError extends _DuckDbError {
-    errorType: 'HTTP';
-    statusCode: number;
+  errorType: 'HTTP';
+  statusCode: number;
 }
 
 export type DuckDbError = HttpError | _DuckDbError;
