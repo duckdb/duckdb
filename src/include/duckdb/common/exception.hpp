@@ -285,6 +285,10 @@ public:
 	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(std::move(response)) {
 	}
 
+	template <class Response>
+	HTTPException(Response &response, const string &msg) : HTTPException(response.status, response.body, msg) {
+	}
+
 	template <typename... Args>
 	explicit HTTPException(int status_code, string response, const string &msg, Args... params)
 	    : HTTPException(status_code, std::move(response), ConstructMessage(msg, params...)) {
