@@ -233,7 +233,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation_id = relations.size();
 		// push one child column binding map back.
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
-		child_binding_maps.push_back(column_binding_map_t<ColumnBinding>());
+		child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
 		// This logical projection may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
