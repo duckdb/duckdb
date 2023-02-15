@@ -28,8 +28,9 @@ def test_pytorch():
 		con.execute(f"create table t( a {supported_type} , b {supported_type})")
 		con.execute("insert into t values (1,2), (3,4)")
 		duck_torch = con.sql("select * from t").torch()
-		torch.equal(duck_torch['a'], torch.tensor([1, 3]))
-		torch.equal(duck_torch['b'], torch.tensor([2, 4]))
+		duck_numpy = con.sql("select * from t").fetchnumpy()
+		torch.equal(duck_torch['a'], torch.tensor(duck_numpy['a']))
+		torch.equal(duck_torch['b'], torch.tensor(duck_numpy['b']))
 
 	with pytest.raises(TypeError, match="can't convert"):
 		con = duckdb.connect()
