@@ -13,6 +13,8 @@ inf
 # overflow on cast from double to real results in an error
 statement error
 SELECT 1e308::REAL
+----
+Conversion Error
 
 # except we can cast inf -> inf
 query I
@@ -34,32 +36,52 @@ inf
 # overflow in SUM/AVG results in an error
 statement error
 SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+----
+Out of Range Error
 
 statement error
 SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+----
+Out of Range Error
 
 # overflow in arithmetic as well
 statement error
 SELECT 1e308+1e308
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 1e308*2
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT -1e308-1e308
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 1e308/0.1
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 2e38::REAL+2e38::REAL
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 2e38::REAL*2
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT -2e38::REAL-2e38::REAL
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 2e38::REAL/0.1::REAL
+----
+Out of Range Error: Overflow
 

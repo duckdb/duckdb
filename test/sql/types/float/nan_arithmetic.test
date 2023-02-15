@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+
+
 foreach type FLOAT DOUBLE
 
 foreach val nan

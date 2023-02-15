@@ -1,0 +1,17 @@
+# name: test/sql/overflow/bigint_overflow.test
+# description: Test handling of overflow bigint; this is tested extra because the multiply overflow detection code is tricky
+# group: [overflow]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT 1e308::DOUBLE + 1e308::DOUBLE;
+----
+Out of Range Error: Overflow
+
+statement error
+SELECT 2e38::FLOAT + 2e38::FLOAT;
+----
+Out of Range Error: Overflow
+

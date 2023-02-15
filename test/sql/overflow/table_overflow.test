@@ -22,6 +22,8 @@ SELECT i+100::TINYINT FROM tinyints ORDER BY 1;
 # overflow in addition
 statement error
 SELECT i+120::TINYINT FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # no overflow if we filter the offending element
 query I
@@ -38,6 +40,8 @@ SELECT -100::TINYINT-i FROM tinyints ORDER BY 1;
 
 statement error
 SELECT -120::TINYINT-i FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # no overflow if we filter the offending element
 query I
@@ -48,10 +52,14 @@ SELECT -120::TINYINT-i FROM tinyints WHERE i=1 ORDER BY 1;
 # addition with negation
 statement error
 SELECT -120::TINYINT + (-i) FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # multiple negations
 statement error
 SELECT -120::TINYINT + (-(-(-i))) FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # multiplication
 query I
@@ -62,9 +70,13 @@ SELECT i*10::TINYINT FROM tinyints ORDER BY 1;
 
 statement error
 SELECT i*15::TINYINT FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # no overflow if we filter the offending element
 query I
@@ -75,6 +87,8 @@ SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints WHERE i=1 ORDER BY 1;
 # what if we have a subquery?
 statement error
 SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints) tbl(i) ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 query I
 SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints) tbl(i) WHERE i=1 ORDER BY 1;
@@ -84,6 +98,8 @@ SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints) tbl(i) WHERE i=
 # what if we have a UNION in the subquery
 statement error
 SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints WHERE i=1 UNION ALL SELECT * FROM tinyints WHERE i=10) tbl(i) ORDER BY 1;
+----
+Out of Range Error: Overflow
 
 # smallints
 statement ok
@@ -95,6 +111,8 @@ INSERT INTO smallints VALUES (1), (10);
 # overflow in various smallint ops
 statement error
 SELECT i+32765::SMALLINT FROM smallints
+----
+Out of Range Error: Overflow
 
 query I
 SELECT i+32765::SMALLINT FROM smallints WHERE i=1
@@ -103,6 +121,8 @@ SELECT i+32765::SMALLINT FROM smallints WHERE i=1
 
 statement error
 SELECT -32765::SMALLINT-i FROM smallints
+----
+Out of Range Error: Overflow
 
 query I
 SELECT -32765::SMALLINT-i FROM smallints WHERE i=1
@@ -111,6 +131,8 @@ SELECT -32765::SMALLINT-i FROM smallints WHERE i=1
 
 statement error
 SELECT i*10000::SMALLINT FROM smallints
+----
+Out of Range Error: Overflow
 
 query I
 SELECT i*10000::SMALLINT FROM smallints WHERE i=1
@@ -120,6 +142,8 @@ SELECT i*10000::SMALLINT FROM smallints WHERE i=1
 # including a cast to tinyint
 statement error
 SELECT i::TINYINT+120::TINYINT FROM smallints
+----
+Out of Range Error: Overflow
 
 query I
 SELECT i::TINYINT+120::TINYINT FROM smallints WHERE i=1
@@ -132,6 +156,8 @@ INSERT INTO smallints VALUES (1000)
 
 statement error
 SELECT i::TINYINT FROM smallints
+----
+Conversion Error
 
 query I
 SELECT i::TINYINT+120::TINYINT FROM smallints WHERE i=1
