@@ -148,12 +148,31 @@ public:
 		}
 		// compare up to shared length. if still the same, compare lengths
 		static bool GreaterThan(const string_t &left, const string_t &right) {
-			auto memcmp_res =
-			    memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), std::min(left.GetSize(), right.GetSize()));
-			auto final_res = (memcmp_res == 0) ? (left.GetSize() > right.GetSize()) : (memcmp_res > 0);
+			const uint32_t left_length = left.GetSize();
+			const uint32_t right_length = right.GetSize();
+			const uint32_t min_lenght = std::min<uint32_t>(left_length, right_length);
+
+			if (min_lenght == 0u)
+				return (left_length > 0u);
+
+			uint32_t A;
+			uint32_t B;
+			memcpy(&A, left.value.pointer.prefix, 4u);
+			memcpy(&B, left.value.pointer.prefix, 4u);
+
+			// Check on prefix -----
+			// We dont' need to mask since:
+			//	if the prefix is greater, it will stay greater regardless of the extra bytes
+			// 	if the prefix is smaller, it will stay smaller regardless of the extra bytes
+			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
+
+			if (A != B)
+				return A > B;
+
+			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_lenght);
+			auto final_res = (memcmp_res == 0) ? (left_length > right_length) : (memcmp_res > 0);
 			return final_res;
 		}
-
 	};
 
 	bool operator==(const string_t &r) const {
