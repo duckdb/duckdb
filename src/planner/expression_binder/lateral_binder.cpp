@@ -39,14 +39,30 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 }
 
 vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
-	auto all_correlated_columns = binder.correlated_columns;
-	for (auto &correlated : correlated_columns) {
-		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), correlated);
-		if (entry == binder.correlated_columns.end()) {
-			throw InternalException("Lateral Binder: could not find correlated column in binder");
-		}
-		binder.correlated_columns.erase(entry);
+
+	if (correlated_columns.empty()) {
+		return binder.correlated_columns;
 	}
+
+	// clear outer
+	correlated_columns.clear();
+	auto all_correlated_columns = binder.correlated_columns;
+
+	// remove outer from inner
+	for (auto &corr_column : correlated_columns) {
+		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), corr_column);
+		if (entry != binder.correlated_columns.end()) {
+			binder.correlated_columns.erase(entry);
+		}
+	}
+
+	// add inner to outer
+	for (auto &corr_column : binder.correlated_columns) {
+		correlated_columns.push_back(corr_column);
+	}
+
+	// clear inner
+	binder.correlated_columns.clear();
 	return all_correlated_columns;
 }
 
