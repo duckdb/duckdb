@@ -47,8 +47,11 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 				options.format = JSONFormat::UNSTRUCTURED;
 			} else if (format == "newline_delimited") {
 				options.format = JSONFormat::NEWLINE_DELIMITED;
+			} else if (format == "array_of_objects") {
+				result->top_level_type = JSONScanTopLevelType::ARRAY_OF_OBJECTS;
 			} else {
-				throw BinderException("format must be one of ['auto', 'unstructured', 'newline_delimited']");
+				throw BinderException(
+				    "format must be one of ['auto', 'unstructured', 'newline_delimited', 'array_of_objects']");
 			}
 		} else if (loption == "compression") {
 			auto compression = StringUtil::Lower(StringValue::Get(kv.second));
@@ -64,6 +67,10 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 				throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
 			}
 		}
+	}
+
+	if (result->top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS) {
+		result->options.format = JSONFormat::UNSTRUCTURED;
 	}
 
 	return std::move(result);
@@ -132,7 +139,7 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteList<string>(names);
 	writer.WriteList<idx_t>(valid_cols);
 	writer.WriteField<idx_t>(max_depth);
-	writer.WriteField<bool>(objects);
+	writer.WriteField<JSONScanTopLevelType>(top_level_type);
 	if (!date_format.empty()) {
 		writer.WriteString(date_format);
 	} else {
@@ -157,7 +164,7 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	names = reader.ReadRequiredList<string>();
 	valid_cols = reader.ReadRequiredList<idx_t>();
 	max_depth = reader.ReadRequired<idx_t>();
-	objects = reader.ReadRequired<bool>();
+	top_level_type = reader.ReadRequired<JSONScanTopLevelType>();
 	date_format = reader.ReadRequired<string>();
 	timestamp_format = reader.ReadRequired<string>();
 
@@ -181,7 +188,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &b
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
+    : scan_count(0), array_idx(0), array_offset(0), batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
       json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
       is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
@@ -262,6 +269,10 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	json_allocator.Reset();
 
+	if (gstate.bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS && array_idx < scan_count) {
+		return GetObjectsFromArray();
+	}
+
 	idx_t count = 0;
 	if (buffer_offset == buffer_size) {
 		if (!ReadNextBuffer(gstate)) {
@@ -285,9 +296,19 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	default:
 		throw InternalException("Unknown JSON format");
 	}
+	scan_count = count;
 
 	// Skip over any remaining whitespace for the next scan
 	SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+
+	if (gstate.bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS) {
+		if (scan_count > 1) {
+			throw InvalidInputException("File must have exactly one array of objects when format='array_of_objects'");
+		}
+		array_idx = 0;
+		array_offset = 0;
+		return GetObjectsFromArray();
+	}
 
 	return count;
 }
@@ -361,6 +382,31 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 	} else {
 		return nullptr;
 	}
+}
+
+idx_t JSONScanLocalState::GetObjectsFromArray() {
+	idx_t arr_count = 0;
+
+	size_t idx, max;
+	yyjson_val *val;
+	for (; array_idx < scan_count; array_idx++, array_offset = 0) {
+		if (objects[array_idx]) {
+			yyjson_arr_foreach(objects[array_idx], idx, max, val) {
+				if (idx < array_offset) {
+					continue;
+				}
+				array_objects[arr_count++] = val;
+				if (arr_count == STANDARD_VECTOR_SIZE) {
+					break;
+				}
+			}
+			array_offset = idx + 1;
+			if (arr_count == STANDARD_VECTOR_SIZE) {
+				break;
+			}
+		}
+	}
+	return arr_count;
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {

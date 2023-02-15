@@ -15,11 +15,15 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 
 	// Read for the specified sample size
 	JSONStructureNode node;
+	bool more_than_one = false;
 	Vector string_vector(LogicalType::VARCHAR);
 	idx_t remaining = bind_data.sample_size;
 	while (remaining != 0) {
 		allocator.Reset();
 		auto read_count = lstate.ReadNext(gstate);
+		if (read_count > 1) {
+			more_than_one = true;
+		}
 		if (read_count == 0) {
 			break;
 		}
@@ -44,11 +48,20 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = original_scan_type;
 	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
-	const auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
+	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
+	if (type.id() == LogicalTypeId::STRUCT) {
+		bind_data.top_level_type = JSONScanTopLevelType::OBJECTS;
+	} else if (!more_than_one && type.id() == LogicalTypeId::LIST &&
+	           ListType::GetChildType(type).id() == LogicalTypeId::STRUCT) {
+		bind_data.top_level_type = JSONScanTopLevelType::ARRAY_OF_OBJECTS;
+		bind_data.options.format = JSONFormat::UNSTRUCTURED;
+		type = ListType::GetChildType(type);
+	}
+
 	if (type.id() != LogicalTypeId::STRUCT) {
 		return_types.emplace_back(type);
 		names.emplace_back("json");
-		bind_data.objects = false;
+		bind_data.top_level_type = JSONScanTopLevelType::OTHER;
 	} else {
 		const auto &child_types = StructType::GetChildTypes(type);
 		return_types.reserve(child_types.size());
@@ -175,9 +188,11 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
 	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
 
-	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
-	const auto objects = lstate.objects;
+	const auto objects = gstate.bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS
+	                         ? lstate.array_objects
+	                         : lstate.objects;
+	output.SetCardinality(count);
 
 	vector<Vector *> result_vectors;
 	result_vectors.reserve(output.ColumnCount());
@@ -187,14 +202,15 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	D_ASSERT(result_vectors.size() == gstate.bind_data.names.size());
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
-	bool success = true;
-	if (gstate.bind_data.objects) {
-		success = JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names,
-		                                         result_vectors, lstate.transform_options);
-	} else if (!result_vectors.empty()) {
+	bool success;
+	if (gstate.bind_data.top_level_type == JSONScanTopLevelType::OTHER) {
 		success = JSONTransform::Transform(objects, lstate.GetAllocator(), *result_vectors[0], count,
 		                                   lstate.transform_options);
+	} else {
+		success = JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names,
+		                                         result_vectors, lstate.transform_options);
 	}
+
 	if (!success) {
 		string hint = gstate.bind_data.auto_detect
 		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
@@ -203,7 +219,6 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		lstate.ThrowTransformError(count, lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}
-	output.SetCardinality(count);
 }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
