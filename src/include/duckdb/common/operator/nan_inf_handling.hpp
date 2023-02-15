@@ -73,7 +73,7 @@ double NanInfHandler::HandleNegate(double val) {
 
 template <>
 float NanInfHandler::HandleNegate(float val) {
-	return -val;;
+	return -val;
 }
 
 } // namespace duckdb
