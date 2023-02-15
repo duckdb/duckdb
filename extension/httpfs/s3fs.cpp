@@ -998,9 +998,8 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw HTTPException(response.status, string(response.body),
-			                        "HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                            std::to_string(response.status) + ")");
+			    throw HTTPException(response, "HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
+			                                      std::to_string(response.status) + ")");
 		    }
 		    return true;
 	    },
