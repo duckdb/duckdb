@@ -2,6 +2,9 @@ package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -639,12 +642,43 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
-		if (catalog != null && !catalog.isEmpty()) {
-			throw new SQLException("catalog argument is not supported");
+		StringWriter sw = new StringWriter();
+		PrintWriter pw = new PrintWriter(sw);
+		pw.println("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG'");
+		pw.println("FROM information_schema.schemata");
+		if (catalog != null || schemaPattern != null) {
+			pw.print("WHERE ");
 		}
-		PreparedStatement ps = conn.prepareStatement(
-				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata WHERE schema_name LIKE ? ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
-		ps.setString(1, schemaPattern);
+		
+		if (catalog != null) {
+			if (catalog.isEmpty()) {
+				pw.println("catalog_name IS NULL");
+			}
+			else {
+				pw.println("catalog_name = ?");
+			}
+		}
+		if (schemaPattern != null) {
+			if (catalog != null) {
+				pw.print("AND ");
+			}
+			if (schemaPattern.isEmpty()) {
+				pw.println("schema_name IS NULL");
+			}
+			else {
+				pw.println("schema_name LIKE ?");
+			}
+		}
+		pw.println("ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+		
+		PreparedStatement ps = conn.prepareStatement(sw.toString());
+		int paramIndex = 0;
+		if (catalog != null && !catalog.isEmpty()) {
+			ps.setString(++paramIndex, catalog);
+		}
+		if (schemaPattern != null && !schemaPattern.isEmpty()) {
+			ps.setString(++paramIndex, schemaPattern);
+		}
 		return ps.executeQuery();
 	}
 

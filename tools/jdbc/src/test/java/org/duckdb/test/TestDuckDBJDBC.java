@@ -1864,7 +1864,90 @@ public class TestDuckDBJDBC {
 			);
 		}
 	}
-  
+	
+	public static void test_get_schemas_with_params() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		String inputCatalog = conn.getCatalog();
+		String inputSchema = conn.getSchema();
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		ResultSet resultSet = null;
+
+		// catalog equal to current_catalog, schema null
+		try {
+			resultSet = databaseMetaData.getSchemas(inputCatalog, null);
+			assertTrue(resultSet.next(), "Expected at least exactly 1 row, got 0");
+			do {
+				String outputCatalog = resultSet.getString("TABLE_CATALOG");
+				assertTrue(
+					inputCatalog.equals(outputCatalog), 
+					"The catalog " + outputCatalog + " from getSchemas should equal the argument catalog " + inputCatalog
+				);
+			} while (resultSet.next());
+		}
+		catch (SQLException ex) {
+			assertFalse(ex.getMessage().startsWith("catalog argument is not supported"));
+		}
+		finally {
+			if (resultSet != null ) {
+				resultSet.close();
+			}
+			conn.close();
+		}
+
+		// catalog equal to current_catalog, schema '%'
+		ResultSet resultSetWithNullSchema = null;
+		try {
+			resultSet = databaseMetaData.getSchemas(inputCatalog, "%");
+			resultSetWithNullSchema = databaseMetaData.getSchemas(inputCatalog, null);
+			assertTrue(resultSet.next(), "Expected at least exactly 1 row, got 0");
+			assertTrue(resultSetWithNullSchema.next(), "Expected at least exactly 1 row, got 0");
+			do {
+				String outputCatalog;
+				outputCatalog = resultSet.getString("TABLE_CATALOG");
+				assertTrue(
+					inputCatalog.equals(outputCatalog), 
+					"The catalog " + outputCatalog + " from getSchemas should equal the argument catalog " + inputCatalog
+				);
+				outputCatalog = resultSetWithNullSchema.getString("TABLE_CATALOG");
+				assertTrue(
+					inputCatalog.equals(outputCatalog), 
+					"The catalog " + outputCatalog + " from getSchemas should equal the argument catalog " + inputCatalog
+				);
+				String schema1 = resultSet.getString("TABLE_SCHEMA");
+				String schema2 = resultSetWithNullSchema.getString("TABLE_SCHEMA");
+				assertTrue(
+					schema1.equals(schema2), 
+					"schema " + schema1 + " from getSchemas with % should equal " + schema2 + " from getSchemas with null"
+				);
+			} while (resultSet.next() && resultSetWithNullSchema.next());
+		}
+		catch (SQLException ex) {
+			assertFalse(ex.getMessage().startsWith("catalog argument is not supported"));
+		}
+		finally {
+			if (resultSet != null ) {
+				resultSet.close();
+			}
+			conn.close();
+		}
+
+		// empty catalog
+		try {
+			resultSet = databaseMetaData.getSchemas("", null);
+			assertTrue(resultSet.next() == false, "Expected 0 schemas, got > 0");
+		}
+		catch (SQLException ex) {
+			assertFalse(ex.getMessage().startsWith("catalog argument is not supported"));
+		}
+		finally {
+			if (resultSet != null ) {
+				resultSet.close();
+			}
+			conn.close();
+		}
+		
+	}
+
 	public static void test_connect_wrong_url_bug848() throws Exception {
 		Driver d = new DuckDBDriver();
 		assertNull(d.connect("jdbc:h2:", null));
