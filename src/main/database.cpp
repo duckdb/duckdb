@@ -266,7 +266,7 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 BufferPool &DatabaseInstance::GetBufferPool() {
 	return *config.buffer_pool;
 }
-	
+
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
 	return db.GetDatabaseManager();
 }

@@ -242,13 +242,13 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-		: current_memory(0), maximum_memory(maximum_memory), queue(make_unique<EvictionQueue>()), queue_insertions(0) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_unique<EvictionQueue>()), queue_insertions(0) {
 }
-BufferPool::~BufferPool() {}
+BufferPool::~BufferPool() {
+}
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp)
-    : db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
-      temporary_id(MAXIMUM_BLOCK),
+    : db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_unique<BufferAllocatorData>(*this)) {
 	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
@@ -322,8 +322,8 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 }
 
 template <typename... ARGS>
-TempBufferPoolReservation BufferManager::EvictBlocksOrThrow(idx_t memory_delta,
-                                                            unique_ptr<FileBuffer> *buffer, ARGS... args) {
+TempBufferPoolReservation BufferManager::EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+                                                            ARGS... args) {
 	auto r = buffer_pool.EvictBlocks(memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		throw OutOfMemoryException(args..., InMemoryWarning());
@@ -333,9 +333,8 @@ TempBufferPoolReservation BufferManager::EvictBlocksOrThrow(idx_t memory_delta,
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto res = EvictBlocksOrThrow(block_size, nullptr,
-	                              "could not allocate block of %lld bytes (%lld/%lld used) %s", block_size,
-	                              GetUsedMemory(), GetMaxMemory());
+	auto res = EvictBlocksOrThrow(block_size, nullptr, "could not allocate block of %lld bytes (%lld/%lld used) %s",
+	                              block_size, GetUsedMemory(), GetMaxMemory());
 
 	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
 
@@ -349,9 +348,9 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto alloc_size = GetAllocSize(block_size);
 	// first evict blocks until we have enough memory to store this buffer
 	unique_ptr<FileBuffer> reusable_buffer;
-	auto res = EvictBlocksOrThrow(alloc_size, &reusable_buffer,
-	                              "could not allocate block of %lld bytes (%lld/%lld used) %s", alloc_size,
-	                              GetUsedMemory(), GetMaxMemory());
+	auto res =
+	    EvictBlocksOrThrow(alloc_size, &reusable_buffer, "could not allocate block of %lld bytes (%lld/%lld used) %s",
+	                       alloc_size, GetUsedMemory(), GetMaxMemory());
 
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
 
@@ -381,9 +380,8 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		return;
 	} else if (memory_delta > 0) {
 		// evict blocks until we have space to resize this block
-		auto reservation =
-		    EvictBlocksOrThrow(memory_delta, nullptr, "failed to resize block from %lld to %lld%s",
-		                       handle->memory_usage, req.alloc_size);
+		auto reservation = EvictBlocksOrThrow(memory_delta, nullptr, "failed to resize block from %lld to %lld%s",
+		                                      handle->memory_usage, req.alloc_size);
 		// EvictBlocks decrements 'current_memory' for us.
 		handle->memory_charge.Merge(std::move(reservation));
 	} else {
@@ -412,8 +410,8 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	}
 	// evict blocks until we have space for the current block
 	unique_ptr<FileBuffer> reusable_buffer;
-	auto reservation = EvictBlocksOrThrow(required_memory, &reusable_buffer,
-	                                      "failed to pin block of size %lld%s", required_memory);
+	auto reservation =
+	    EvictBlocksOrThrow(required_memory, &reusable_buffer, "failed to pin block of size %lld%s", required_memory);
 	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
 	// check if the block is already loaded
@@ -475,7 +473,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-                                                         unique_ptr<FileBuffer> *buffer) {
+                                                   unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
 	TempBufferPoolReservation r(current_memory, extra_memory);
 	while (current_memory > memory_limit) {
@@ -981,8 +979,7 @@ void BufferManager::ReserveMemory(idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	auto reservation =
-	    EvictBlocksOrThrow(size, nullptr, "failed to reserve memory data of size %lld%s", size);
+	auto reservation = EvictBlocksOrThrow(size, nullptr, "failed to reserve memory data of size %lld%s", size);
 	reservation.size = 0;
 }
 
@@ -998,8 +995,7 @@ void BufferManager::FreeReservedMemory(idx_t size) {
 //===--------------------------------------------------------------------===//
 data_ptr_t BufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = (BufferAllocatorData &)*private_data;
-	auto reservation = data.manager.EvictBlocksOrThrow(size, nullptr,
-	                                                   "failed to allocate data of size %lld%s", size);
+	auto reservation = data.manager.EvictBlocksOrThrow(size, nullptr, "failed to allocate data of size %lld%s", size);
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;
 	return Allocator::Get(data.manager.db).AllocateData(size);

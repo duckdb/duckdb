@@ -29,6 +29,7 @@ class BufferPool {
 	friend class BlockHandle;
 	friend class BlockManager;
 	friend class BufferManager;
+
 public:
 	explicit BufferPool(idx_t maximum_memory);
 	virtual ~BufferPool();
@@ -44,7 +45,7 @@ public:
 		return maximum_memory;
 	}
 
-private:
+protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
 	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
@@ -55,7 +56,8 @@ private:
 		bool success;
 		TempBufferPoolReservation reservation;
 	};
-	virtual EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	virtual EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit,
+	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
