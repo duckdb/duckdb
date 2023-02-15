@@ -18,6 +18,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float AddOperator::Operation(float left, float right) {
+	// if either left or right is 'nan' or 'inf' return that value;
+	// prefer left operator values (so +inf -
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	auto result = left + right;
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of float!");
@@ -27,6 +32,9 @@ float AddOperator::Operation(float left, float right) {
 
 template <>
 double AddOperator::Operation(double left, double right) {
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	auto result = left + right;
 	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in addition of double!");

@@ -425,18 +425,21 @@ struct NegateOperator {
 		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
 		}
+		if (Value::IsNan(input)) {
+			return input;
+		}
 		return -cast;
 	}
 };
 
 template <>
 bool NegateOperator::CanNegate(float input) {
-	return Value::FloatIsFinite(input);
+	return true;
 }
 
 template <>
 bool NegateOperator::CanNegate(double input) {
-	return Value::DoubleIsFinite(input);
+	return true;
 }
 
 template <>
@@ -802,6 +805,9 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float DivideOperator::Operation(float left, float right) {
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	auto result = left / right;
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
@@ -811,6 +817,9 @@ float DivideOperator::Operation(float left, float right) {
 
 template <>
 double DivideOperator::Operation(double left, double right) {
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	auto result = left / right;
 	if (!Value::DoubleIsFinite(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
@@ -945,6 +954,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	auto result = std::fmod(left, right);
 	if (!Value::FloatIsFinite(result)) {
 		throw OutOfRangeException("Overflow in modulo of float!");
@@ -954,6 +966,9 @@ float ModuloOperator::Operation(float left, float right) {
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
+	if (!Value::OperationIsSimple(left, right)) {
+		return Value::HandleSpecialArithemetic(left, right);
+	}
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
 	if (!Value::DoubleIsFinite(result)) {

@@ -10,14 +10,15 @@ foreach type FLOAT DOUBLE
 foreach val nan
 
 # any arithmetic on a nan value will result in a nan value
+
 query I
 SELECT '${val}'::${type} + 1
----
+----
 nan
 
 query I
 SELECT '${val}'::${type} - 1
----
+----
 nan
 
 query I
