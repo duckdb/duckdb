@@ -24,10 +24,10 @@ insert into integers values (1,1), (2,2), (3,3)
 statement ok
 create unique index i_index on integers(i);
 
-#query II
-#EXPLAIN SELECT i FROM integers  where i = 1
-#----
-#logical_opt	<REGEX>:.*INDEX_SCAN.*
+query II
+EXPLAIN SELECT i FROM integers where i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
 
 restart
 
@@ -40,15 +40,17 @@ PRAGMA wal_autocheckpoint='1TB';
 # this succeeds so I am guessing that it does not find the index for constraint checking
 statement error
 INSERT INTO integers VALUES (1, 1)
+----
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicated key
+
+query II
+EXPLAIN SELECT i FROM integers WHERE i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
 
 # this succeeds, so the index is somewhere?
 statement ok
 DROP INDEX i_index;
-
-query II
-EXPLAIN SELECT i FROM integers  where i = 1
-----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
 
 #restart
 #

@@ -48,6 +48,7 @@ void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vect
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
 	}
+	// TODO: do we still need the bound_expressions? storage->AddIndex(move(art), bound_expressions);
 	storage->info->indexes.AddIndex(std::move(art));
 }
 

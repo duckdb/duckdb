@@ -300,4 +300,15 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	return BindCreateTableInfo(std::move(info), schema);
 }
 
+vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info) {
+	vector<unique_ptr<Expression>> expressions;
+
+	auto index_binder = IndexBinder(*this, this->context, table);
+	for (auto &expr : info->expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	return expressions;
+}
+
 } // namespace duckdb

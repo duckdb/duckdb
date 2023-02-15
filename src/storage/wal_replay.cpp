@@ -389,34 +389,63 @@ void ReplayState::ReplayDropTableMacro() {
 // Replay Index
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateIndex() {
-	// TODO
 
-	//	auto info = IndexCatalogEntry::Deserialize(source, context);
-	//	if (deserialize_only) {
-	//		return;
-	//	}
-	//
-	//	auto &catalog = Catalog::GetCatalog(context);
-	//	current_table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
-	//
-	//	catalog.CreateIndex(context, info.get(), current_table);
-	//	D_ASSERT(current_table);
+	auto info = IndexCatalogEntry::Deserialize(source, context);
+	if (deserialize_only) {
+		return;
+	}
+
+	// get the physical table to which we'll add the index
+	auto table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &data_table = table->GetStorage();
+
+	// bind the parsed expressions
+	if (info->expressions.empty()) {
+		for (auto &parsed_expr : info->parsed_expressions) {
+			info->expressions.push_back(parsed_expr->Copy());
+		}
+	}
+	auto binder = Binder::CreateBinder(context);
+	auto expressions = binder->BindCreateIndexExpressions(table, info.get());
+
+	// create the empty index
+	unique_ptr<Index> index;
+	switch (info->index_type) {
+	case IndexType::ART: {
+		index = make_unique<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
+		                         data_table.db, true);
+		break;
+	}
+	default:
+		throw InternalException("Unimplemented index type");
+	}
+
+	// add the index to the catalog
+	auto index_entry = (DuckIndexEntry *)catalog.CreateIndex(context, info.get());
+	index_entry->index = index.get();
+	index_entry->info = data_table.info;
+	for (auto &parsed_expr : info->parsed_expressions) {
+		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+	}
+
+	// physically add the index to the data table storage
+	data_table.WALAddIndex(context, std::move(index), expressions);
 }
 
 void ReplayState::ReplayDropIndex() {
-	// TODO
 
-	//	DropInfo info;
-	//
-	//	info.type = CatalogType::INDEX_ENTRY;
-	//	info.schema = source.Read<string>();
-	//	info.name = source.Read<string>();
-	//	if (deserialize_only) {
-	//		return;
-	//	}
-	//
-	//	auto &catalog = Catalog::GetCatalog(context);
-	//	catalog.DropEntry(context, &info);
+	DropInfo info;
+	info.type = CatalogType::INDEX_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	catalog.DropEntry(context, &info);
+
+	// TODO: where to physically drop the index?
+	// TODO: do we actually have to do this manually? Or does it happen implicitly when dropping the entry?
 }
 
 //===--------------------------------------------------------------------===//
