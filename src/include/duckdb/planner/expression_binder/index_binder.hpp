@@ -17,13 +17,13 @@ class BoundColumnRefExpression;
 //! The IndexBinder is responsible for binding an expression within an index statement
 class IndexBinder : public ExpressionBinder {
 public:
-	IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table = nullptr);
+	IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table = nullptr,
+	            CreateIndexInfo *info = nullptr);
 
 private:
-	// both the table and the ref_expr_indexes are only necessary for binding the expressions of an index
-	// during WAL replay
+	// only for WAL replay
 	TableCatalogEntry *table;
-	std::unordered_map<idx_t, idx_t> ref_expr_indexes;
+	CreateIndexInfo *info;
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

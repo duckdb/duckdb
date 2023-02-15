@@ -1182,7 +1182,6 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 	{
 		IndexLock lock;
 		index->InitializeLock(lock);
-		ExpressionExecutor executor(context, expressions);
 
 		while (true) {
 			intermediate.Reset();
@@ -1195,7 +1194,7 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 				break;
 			}
 			// resolve the expressions for this chunk
-			executor.Execute(intermediate, result);
+			index->ExecuteExpressions(intermediate, result);
 
 			// insert into the index
 			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {

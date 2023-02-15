@@ -1,9 +1,11 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+
 namespace duckdb {
 
-IndexBinder::IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table)
-    : ExpressionBinder(binder, context), table(table) {
+IndexBinder::IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table, CreateIndexInfo *info)
+    : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
 BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -22,13 +24,19 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			auto col_idx = table->GetColumnIndex(col_ref.column_names.back());
 			auto col_type = table->GetColumn(col_idx).GetType();
 
-			if (ref_expr_indexes.find(col_idx.index) == ref_expr_indexes.end()) {
-				ref_expr_indexes[col_idx.index] = ref_expr_indexes.size();
+			// find the col_idx in the index.column_ids
+			auto col_id_idx = DConstants::INVALID_INDEX;
+			for (idx_t i = 0; i < info->column_ids.size(); i++) {
+				col_id_idx = i;
 			}
 
-			auto bound_ref_expr =
-			    make_unique<BoundReferenceExpression>(col_ref.alias, col_type, ref_expr_indexes[col_idx.index]);
-			return BindResult(std::move(bound_ref_expr));
+			if (col_id_idx == DConstants::INVALID_INDEX) {
+				throw InternalException("failed to replay CREATE INDEX statement - column id not found");
+			}
+
+			auto bound_column_ref =
+			    make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx));
+			return BindResult(std::move(bound_column_ref));
 		}
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	default:

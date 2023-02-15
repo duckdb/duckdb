@@ -303,7 +303,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info) {
 	vector<unique_ptr<Expression>> expressions;
 
-	auto index_binder = IndexBinder(*this, this->context, table);
+	auto index_binder = IndexBinder(*this, this->context, table, info);
 	for (auto &expr : info->expressions) {
 		expressions.push_back(index_binder.Bind(expr));
 	}
