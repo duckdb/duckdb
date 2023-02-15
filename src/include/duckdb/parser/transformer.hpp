@@ -156,6 +156,7 @@ private:
 	unique_ptr<SQLStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ShowStatement> TransformShowSelect(duckdb_libpgquery::PGNode *node);
 	unique_ptr<AttachStatement> TransformAttach(duckdb_libpgquery::PGNode *node);
+	unique_ptr<DetachStatement> TransformDetach(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SetStatement> TransformUse(duckdb_libpgquery::PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);

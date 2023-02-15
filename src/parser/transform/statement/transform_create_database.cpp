@@ -11,7 +11,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateDatabase(duckdb_libpgque
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateDatabaseInfo>();
 
-	info->extension_name = stmt->extension ? stmt->extension : string();
 	info->path = stmt->path ? stmt->path : string();
 
 	auto qualified_name = TransformQualifiedName(stmt->name);
