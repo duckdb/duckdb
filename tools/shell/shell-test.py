@@ -879,6 +879,17 @@ outstr = open(outfile,'rb').read().decode('utf8')
 if '50' not in outstr:
      raise Exception('.output test failed')
 
+# we always display all columns when outputting to a file
+columns = ', '.join([str(x) for x in range(100)])
+outfile = tf()
+test('''
+.output %s
+SELECT %s
+''' % (outfile, columns))
+outstr = open(outfile,'rb').read().decode('utf8')
+if '99' not in outstr:
+     raise Exception('.output test failed')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 

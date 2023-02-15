@@ -1,0 +1,20 @@
+# name: test/fuzzer/pedro/test_truncate_heap_use_after_free.test
+# group: [pedro]
+
+statement ok
+CREATE TABLE t2 (c2 INT);
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO t2 VALUES (1),(0);
+
+statement ok
+UPDATE t2 SET c2 = DEFAULT;
+
+statement ok
+COMMIT;
+
+statement ok
+TRUNCATE t2;
