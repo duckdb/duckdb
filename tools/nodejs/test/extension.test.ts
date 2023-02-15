@@ -20,6 +20,10 @@ if (fs.existsSync(extension_full_path)) {
     }).filter(a => a) as string[];
 }
 
+function isHTTPException(err: DuckDbError): err is HttpError {
+    return err.errorType === 'HTTP';
+}
+
 // Note: test will pass on http request failing due to connection issues.
 const test_httpfs = async function (db: duckdb.Database) {
     await new Promise<void>((resolve, reject) => db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;", function (err: null | Error, rows: TableData) {
@@ -43,9 +47,10 @@ const test_httpfs = async function (db: duckdb.Database) {
     await new Promise<void>((resolve) => {
         db.exec("select * from read_csv_auto('https://example.com/hello.csv')", (err: DuckDbError | null) => {
             assert.ok(err);
-            assert.equal(err.errorType, 'HTTP');
-            assert.equal(err.statusCode, 404);
-
+            assert.ok(isHTTPException(err));
+            if (isHTTPException(err)) {
+                assert.equal(err.statusCode, 404);
+            }
             resolve();
         });
     })
