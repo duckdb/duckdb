@@ -251,9 +251,6 @@ public:
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p) {
 		current_file_path = files_path_p[0];
-		for (idx_t i = 0; i < rows_to_skip; i++) {
-			file_handle->ReadLine();
-		}
 		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
