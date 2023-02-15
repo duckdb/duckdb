@@ -476,6 +476,10 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
+	if (result_data.result->type != duckdb::QueryResultType::MATERIALIZED_RESULT) {
+		// This API is only supported for materialized query results
+		return nullptr;
+	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
 	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	auto &collection = materialized.Collection();
@@ -486,4 +490,15 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
 	collection.FetchChunk(chunk_idx, *chunk);
 	return reinterpret_cast<duckdb_data_chunk>(chunk.release());
+}
+
+bool duckdb_result_is_streaming(duckdb_result result) {
+	if (!result.internal_data) {
+		return false;
+	}
+	if (duckdb_result_error(&result) != nullptr) {
+		return false;
+	}
+	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
+	return result_data.result->type == duckdb::QueryResultType::STREAM_RESULT;
 }

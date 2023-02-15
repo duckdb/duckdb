@@ -45,7 +45,7 @@ public:
 	}
 	CAPIResult(duckdb_result result, bool success) : success(success), result(result) {
 	}
-	~CAPIResult() {
+	virtual ~CAPIResult() {
 		duckdb_destroy_result(&result);
 	}
 
@@ -66,6 +66,10 @@ public:
 
 	idx_t ChunkCount() {
 		return duckdb_result_chunk_count(result);
+	}
+
+	virtual unique_ptr<CAPIDataChunk> FetchChunk() {
+		throw InvalidInputException("This result does not implement FetchChunk without an index");
 	}
 
 	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
@@ -120,8 +124,29 @@ public:
 public:
 	bool success = false;
 
-private:
+protected:
 	duckdb_result result;
+};
+
+class CAPIStreamResult : public CAPIResult {
+public:
+	CAPIStreamResult() {
+	}
+	CAPIStreamResult(duckdb_result result, bool success) : CAPIResult(result, success) {
+		D_ASSERT(duckdb_result_is_streaming(result) == true);
+	}
+	~CAPIStreamResult() {
+		duckdb_destroy_result(&result);
+	}
+
+public:
+	unique_ptr<CAPIDataChunk> FetchChunk() final override {
+		auto chunk = duckdb_stream_fetch_chunk(result);
+		if (!chunk) {
+			return nullptr;
+		}
+		return make_unique<CAPIDataChunk>(chunk);
+	}
 };
 
 template <>
@@ -208,6 +233,64 @@ public:
 
 	duckdb_database database = nullptr;
 	duckdb_connection connection = nullptr;
+};
+
+struct CAPIPrepared {
+	CAPIPrepared() {
+	}
+	~CAPIPrepared() {
+		if (!prepared) {
+			return;
+		}
+		duckdb_destroy_prepare(&prepared);
+	}
+
+	bool Prepare(CAPITester &tester, const string &query) {
+		auto state = duckdb_prepare(tester.connection, query.c_str(), &prepared);
+		return state == DuckDBSuccess;
+	}
+
+	duckdb_prepared_statement prepared = nullptr;
+};
+
+struct CAPIPending {
+	CAPIPending() {
+	}
+	~CAPIPending() {
+		if (!pending) {
+			return;
+		}
+		duckdb_destroy_pending(&pending);
+	}
+
+	bool Pending(CAPIPrepared &prepared) {
+		auto state = duckdb_pending_prepared(prepared.prepared, &pending);
+		return state == DuckDBSuccess;
+	}
+
+	bool PendingStreaming(CAPIPrepared &prepared) {
+		auto state = duckdb_pending_prepared_streaming(prepared.prepared, &pending);
+		return state == DuckDBSuccess;
+	}
+
+	duckdb_pending_state ExecuteTask() {
+		REQUIRE(pending);
+		return duckdb_pending_execute_task(pending);
+	}
+
+	unique_ptr<CAPIResult> CreateStream() {
+		duckdb_result result;
+		auto success = duckdb_create_streaming_result(pending, &result) == DuckDBSuccess;
+		return make_unique<CAPIStreamResult>(result, success);
+	}
+
+	unique_ptr<CAPIResult> Execute() {
+		duckdb_result result;
+		auto success = duckdb_execute_pending(pending, &result) == DuckDBSuccess;
+		return make_unique<CAPIResult>(result, success);
+	}
+
+	duckdb_pending_result pending = nullptr;
 };
 
 } // namespace duckdb

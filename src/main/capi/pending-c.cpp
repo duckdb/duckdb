@@ -9,14 +9,16 @@ using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
 
-duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement, duckdb_pending_result *out_result) {
+duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
+                                              duckdb_pending_result *out_result, bool allow_streaming) {
 	if (!prepared_statement || !out_result) {
 		return DuckDBError;
 	}
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	auto result = new PendingStatementWrapper();
+	result->allow_streaming = allow_streaming;
 	try {
-		result->statement = wrapper->statement->PendingQuery(wrapper->values, false);
+		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
 		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -26,6 +28,15 @@ duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statemen
 	*out_result = (duckdb_pending_result)result;
 
 	return return_value;
+}
+
+duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement, duckdb_pending_result *out_result) {
+	return duckdb_pending_prepared_internal(prepared_statement, out_result, false);
+}
+
+duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                               duckdb_pending_result *out_result) {
+	return duckdb_pending_prepared_internal(prepared_statement, out_result, true);
 }
 
 void duckdb_destroy_pending(duckdb_pending_result *pending_result) {
@@ -82,11 +93,33 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	}
 }
 
+duckdb_state duckdb_create_streaming_result(duckdb_pending_result pending_result, duckdb_result *out_result) {
+	if (!pending_result || !out_result) {
+		return DuckDBError;
+	}
+	auto wrapper = (PendingStatementWrapper *)pending_result;
+	if (!wrapper->statement || !wrapper->allow_streaming) {
+		return DuckDBError;
+	}
+	auto result = wrapper->statement->Execute();
+	if (result->type != duckdb::QueryResultType::STREAM_RESULT) {
+		// We are expecting to create a stream result, error should be communicated if the result is not streaming
+		return DuckDBError;
+	}
+	wrapper->statement.reset();
+	return duckdb_translate_result(std::move(result), out_result);
+}
+
 duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb_result *out_result) {
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
 	auto wrapper = (PendingStatementWrapper *)pending_result;
+	if (wrapper->allow_streaming) {
+		// This would work just fine, but there is an explicit API to create streaming results
+		// that should be used when working with PendingQueryResults that have 'allow_streaming == true'
+		return DuckDBError;
+	}
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}
