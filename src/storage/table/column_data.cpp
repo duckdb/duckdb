@@ -27,8 +27,10 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(std::move(other.type)), parent(parent), updates(std::move(other.updates)),
-      version(parent ? parent->version + 1 : 0) {
+      type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
+	if (other.updates) {
+		updates = make_unique<UpdateSegment>(*other.updates, *this);
+	}
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
 		auto &other = (ColumnSegment &)*segment;
