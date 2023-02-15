@@ -240,8 +240,9 @@ DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object
 
 py::dict DuckDBPyResult::FetchPyTorch() {
 	auto result_dict = FetchNumpyInternal();
+	auto from_numpy = py::module::import("torch").attr("from_numpy");
 	for (auto &item : result_dict) {
-		result_dict[item.first] = py::module::import("torch").attr("from_numpy")(item.second);
+		result_dict[item.first] = from_numpy(item.second);
 	}
 	return result_dict;
 }
