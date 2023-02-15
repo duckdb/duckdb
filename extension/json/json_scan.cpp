@@ -97,6 +97,27 @@ void JSONScanData::InitializeFormats() {
 	if (!timestamp_format.empty()) {
 		date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, timestamp_format);
 	}
+
+	if (auto_detect) {
+		static const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> FORMAT_TEMPLATES = {
+		    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
+		    {LogicalTypeId::TIMESTAMP,
+		     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
+		      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"}},
+		};
+
+		// Populate possible date/timestamp formats, assume this is consistent across columns
+		for (auto &kv : FORMAT_TEMPLATES) {
+			const auto &type = kv.first;
+			if (date_format_map.HasFormats(type)) {
+				continue; // Already populated
+			}
+			const auto &format_strings = kv.second;
+			for (auto &format_string : format_strings) {
+				date_format_map.AddFormat(type, format_string);
+			}
+		}
+	}
 }
 
 void JSONScanData::Serialize(FieldWriter &writer) {
@@ -112,8 +133,16 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteList<idx_t>(valid_cols);
 	writer.WriteField<idx_t>(max_depth);
 	writer.WriteField<bool>(objects);
-	writer.WriteString(date_format);
-	writer.WriteString(timestamp_format);
+	if (!date_format.empty()) {
+		writer.WriteString(date_format);
+	} else {
+		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier);
+	}
+	if (!timestamp_format.empty()) {
+		writer.WriteString(timestamp_format);
+	} else {
+		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier);
+	}
 }
 
 void JSONScanData::Deserialize(FieldReader &reader) {
@@ -131,6 +160,9 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	objects = reader.ReadRequired<bool>();
 	date_format = reader.ReadRequired<string>();
 	timestamp_format = reader.ReadRequired<string>();
+
+	InitializeFormats();
+	transform_options.date_format_map = &date_format_map;
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)

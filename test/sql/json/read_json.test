@@ -4,6 +4,9 @@
 
 require json
 
+statement ok
+pragma enable_verification
+
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
 ----
@@ -182,6 +185,9 @@ d5c52052-5f8e-473f-bc8d-176342643ef5	UUID
 3b6a6de3-0732-4591-93ed-8df6091eb00d	UUID
 ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
 63928b16-1814-436f-8b30-b3c40cc31d51	UUID
+
+statement ok
+pragma disable_verification
 
 require httpfs
 
