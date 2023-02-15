@@ -7,26 +7,38 @@ PRAGMA enable_verification
 
 foreach type FLOAT DOUBLE
 
-foreach val nan inf -inf
+foreach val nan
 
-# any arithmetic on a nan or inf value will result in an overflow
-statement error
+# any arithmetic on a nan value will result in a nan value
+query I
 SELECT '${val}'::${type} + 1
+---
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} - 1
+---
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} * 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} / 1
+----
+nan
 
-statement error
+query I
 SELECT '${val}'::${type} % 1
+----
+nan
 
-statement error
+query I
 SELECT -('${val}'::${type})
+----
+nan
 
 endloop
 
