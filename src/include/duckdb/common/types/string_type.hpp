@@ -120,6 +120,11 @@ public:
 
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+			if (a.GetSize() != b.GetSize())
+				return false;
+			return (memcmp(a.GetDataUnsafe(), b.GetDataUnsafe(), a.GetSize()) == 0);
+#endif
 			uint64_t A;
 			uint64_t B;
 			memcpy(&A, &a, 8u);
@@ -155,6 +160,7 @@ public:
 			if (min_lenght == 0u)
 				return (left_length > 0u);
 
+#ifdef DUCKDB_DEBUG_NO_INLINE
 			uint32_t A;
 			uint32_t B;
 			memcpy(&A, left.value.pointer.prefix, 4u);
@@ -168,7 +174,7 @@ public:
 
 			if (A != B)
 				return A > B;
-
+#endif
 			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_lenght);
 			auto final_res = (memcmp_res == 0) ? (left_length > right_length) : (memcmp_res > 0);
 			return final_res;
