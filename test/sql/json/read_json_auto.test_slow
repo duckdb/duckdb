@@ -29,6 +29,11 @@ select * from '__TEST_DIR__/my_file.json'
 2
 3
 
+query I
+select count(*) from '__TEST_DIR__/my_file.json'
+----
+3
+
 statement ok
 copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
@@ -79,11 +84,22 @@ select * from '__TEST_DIR__/my_file.json'
 bar	0
 baz	1
 
-# we can read even if the top-level json is not object
+# we can read even if the top-level json is not an object
 query I
 select * from 'data/json/top_level_array.json'
 ----
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
+
+query I
+select count(*) from 'data/json/top_level_array.json'
+----
+1
+
+query I
+select unnest(json) from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
+----
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
 
 # issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
 statement ok

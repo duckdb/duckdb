@@ -126,7 +126,7 @@ SELECT * FROM 'data/json/example_n.ndjson'
 4	Broadcast News
 5	Raising Arizona
 
-# we can detect lists too, default depth is 2
+# we can detect lists too
 query III
 SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 ----

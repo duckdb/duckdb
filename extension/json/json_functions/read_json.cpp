@@ -187,11 +187,11 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	D_ASSERT(result_vectors.size() == gstate.bind_data.names.size());
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
-	bool success;
+	bool success = true;
 	if (gstate.bind_data.objects) {
 		success = JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names,
 		                                         result_vectors, lstate.transform_options);
-	} else {
+	} else if (!result_vectors.empty()) {
 		success = JSONTransform::Transform(objects, lstate.GetAllocator(), *result_vectors[0], count,
 		                                   lstate.transform_options);
 	}
