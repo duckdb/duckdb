@@ -65,7 +65,7 @@ idx_t Printer::TerminalWidth() {
 	int columns, rows;
 
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-	rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	rows = csbi.srWindow.Right - csbi.srWindow.Left + 1;
 	return rows;
 #else
 	struct winsize w;

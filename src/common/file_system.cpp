@@ -335,6 +335,20 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+IOException FileSystem::MissingFileException(const string &file_path, ClientContext &context) {
+	const string prefixes[] = {"http://", "https://", "s3://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(file_path, prefix)) {
+			if (!context.db->LoadedExtensions().count("httpfs")) {
+				return MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs "
+				                                 "extension is not loaded. Try loading the extension: LOAD HTTPFS",
+				                                 file_path);
+			}
+		}
+	}
+	return IOException("No files found that match the pattern \"%s\"", file_path);
+}
+
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
 	throw NotImplementedException("%s: Seek is not implemented!", GetName());
 }

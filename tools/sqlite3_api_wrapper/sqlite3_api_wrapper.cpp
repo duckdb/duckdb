@@ -32,7 +32,7 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -222,7 +222,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value) {
 	if (!pStmt) {
 		return nullptr;
 	}
@@ -262,6 +262,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_val
 	if (null_value) {
 		config.null_value = null_value;
 	}
+	config.max_width = max_width;
 	BoxRenderer renderer(config);
 	auto result_rendering =
 	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());

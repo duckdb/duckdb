@@ -2,6 +2,7 @@
 
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/python_objects.hpp"
 
 namespace duckdb {
 
@@ -81,9 +82,9 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static py::object GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static py::object FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static Optional<py::tuple> FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 

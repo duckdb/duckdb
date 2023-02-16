@@ -23,25 +23,16 @@
 
 namespace duckdb {
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
-                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(fs_p, allocator, opener_p, std::move(options_p), requested_types), buffer_size(0), position(0),
-      start(0) {
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+                                     const vector<LogicalType> &requested_types)
+    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        std::move(options_p), requested_types) {
-}
-
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    std::move(options_p), requested_types),
-      buffer_size(0), position(0), start(0) {
+    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	options.file_path = std::move(filename);
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);

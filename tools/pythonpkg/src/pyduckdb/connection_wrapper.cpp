@@ -207,14 +207,14 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyCo
 	return conn->Cursor();
 }
 
-py::object PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnection> conn) {
+Optional<py::list> PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->GetDescription();
 }
 
-py::object PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
+Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}

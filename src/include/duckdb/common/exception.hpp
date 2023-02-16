@@ -262,6 +262,16 @@ public:
 	}
 };
 
+class MissingExtensionException : public IOException {
+public:
+	DUCKDB_API explicit MissingExtensionException(const string &msg);
+
+	template <typename... Args>
+	explicit MissingExtensionException(const string &msg, Args... params)
+	    : IOException(ConstructMessage(msg, params...)) {
+	}
+};
+
 class SerializationException : public Exception {
 public:
 	DUCKDB_API explicit SerializationException(const string &msg);

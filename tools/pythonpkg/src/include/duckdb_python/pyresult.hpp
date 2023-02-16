@@ -11,6 +11,7 @@
 #include "array_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/python_objects.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ public:
 	explicit DuckDBPyResult() {};
 
 public:
-	py::object Fetchone();
+	Optional<py::tuple> Fetchone();
 
 	py::list Fetchmany(idx_t size);
 
@@ -60,7 +61,7 @@ public:
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	py::object FetchAllArrowChunks(idx_t chunk_size);
+	py::list FetchAllArrowChunks(idx_t chunk_size);
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
 

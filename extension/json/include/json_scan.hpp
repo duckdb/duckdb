@@ -26,6 +26,16 @@ enum class JSONScanType : uint8_t {
 	SAMPLE = 3,
 };
 
+enum class JSONScanTopLevelType : uint8_t {
+	INVALID = 0,
+	//! Sequential objects, e.g., NDJSON
+	OBJECTS = 1,
+	//! Top-level array containing objects
+	ARRAY_OF_OBJECTS = 2,
+	//! Other, e.g., array of integer, or just strings
+	OTHER = 3
+};
+
 //! Even though LogicalTypeId is just a uint8_t, this is still needed ...
 struct LogicalTypeIdHash {
 	inline std::size_t operator()(const LogicalTypeId &id) const {
@@ -105,7 +115,7 @@ public:
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 	//! Whether we're parsing objects (usually), or something else like arrays
-	bool objects = true;
+	JSONScanTopLevelType top_level_type = JSONScanTopLevelType::OBJECTS;
 	//! Forced date/timestamp formats
 	string date_format;
 	string timestamp_format;
@@ -181,8 +191,13 @@ public:
 	yyjson_alc *GetAllocator();
 	void ThrowTransformError(idx_t count, idx_t object_index, const string &error_message);
 
+	idx_t scan_count;
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_val *objects[STANDARD_VECTOR_SIZE];
+
+	idx_t array_idx;
+	idx_t array_offset;
+	yyjson_val *array_objects[STANDARD_VECTOR_SIZE];
 
 	idx_t batch_index;
 
@@ -192,6 +207,7 @@ public:
 
 private:
 	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
+	idx_t GetObjectsFromArray();
 
 private:
 	//! Bind data
@@ -300,7 +316,6 @@ public:
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;
 
-		// TODO: might be able to do some of these
 		table_function.projection_pushdown = false;
 		table_function.filter_pushdown = false;
 		table_function.filter_prune = false;
