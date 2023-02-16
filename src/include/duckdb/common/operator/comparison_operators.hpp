@@ -155,15 +155,6 @@ inline bool Equals::Operation(string_t left, string_t right) {
 }
 
 template <>
-inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (left_null && right_null) || (!left_null && !right_null && (left == right));
-}
-template <>
-inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return !NotDistinctFrom::Operation(left, right, left_null, right_null);
-}
-
-template <>
 inline bool GreaterThan::Operation(string_t left, string_t right) {
 	return left > right;
 }
@@ -180,14 +171,6 @@ inline bool GreaterThan::Operation(interval_t left, interval_t right) {
 	return Interval::GreaterThan(left, right);
 }
 
-template <>
-inline bool NotDistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (left_null && right_null) || (!left_null && !right_null && Interval::Equals(left, right));
-}
-template <>
-inline bool DistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (left_null != right_null) || (!left_null && !right_null && !Equals::Operation(left, right));
-}
 inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
 	return LessThan::Operation(lhs, rhs);
 }
