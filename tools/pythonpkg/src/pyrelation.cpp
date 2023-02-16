@@ -11,6 +11,8 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/parser/statement/relation_statement.hpp"
 
 namespace duckdb {
 
@@ -904,7 +906,9 @@ string DuckDBPyRelation::Explain() {
 	auto res = rel->Explain();
 
 	auto context = rel->context.GetContext();
-	return res->ToString();
+	auto relation_statement = unique_ptr_cast<RelationStatement, SQLStatement>(make_unique<RelationStatement>(rel));
+	auto prepared_statement = context->Prepare(std::move(relation_statement));
+	return prepared_statement->data->plan->ToString();
 }
 
 // TODO: RelationType to a python enum

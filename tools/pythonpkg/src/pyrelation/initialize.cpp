@@ -199,7 +199,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);
 
-	relation_module.def("sql", &DuckDBPyRelation::ToSQL, "Get the SQL query that is equivalent to the relation");
+	relation_module.def("sql_query", &DuckDBPyRelation::ToSQL, "Get the SQL query that is equivalent to the relation");
 }
 
 } // namespace duckdb
