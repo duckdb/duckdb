@@ -75,19 +75,29 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	auto chunk_count = result->ChunkCount();
 	REQUIRE(chunk_count == 0);
 	auto column_count = result->ColumnCount();
+	(void)column_count;
 	auto column_name = result->ColumnName(0);
+	(void)column_name;
 	auto column_type = result->ColumnType(0);
+	(void)column_type;
 	auto error_message = result->ErrorMessage();
+	REQUIRE(error_message == nullptr);
 	auto fetched_chunk = result->FetchChunk(0);
 	REQUIRE(fetched_chunk == nullptr);
 	auto has_error = result->HasError();
-	auto is_null = result->IsNull(0, 0);
+	REQUIRE(has_error == false);
 	auto row_count = result->row_count();
-	auto rows_changes = result->rows_changed();
+	REQUIRE(row_count == 0);
+	auto rows_changed = result->rows_changed();
+	REQUIRE(rows_changed == 0);
 
 	// this succeeds because the result is materialized if a stream-result method hasn't being used yet
 	auto column_data = result->ColumnData<uint32_t>(0);
 	REQUIRE(column_data != nullptr);
+
+	// this materializes the result
+	auto is_null = result->IsNull(0, 0);
+	REQUIRE(is_null == false);
 }
 
 TEST_CASE("Test materializing a streaming result in C API", "[capi]") {
