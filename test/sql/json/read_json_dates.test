@@ -2,6 +2,9 @@
 # description: Read json files - date detection
 # group: [json]
 
+statement ok
+pragma enable_verification
+
 require json
 
 # create date and timestamp tables

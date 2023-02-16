@@ -523,12 +523,31 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	return success;
 }
 
+bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
+	auto data = (string_t *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val) {
+			validity.SetInvalid(i);
+		} else {
+			data[i] = JSONCommon::WriteVal(val, alc);
+		}
+	}
+	// Can always transform to JSON
+	return true;
+}
+
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
 		// Auto-detected date/timestamp format during sampling
 		return TransformFromStringWithFormat(vals, result, count, options);
+	}
+
+	if (JSONCommon::LogicalTypeIsJSON(result_type)) {
+		return TransformToJSON(vals, alc, result, count);
 	}
 
 	switch (result_type.id()) {
