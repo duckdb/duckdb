@@ -18,12 +18,12 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
-bool DataFrame::check_(const py::handle &object) {
+bool DataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.pandas().DataFrame.IsInstance(object);
 }
 
-bool PolarsDataFrame::check_(const py::handle &object) {
+bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.polars().DataFrame.IsInstance(object);
 }
