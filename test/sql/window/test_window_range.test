@@ -958,12 +958,12 @@ SELECT t FROM map WHERE v=a
     ) ORDER BY a
   ) FROM tx;
 ----
-2
-6
-12
 1
 4
 9
+2
+6
+12
 
 query I
 SELECT sum(a) OVER win FROM tx
@@ -973,12 +973,12 @@ SELECT t FROM map WHERE v=a
     ) ORDER BY a
   );
 ----
-2
-6
-12
 1
 4
 9
+2
+6
+12
 
 query I
   WITH map2 AS (
@@ -990,12 +990,12 @@ SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
   ) FROM tx;
 ----
-2
-6
-12
 1
 4
 9
+2
+6
+12
 
 query I
   WITH map2 AS (
@@ -1008,12 +1008,12 @@ SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
   );
 ----
-2
-6
-12
 1
 4
 9
+2
+6
+12
 
 #==========================================================================
 

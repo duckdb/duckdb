@@ -95,33 +95,18 @@ hash_t HashBytes(void *ptr, size_t len) noexcept {
 		h *= M;
 	}
 
-	auto const *const data8 = reinterpret_cast<uint8_t const *>(data64 + n_blocks);
-	switch (len & 7U) {
-	case 7:
-		h ^= static_cast<uint64_t>(data8[6]) << 48U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 6:
-		h ^= static_cast<uint64_t>(data8[5]) << 40U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 5:
-		h ^= static_cast<uint64_t>(data8[4]) << 32U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 4:
-		h ^= static_cast<uint64_t>(data8[3]) << 24U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 3:
-		h ^= static_cast<uint64_t>(data8[2]) << 16U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 2:
-		h ^= static_cast<uint64_t>(data8[1]) << 8U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 1:
-		h ^= static_cast<uint64_t>(data8[0]);
+	if (len & 7U) {
+		uint64_t k = 0;
+		memcpy(&k, data64 + n_blocks, len & 7U);
+
+		k *= M;
+		k ^= k >> R;
+		k *= M;
+
+		h ^= k;
 		h *= M;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	default:
-		break;
 	}
+
 	h ^= h >> R;
 	h *= M;
 	h ^= h >> R;
