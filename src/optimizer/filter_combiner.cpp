@@ -582,7 +582,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
 	    comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
 	    comparison.type != ExpressionType::COMPARE_EQUAL && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
-		// only support [>, >=, <, <=, ==] expressions
+		// only support [>, >=, <, <=, ==, !=] expressions
 		return FilterResult::UNSUPPORTED;
 	}
 	// check if one of the sides is a scalar value
@@ -610,6 +610,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		// get the current bucket of constant values
 		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &info_list = constant_values.find(equivalence_set)->second;
+		D_ASSERT(node->return_type == info.constant.type());
 		// check the existing constant comparisons to see if we can do any pruning
 		auto ret = AddConstantComparison(info_list, info);
 
@@ -795,7 +796,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			for (auto &stored_exp : stored_expressions) {
 				if (stored_exp.first->type == ExpressionType::BOUND_COLUMN_REF) {
 					auto &st_col_ref = (BoundColumnRefExpression &)*stored_exp.second;
-					if (st_col_ref.binding == col_ref.binding) {
+					if (st_col_ref.binding == col_ref.binding &&
+					    bound_cast_expr.return_type == stored_exp.second->return_type) {
 						bound_cast_expr.child = stored_exp.second->Copy();
 						right_node = GetNode(bound_cast_expr.child.get());
 						break;

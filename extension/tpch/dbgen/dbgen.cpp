@@ -10,6 +10,7 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #endif
 
 #define DECLARER /* EXTERN references get defined here */

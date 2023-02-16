@@ -1,6 +1,6 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -8,8 +8,14 @@ namespace duckdb {
 CatalogTransaction::CatalogTransaction(Catalog &catalog, ClientContext &context) {
 	auto &transaction = Transaction::Get(context, catalog);
 	this->db = &DatabaseInstance::GetDatabase(context);
-	this->transaction_id = transaction.transaction_id;
-	this->start_time = transaction.start_time;
+	if (!transaction.IsDuckTransaction()) {
+		this->transaction_id = transaction_t(-1);
+		this->start_time = transaction_t(-1);
+	} else {
+		auto &dtransaction = (DuckTransaction &)transaction;
+		this->transaction_id = dtransaction.transaction_id;
+		this->start_time = dtransaction.start_time;
+	}
 	this->transaction = &transaction;
 	this->context = &context;
 }

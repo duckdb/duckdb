@@ -9,6 +9,8 @@ on:
       - 'data/**'
       - 'examples/**'
       - 'test/**'
+      - 'tools/odbc/**'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/pythonpkg/**'
       - 'tools/rpkg/**'
@@ -29,7 +31,7 @@ jobs:
     name: node.js Linux
     runs-on: ubuntu-20.04
     env:
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -52,6 +54,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -118,7 +121,7 @@ jobs:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -128,6 +131,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -251,6 +255,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.node }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
           variant: sccache
 
       - name: Node

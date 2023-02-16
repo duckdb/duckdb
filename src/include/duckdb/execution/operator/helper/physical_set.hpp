@@ -30,13 +30,13 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+	                                 SetScope scope, const Value &value);
+
 public:
 	const std::string name;
 	const Value value;
 	const SetScope scope;
-
-private:
-	void SetExtensionVariable(ExecutionContext &context, DBConfig &config, ExtensionOption &extension_option) const;
 };
 
 } // namespace duckdb

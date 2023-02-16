@@ -17,6 +17,17 @@ public:
 	}
 };
 
+class PolarsDataFrame : public py::object {
+public:
+	PolarsDataFrame(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
+	using py::object::object;
+
+public:
+	static bool IsDataFrame(const py::handle &object);
+	static bool IsLazyFrame(const py::handle &object);
+};
+
 // Pandas has two different sets of types
 // NumPy dtypes (e.g., bool, int8,...)
 // Pandas Specific Types (e.g., categorical, datetime_tz,...)
@@ -31,6 +42,7 @@ enum class PandasType : uint8_t {
 	UINT_32,   //! uint32, uintc,
 	INT_64,    //! int64, int0, int_, intp, matrix
 	UINT_64,   //! uint64, uint, uint0, uintp
+	FLOAT_16,  //! float16, half
 	FLOAT_32,  //! float32, single
 	FLOAT_64,  //! float64, float_, double
 	OBJECT,    //! object

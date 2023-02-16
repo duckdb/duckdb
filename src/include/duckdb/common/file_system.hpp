@@ -148,7 +148,9 @@ public:
 	DUCKDB_API virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
-	                                  const std::function<void(const string &, bool)> &callback);
+	                                  const std::function<void(const string &, bool)> &callback,
+	                                  FileOpener *opener = nullptr);
+
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
@@ -199,6 +201,7 @@ public:
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
+	DUCKDB_API static IOException MissingFileException(const string &file_path, ClientContext &context);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);

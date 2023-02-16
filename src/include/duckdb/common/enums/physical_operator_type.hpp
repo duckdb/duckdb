@@ -87,6 +87,7 @@ enum class PhysicalOperatorType : uint8_t {
 	TRANSACTION,
 	CREATE_TYPE,
 	ATTACH,
+	DETACH,
 
 	// -----------------------------
 	// Helpers
@@ -102,7 +103,8 @@ enum class PhysicalOperatorType : uint8_t {
 	LOAD,
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,
-	RESET
+	RESET,
+	EXTENSION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

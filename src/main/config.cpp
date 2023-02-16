@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -58,6 +59,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+                                                 DUCKDB_LOCAL(CustomExtensionRepository),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -141,6 +143,15 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	SetOption(nullptr, option, value);
+}
+
+void DBConfig::SetOptionByName(const string &name, const Value &value) {
+	auto option = DBConfig::GetOptionByName(name);
+	if (option) {
+		SetOption(*option, value);
+	} else {
+		options.unrecognized_options[name] = value;
+	}
 }
 
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {

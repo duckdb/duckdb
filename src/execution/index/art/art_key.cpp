@@ -19,6 +19,11 @@ Key Key::CreateKey(ArenaAllocator &allocator, string_t value) {
 	idx_t len = value.GetSize() + 1;
 	auto data = allocator.Allocate(len);
 	memcpy(data, value.GetDataUnsafe(), len - 1);
+
+	if (len > 1 && data[len - 2] == '\0') {
+		// FIXME: rethink this
+		throw NotImplementedException("Indexes cannot have contain null-terminated decoded BLOBs.");
+	}
 	data[len - 1] = '\0';
 	return Key(data, len);
 }
@@ -33,6 +38,11 @@ void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value) {
 	key.len = value.GetSize() + 1;
 	key.data = allocator.Allocate(key.len);
 	memcpy(key.data, value.GetDataUnsafe(), key.len - 1);
+
+	if (key.len > 1 && key.data[key.len - 2] == '\0') {
+		// FIXME: rethink this
+		throw NotImplementedException("Indexes cannot have contain null-terminated decoded BLOBs.");
+	}
 	key.data[key.len - 1] = '\0';
 }
 

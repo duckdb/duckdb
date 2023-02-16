@@ -1216,6 +1216,9 @@ static const Value &CheckQuantile(const Value &quantile_val) {
 	if (quantile < -1 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [-1, 1]");
 	}
+	if (Value::IsNan(quantile)) {
+		throw BinderException("QUANTILE parameter cannot be NaN");
+	}
 
 	return quantile_val;
 }

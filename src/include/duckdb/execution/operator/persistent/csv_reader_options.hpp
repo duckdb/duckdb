@@ -38,6 +38,11 @@ struct BufferedCSVReaderOptions {
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
 
+	//! Whether or not an option was provided for parallel
+	bool has_parallel = false;
+	//! Whether or not the read will use the ParallelCSVReader
+	bool use_parallel = false;
+	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
 	string quote = "\"";
@@ -122,7 +127,12 @@ struct BufferedCSVReaderOptions {
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
 
+	void SetCompression(const string &compression);
+	void SetHeader(bool has_header);
+	void SetEscape(const string &escape);
+	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
+	void SetParallel(bool use_parallel);
 
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by

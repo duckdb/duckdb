@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   duckdb_columns.cpp
   duckdb_constraints.cpp
+  duckdb_databases.cpp
   duckdb_dependencies.cpp
   duckdb_extensions.cpp
   duckdb_functions.cpp
@@ -15,7 +16,6 @@ add_library_unity(
   duckdb_types.cpp
   duckdb_views.cpp
   pragma_collations.cpp
-  pragma_database_list.cpp
   pragma_database_size.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp

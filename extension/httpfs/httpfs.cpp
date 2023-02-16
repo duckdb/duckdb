@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <thread>
+#include <string>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -28,36 +29,23 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 }
 
 HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
-	uint64_t timeout;
-	uint64_t retries;
-	uint64_t retry_wait_ms;
-	float retry_backoff;
+	uint64_t timeout = DEFAULT_TIMEOUT;
+	uint64_t retries = DEFAULT_RETRIES;
+	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
+	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	Value value;
-
-	if (opener->TryGetCurrentSetting("http_timeout", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
-	} else {
-		timeout = DEFAULT_TIMEOUT;
 	}
-
-	if (opener->TryGetCurrentSetting("http_retries", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
 		retries = value.GetValue<uint64_t>();
-	} else {
-		retries = DEFAULT_RETRIES;
 	}
-
-	if (opener->TryGetCurrentSetting("http_retry_wait_ms", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value)) {
 		retry_wait_ms = value.GetValue<uint64_t>();
-	} else {
-		retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	}
-
-	if (opener->TryGetCurrentSetting("http_retry_backoff", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
 		retry_backoff = value.GetValue<float>();
-	} else {
-		retry_backoff = DEFAULT_RETRY_BACKOFF;
 	}
-
 	return {timeout, retries, retry_wait_ms, retry_backoff};
 }
 
@@ -299,15 +287,12 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, cons
                                                         FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, query_param.empty() ? path : path + "?" + query_param, flags,
-	                                           opener ? HTTPParams::ReadFrom(opener) : HTTPParams());
+	                                           HTTPParams::ReadFrom(opener));
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                 FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	if (!opener) {
-		throw IOException("Cannot open a HTTPFS file without a file opener");
-	}
 
 	// splitting query params from base path
 	string stripped_path, query_param;
@@ -427,7 +412,7 @@ time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
 bool HTTPFileSystem::FileExists(const string &filename) {
 	try {
 		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &sfh = (HTTPFileHandle &)handle;
+		auto &sfh = (HTTPFileHandle &)*handle;
 		if (sfh.length == 0) {
 			return false;
 		}
@@ -448,28 +433,28 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 
 // Get either the local, global, or no cache depending on settings
 static HTTPMetadataCache *TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
-	auto client_context = opener->TryGetClientContext();
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (!client_context) {
+		return nullptr;
+	}
 
-	if (client_context) {
-		bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
+	bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
 
-		if (use_shared_cache) {
-			if (!httpfs.global_metadata_cache) {
-				httpfs.global_metadata_cache = make_unique<HTTPMetadataCache>(false, true);
-			}
-			return httpfs.global_metadata_cache.get();
+	if (use_shared_cache) {
+		if (!httpfs.global_metadata_cache) {
+			httpfs.global_metadata_cache = make_unique<HTTPMetadataCache>(false, true);
+		}
+		return httpfs.global_metadata_cache.get();
+	} else {
+		auto lookup = client_context->registered_state.find("http_cache");
+		if (lookup == client_context->registered_state.end()) {
+			auto cache = make_shared<HTTPMetadataCache>(true, false);
+			client_context->registered_state["http_cache"] = cache;
+			return cache.get();
 		} else {
-			auto lookup = client_context->registered_state.find("http_cache");
-			if (lookup == client_context->registered_state.end()) {
-				auto cache = make_shared<HTTPMetadataCache>(true, false);
-				client_context->registered_state["http_cache"] = cache;
-				return cache.get();
-			} else {
-				return (HTTPMetadataCache *)lookup->second.get();
-			}
+			return (HTTPMetadataCache *)lookup->second.get();
 		}
 	}
-	return nullptr;
 }
 
 void HTTPFileHandle::Initialize(FileOpener *opener) {
@@ -524,7 +509,18 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
-	length = atoll(res->headers["Content-Length"].c_str());
+	if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {
+		// There was no content-length header, we can not do range requests here
+		throw IOException("Server did not send Content-Length header, can not read from this file.");
+	}
+
+	try {
+		length = std::stoll(res->headers["Content-Length"]);
+	} catch (std::invalid_argument &e) {
+		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+	} catch (std::out_of_range &e) {
+		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+	}
 
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
