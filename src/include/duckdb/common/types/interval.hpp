@@ -101,8 +101,7 @@ public:
 	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
-	static bool Equals(interval_t left, interval_t right);
-	static bool GreaterThan(interval_t left, interval_t right);
-	static bool GreaterThanEquals(interval_t left, interval_t right);
+	static bool Equals(const interval_t &left, const interval_t &right);
+	static bool GreaterThan(const interval_t &left, const interval_t &right);
 };
 } // namespace duckdb
