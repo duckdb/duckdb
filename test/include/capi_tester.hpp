@@ -45,7 +45,7 @@ public:
 	}
 	CAPIResult(duckdb_result result, bool success) : success(success), result(result) {
 	}
-	virtual ~CAPIResult() {
+	~CAPIResult() {
 		duckdb_destroy_result(&result);
 	}
 
@@ -68,8 +68,12 @@ public:
 		return duckdb_result_chunk_count(result);
 	}
 
-	virtual unique_ptr<CAPIDataChunk> FetchChunk() {
-		throw InvalidInputException("This result does not implement FetchChunk without an index");
+	unique_ptr<CAPIDataChunk> StreamChunk() {
+		auto chunk = duckdb_stream_fetch_chunk(result);
+		if (!chunk) {
+			return nullptr;
+		}
+		return make_unique<CAPIDataChunk>(chunk);
 	}
 
 	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
@@ -126,27 +130,6 @@ public:
 
 protected:
 	duckdb_result result;
-};
-
-class CAPIStreamResult : public CAPIResult {
-public:
-	CAPIStreamResult() {
-	}
-	CAPIStreamResult(duckdb_result result, bool success) : CAPIResult(result, success) {
-		D_ASSERT(duckdb_result_is_streaming(result) == true);
-	}
-	~CAPIStreamResult() {
-		duckdb_destroy_result(&result);
-	}
-
-public:
-	unique_ptr<CAPIDataChunk> FetchChunk() final override {
-		auto chunk = duckdb_stream_fetch_chunk(result);
-		if (!chunk) {
-			return nullptr;
-		}
-		return make_unique<CAPIDataChunk>(chunk);
-	}
 };
 
 template <>
@@ -281,7 +264,7 @@ struct CAPIPending {
 	unique_ptr<CAPIResult> CreateStream() {
 		duckdb_result result;
 		auto success = duckdb_create_streaming_result(pending, &result) == DuckDBSuccess;
-		return make_unique<CAPIStreamResult>(result, success);
+		return make_unique<CAPIResult>(result, success);
 	}
 
 	unique_ptr<CAPIResult> Execute() {
