@@ -99,6 +99,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
+		} else if (loption == "column_names" || loption == "names") {
+			if (!options.name_list.empty()) {
+				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+			}
+			if (kv.second.IsNull()) {
+				throw BinderException("read_csv_auto %s cannot be NULL", kv.first);
+			}
+			auto &children = ListValue::GetChildren(kv.second);
+			for (auto &child : children) {
+				options.name_list.push_back(StringValue::Get(child));
+			}
 		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
@@ -961,6 +972,8 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
+	read_csv_auto.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
+	read_csv_auto.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	return read_csv_auto;
 }
 
