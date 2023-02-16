@@ -22,6 +22,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	// Bind the select statement of the original to resolve the types
 	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
+	if (select_stmt.select_list.size() == 1 && select_stmt.select_list[0]->type == ExpressionType::STAR) {
+		select_stmt.select_list.clear();
+		for (auto &name : bound_original.names) {
+			select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name));
+		}
+	}
 	D_ASSERT(bound_original.types.size() == select_stmt.select_list.size());
 	const idx_t num_cols = bound_original.types.size();
 

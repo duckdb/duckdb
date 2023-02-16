@@ -4,6 +4,27 @@
 
 require json
 
+# test issue #6305
+statement ok
+copy (
+    select * from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
+
+mode skip
+
 require tpch
 
 statement ok
