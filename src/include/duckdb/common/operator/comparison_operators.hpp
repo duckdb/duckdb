@@ -83,7 +83,10 @@ DUCKDB_API bool GreaterThanEquals::Operation(const double &left, const double &r
 struct DistinctFrom {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return (left_null != right_null) || (!left_null && !right_null && NotEquals::Operation(left, right));
+		if (left_null || right_null) {
+			return left_null != right_null;
+		}
+		return NotEquals::Operation(left, right);
 	}
 };
 
