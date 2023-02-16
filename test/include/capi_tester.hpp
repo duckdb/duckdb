@@ -76,6 +76,10 @@ public:
 		return make_unique<CAPIDataChunk>(chunk);
 	}
 
+	bool IsStreaming() {
+		return duckdb_result_is_streaming(result);
+	}
+
 	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
 		auto chunk = duckdb_result_get_chunk(result, chunk_idx);
 		if (!chunk) {

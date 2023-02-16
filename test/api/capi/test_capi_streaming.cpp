@@ -69,6 +69,7 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	result = pending.CreateStream();
 	REQUIRE(result);
 	REQUIRE(!result->HasError());
+	REQUIRE(result->IsStreaming());
 
 	// interrogate the result with various methods
 	auto chunk_count = result->ChunkCount();
@@ -87,4 +88,30 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	// this succeeds because the result is materialized if a stream-result method hasn't being used yet
 	auto column_data = result->ColumnData<uint32_t>(0);
 	REQUIRE(column_data != nullptr);
+}
+
+TEST_CASE("Test materializing a streaming result in C API", "[capi]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+	CAPIPending pending;
+	unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE(prepared.Prepare(tester, "SELECT i::UINT32 FROM range(1000000) tbl(i)"));
+	// Create a pending query that will turn into a streaming result
+	REQUIRE(pending.PendingStreaming(prepared));
+
+	while (true) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state != DUCKDB_PENDING_ERROR);
+		if (state == DUCKDB_PENDING_RESULT_READY) {
+			break;
+		}
+	}
+
+	// This creates a streaming result, but gets materialized instantly into
+	// a MaterializedQueryResult
+	result = pending.Execute();
+	REQUIRE(!result->IsStreaming());
 }

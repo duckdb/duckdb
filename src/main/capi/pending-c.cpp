@@ -115,15 +115,17 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 		return DuckDBError;
 	}
 	auto wrapper = (PendingStatementWrapper *)pending_result;
-	if (wrapper->allow_streaming) {
-		// This would work just fine, but there is an explicit API to create streaming results
-		// that should be used when working with PendingQueryResults that have 'allow_streaming == true'
-		return DuckDBError;
-	}
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}
-	auto result = wrapper->statement->Execute();
+
+	std::unique_ptr<duckdb::QueryResult> result;
+	result = wrapper->statement->Execute();
+	if (wrapper->allow_streaming && result->type == duckdb::QueryResultType::STREAM_RESULT) {
+		// Materialize the result into a MaterializedQueryResult
+		auto &stream_result = (duckdb::StreamQueryResult &)*result;
+		result = stream_result.Materialize();
+	}
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }
