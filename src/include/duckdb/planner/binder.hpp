@@ -183,6 +183,9 @@ public:
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
 
+	DUCKDB_API void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
+	                                      vector<unique_ptr<ParsedExpression>> &new_select_list);
+
 	void SetCanContainNulls(bool can_contain_nulls);
 
 private:
@@ -327,8 +330,6 @@ private:
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
 
-	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
-	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	bool FindStarExpression(ParsedExpression &expr, StarExpression **star);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);

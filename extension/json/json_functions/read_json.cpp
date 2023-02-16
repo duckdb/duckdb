@@ -49,13 +49,15 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
 	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
-	if (type.id() == LogicalTypeId::STRUCT) {
-		bind_data.top_level_type = JSONScanTopLevelType::OBJECTS;
-	} else if (!more_than_one && type.id() == LogicalTypeId::LIST &&
-	           ListType::GetChildType(type).id() == LogicalTypeId::STRUCT) {
-		bind_data.top_level_type = JSONScanTopLevelType::ARRAY_OF_OBJECTS;
-		bind_data.options.format = JSONFormat::UNSTRUCTURED;
-		type = ListType::GetChildType(type);
+	if (bind_data.options.format == JSONFormat::AUTO_DETECT) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			bind_data.top_level_type = JSONScanTopLevelType::OBJECTS;
+		} else if (!more_than_one && type.id() == LogicalTypeId::LIST &&
+		           ListType::GetChildType(type).id() == LogicalTypeId::STRUCT) {
+			bind_data.top_level_type = JSONScanTopLevelType::ARRAY_OF_OBJECTS;
+			bind_data.options.format = JSONFormat::UNSTRUCTURED;
+			type = ListType::GetChildType(type);
+		}
 	}
 
 	if (type.id() != LogicalTypeId::STRUCT) {

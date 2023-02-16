@@ -42,6 +42,44 @@ UUID	10
 UUID	15
 UUID	5
 
+# exclude
+statement ok
+copy (
+    select order_id, * exclude (order_id) from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
+
+# and finally, replace
+statement ok
+copy (
+    select * replace (revenue + 1 as revenue) from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	11
+UUID	11
+UUID	16
+UUID	6
+
 require tpch
 
 statement ok

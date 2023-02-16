@@ -1,7 +1,6 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "json_functions.hpp"
@@ -16,49 +15,40 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto &select_stmt = (SelectNode &)*copy.select_statement;
 	auto &info = *copy.info;
 
-	// strftime if the user specified a format TODO: deal with date/timestamp within nested types
-	auto date_it = info.options.find("dateformat");
-	auto timestamp_it = info.options.find("timestampformat");
-
 	// Bind the select statement of the original to resolve the types
 	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
-	if (select_stmt.select_list.size() == 1 && select_stmt.select_list[0]->type == ExpressionType::STAR) {
-		auto orig_expr = std::move(select_stmt.select_list[0]);
-		auto &star_expr = (StarExpression &)*orig_expr;
-		select_stmt.select_list.clear();
-		for (auto &name : bound_original.names) {
-			if (star_expr.relation_name.empty()) {
-				select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name));
-			} else {
-				select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name, star_expr.relation_name));
-			}
-		}
-	}
-	D_ASSERT(bound_original.types.size() == select_stmt.select_list.size());
-	const idx_t num_cols = bound_original.types.size();
 
-	// This loop also makes sure the columns have an alias (needed for struct_pack)
+	// Expand any star expressions
+	vector<unique_ptr<ParsedExpression>> select_list;
+	dummy_binder->ExpandStarExpressions(select_stmt.select_list, select_list);
+	D_ASSERT(select_list.size() == bound_original.types.size());
+
+	// strftime if the user specified a format (loop also gives columns a name, needed for struct_pack)
+	// TODO: deal with date/timestamp within nested types
+	const auto date_it = info.options.find("dateformat");
+	const auto timestamp_it = info.options.find("timestampformat");
 	vector<unique_ptr<ParsedExpression>> strftime_children;
-	for (idx_t i = 0; i < num_cols; i++) {
+	for (idx_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
 		strftime_children.clear();
-		auto &col = select_stmt.select_list[i];
-		auto name = col->GetName();
-		if (bound_original.types[i] == LogicalTypeId::DATE && date_it != info.options.end()) {
-			strftime_children.emplace_back(std::move(col));
+		auto &expr = select_list[col_idx];
+		auto name = expr->GetName();
+		const auto &type = bound_original.types[col_idx];
+		if (date_it != info.options.end() && type == LogicalTypeId::DATE) {
+			strftime_children.emplace_back(std::move(expr));
 			strftime_children.emplace_back(make_unique<ConstantExpression>(date_it->second.back()));
-			col = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
-		} else if (bound_original.types[i] == LogicalTypeId::TIMESTAMP && timestamp_it != info.options.end()) {
-			strftime_children.emplace_back(std::move(col));
+			expr = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+		} else if (timestamp_it != info.options.end() && type == LogicalTypeId::TIMESTAMP) {
+			strftime_children.emplace_back(std::move(expr));
 			strftime_children.emplace_back(make_unique<ConstantExpression>(timestamp_it->second.back()));
-			col = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+			expr = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
 		}
-		col->alias = name;
+		expr->alias = name;
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
 	vector<unique_ptr<ParsedExpression>> struct_pack_child;
-	struct_pack_child.emplace_back(make_unique<FunctionExpression>("struct_pack", std::move(select_stmt.select_list)));
+	struct_pack_child.emplace_back(make_unique<FunctionExpression>("struct_pack", std::move(select_list)));
 	select_stmt.select_list.clear();
 	select_stmt.select_list.emplace_back(make_unique<FunctionExpression>("to_json", std::move(struct_pack_child)));
 
