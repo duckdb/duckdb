@@ -104,7 +104,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
-	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
+	    .def("tfetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
 	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)

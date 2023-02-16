@@ -23,9 +23,6 @@ SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime
 1988	AA	JFK	New York, NY	NULL
 1988	AA	JFK	New York, NY	NULL
 
-# read with parallel reader and verify that we get the same result
-statement ok
-SET experimental_parallel_csv=true;
 
 statement ok
 PRAGMA verify_parallelism

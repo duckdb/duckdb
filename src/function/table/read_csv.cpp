@@ -38,7 +38,7 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	auto &config = DBConfig::GetConfig(context);
-	single_threaded = !config.options.experimental_parallel_csv_reader;
+	bool single_threaded = false;
 	if (options.has_parallel) {
 		// Override the option set in the config
 		single_threaded = !options.use_parallel;

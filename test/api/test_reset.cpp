@@ -35,7 +35,6 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"enable_object_cache", {true, true}},
 	    {"enable_profiling", {"json", "json"}},
 	    {"enable_progress_bar", {true, true}},
-	    {"experimental_parallel_csv", {true, true}},
 	    {"explain_output", {true, true}},
 	    {"external_threads", {8, 8}},
 	    {"file_search_path", {"test", "test"}},

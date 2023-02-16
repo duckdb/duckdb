@@ -25,10 +25,6 @@ SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumb
 2403	 pending foxes. slyly re
 1564	arefully slyly ex
 
-# read with parallel reader and verify that we get the same result
-statement ok
-SET experimental_parallel_csv=true;
-
 statement ok
 PRAGMA verify_parallelism
 
