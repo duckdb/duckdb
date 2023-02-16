@@ -903,8 +903,6 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain() {
 	AssertRelation();
-	auto res = rel->Explain();
-
 	auto context = rel->context.GetContext();
 	auto relation_statement = unique_ptr_cast<RelationStatement, SQLStatement>(make_unique<RelationStatement>(rel));
 	auto prepared_statement = context->Prepare(std::move(relation_statement));
