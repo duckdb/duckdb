@@ -57,6 +57,8 @@ string StatementTypeToString(StatementType type) {
 		return "LOGICAL_PLAN";
 	case StatementType::ATTACH_STATEMENT:
 		return "ATTACH";
+	case StatementType::DETACH_STATEMENT:
+		return "DETACH";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

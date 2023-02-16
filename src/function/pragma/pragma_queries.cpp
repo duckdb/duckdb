@@ -1,10 +1,12 @@
-#include "duckdb/function/pragma/pragma_functions.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/parser/statement/export_statement.hpp"
-#include "duckdb/parser/statement/copy_statement.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/export_statement.hpp"
 
 namespace duckdb {
 
@@ -58,10 +60,35 @@ string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &pa
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
-	return StringUtil::Format(
-	    "SELECT name AS \"column_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
-	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s');",
-	    parameters.values[0].ToString());
+	auto table = QualifiedName::Parse(parameters.values[0].ToString());
+
+	// clang-format off
+    string sql = R"(
+	SELECT
+		name AS "column_name",
+		type as "column_type",
+		CASE WHEN "notnull" THEN 'NO' ELSE 'YES' END AS "null",
+		(SELECT 
+			MIN(CASE 
+				WHEN constraint_type='PRIMARY KEY' THEN 'PRI'
+				WHEN constraint_type='UNIQUE' THEN 'UNI' 
+				ELSE NULL END) 
+		FROM duckdb_constraints() c  
+		WHERE c.table_oid=cols.table_oid 
+		AND list_contains(constraint_column_names, cols.column_name)) AS "key",
+		dflt_value AS "default", 
+		NULL AS "extra" 
+	FROM pragma_table_info('%func_param_table%') 
+	LEFT JOIN duckdb_columns cols 
+	ON cols.column_name = pragma_table_info.name 
+	AND cols.table_name='%table_name%'
+	AND cols.schema_name='%table_schema%';)";
+	// clang-format on
+
+	sql = StringUtil::Replace(sql, "%func_param_table%", parameters.values[0].ToString());
+	sql = StringUtil::Replace(sql, "%table_name%", table.name);
+	sql = StringUtil::Replace(sql, "%table_schema%", table.schema.empty() ? DEFAULT_SCHEMA : table.schema);
+	return sql;
 }
 
 string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {
