@@ -100,7 +100,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
 		} else if (loption == "column_names" || loption == "names") {
-			auto &child_type = kv.second.type();
 			if (!options.name_list.empty()) {
 				throw BinderException("read_csv_auto column_names/names can only be supplied once");
 			}
