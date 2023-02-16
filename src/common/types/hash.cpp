@@ -63,11 +63,6 @@ hash_t Hash(const char *str) {
 }
 
 template <>
-hash_t Hash(string_t val) {
-	return Hash(val.GetDataUnsafe(), val.GetSize());
-}
-
-template <>
 hash_t Hash(char *val) {
 	return Hash<const char *>(val);
 }
@@ -75,7 +70,7 @@ hash_t Hash(char *val) {
 // MIT License
 // Copyright (c) 2018-2021 Martin Ankerl
 // https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
-hash_t HashBytes(void *ptr, size_t len) noexcept {
+hash_t HashBytes(const void *ptr, size_t len) noexcept {
 	static constexpr uint64_t M = UINT64_C(0xc6a4a7935bd1e995);
 	static constexpr uint64_t SEED = UINT64_C(0xe17a1465);
 	static constexpr unsigned int R = 47;
@@ -129,11 +124,51 @@ hash_t HashBytes(void *ptr, size_t len) noexcept {
 }
 
 hash_t Hash(const char *val, size_t size) {
-	return HashBytes((void *)val, size);
+	return HashBytes((const void *)val, size);
 }
 
 hash_t Hash(uint8_t *val, size_t size) {
 	return HashBytes((void *)val, size);
+}
+
+template <>
+hash_t Hash(string_t val) {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+	return HashBytes((const void *)val.GetDataUnsafe(), val.GetSize());
+#endif
+	if (val.IsInlined()) {
+		static constexpr uint64_t M = UINT64_C(0xc6a4a7935bd1e995);
+		static constexpr uint64_t SEED = UINT64_C(0xe17a1465);
+		static constexpr unsigned int R = 47;
+
+		const_data_ptr_t data64 = static_cast<const_data_ptr_t>(val.getInlined());
+		uint64_t h = SEED ^ (val.GetSize() * M);
+
+		uint64_t k = Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(data64));
+
+		k *= M;
+		k ^= k >> R;
+		k *= M;
+
+		h ^= k;
+		h *= M;
+
+		k = Load<uint32_t>(reinterpret_cast<const_data_ptr_t>((char const *)data64 + 8u));
+		k <<= 32u;
+		k *= M;
+		k ^= k >> R;
+		k *= M;
+
+		h ^= k;
+		h *= M;
+
+		h ^= h >> R;
+		h *= M;
+		h ^= h >> R;
+		return static_cast<hash_t>(h);
+	} else {
+		return HashBytes((const void *)val.GetDataUnsafe(), val.GetSize());
+	}
 }
 
 } // namespace duckdb

@@ -66,6 +66,9 @@ public:
 	bool IsInlined() const {
 		return GetSize() <= INLINE_LENGTH;
 	}
+	void const *getInlined() {
+		return (void const *)value.inlined.inlined;
+	}
 
 	//! this is unsafe since the string will not be terminated at the end
 	const char *GetDataUnsafe() const {
