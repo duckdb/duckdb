@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   transform_alter_table.cpp
   transform_attach.cpp
+  transform_detach.cpp
   transform_call.cpp
   transform_checkpoint.cpp
   transform_create_function.cpp

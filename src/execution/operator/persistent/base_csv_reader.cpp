@@ -30,15 +30,10 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	return to_string(linenr + 1) + estimated;
 }
 
-BaseCSVReader::BaseCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
-                             BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : fs(fs_p), allocator(allocator), opener(opener_p), options(std::move(options_p)) {
-}
-
-BaseCSVReader::BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
-    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    std::move(options_p), requested_types) {
+    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
+      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -144,7 +139,7 @@ bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type
 	} else {
 		Value new_value;
 		string error_message;
-		return value.DefaultTryCastAs(sql_type, new_value, &error_message, true);
+		return value.TryCastAs(context, sql_type, new_value, &error_message, true);
 	}
 }
 
@@ -481,8 +476,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				                                             error_message, return_types[col_idx]);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::DefaultTryCast(parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-				                                           parse_chunk.size(), &error_message);
+				success = VectorOperations::TryCast(context, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
+				                                    parse_chunk.size(), &error_message);
 			}
 			if (success) {
 				continue;

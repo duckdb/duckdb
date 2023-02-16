@@ -58,11 +58,11 @@ public:
 struct JSONFileHandle {
 public:
 	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	void Close();
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
 
-	bool PlainFileSource() const;
 	bool CanSeek() const;
 	void Seek(idx_t position);
 
@@ -71,6 +71,7 @@ public:
 	idx_t Read(const char *pointer, idx_t requested_size, bool sample_run);
 
 	void Reset();
+	bool RequestedReadsComplete();
 
 private:
 	idx_t ReadFromCache(const char *&pointer, idx_t &size, idx_t &position);
@@ -87,6 +88,8 @@ private:
 
 	//! Read properties
 	idx_t read_position;
+	idx_t requested_reads;
+	atomic<idx_t> actual_reads;
 
 	//! Cached buffers for resetting when reading stream
 	vector<AllocatedData> cached_buffers;
@@ -98,6 +101,7 @@ public:
 	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, string file_path);
 
 	void OpenJSONFile();
+	void CloseJSONFile();
 	bool IsOpen();
 
 	BufferedJSONReaderOptions &GetOptions();

@@ -115,7 +115,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp)) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}
