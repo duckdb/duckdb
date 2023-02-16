@@ -536,7 +536,7 @@ void HTTPFileHandle::InitializeClient() {
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &original_url) {
 	code = res.status;
-	error = string(res.body);
+	error = res.reason;
 	for (auto &h : res.headers) {
 		headers[h.first] = h.second;
 	}
