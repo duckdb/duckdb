@@ -41,7 +41,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
 	return chunk;
 }
 
-py::object DuckDBPyResult::Fetchone() {
+Optional<py::tuple> DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {
@@ -68,7 +68,7 @@ py::object DuckDBPyResult::Fetchone() {
 		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx]);
 	}
 	chunk_offset++;
-	return std::move(res);
+	return res;
 }
 
 py::list DuckDBPyResult::Fetchmany(idx_t size) {
@@ -257,7 +257,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 	return true;
 }
 
-py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
+py::list DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -327,6 +327,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return py::str("STRING");
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
 		return py::str("BINARY");
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -363,17 +364,19 @@ py::str GetTypeToPython(const LogicalType &type) {
 	}
 }
 
-py::list DuckDBPyResult::Description() {
-	const auto names = result->names;
-
-	py::list desc(names.size());
+py::list DuckDBPyResult::GetDescription(const vector<string> &names, const vector<LogicalType> &types) {
+	py::list desc;
 
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		auto py_name = py::str(names[col_idx]);
-		auto py_type = GetTypeToPython(result->types[col_idx]);
-		desc[col_idx] = py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none());
+		auto py_type = GetTypeToPython(types[col_idx]);
+		desc.append(py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none()));
 	}
 	return desc;
+}
+
+py::list DuckDBPyResult::Description() {
+	return GetDescription(result->names, result->types);
 }
 
 void DuckDBPyResult::Close() {

@@ -6,8 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "re2/re2.h"
 
-#include <iostream>
-
 namespace duckdb {
 
 static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
@@ -88,6 +86,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
                                               unordered_map<string, column_t> &column_map, idx_t table_index,
                                               bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
+	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	duckdb_re2::RE2 regex(REGEX_STRING);
 
@@ -101,15 +100,21 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 		auto known_values = GetKnownColumnValues(file, column_map, regex, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner(context);
-		for (auto &filter : filters) {
+
+		for (idx_t j = 0; j < filters.size(); j++) {
+			auto &filter = filters[j];
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
+
 			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
-				pruned_filters.emplace_back(filter->Copy());
+				if (!have_preserved_filter[j]) {
+					pruned_filters.emplace_back(filter->Copy());
+					have_preserved_filter[j] = true;
+				}
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
@@ -126,8 +131,128 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 		}
 	}
 
+	D_ASSERT(filters.size() >= pruned_filters.size());
+
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);
+}
+
+HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
+    : PartitionedColumnData(other) {
+	// Synchronize to ensure consistency of shared partition map
+	if (other.global_state) {
+		global_state = other.global_state;
+		unique_lock<mutex> lck(global_state->lock);
+		SynchronizeLocalMap();
+	}
+}
+
+void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
+	Vector hashes(LogicalType::HASH, input.size());
+	input.Hash(group_by_columns, hashes);
+
+	for (idx_t i = 0; i < input.size(); i++) {
+		HivePartitionKey key;
+		key.hash = FlatVector::GetData<hash_t>(hashes)[i];
+		for (auto &col : group_by_columns) {
+			key.values.emplace_back(input.GetValue(col, i));
+		}
+
+		auto lookup = local_partition_map.find(key);
+		const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+		if (lookup == local_partition_map.end()) {
+			idx_t new_partition_id = RegisterNewPartition(key, state);
+			partition_indices[i] = new_partition_id;
+		} else {
+			partition_indices[i] = lookup->second;
+		}
+	}
+}
+
+std::map<idx_t, const HivePartitionKey *> HivePartitionedColumnData::GetReverseMap() {
+	std::map<idx_t, const HivePartitionKey *> ret;
+	for (const auto &pair : local_partition_map) {
+		ret[pair.second] = &(pair.first);
+	}
+	return ret;
+}
+
+void HivePartitionedColumnData::GrowAllocators() {
+	unique_lock<mutex> lck_gstate(allocators->lock);
+
+	idx_t current_allocator_size = allocators->allocators.size();
+	idx_t required_allocators = local_partition_map.size();
+
+	allocators->allocators.reserve(current_allocator_size);
+	for (idx_t i = current_allocator_size; i < required_allocators; i++) {
+		CreateAllocator();
+	}
+
+	D_ASSERT(allocators->allocators.size() == local_partition_map.size());
+}
+
+void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState &state) {
+	idx_t current_append_state_size = state.partition_append_states.size();
+	idx_t required_append_state_size = local_partition_map.size();
+
+	for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
+		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		state.partition_buffers.emplace_back(CreatePartitionBuffer());
+	}
+}
+
+void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState &state) {
+	idx_t current_partitions = partitions.size();
+	idx_t required_partitions = local_partition_map.size();
+
+	D_ASSERT(allocators->allocators.size() == required_partitions);
+
+	for (idx_t i = current_partitions; i < required_partitions; i++) {
+		partitions.emplace_back(CreatePartitionCollection(i));
+		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
+	}
+	D_ASSERT(partitions.size() == local_partition_map.size());
+}
+
+void HivePartitionedColumnData::SynchronizeLocalMap() {
+	// Synchronise global map into local, may contain changes from other threads too
+	for (auto it = global_state->partitions.begin() + local_partition_map.size(); it < global_state->partitions.end();
+	     it++) {
+		local_partition_map[(*it)->first] = (*it)->second;
+	}
+}
+
+idx_t HivePartitionedColumnData::RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state) {
+	if (global_state) {
+		idx_t partition_id;
+
+		// Synchronize Global state with our local state with the newly discoveren partition
+		{
+			unique_lock<mutex> lck_gstate(global_state->lock);
+
+			// Insert into global map, or return partition if already present
+			auto res =
+			    global_state->partition_map.emplace(std::make_pair(std::move(key), global_state->partition_map.size()));
+			auto it = res.first;
+			partition_id = it->second;
+
+			// Add iterator to vector to allow incrementally updating local states from global state
+			global_state->partitions.emplace_back(it);
+			SynchronizeLocalMap();
+		}
+
+		// After synchronizing with the global state, we need to grow the shared allocators to support
+		// the number of partitions, which guarantees that there's always enough allocators available to each thread
+		GrowAllocators();
+
+		// Grow local partition data
+		GrowAppendState(state);
+		GrowPartitions(state);
+
+		return partition_id;
+	} else {
+		return local_partition_map.emplace(std::make_pair(std::move(key), local_partition_map.size())).first->second;
+	}
 }
 
 } // namespace duckdb

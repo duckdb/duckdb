@@ -183,7 +183,6 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 		auto states = (STATE **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
-			const auto aidx = adata.sel->get_index(i);
 			const auto bidx = bdata.sel->get_index(i);
 			if (!bdata.validity.RowIsValid(bidx)) {
 				continue;
@@ -194,12 +193,12 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			auto state = states[sidx];
 			if (!state->is_initialized) {
 				STATE::template AssignValue<BY_TYPE>(state->value, bval, false);
-				AssignVector(state, arg, aidx);
+				AssignVector(state, arg, i);
 				state->is_initialized = true;
 
 			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state->value)) {
 				STATE::template AssignValue<BY_TYPE>(state->value, bval, true);
-				AssignVector(state, arg, aidx);
+				AssignVector(state, arg, i);
 			}
 		}
 	}

@@ -7,7 +7,7 @@ namespace duckdb {
 MetaBlockWriter::MetaBlockWriter(BlockManager &block_manager, block_id_t initial_block_id)
     : block_manager(block_manager) {
 	if (initial_block_id == INVALID_BLOCK) {
-		initial_block_id = GetNextBlockId();
+		initial_block_id = MetaBlockWriter::GetNextBlockId();
 	}
 	block = block_manager.CreateBlock(initial_block_id, nullptr);
 	Store<block_id_t>(-1, block->buffer);

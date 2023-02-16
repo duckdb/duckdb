@@ -25,6 +25,9 @@ statement ok
 SET experimental_parallel_csv=true;
 
 statement ok
+PRAGMA verify_parallelism
+
+statement ok
 CREATE TABLE voters2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII

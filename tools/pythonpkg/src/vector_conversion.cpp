@@ -315,10 +315,10 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (import_cache.pandas.libs.NAType.IsLoaded()) {
+				if (import_cache.pandas().libs.NAType.IsLoaded()) {
 					// If pandas is imported, check if the type is NAType
 					auto val_type = Py_TYPE(val);
-					auto na_type = (PyTypeObject *)import_cache.pandas.libs.NAType().ptr();
+					auto na_type = (PyTypeObject *)import_cache.pandas().libs.NAType().ptr();
 					if (val_type == na_type) {
 						out_mask.SetInvalid(row);
 						continue;
@@ -467,6 +467,11 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 				bind_data.pandas_type = ConvertPandasType(numpy_type);
 				duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
 			}
+		} else if (bind_data.pandas_type == PandasType::FLOAT_16) {
+			auto pandas_array = get_fun(df_columns[col_idx]).attr("array");
+			bind_data.numpy_col = py::array(column.attr("to_numpy")("float32"));
+			bind_data.pandas_type = PandasType::FLOAT_32;
+			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
 		} else {
 			auto pandas_array = get_fun(df_columns[col_idx]).attr("array");
 			if (py::hasattr(pandas_array, "_data")) {

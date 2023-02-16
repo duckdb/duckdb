@@ -120,7 +120,12 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
-	string url_template = "http://extensions.duckdb.org/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
+
+	string default_endpoint = "http://extensions.duckdb.org";
+	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
+	string &custom_endpoint = ClientConfig::GetConfig(context).custom_extension_repo;
+	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
+	string url_template = endpoint + versioned_path;
 
 	if (is_http_url) {
 		url_template = extension;

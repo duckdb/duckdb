@@ -8,19 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/result_modifier.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -34,6 +34,10 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+
+class ColumnList;
+class ExternalDependency;
+class TableFunction;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -73,7 +77,8 @@ class Binder : public std::enable_shared_from_this<Binder> {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr,
+	                                                  bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -98,8 +103,8 @@ public:
 	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
-	BoundStatement Bind(SQLStatement &statement);
-	BoundStatement Bind(QueryNode &node);
+	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
+	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
@@ -160,11 +165,11 @@ public:
 	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
 	                                          vector<PhysicalIndex> &columns);
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
-	                                TableCatalogEntry *table);
-	void BindOnConflictClause(unique_ptr<LogicalInsert> &insert, TableCatalogEntry *table, InsertStatement &stmt);
+	                                TableCatalogEntry &table);
+	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &catalog = INVALID_CATALOG,
+	static void BindLogicalType(ClientContext &context, LogicalType &type, Catalog *catalog = nullptr,
 	                            const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
@@ -208,7 +213,7 @@ private:
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
-	void BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
+	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
 	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
@@ -242,6 +247,7 @@ private:
 	BoundStatement Bind(LoadStatement &stmt);
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 	BoundStatement Bind(AttachStatement &stmt);
+	BoundStatement Bind(DetachStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
 	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,

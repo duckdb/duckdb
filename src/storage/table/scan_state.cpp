@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -84,7 +84,7 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 	return parent.GetAdaptiveFilter();
 }
 
-bool CollectionScanState::Scan(Transaction &transaction, DataChunk &result) {
+bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	auto current_row_group = row_group_state.row_group;
 	while (current_row_group) {
 		current_row_group->Scan(transaction, row_group_state, result);

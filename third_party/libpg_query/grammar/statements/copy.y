@@ -184,6 +184,14 @@ copy_opt_item:
 				{
 					$$ = makeDefElem("force_quote", (PGNode *)makeNode(PGAStar), @1);
 				}
+			| PARTITION BY columnList
+				{
+					$$ = makeDefElem("partition_by", (PGNode *)$3, @1);
+				}
+			| PARTITION BY '*'
+				{
+					$$ = makeDefElem("partition_by", (PGNode *)makeNode(PGAStar), @1);
+				}
 			| FORCE NOT NULL_P columnList
 				{
 					$$ = makeDefElem("force_not_null", (PGNode *)$4, @1);

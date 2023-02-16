@@ -164,6 +164,7 @@ public:
 	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
+	string GetName() const override;
 
 public:
 	// HTTP Requests
@@ -201,9 +202,16 @@ public:
 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
 
 	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override;
 
 	//! Wrapper around BufferManager::Allocate to limit the number of buffers
 	BufferHandle Allocate(idx_t part_size, uint16_t max_threads);
+
+	//! S3 is object storage so directories effectively always exist
+	bool DirectoryExists(const string &directory) override {
+		return true;
+	}
 
 protected:
 	unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,

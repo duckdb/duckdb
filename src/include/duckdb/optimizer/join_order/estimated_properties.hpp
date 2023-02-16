@@ -15,7 +15,6 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 

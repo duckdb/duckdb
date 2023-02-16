@@ -20,6 +20,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -368,19 +369,11 @@ bool Value::StringIsValid(const char *str, idx_t length) {
 }
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
-	D_ASSERT(width <= Decimal::MAX_WIDTH_INT16);
-	Value result(LogicalType::DECIMAL(width, scale));
-	result.value_.smallint = value;
-	result.is_null = false;
-	return result;
+	return Value::DECIMAL(int64_t(value), width, scale);
 }
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
-	D_ASSERT(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
-	Value result(LogicalType::DECIMAL(width, scale));
-	result.value_.integer = value;
-	result.is_null = false;
-	return result;
+	return Value::DECIMAL(int64_t(value), width, scale);
 }
 
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
@@ -610,6 +603,20 @@ Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
 	result.str_value = Blob::ToBlob(string_t(data));
+	return result;
+}
+
+Value Value::BIT(const_data_ptr_t data, idx_t len) {
+	Value result(LogicalType::BIT);
+	result.is_null = false;
+	result.str_value = string((const char *)data, len);
+	return result;
+}
+
+Value Value::BIT(const string &data) {
+	Value result(LogicalType::BIT);
+	result.is_null = false;
+	result.str_value = Bit::ToBit(string_t(data));
 	return result;
 }
 
@@ -1567,6 +1574,10 @@ bool Value::DefaultTryCastAs(const LogicalType &target_type, bool strict) {
 	CastFunctionSet set;
 	GetCastFunctionInput get_input;
 	return TryCastAs(set, get_input, target_type, strict);
+}
+
+void Value::Reinterpret(LogicalType new_type) {
+	this->type_ = std::move(new_type);
 }
 
 void Value::Serialize(Serializer &main_serializer) const {

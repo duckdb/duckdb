@@ -90,7 +90,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 		return;
 	}
 	try {
-		Close();
+		MiniZStreamWrapper::Close();
 	} catch (...) {
 	}
 }

@@ -36,6 +36,15 @@ describe('UDFs', function() {
             db.unregister_udf("udf", done);
         });
 
+        it('0ary non-inlined string', function(done) {
+            db.register_udf("udf", "varchar", () => 'this string is over 12 bytes');
+            db.all("select udf() v", function(err: null | Error, rows: TableData) {
+                if (err) throw err;
+                assert.equal(rows[0].v, 'this string is over 12 bytes');
+            });
+            db.unregister_udf("udf", done);
+        });
+
         it('0ary int null', function(done) {
             db.register_udf("udf", "integer", () => undefined);
             db.all("select udf() v", function(err: null | Error, rows: TableData) {

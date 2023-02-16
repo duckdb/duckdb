@@ -132,14 +132,14 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Generated());
+	D_ASSERT(table_entry->GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	auto expression = table_entry->columns.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
+	auto expression = table_entry->GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, string> alias_map;
 	for (auto &entry : name_map) {
 		alias_map[entry.second] = entry.first;
 	}
-	ReplaceAliases(*expression, table_entry->columns, alias_map);
+	ReplaceAliases(*expression, table_entry->GetColumns(), alias_map);
 	BakeTableName(*expression, alias);
 	return (expression);
 }
@@ -192,7 +192,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 		// Either there is no table, or the columns category has to be standard
 		auto table_entry = (TableCatalogEntry *)entry;
-		auto &column_entry = table_entry->columns.GetColumn(LogicalIndex(column_index));
+		auto &column_entry = table_entry->GetColumn(LogicalIndex(column_index));
 		(void)table_entry;
 		(void)column_entry;
 		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
