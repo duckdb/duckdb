@@ -23,12 +23,13 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
     error_occured = []
     orig = getattr(obj, name)
 
-    def ceptor(*args,**kwargs):
+    def ceptor(*args, **kwargs):
         try:
-            return orig(*args,**kwargs)
+            return orig(*args, **kwargs)
         except Exception as e:
             error_occured.append(e)
             raise e
+
     monkeypatch.setattr(obj, name, ceptor)
     return error_occured
 
@@ -71,12 +72,16 @@ class TestPythonFilesystem:
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
-    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
-        memory = MemoryFileSystem(skip_instance_cache=True)
-        add_file(memory)
-        memory.protocol = ('file', 'local')
-        duckdb_cursor.register_filesystem(memory)
+    def test_multiple_protocol_filesystems(self):
+        class ExtendedMemoryFileSystem(MemoryFileSystem):
+            protocol = ('file', 'local')
+            # defer to the original implementation doesn't hardcode the protocol
+            _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
 
+        memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
+        add_file(memory)
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.register_filesystem(memory)
         for protocol in memory.protocol:
             duckdb_cursor.execute(f"select * from '{protocol}://{FILENAME}'")
 
@@ -163,7 +168,7 @@ class TestPythonFilesystem:
             conn.execute('INSERT INTO hello.t VALUES (1)')
 
             conn.execute('FROM hello.t')
-            assert conn.fetchall() == [(0, ), (1, )]
+            assert conn.fetchall() == [(0,), (1,)]
 
         # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
         # isn't happening
