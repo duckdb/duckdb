@@ -12,13 +12,11 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_database_info.hpp"
-#include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
@@ -26,13 +24,13 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
-#include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -651,22 +649,26 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::DATABASE_ENTRY: {
 		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
 		auto &base = (CreateDatabaseInfo &)*stmt.info;
-		string extension_name = base.extension_name;
 		string database_name = base.name;
 		string source_path = base.path;
 
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &extension : config.create_database_extensions) {
-			auto create_database_function_ref =
-			    extension.function(context, extension_name, database_name, source_path, extension.data.get());
-			if (create_database_function_ref) {
-				auto bound_create_database_func = Bind(*create_database_function_ref);
-				result.plan = CreatePlan(*bound_create_database_func);
-				break;
-			}
-		}
-		if (!result.plan) {
+
+		if (config.storage_extensions.empty()) {
 			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
+		}
+		// for now assume only one storage extension provides the custom create_database impl
+		for (auto &extension_entry : config.storage_extensions) {
+			if (extension_entry.second->create_database != nullptr) {
+				auto &storage_extension = extension_entry.second;
+				auto create_database_function_ref = storage_extension->create_database(
+				    storage_extension->storage_info.get(), context, database_name, source_path);
+				if (create_database_function_ref) {
+					auto bound_create_database_func = Bind(*create_database_function_ref);
+					result.plan = CreatePlan(*bound_create_database_func);
+					break;
+				}
+			}
 		}
 		break;
 	}

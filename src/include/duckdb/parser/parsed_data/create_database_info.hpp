@@ -16,9 +16,6 @@ struct CreateDatabaseInfo : public CreateInfo {
 	CreateDatabaseInfo() : CreateInfo(CatalogType::DATABASE_ENTRY) {
 	}
 
-	//! Extension name which creates databases
-	string extension_name;
-
 	//! Name of the database
 	string name;
 
@@ -29,7 +26,6 @@ public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateDatabaseInfo>();
 		CopyProperties(*result);
-		result->extension_name = extension_name;
 		result->name = name;
 		result->path = path;
 		return unique_ptr<CreateInfo>(result.release());
