@@ -1,8 +1,13 @@
 name: Julia
 on:
-   push:
-     paths-ignore:
-       - '**.md'
+  schedule:
+    - cron: "0 2 * * *"
+  push:
+    branches:
+      - '**'
+      - '!master'
+    paths-ignore:
+      - '**.md'
    pull_request:
      paths-ignore:
        - '**.md'
