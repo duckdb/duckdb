@@ -43,8 +43,6 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
-	shared_ptr<Relation> rel;
-
 public:
 	static void Initialize(py::handle &m);
 
@@ -244,6 +242,8 @@ public:
 
 	static bool IsRelation(const py::object &object);
 
+	Relation &GetRel();
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -258,6 +258,9 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
+	shared_ptr<Relation> rel;
+	vector<LogicalType> types;
+	vector<string> names;
 	unique_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
 };

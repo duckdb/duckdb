@@ -14,10 +14,23 @@
 
 namespace duckdb {
 
-DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(std::move(rel)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
+	if (!rel) {
+		throw InternalException("DuckDBPyRelation created without a relation");
+	}
+	auto &columns = rel->Columns();
+	for (auto &col : columns) {
+		names.push_back(col.GetName());
+		types.push_back(col.GetType());
+	}
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(std::move(result)) {
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
+	if (!result) {
+		throw InternalException("DuckDBPyRelation created without a result");
+	}
+	this->types = result->GetTypes();
+	this->names = result->GetNames();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
@@ -193,24 +206,20 @@ void DuckDBPyRelation::AssertRelation() const {
 }
 
 void DuckDBPyRelation::AssertResultOpen() const {
-	if (result && result->IsClosed()) {
+	if (!result || result->IsClosed()) {
 		throw InvalidInputException("No open result set");
 	}
 }
 
 py::list DuckDBPyRelation::Description() {
-	if (rel) {
-		auto &columns = rel->Columns();
-		vector<string> names;
-		vector<LogicalType> types;
-		for (auto &col : columns) {
-			names.push_back(col.GetName());
-			types.push_back(col.GetType());
-		}
-		return DuckDBPyResult::GetDescription(names, types);
+	return DuckDBPyResult::GetDescription(names, types);
+}
+
+Relation &DuckDBPyRelation::GetRel() {
+	if (!rel) {
+		throw InternalException("DuckDBPyRelation - calling GetRel, but no rel was present");
 	}
-	AssertResultOpen();
-	return result->Description();
+	return *rel;
 }
 
 struct DescribeAggregateInfo {
@@ -393,7 +402,7 @@ idx_t DuckDBPyRelation::Length() {
 	aggregate_rel->Execute();
 	D_ASSERT(aggregate_rel->result && aggregate_rel->result->result);
 	auto tmp_res = std::move(aggregate_rel->result);
-	return tmp_res->result->Fetch()->GetValue(0, 0).GetValue<idx_t>();
+	return tmp_res->FetchChunk()->GetValue(0, 0).GetValue<idx_t>();
 }
 
 py::tuple DuckDBPyRelation::Shape() {
@@ -466,15 +475,14 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow() {
-	auto tmp_result = make_unique<DuckDBPyResult>();
-	tmp_result->result = ExecuteInternal();
-	if (!tmp_result->result) {
+	auto query_result = ExecuteInternal();
+	if (!query_result) {
 		throw InternalException("ExecuteOrThrow - no query available to execute");
 	}
-	if (tmp_result->result->HasError()) {
-		tmp_result->result->ThrowError();
+	if (query_result->HasError()) {
+		query_result->ThrowError();
 	}
-	result = std::move(tmp_result);
+	result = make_unique<DuckDBPyResult>(std::move(query_result));
 }
 
 DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
@@ -531,7 +539,7 @@ py::list DuckDBPyRelation::FetchAll() {
 	}
 	auto res = result->Fetchall();
 	result = nullptr;
-	return std::move(res);
+	return res;
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
@@ -636,7 +644,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else if (type_string == "left") {
 		dtype = JoinType::LEFT;
 	} else {
-		throw InvalidInputException("Unsupported join type %s try 'inner' or 'left'", type_string);
+		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
 	}
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
