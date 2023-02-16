@@ -1,9 +1,13 @@
----
 name: Java JDBC
 on:
+  schedule:
+    - cron: "0 2 * * *"
   push:
+    branches:
+      - '**'
+      - '!master'
     paths-ignore:
-      - "**.md"
+      - '**.md'
   pull_request:
     paths-ignore:
       - "**"

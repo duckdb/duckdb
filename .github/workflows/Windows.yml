@@ -1,6 +1,11 @@
 name: Windows
 on:
+  schedule:
+    - cron: "0 2 * * *"
   push:
+    branches:
+      - '**'
+      - '!master'
     paths-ignore:
       - '**.md'
   pull_request:

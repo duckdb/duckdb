@@ -1,5 +1,7 @@
 name: Main
 on:
+  schedule:
+    - cron: "0 2 * * *"
   push:
     paths-ignore:
       - '**.md'
