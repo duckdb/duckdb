@@ -451,23 +451,23 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
-static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
+static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel, bool stream_result = false) {
 	if (!rel) {
 		return nullptr;
 	}
 	auto context = rel->context.GetContext();
 	py::gil_scoped_release release;
-	auto pending_query = context->PendingQuery(rel, false);
+	auto pending_query = context->PendingQuery(rel, stream_result);
 	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
 }
 
-unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
-	return PyExecuteRelation(rel);
+unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
+	return PyExecuteRelation(rel, stream_result);
 }
 
-void DuckDBPyRelation::ExecuteOrThrow() {
+void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	auto tmp_result = make_unique<DuckDBPyResult>();
-	tmp_result->result = ExecuteInternal();
+	tmp_result->result = ExecuteInternal(stream_result);
 	if (!tmp_result->result) {
 		throw InternalException("ExecuteOrThrow - no query available to execute");
 	}
@@ -497,7 +497,7 @@ Optional<py::tuple> DuckDBPyRelation::FetchOne() {
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	if (result->IsClosed()) {
 		return py::none();
@@ -510,7 +510,7 @@ py::list DuckDBPyRelation::FetchMany(idx_t size) {
 		if (!rel) {
 			return py::list();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 		D_ASSERT(result);
 	}
 	if (result->IsClosed()) {
@@ -568,7 +568,7 @@ DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_o
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
@@ -597,7 +597,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
 	return result->FetchRecordBatchReader(batch_size);
