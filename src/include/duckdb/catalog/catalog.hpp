@@ -142,9 +142,6 @@ public:
 	DUCKDB_API CatalogEntry *CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info);
 	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 
-	//	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table);
-	//	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, SchemaCatalogEntry *schema, CreateIndexInfo *info,
-	//	                                     TableCatalogEntry *table);
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                     BoundCreateTableInfo *info);
