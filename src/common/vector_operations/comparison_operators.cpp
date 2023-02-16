@@ -22,12 +22,12 @@ bool EqualsFloat(T left, T right) {
 }
 
 template <>
-bool Equals::Operation(float left, float right) {
+bool Equals::Operation(const float &left, const float &right) {
 	return EqualsFloat<float>(left, right);
 }
 
 template <>
-bool Equals::Operation(double left, double right) {
+bool Equals::Operation(const double &left, const double &right) {
 	return EqualsFloat<double>(left, right);
 }
 
@@ -49,12 +49,12 @@ bool GreaterThanFloat(T left, T right) {
 }
 
 template <>
-bool GreaterThan::Operation(float left, float right) {
+bool GreaterThan::Operation(const float &left, const float &right) {
 	return GreaterThanFloat<float>(left, right);
 }
 
 template <>
-bool GreaterThan::Operation(double left, double right) {
+bool GreaterThan::Operation(const double &left, const double &right) {
 	return GreaterThanFloat<double>(left, right);
 }
 
@@ -77,12 +77,12 @@ bool GreaterThanEqualsFloat(T left, T right) {
 }
 
 template <>
-bool GreaterThanEquals::Operation(float left, float right) {
+bool GreaterThanEquals::Operation(const float &left, const float &right) {
 	return GreaterThanEqualsFloat<float>(left, right);
 }
 
 template <>
-bool GreaterThanEquals::Operation(double left, double right) {
+bool GreaterThanEquals::Operation(const double &left, const double &right) {
 	return GreaterThanEqualsFloat<double>(left, right);
 }
 
