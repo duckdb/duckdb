@@ -42,6 +42,9 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EnumComparisonRule>(rewriter));
+	// HEEERE ADD A NEW RULE to rewrite anti and semi joins!
+
+
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -76,6 +79,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
+
+	RunOptimizer(OptimizerType::ANTI_SEMI_JOIN_REWRITER, [&]() {
+
+	});
 
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {

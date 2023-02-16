@@ -21,3 +21,8 @@ query I
 SELECT * FROM one ANTI JOIN two ON one.a = two.a;
 ----
 43
+
+# Works with filters
+query I
+SELECT * FROM one ANTI JOIN two ON one.a = two.a WHERE two.a < 43;
+----
