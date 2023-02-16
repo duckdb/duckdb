@@ -45,6 +45,6 @@ public:
 		                        StatementTypeToString(type));
 	}
 	//! Create a copy of this SelectStatement
-	virtual unique_ptr<SQLStatement> Copy() const = 0;
+	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;
 };
 } // namespace duckdb

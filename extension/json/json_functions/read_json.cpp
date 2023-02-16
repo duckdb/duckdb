@@ -21,23 +21,25 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	while (remaining != 0) {
 		allocator.Reset();
 		auto read_count = lstate.ReadNext(gstate);
-		if (read_count > 1) {
+		if (lstate.scan_count > 1) {
 			more_than_one = true;
 		}
 		if (read_count == 0) {
 			break;
 		}
 		idx_t next = MinValue<idx_t>(read_count, remaining);
+		auto objects =
+		    bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS ? lstate.array_objects : lstate.objects;
 		for (idx_t i = 0; i < next; i++) {
-			if (lstate.objects[i]) {
-				JSONStructure::ExtractStructure(lstate.objects[i], node);
+			if (objects[i]) {
+				JSONStructure::ExtractStructure(objects[i], node);
 			}
 		}
 		if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 			continue;
 		}
 		node.InitializeCandidateTypes(bind_data.max_depth);
-		node.RefineCandidateTypes(lstate.objects, next, string_vector, allocator, bind_data.date_format_map);
+		node.RefineCandidateTypes(objects, next, string_vector, allocator, bind_data.date_format_map);
 		remaining -= next;
 
 		if (gstate.file_index == 10) {
@@ -46,7 +48,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 	}
 	bind_data.type = original_scan_type;
-	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
 	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
 	if (bind_data.options.format == JSONFormat::AUTO_DETECT) {
@@ -58,23 +59,32 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			bind_data.options.format = JSONFormat::UNSTRUCTURED;
 			type = ListType::GetChildType(type);
 		}
+	} else if (bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS && bind_data.auto_detect &&
+	           type.id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Expected ARRAY of OBJECTS!");
 	}
 
-	if (type.id() != LogicalTypeId::STRUCT) {
-		return_types.emplace_back(type);
-		names.emplace_back("json");
-		bind_data.top_level_type = JSONScanTopLevelType::OTHER;
-	} else {
-		const auto &child_types = StructType::GetChildTypes(type);
-		return_types.reserve(child_types.size());
-		names.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			return_types.emplace_back(child_type.second);
-			names.emplace_back(child_type.first);
+	if (bind_data.auto_detect) {
+		bind_data.transform_options.date_format_map = &bind_data.date_format_map;
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return_types.emplace_back(type);
+			names.emplace_back("json");
+			bind_data.top_level_type = JSONScanTopLevelType::OTHER;
+		} else {
+			const auto &child_types = StructType::GetChildTypes(type);
+			return_types.reserve(child_types.size());
+			names.reserve(child_types.size());
+			for (auto &child_type : child_types) {
+				return_types.emplace_back(child_type.second);
+				names.emplace_back(child_type.first);
+			}
 		}
 	}
 
 	for (auto &reader : gstate.json_readers) {
+		if (bind_data.options.format != JSONFormat::AUTO_DETECT) {
+			reader->GetOptions().format = bind_data.options.format;
+		}
 		if (reader->IsOpen()) {
 			reader->Reset();
 		}
@@ -171,7 +181,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 
 	bind_data.InitializeFormats();
 
-	if (bind_data.auto_detect) {
+	if (bind_data.auto_detect || bind_data.options.format == JSONFormat::AUTO_DETECT) {
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		bind_data.names = names;
 	}
