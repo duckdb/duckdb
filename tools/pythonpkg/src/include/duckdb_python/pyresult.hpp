@@ -17,18 +17,7 @@ namespace duckdb {
 
 struct DuckDBPyResult {
 public:
-	idx_t chunk_offset = 0;
-
-	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
-	// Holds the categories of Categorical/ENUM types
-	unordered_map<idx_t, py::list> categories;
-	// Holds the categorical type of Categorical/ENUM types
-	unordered_map<idx_t, py::object> categories_type;
-
-	string timezone_config;
-
-	explicit DuckDBPyResult() {};
+	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
 
 public:
 	Optional<py::tuple> Fetchone();
@@ -50,11 +39,15 @@ public:
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
-	py::list Description();
 
 	void Close();
 
 	bool IsClosed() const;
+
+	unique_ptr<DataChunk> FetchChunk();
+
+	const vector<string> &GetNames();
+	const vector<LogicalType> &GetTypes();
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
@@ -71,6 +64,17 @@ private:
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 
 private:
+	idx_t chunk_offset = 0;
+
+	unique_ptr<QueryResult> result;
+	unique_ptr<DataChunk> current_chunk;
+	// Holds the categories of Categorical/ENUM types
+	unordered_map<idx_t, py::list> categories;
+	// Holds the categorical type of Categorical/ENUM types
+	unordered_map<idx_t, py::object> categories_type;
+
+	string timezone_config;
+
 	bool result_closed = false;
 };
 
