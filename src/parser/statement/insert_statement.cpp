@@ -13,6 +13,9 @@ OnConflictInfo::OnConflictInfo(const OnConflictInfo &other)
 	if (other.set_info) {
 		set_info = other.set_info->Copy();
 	}
+	if (other.condition) {
+		condition = other.condition->Copy();
+	}
 }
 
 unique_ptr<OnConflictInfo> OnConflictInfo::Copy() const {
