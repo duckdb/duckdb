@@ -49,6 +49,8 @@ public:
 
 	py::dict FetchPyTorch();
 
+	py::dict FetchTF();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
