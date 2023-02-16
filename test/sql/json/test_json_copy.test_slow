@@ -23,7 +23,24 @@ UUID	10
 UUID	15
 UUID	5
 
-mode skip
+# struct star expression should work too
+statement ok
+copy (
+    select v.* from values
+    ({order_id: uuid(), revenue: 10}),
+    ({order_id: uuid(), revenue: 10}),
+    ({order_id: uuid(), revenue: 15}),
+    ({order_id: uuid(), revenue: 5}),
+    t (v)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
 
 require tpch
 

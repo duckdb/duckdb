@@ -18,11 +18,11 @@ namespace duckdb {
 class ColumnRefExpression : public ParsedExpression {
 public:
 	//! Specify both the column and table name
-	ColumnRefExpression(string column_name, string table_name);
+	DUCKDB_API ColumnRefExpression(string column_name, string table_name);
 	//! Only specify the column name, the table name will be derived later
-	explicit ColumnRefExpression(string column_name);
+	DUCKDB_API explicit ColumnRefExpression(string column_name);
 	//! Specify a set of names
-	explicit ColumnRefExpression(vector<string> column_names);
+	DUCKDB_API explicit ColumnRefExpression(vector<string> column_names);
 
 	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
 	vector<string> column_names;

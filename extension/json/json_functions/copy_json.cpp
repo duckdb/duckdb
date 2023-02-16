@@ -1,6 +1,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "json_functions.hpp"
@@ -23,9 +24,15 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
 	if (select_stmt.select_list.size() == 1 && select_stmt.select_list[0]->type == ExpressionType::STAR) {
+		auto orig_expr = std::move(select_stmt.select_list[0]);
+		auto &star_expr = (StarExpression &)*orig_expr;
 		select_stmt.select_list.clear();
 		for (auto &name : bound_original.names) {
-			select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name));
+			if (star_expr.relation_name.empty()) {
+				select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name));
+			} else {
+				select_stmt.select_list.emplace_back(make_unique<ColumnRefExpression>(name, star_expr.relation_name));
+			}
 		}
 	}
 	D_ASSERT(bound_original.types.size() == select_stmt.select_list.size());
