@@ -869,7 +869,7 @@ idx_t VectorOperations::DistinctFrom(Vector &left, Vector &right, const Selectio
 // true := A == B with nulls being equal
 idx_t VectorOperations::NotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
+	return count - TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, false_sel, true_sel);
 }
 
 // true := A > B with nulls being maximal
@@ -888,8 +888,8 @@ idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &righ
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanEquals>(left, right, sel, count, true_sel,
-	                                                                           false_sel);
+	return count -
+	       TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(right, left, sel, count, false_sel, true_sel);
 }
 // true := A < B with nulls being maximal
 idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
@@ -919,7 +919,8 @@ idx_t VectorOperations::NestedNotEquals(Vector &left, Vector &right, const Selec
 // true := A == B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedEquals(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                      SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, &sel, count, true_sel, false_sel);
+	return count -
+	       TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, &sel, count, false_sel, true_sel);
 }
 
 } // namespace duckdb
