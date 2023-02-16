@@ -38,8 +38,78 @@ namespace duckdb {
 #ifndef DUCKDB_DEBUG_MOVE
 using std::move;
 #endif
+template<class T>
+class unique_ptr {
+public:
+	using element_type = T;
+	using pointer = element_type*;
+
+	unique_ptr() : ptr(nullptr) {}
+	unique_ptr(pointer ptr_p) : ptr(ptr_p) {}
+	~unique_ptr() {
+		reset();
+	}
+	// disable copy constructors
+	unique_ptr(const unique_ptr &other) = delete;
+	unique_ptr &operator=(const unique_ptr &) = delete;
+	//! enable move constructors
+	unique_ptr(unique_ptr &&other) noexcept {
+		ptr = other.release();
+	}
+	template<class U>
+	unique_ptr(unique_ptr<U> &&other) noexcept {
+		ptr = static_cast<T *>(other.release());
+	}
+	unique_ptr &operator=(unique_ptr &&other) noexcept {
+		swap(other);
+		return *this;
+	}
+	template<class U>
+	unique_ptr& operator=(unique_ptr<U>&& other) noexcept {
+		auto cast_ptr = static_cast<U *>(release());
+		ptr = static_cast<T *>(other.release());
+		other.reset(cast_ptr);
+		return *this;
+	}
+    operator bool() const {
+        return ptr;
+    }
+	T& operator*() {
+		if (!ptr) {
+			throw std::runtime_error("Attempting to dereference a unique pointer that is not set");
+		}
+        return *ptr;
+	}
+    pointer operator->() const {
+		if (!ptr) {
+			throw std::runtime_error("Attempting to reference a unique pointer that is not set");
+		}
+        return ptr;
+    }
+
+    pointer get() {
+    	return ptr;
+    }
+    pointer release() noexcept {
+    	auto res = ptr;
+    	ptr = nullptr;
+    	return res;
+    }
+    void reset(pointer new_ptr = nullptr) noexcept {
+		if (ptr) {
+			delete ptr;
+		}
+		ptr = new_ptr;
+    }
+    void swap(unique_ptr& other) noexcept {
+		std::swap(ptr, other.ptr);
+    }
+
+private:
+	T *ptr;
+};
+
 using std::shared_ptr;
-using std::unique_ptr;
 using std::weak_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::make_shared;

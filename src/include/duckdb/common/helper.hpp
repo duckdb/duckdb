@@ -35,14 +35,10 @@ namespace duckdb {
 #define DUCKDB_EXPLICIT_FALLTHROUGH
 #endif
 
-#if !defined(_MSC_VER) && (__cplusplus < 201402L)
 template <typename T, typename... Args>
 unique_ptr<T> make_unique(Args &&... args) {
 	return unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
-#else // Visual Studio has make_unique
-using std::make_unique;
-#endif
 template <typename S, typename T, typename... Args>
 unique_ptr<S> make_unique_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
