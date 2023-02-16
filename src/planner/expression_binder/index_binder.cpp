@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
@@ -37,10 +38,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			if (col_id_idx == DConstants::INVALID_INDEX) {
 				throw InternalException("failed to replay CREATE INDEX statement - column id not found");
 			}
-
-			auto bound_column_ref =
-			    make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx));
-			return BindResult(std::move(bound_column_ref));
+			return BindResult(make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx)));
 		}
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
