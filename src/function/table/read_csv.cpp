@@ -101,8 +101,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		} else if (loption == "column_names" || loption == "names") {
 			auto &child_type = kv.second.type();
-			D_ASSERT(child_type.id() == LogicalTypeId::LIST);
-			D_ASSERT(ListType::GetChildType(child_type).id() == LogicalTypeId::VARCHAR);
 			if (!options.name_list.empty()) {
 				throw BinderException("read_csv_auto column_names/names can only be supplied once");
 			}
