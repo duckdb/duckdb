@@ -33,6 +33,11 @@ public:
 
 	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer);
 
+	//! Gets a bound CreateViewInfo object from a SELECT statement and a view name, schema name, etc
+	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info);
+	//! Gets a bound CreateViewInfo object from a CREATE VIEW statement
+	DUCKDB_API static unique_ptr<CreateViewInfo> FromCreateView(ClientContext &context, const string &sql);
+
 protected:
 	void SerializeInternal(Serializer &serializer) const override;
 };

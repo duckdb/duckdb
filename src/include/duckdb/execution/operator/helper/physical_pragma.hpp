@@ -19,7 +19,7 @@ class PhysicalPragma : public PhysicalOperator {
 public:
 	PhysicalPragma(PragmaFunction function_p, PragmaInfo info_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::PRAGMA, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      function(move(function_p)), info(move(info_p)) {
+	      function(std::move(function_p)), info(std::move(info_p)) {
 	}
 
 	//! The pragma function to call

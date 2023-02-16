@@ -266,3 +266,24 @@ endloop
 #
 statement error
 SELECT ts, strftime(ts, '%C') FROM timestamps;
+
+#
+# Tests for fix of nr3 in list of https://github.com/duckdb/duckdb/issues/5984
+#
+statement ok
+PRAGMA TIMEZONE='Asia/Baghdad';
+SELECT strftime(TIMESTAMPTZ '-268535-1-1 0:0:0 America/Pangnirtung','%Z');
+
+statement ok
+PRAGMA TIMEZONE='Asia/Baghdad';
+SELECT strftime(TIMESTAMPTZ '-268535-1-1 0:0:0 America/Pangnirtung','%Z');
+
+statement ok
+PRAGMA TIMEZONE='Pacific/Truk';
+SELECT strftime(TIMESTAMPTZ '-217208-11-5 1:47:22 America/Merida','%Z');
+
+statement ok
+SELECT strftime(TIMESTAMPTZ '-204873-8-9 6:35:55 America/North_Dakota/Beulah','x%Z');
+
+statement ok
+SELECT strftime(TIMESTAMPTZ '292555-4-29 18:38:18 Asia/Damascus','e%Z');

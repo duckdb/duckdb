@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundBaseTableRef &ref) {
-	return move(ref.get);
+	return std::move(ref.get);
 }
 
 } // namespace duckdb

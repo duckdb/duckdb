@@ -18,7 +18,7 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_unique<BoundExpression>(move(result));
+	return make_unique<BoundExpression>(std::move(result));
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
@@ -27,7 +27,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left), move(right));
+	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left), std::move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -117,7 +117,7 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
-	auto result = make_unique<BoundJoinRef>();
+	auto result = make_unique<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
@@ -128,6 +128,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
+
 		result->lateral = binder.HasCorrelatedColumns();
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
@@ -135,12 +137,12 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<string> extra_using_columns;
-	if (ref.is_natural) {
+	switch (ref.ref_type) {
+	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
 		case_insensitive_set_t lhs_columns;
@@ -191,10 +193,18 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			error_msg += "\n   Right candidates: " + right_candidates;
 			throw BinderException(FormatError(ref, error_msg));
 		}
-	} else if (!ref.using_columns.empty()) {
-		// USING columns
-		D_ASSERT(!result->condition);
-		extra_using_columns = ref.using_columns;
+		break;
+	}
+	case JoinRefType::REGULAR:
+		if (!ref.using_columns.empty()) {
+			// USING columns
+			D_ASSERT(!result->condition);
+			extra_using_columns = ref.using_columns;
+		}
+		break;
+	case JoinRefType::CROSS:
+	case JoinRefType::POSITIONAL:
+		break;
 	}
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
 
@@ -239,28 +249,27 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			                                  using_column);
 			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, set.get(), right_binding,
 			                                  using_column);
-			AddUsingBindingSet(move(set));
+			AddUsingBindingSet(std::move(set));
 		}
 	}
 
-	bind_context.AddContext(move(left_binder.bind_context));
-	bind_context.AddContext(move(right_binder.bind_context));
+	bind_context.AddContext(std::move(left_binder.bind_context));
+	bind_context.AddContext(std::move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition),
-			                                                   move(condition));
+			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+			                                                   std::move(ref.condition), std::move(condition));
 		} else {
-			ref.condition = move(condition);
+			ref.condition = std::move(condition);
 		}
 	}
 	if (ref.condition) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}
-	D_ASSERT(result->condition);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

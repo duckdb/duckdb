@@ -121,7 +121,7 @@ public:
 		}
 
 		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalColumnDataGet>(0, types, move(chunk_collection));
+		plan = make_unique<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
 
 		len = 0;
 		(void)len;

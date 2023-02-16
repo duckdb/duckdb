@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_string_map.benchmark
+# description: Cast string values to map
+# group: [cast]
+
+name Cast VARCHAR -> MAP
+group cast
+
+load
+CREATE TABLE intMap AS SELECT map([i], [i+1])::VARCHAR col FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MAX(CAST(col AS MAP(INT, INT))) FROM intMap;
+
+result I
+{9999999=10000000}

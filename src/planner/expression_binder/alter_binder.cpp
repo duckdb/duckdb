@@ -9,7 +9,7 @@ namespace duckdb {
 AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table,
                          vector<LogicalIndex> &bound_columns, LogicalType target_type)
     : ExpressionBinder(binder, context), table(table), bound_columns(bound_columns) {
-	this->target_type = move(target_type);
+	this->target_type = std::move(target_type);
 }
 
 BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
@@ -39,12 +39,11 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",
 		                      colref.column_names[0]);
 	}
-	if (table.columns.GetColumn(LogicalIndex(idx)).Generated()) {
+	if (table.GetColumn(idx).Generated()) {
 		throw BinderException("Using generated columns in alter statement not supported");
 	}
 	bound_columns.push_back(idx);
-	return BindResult(
-	    make_unique<BoundReferenceExpression>(table.columns.GetColumn(idx).Type(), bound_columns.size() - 1));
+	return BindResult(make_unique<BoundReferenceExpression>(table.GetColumn(idx).Type(), bound_columns.size() - 1));
 }
 
 } // namespace duckdb

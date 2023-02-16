@@ -289,7 +289,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		auto shared_db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
 		auto db = shared_db.get();
 		std::lock_guard<std::mutex> lock(db_map_lock);
-		db_map[db] = move(shared_db);
+		db_map[db] = std::move(shared_db);
 
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
@@ -408,7 +408,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
 		try {
-			auto res = conn_ref->Query(move(statements[i]));
+			auto res = conn_ref->Query(std::move(statements[i]));
 			if (res->HasError()) {
 				env->ThrowNew(J_SQLException, res->GetError().c_str());
 				return nullptr;
@@ -420,7 +420,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	}
 
 	auto stmt_ref = new StatementHolder();
-	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
+	stmt_ref->stmt = conn_ref->Prepare(std::move(statements.back()));
 	if (stmt_ref->stmt->HasError()) {
 		string error_msg = string(stmt_ref->stmt->GetError());
 		stmt_ref->stmt = nullptr;
@@ -445,6 +445,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
+		return nullptr;
 	}
 	auto res_ref = make_unique<ResultHolder>();
 	vector<Value> duckdb_params;
@@ -489,6 +490,18 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else if (env->IsInstanceOf(param, J_Decimal)) {
 				jint precision = env->CallIntMethod(param, J_Decimal_precision);
 				jint scale = env->CallIntMethod(param, J_Decimal_scale);
+
+				// Java BigDecimal type can have scale that exceeds the precision
+				// Which our DECIMAL type does not support (assert(width >= scale))
+				if (scale > precision) {
+					precision = scale;
+				}
+
+				// DECIMAL scale is unsigned, so negative values are not supported
+				if (scale < 0) {
+					env->ThrowNew(J_SQLException, "Converting from a BigDecimal with negative scale is not supported");
+					return nullptr;
+				}
 
 				if (precision <= 18) { // normal sizes -> avoid string processing
 					jobject no_point_dec = env->CallObjectMethod(param, J_Decimal_scaleByPowTen, scale);
@@ -723,7 +736,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			vec.ReferenceAndSetType(string_vec);
 			// fall through on purpose
 		}
-		case LogicalTypeId::JSON:
 		case LogicalTypeId::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -757,6 +769,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetDataUnsafe(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
+			break;
+		case LogicalTypeId::UUID:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
 		default:
 			env->ThrowNew(J_SQLException, ("Unsupported result column type " + vec.GetType().ToString()).c_str());
@@ -963,7 +978,7 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 		env->ThrowNew(J_SQLException, "Invalid result set");
 	}
 
-	auto wrapper = new ResultArrowArrayStreamWrapper(move(res_ref->res), batch_size);
+	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
 	return (jlong)&wrapper->stream;
 }
 

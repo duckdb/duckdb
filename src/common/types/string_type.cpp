@@ -1,4 +1,5 @@
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "utf8proc_wrapper.hpp"

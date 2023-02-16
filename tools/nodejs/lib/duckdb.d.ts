@@ -3,9 +3,13 @@
  * See https://duckdb.org/docs/api/nodejs/overview for details
  * on Node.JS API
  */
-export class DuckDbError extends Error {
-  errno: number;
-  code: string;
+
+/**
+ * Standard error shape for DuckDB errors
+ */
+export interface DuckDbError extends Error {
+  errno: -1; // value of ERROR
+  code: 'DUCKDB_NODEJS_ERROR';
 }
 
 type Callback<T> = (err: DuckDbError | null, res: T) => void;
@@ -61,6 +65,15 @@ export class IpcResultStreamIterator implements AsyncIterator<Uint8Array>, Async
   toArray(): Promise<ArrowArray>;
 }
 
+export interface ReplacementScanResult {
+  function: string;
+  parameters: Array<unknown>;
+}
+
+export type ReplacementScanCallback = (
+  table: string
+) => ReplacementScanResult | null;
+
 export class Database {
   constructor(path: string, accessMode?: number | Record<string,string>, callback?: Callback<any>);
   constructor(path: string, callback?: Callback<any>);
@@ -99,6 +112,10 @@ export class Database {
   register_buffer(name: string, array: ArrowIterable, force: boolean, callback?: Callback<void>): void;
 
   unregister_buffer(name: string, callback?: Callback<void>): void;
+
+  registerReplacementScan(
+    replacementScan: ReplacementScanCallback
+  ): Promise<void>;
 }
 
 export class Statement {

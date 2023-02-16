@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -58,6 +59,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+                                                 DUCKDB_LOCAL(CustomExtensionRepository),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -143,6 +145,15 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	SetOption(nullptr, option, value);
 }
 
+void DBConfig::SetOptionByName(const string &name, const Value &value) {
+	auto option = DBConfig::GetOptionByName(name);
+	if (option) {
+		SetOption(*option, value);
+	} else {
+		options.unrecognized_options[name] = value;
+	}
+}
+
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
@@ -164,7 +175,7 @@ void DBConfig::ResetOption(DatabaseInstance *db, const ConfigurationOption &opti
 
 void DBConfig::SetOption(const string &name, Value value) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables[name] = move(value);
+	options.set_variables[name] = std::move(value);
 }
 
 void DBConfig::ResetOption(const string &name) {
@@ -184,7 +195,7 @@ void DBConfig::ResetOption(const string &name) {
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function) {
 	extension_parameters.insert(
-	    make_pair(name, ExtensionOption(move(description), move(parameter), function, default_value)));
+	    make_pair(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value)));
 	if (!default_value.IsNull()) {
 		// Default value is set, insert it into the 'set_variables' list
 		options.set_variables[name] = default_value;

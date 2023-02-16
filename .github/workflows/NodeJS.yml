@@ -9,6 +9,8 @@ on:
       - 'data/**'
       - 'examples/**'
       - 'test/**'
+      - 'tools/odbc/**'
+      - 'tools/jdbc/**'
       - 'tools/juliapkg/**'
       - 'tools/pythonpkg/**'
       - 'tools/rpkg/**'
@@ -21,17 +23,15 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_ACCESS_KEY_ID: ${{ secrets.NODE_PRE_GYP_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
     env:
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -54,6 +54,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -65,6 +66,7 @@ jobs:
         run: ./scripts/node_version.sh upload
         env:
           DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Validate Docs
         run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
@@ -119,7 +121,7 @@ jobs:
         target_arch: [ x64, arm64 ]
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
-      DUCKDB_NODE_BUILD_CACHE: 1
+      DUCKDB_NODE_BUILD_CACHE: 0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -129,6 +131,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -149,6 +152,8 @@ jobs:
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       # these older versions of NodeJS don't have M1 support
 
@@ -243,11 +248,14 @@ jobs:
       - name: Node Version
         shell: bash
         run: ./scripts/node_version.sh
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.node }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
           variant: sccache
 
       - name: Node

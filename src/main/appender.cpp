@@ -1,5 +1,6 @@
 #include "duckdb/main/appender.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
@@ -19,8 +20,8 @@ BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
 }
 
 BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
-    : allocator(allocator_p), types(move(types_p)), collection(make_unique<ColumnDataCollection>(allocator, types)),
-      column(0), appender_type(type_p) {
+    : allocator(allocator_p), types(std::move(types_p)),
+      collection(make_unique<ColumnDataCollection>(allocator, types)), column(0), appender_type(type_p) {
 	InitializeChunk();
 }
 
@@ -357,7 +358,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
-	table.storage->LocalAppend(table, context, collection);
+	table.GetStorage().LocalAppend(table, context, collection);
 }
 
 void BaseAppender::Close() {

@@ -20,6 +20,7 @@ add_library_unity(
   OBJECT
   allocator.cpp
   assert.cpp
+  bind_helpers.cpp
   box_renderer.cpp
   compressed_file_system.cpp
   constants.cpp

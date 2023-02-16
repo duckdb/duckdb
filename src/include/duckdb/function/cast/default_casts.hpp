@@ -12,7 +12,9 @@
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
+
 class CastFunctionSet;
+struct FunctionLocalState;
 
 //! Extra data that can be attached to a bind function of a cast, and is available during binding
 struct BindCastInfo {
@@ -29,8 +31,8 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
-	CastParameters(BoundCastData *cast_data, bool strict, string *error_message)
-	    : cast_data(cast_data), strict(strict), error_message(error_message) {
+	CastParameters(BoundCastData *cast_data, bool strict, string *error_message, FunctionLocalState *local_state)
+	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
 	}
 	CastParameters(CastParameters &parent, BoundCastData *cast_data = nullptr)
 	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message) {
@@ -42,16 +44,20 @@ struct CastParameters {
 	bool strict = false;
 	// out: error message in case cast has failed
 	string *error_message = nullptr;
+	//! Local state
+	FunctionLocalState *local_state = nullptr;
 };
 
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(ClientContext &context);
 
 struct BoundCastInfo {
 	DUCKDB_API
-	BoundCastInfo(cast_function_t function,
-	              unique_ptr<BoundCastData> cast_data = nullptr); // NOLINT: allow explicit cast from cast_function_t
-
+	BoundCastInfo(
+	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
+	    init_cast_local_state_t init_local_state = nullptr); // NOLINT: allow explicit cast from cast_function_t
 	cast_function_t function;
+	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
 
 public:
@@ -70,7 +76,7 @@ public:
 };
 
 struct ListBoundCastData : public BoundCastData {
-	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(move(child_cast)) {
+	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(std::move(child_cast)) {
 	}
 
 	BoundCastInfo child_cast_info;
@@ -89,7 +95,7 @@ struct ListCast {
 
 struct StructBoundCastData : public BoundCastData {
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
-	    : child_cast_info(move(child_casts)), target(move(target_p)) {
+	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
 	}
 
 	vector<BoundCastInfo> child_cast_info;
@@ -104,20 +110,38 @@ public:
 		for (auto &info : child_cast_info) {
 			copy_info.push_back(info.Copy());
 		}
-		return make_unique<StructBoundCastData>(move(copy_info), target);
+		return make_unique<StructBoundCastData>(std::move(copy_info), target);
+	}
+};
+
+struct MapBoundCastData : public BoundCastData {
+	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
+	    : key_cast(std::move(key_cast)), value_cast(std::move(value_cast)) {
+	}
+
+	BoundCastInfo key_cast;
+	BoundCastInfo value_cast;
+
+	static unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source,
+	                                                  const LogicalType &target);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_unique<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
 	}
 };
 
 struct DefaultCasts {
-	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
-	                                            const LogicalType &target);
+	DUCKDB_API static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source,
+	                                                       const LogicalType &target);
 
-	static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-	static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-	static bool ReinterpretCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	DUCKDB_API static bool ReinterpretCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 private:
 	static BoundCastInfo BlobCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo BitCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo DateCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo DecimalCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);

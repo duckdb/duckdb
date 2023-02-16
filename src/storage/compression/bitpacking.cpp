@@ -211,8 +211,9 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
+		static_assert(std::is_integral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= frame_of_reference;
+			buffer[i] -= uint64_t(frame_of_reference);
 		}
 	}
 
@@ -470,7 +471,7 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
@@ -510,7 +511,7 @@ public:
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
 		handle.Destroy();
 
-		state.FlushSegment(move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
@@ -719,7 +720,7 @@ public:
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	auto result = make_unique<BitpackingScanState<T>>(segment);
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

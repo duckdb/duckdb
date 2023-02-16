@@ -120,10 +120,10 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, move(path)), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
-		Close();
+		UnixFileHandle::Close();
 	}
 
 	int fd;
@@ -407,7 +407,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -488,7 +489,7 @@ public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
 	    : FileHandle(file_system, path), position(0), fd(fd) {
 	}
-	virtual ~WindowsFileHandle() {
+	~WindowsFileHandle() override {
 		Close();
 	}
 
@@ -552,7 +553,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
-	return move(handle);
+	return std::move(handle);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -734,7 +735,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
@@ -966,7 +968,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (is_last_chunk) {
 			return result;
 		}
-		previous_directories = move(result);
+		previous_directories = std::move(result);
 	}
 	return vector<string>();
 }

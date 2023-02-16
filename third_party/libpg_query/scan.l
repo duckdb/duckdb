@@ -1057,7 +1057,7 @@ other			.
 						if (keyword_text[yyleng - 1] == '\0') {
 							yyless(yyleng - 1);
 						}
-						yylval->keyword = keyword->name;
+						yylval->keyword = keyword_text;
 						return keyword->value;
 					}
 

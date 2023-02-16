@@ -16,7 +16,7 @@
 namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(move(path_p)), read_only(read_only) {
+    : db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
 		path = ":memory:";
 	}
@@ -81,7 +81,7 @@ public:
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
-    : StorageManager(db, move(path), read_only) {
+    : StorageManager(db, std::move(path), read_only) {
 }
 
 void SingleFileStorageManager::LoadDatabase() {
@@ -107,11 +107,15 @@ void SingleFileStorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, true, config.options.use_direct_io);
+		auto sf_block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
+		sf_block_manager->CreateNewDatabase();
+		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 	} else {
 		// initialize the block manager while loading the current db file
-		block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, false, config.options.use_direct_io);
+		auto sf_block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
+		sf_block_manager->LoadExistingDatabase();
+		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
 
 		//! Load from storage

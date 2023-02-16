@@ -1182,7 +1182,7 @@ static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
                                              AggregateFunction &bound_function) {
 	auto quantiles = reader.ReadRequiredList<Value>();
-	return make_unique<QuantileBindData>(move(quantiles));
+	return make_unique<QuantileBindData>(std::move(quantiles));
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
@@ -1215,6 +1215,9 @@ static const Value &CheckQuantile(const Value &quantile_val) {
 	auto quantile = quantile_val.GetValue<double>();
 	if (quantile < -1 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [-1, 1]");
+	}
+	if (Value::IsNan(quantile)) {
+		throw BinderException("QUANTILE parameter cannot be NaN");
 	}
 
 	return quantile_val;

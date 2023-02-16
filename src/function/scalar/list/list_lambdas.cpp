@@ -5,6 +5,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 
 namespace duckdb {
 
@@ -28,7 +30,7 @@ public:
 };
 
 ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Expression> lambda_expr_p)
-    : stype(stype_p), lambda_expr(move(lambda_expr_p)) {
+    : stype(stype_p), lambda_expr(std::move(lambda_expr_p)) {
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
@@ -112,15 +114,19 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 
 	// set the list child vector
 	Vector slice(child_vector, sel, elem_cnt);
+	Vector second_slice(child_vector, sel, elem_cnt);
 	slice.Flatten(elem_cnt);
+	second_slice.Flatten(elem_cnt);
+
 	input_chunk.data[0].Reference(slice);
+	input_chunk.data[1].Reference(second_slice);
 
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
 		slices[col_idx].Flatten(elem_cnt);
-		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
+		input_chunk.data[col_idx + 2].Reference(slices[col_idx]);
 	}
 
 	// execute the lambda expression
@@ -184,6 +190,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	vector<SelectionVector> sel_vectors;
 
 	vector<LogicalType> types;
+	types.push_back(child_vector.GetType());
 	types.push_back(child_vector.GetType());
 
 	// skip the list column
@@ -331,8 +338,8 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
 	// get the lambda expression and put it in the bind info
-	auto lambda_expr = move(bound_lambda_expr.lambda_expr);
-	return make_unique<ListLambdaBindData>(bound_function.return_type, move(lambda_expr));
+	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	return make_unique<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr));
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
@@ -357,6 +364,15 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
+
+	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
+		auto cast_lambda_expr =
+		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
+		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
+	}
+
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }

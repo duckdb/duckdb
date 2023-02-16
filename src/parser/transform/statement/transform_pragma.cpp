@@ -36,6 +36,13 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);
+			} else if (expr->type == ExpressionType::COLUMN_REF) {
+				auto &colref = (ColumnRefExpression &)*expr;
+				if (!colref.IsQualified()) {
+					info.parameters.emplace_back(colref.GetColumnName());
+				} else {
+					info.parameters.emplace_back(expr->ToString());
+				}
 			} else {
 				info.parameters.emplace_back(expr->ToString());
 			}
@@ -64,7 +71,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 			break;
 		}
 		auto set_statement = make_unique<SetVariableStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
-		return move(set_statement);
+		return std::move(set_statement);
 	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:
 		break;
@@ -72,7 +79,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 		throw InternalException("Unknown pragma type");
 	}
 
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

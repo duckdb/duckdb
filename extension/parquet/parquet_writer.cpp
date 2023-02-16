@@ -69,9 +69,9 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::ENUM:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIT:
 		return Type::BYTE_ARRAY;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
@@ -150,6 +150,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	case LogicalTypeId::TIME:
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
 		schema_ele.__isset.converted_type = true;
+		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIME = true;
 		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
@@ -175,7 +176,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		schema_ele.converted_type = ConvertedType::UTF8;
 		schema_ele.__isset.converted_type = true;
 		break;
@@ -212,9 +212,22 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 	}
 }
 
+void VerifyUniqueNames(const vector<string> &names) {
+#ifdef DEBUG
+	unordered_set<string> name_set;
+	name_set.reserve(names.size());
+	for (auto &column : names) {
+		auto res = name_set.insert(column);
+		D_ASSERT(res.second == true);
+	}
+	// If there would be duplicates, these sizes would differ
+	D_ASSERT(name_set.size() == names.size());
+#endif
+}
+
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec)
-    : file_name(move(file_name_p)), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
+    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(
 	    fs, file_name.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, file_opener_p);
@@ -238,10 +251,13 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
+	auto &unique_names = column_names;
+	VerifyUniqueNames(unique_names);
+
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             column_names[i], schema_path));
+		                                                             unique_names[i], schema_path));
 	}
 }
 
@@ -274,14 +290,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		for (auto &chunk : buffer.Chunks()) {
 			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
 		}
-		states.push_back(move(write_state));
+		states.push_back(std::move(write_state));
 	}
 
 	lock_guard<mutex> glock(lock);
 	row_group.file_offset = writer->GetTotalWritten();
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
-		auto write_state = move(states[col_idx]);
+		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
 	}
 

@@ -90,7 +90,7 @@ def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_di
 
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
-if os.name != 'nt':
+if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
     import distutils.ccompiler
     distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
 
@@ -153,11 +153,6 @@ class get_pybind_include(object):
         import pybind11
         return pybind11.get_include(self.user)
 
-class get_numpy_include(object):
-    def __str__(self):
-        import numpy
-        return numpy.get_include()
-
 extra_files = []
 header_files = []
 
@@ -169,7 +164,7 @@ script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
-include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -285,16 +280,13 @@ setup(
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
-    install_requires=[ # these version is still available for Python 2, newer ones aren't
-         'numpy>=1.14'
-    ],
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
         'duckdb-stubs'
     ],
     include_package_data=True,
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'numpy>=1.14', 'pybind11>=2.6.0'],
+    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers = [

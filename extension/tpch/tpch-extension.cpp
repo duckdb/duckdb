@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return std::move(result);
 }
 
 static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -65,7 +65,7 @@ struct TPCHData : public GlobalTableFunctionState {
 
 unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TPCHData>();
-	return move(result);
+	return std::move(result);
 }
 
 static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunctionBindInput &input,

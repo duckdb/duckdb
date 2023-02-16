@@ -1,7 +1,12 @@
-#include "duckdb/function/pragma/pragma_functions.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/export_statement.hpp"
 
 namespace duckdb {
 
@@ -29,7 +34,7 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 }
 
 string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM pragma_database_list() ORDER BY name;";
+	return "SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name;";
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
@@ -38,7 +43,7 @@ string PragmaAllProfiling(ClientContext &context, const FunctionParameters &para
 }
 
 string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_database_list() ORDER BY 1;";
+	return "SELECT * FROM pragma_database_list;";
 }
 
 string PragmaCollations(ClientContext &context, const FunctionParameters &parameters) {
@@ -55,10 +60,35 @@ string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &pa
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
-	return StringUtil::Format(
-	    "SELECT name AS \"column_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
-	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s');",
-	    parameters.values[0].ToString());
+	auto table = QualifiedName::Parse(parameters.values[0].ToString());
+
+	// clang-format off
+    string sql = R"(
+	SELECT
+		name AS "column_name",
+		type as "column_type",
+		CASE WHEN "notnull" THEN 'NO' ELSE 'YES' END AS "null",
+		(SELECT 
+			MIN(CASE 
+				WHEN constraint_type='PRIMARY KEY' THEN 'PRI'
+				WHEN constraint_type='UNIQUE' THEN 'UNI' 
+				ELSE NULL END) 
+		FROM duckdb_constraints() c  
+		WHERE c.table_oid=cols.table_oid 
+		AND list_contains(constraint_column_names, cols.column_name)) AS "key",
+		dflt_value AS "default", 
+		NULL AS "extra" 
+	FROM pragma_table_info('%func_param_table%') 
+	LEFT JOIN duckdb_columns cols 
+	ON cols.column_name = pragma_table_info.name 
+	AND cols.table_name='%table_name%'
+	AND cols.schema_name='%table_schema%';)";
+	// clang-format on
+
+	sql = StringUtil::Replace(sql, "%func_param_table%", parameters.values[0].ToString());
+	sql = StringUtil::Replace(sql, "%table_name%", table.name);
+	sql = StringUtil::Replace(sql, "%table_schema%", table.schema.empty() ? DEFAULT_SCHEMA : table.schema);
+	return sql;
 }
 
 string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {
@@ -73,7 +103,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto *opener = FileSystem::GetFileOpener(context);
 
-	string query;
+	string final_query;
 	// read the "shema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
@@ -83,10 +113,25 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);
-
-		query += string(buffer.get(), fsize);
+		auto query = string(buffer.get(), fsize);
+		// Replace the placeholder with the path provided to IMPORT
+		if (file == "load.sql") {
+			Parser parser;
+			parser.ParseQuery(query);
+			auto copy_statements = std::move(parser.statements);
+			query.clear();
+			for (auto &statement_p : copy_statements) {
+				D_ASSERT(statement_p->type == StatementType::COPY_STATEMENT);
+				auto &statement = (CopyStatement &)*statement_p;
+				auto &info = *statement.info;
+				auto file_name = fs.ExtractName(info.file_path);
+				info.file_path = fs.JoinPath(parameters.values[0].ToString(), file_name);
+				query += statement.ToString() + ";";
+			}
+		}
+		final_query += query;
 	}
-	return query;
+	return final_query;
 }
 
 string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &parameters) {

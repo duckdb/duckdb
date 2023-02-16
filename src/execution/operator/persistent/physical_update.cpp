@@ -14,9 +14,9 @@ PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tab
                                vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
                                bool return_chunk)
-    : PhysicalOperator(PhysicalOperatorType::UPDATE, move(types), estimated_cardinality), tableref(tableref),
-      table(table), columns(std::move(columns)), expressions(move(expressions)), bound_defaults(move(bound_defaults)),
-      return_chunk(return_chunk) {
+    : PhysicalOperator(PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality), tableref(tableref),
+      table(table), columns(std::move(columns)), expressions(std::move(expressions)),
+      bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -70,7 +70,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	// update data in the base table
 	// the row ids are given to us as the last column of the child chunk
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
+	update_chunk.Reset();
 	update_chunk.SetCardinality(chunk);
+
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column

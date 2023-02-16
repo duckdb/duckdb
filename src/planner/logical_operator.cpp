@@ -18,7 +18,7 @@ LogicalOperator::LogicalOperator(LogicalOperatorType type)
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : type(type), expressions(std::move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
 }
 
 LogicalOperator::~LogicalOperator() {
@@ -57,6 +57,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
+	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result.emplace_back(table_idx, i);
 	}
@@ -84,6 +85,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
+			D_ASSERT(index < bindings.size());
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
@@ -152,7 +154,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
 	D_ASSERT(child);
-	children.push_back(move(child));
+	children.push_back(std::move(child));
 }
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
@@ -261,6 +263,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = LogicalCrossProduct::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		result = LogicalPositionalJoin::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(state, reader);
 		break;
@@ -335,6 +340,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_DETACH:
+		throw SerializationException("Logical Detach does not support serialization");
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(state, reader);
 		break;
@@ -344,7 +351,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	}
 
 	reader.Finalize();
-	result->children = move(children);
+	result->children = std::move(children);
 
 	return result;
 }

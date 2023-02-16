@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -27,6 +25,9 @@ class LogicalGet;
 class BoundQueryNode;
 
 class StarExpression;
+
+class TableCatalogEntry;
+class TableFunctionCatalogEntry;
 
 struct UsingColumnSet {
 	string primary_binding;
@@ -82,7 +83,7 @@ public:
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  vector<column_t> &bound_column_ids, StandardEntry *entry);
+	                  vector<column_t> &bound_column_ids, StandardEntry *entry, bool add_row_id = true);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
 	                      const vector<LogicalType> &types, vector<column_t> &bound_column_ids, StandardEntry *entry);

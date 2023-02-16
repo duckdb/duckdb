@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
@@ -8,11 +9,11 @@ CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALI
 }
 
 CreateTableInfo::CreateTableInfo(string catalog_p, string schema_p, string name_p)
-    : CreateInfo(CatalogType::TABLE_ENTRY, move(schema_p), move(catalog_p)), table(move(name_p)) {
+    : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
 }
 
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry *schema, string name_p)
-    : CreateTableInfo(schema->catalog->GetName(), schema->name, move(name_p)) {
+    : CreateTableInfo(schema->catalog->GetName(), schema->name, std::move(name_p)) {
 }
 
 void CreateTableInfo::SerializeInternal(Serializer &serializer) const {
@@ -48,7 +49,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -39,7 +39,7 @@ struct ListAggregatesBindData : public FunctionData {
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
-    : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
+    : stype(stype_p), aggr_expr(std::move(aggr_expr_p)) {
 }
 
 ListAggregatesBindData::~ListAggregatesBindData() {
@@ -47,7 +47,7 @@ ListAggregatesBindData::~ListAggregatesBindData() {
 
 struct StateVector {
 	StateVector(idx_t count_p, unique_ptr<Expression> aggr_expr_p)
-	    : count(count_p), aggr_expr(move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
+	    : count(count_p), aggr_expr(std::move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
 	}
 
 	~StateVector() {
@@ -144,7 +144,6 @@ struct UniqueFunctor {
 
 template <class FUNCTION_FUNCTOR, bool IS_AGGR = false>
 static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	auto count = args.size();
 	Vector &lists = args.data[0];
 
@@ -167,6 +166,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
+	child_vector.Flatten(lists_size);
 
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
@@ -216,7 +216,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 				// update the aggregate state(s)
-				Vector slice = Vector(child_vector, sel_vector, states_idx);
+				Vector slice(child_vector, sel_vector, states_idx);
 				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
@@ -232,7 +232,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
-		Vector slice = Vector(child_vector, sel_vector, states_idx);
+		Vector slice(child_vector, sel_vector, states_idx);
 		aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
@@ -367,17 +367,17 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
-	children.push_back(move(expr));
+	children.push_back(std::move(expr));
 	// push any extra arguments into the list aggregate bind
 	if (arguments.size() > 2) {
 		for (idx_t i = 2; i < arguments.size(); i++) {
-			children.push_back(move(arguments[i]));
+			children.push_back(std::move(arguments[i]));
 		}
 		arguments.resize(2);
 	}
 
 	FunctionBinder function_binder(context);
-	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, move(children));
+	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, std::move(children));
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
 
 	if (IS_AGGR) {
@@ -390,7 +390,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 		    bound_aggr_function->ToString());
 	}
 
-	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
+	return make_unique<ListAggregatesBindData>(bound_function.return_type, std::move(bound_aggr_function));
 }
 
 template <bool IS_AGGR = false>

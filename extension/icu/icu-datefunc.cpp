@@ -112,14 +112,6 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 }
 
 int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
-	// ICU triggers the address sanitiser because it tries to left shift a negative value
-	// when start_date > end_date. To avoid this, we swap the values and negate the result.
-	const auto start_date = GetTimeUnsafe(calendar);
-	if (start_date > end_date) {
-		SetTime(calendar, end_date);
-		return -SubtractField(calendar, field, start_date);
-	}
-
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto when = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;

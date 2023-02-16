@@ -24,10 +24,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	// function can be null here
 	if (stmt->function) {
 		auto expression = TransformExpression(stmt->function);
-		macro_func = make_unique<ScalarMacroFunction>(move(expression));
+		macro_func = make_unique<ScalarMacroFunction>(std::move(expression));
 	} else if (stmt->query) {
 		auto query_node = TransformSelect(stmt->query, true)->node->Copy();
-		macro_func = make_unique<TableMacroFunction>(move(query_node));
+		macro_func = make_unique<TableMacroFunction>(std::move(query_node));
 	}
 
 	auto info =
@@ -64,21 +64,21 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 				if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
 					throw ParserException("Duplicate default parameter: '%s'", param->alias);
 				}
-				macro_func->default_parameters[param->alias] = move(param);
+				macro_func->default_parameters[param->alias] = std::move(param);
 			} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				// positional parameters
 				if (!macro_func->default_parameters.empty()) {
 					throw ParserException("Positional parameters cannot come after parameters with a default value!");
 				}
-				macro_func->parameters.push_back(move(param));
+				macro_func->parameters.push_back(std::move(param));
 			} else {
 				throw ParserException("Invalid parameter: '%s'", param->ToString());
 			}
 		}
 	}
 
-	info->function = move(macro_func);
-	result->info = move(info);
+	info->function = std::move(macro_func);
+	result->info = std::move(info);
 
 	return result;
 }

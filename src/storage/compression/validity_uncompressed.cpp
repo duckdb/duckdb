@@ -211,7 +211,7 @@ unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	result->block_id = segment.block->BlockId();
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -395,7 +395,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	return make_unique<CompressionAppendState>(move(handle));
+	return make_unique<CompressionAppendState>(std::move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {

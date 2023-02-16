@@ -14,13 +14,20 @@
 
 namespace duckdb {
 
+void VerifyArrowDatasetLoaded() {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.arrow().dataset.IsLoaded()) {
+		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
+	}
+}
+
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
-	auto scanner_class = import_cache.arrow.dataset.Scanner();
-	auto table_class = import_cache.arrow.lib.Table();
-	auto record_batch_reader_class = import_cache.arrow.lib.RecordBatchReader();
-	auto dataset_class = import_cache.arrow.dataset.Dataset();
+	auto scanner_class = import_cache.arrow().dataset.Scanner();
+	auto table_class = import_cache.arrow().lib.Table();
+	auto record_batch_reader_class = import_cache.arrow().lib.RecordBatchReader();
+	auto dataset_class = import_cache.arrow().dataset.Dataset();
 
 	if (py::isinstance(obj, scanner_class)) {
 		return PyArrowObjectType::Scanner;
@@ -62,15 +69,16 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
-	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
+
+	VerifyArrowDatasetLoaded();
 
 	py::object scanner;
-	py::object arrow_scanner = scanner_class.attr("from_dataset");
 	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
 	switch (arrow_object_type) {
 	case PyArrowObjectType::Table: {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
+		py::object arrow_scanner = dataset.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
 		break;
 	}
@@ -86,6 +94,7 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		break;
 	}
 	case PyArrowObjectType::Dataset: {
+		py::object arrow_scanner = arrow_obj_handle.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->config);
 		break;
 	}
@@ -103,6 +112,8 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 }
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
+	VerifyArrowDatasetLoaded();
+
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
@@ -204,7 +215,6 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 }
 
 py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config) {
-
 	py::object field = py::module_::import("pyarrow.dataset").attr("field");
 	switch (filter->filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {

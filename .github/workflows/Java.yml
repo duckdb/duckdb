@@ -27,6 +27,7 @@ jobs:
       GEN: ninja
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
+      BUILD_JSON: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_LIBCPP: 1
@@ -39,6 +40,8 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
       - name: Build
         shell: bash
         run: make
@@ -81,6 +84,8 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
       - name: Install Stuff
         shell: bash
         run: >
@@ -115,15 +120,21 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: "3.7"
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
       - name: Build
         shell: bash
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_JSON_EXTENSION=1
 
           cmake --build . --config Release
-      - name: Java Test
+      - name: Java Tests
         shell: bash
         run: |
           java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
@@ -145,6 +156,7 @@ jobs:
     needs: java-linux-amd64
     env:
       BUILD_JDBC: 1
+      BUILD_JSON: 1
       OSX_BUILD_UNIVERSAL: 1
     steps:
       - uses: actions/checkout@v3
@@ -157,6 +169,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' }}
       - name: Build
         shell: bash
         run: make
@@ -274,6 +287,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash

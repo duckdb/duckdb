@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -54,8 +55,9 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 	for (auto i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
 		bool move_to_ordered = true;
-		for (idx_t j = 0; j < table_entry->constraints.size(); j++) {
-			auto &cond = table_entry->constraints[j];
+		auto &constraints = table_entry->GetConstraints();
+		for (idx_t j = 0; j < constraints.size(); j++) {
+			auto &cond = constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
 				auto &fk = (ForeignKeyConstraint &)*cond;
 				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
@@ -85,6 +87,15 @@ void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 	tables = ordered;
 }
 
+string CreateFileName(const string &id_suffix, TableCatalogEntry *table, const string &extension) {
+	auto name = SanitizeExportIdentifier(table->name);
+	if (table->schema->name == DEFAULT_SCHEMA) {
+		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
+	}
+	auto schema = SanitizeExportIdentifier(table->schema->name);
+	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -98,7 +109,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// lookup the format in the catalog
 	auto copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
-	if (!copy_function->function.copy_to_bind) {
+	if (!copy_function->function.copy_to_bind && !copy_function->function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
@@ -135,20 +146,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		idx_t id = 0;
 		while (true) {
 			string id_suffix = id == 0 ? string() : "_" + to_string(id);
-			if (table->schema->name == DEFAULT_SCHEMA) {
-				info->file_path = fs.JoinPath(stmt.info->file_path,
-				                              StringUtil::Format("%s%s.%s", SanitizeExportIdentifier(table->name),
-				                                                 id_suffix, copy_function->function.extension));
-			} else {
-				info->file_path =
-				    fs.JoinPath(stmt.info->file_path,
-				                StringUtil::Format("%s_%s%s.%s", SanitizeExportIdentifier(table->schema->name),
-				                                   SanitizeExportIdentifier(table->name), id_suffix,
-				                                   copy_function->function.extension));
-			}
-			if (table_name_index.find(info->file_path) == table_name_index.end()) {
+			auto name = CreateFileName(id_suffix, table, copy_function->function.extension);
+			auto directory = stmt.info->file_path;
+			auto full_path = fs.JoinPath(directory, name);
+			info->file_path = full_path;
+			auto insert_result = table_name_index.insert(info->file_path);
+			if (insert_result.second == true) {
 				// this name was not yet taken: take it
-				table_name_index.insert(info->file_path);
 				break;
 			}
 			id++;
@@ -159,13 +163,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->table = table->name;
 
 		// We can not export generated columns
-		for (auto &col : table->columns.Physical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			info->select_list.push_back(col.GetName());
 		}
 
 		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
+
 		exported_data.file_path = info->file_path;
 
 		ExportedTableInfo table_info;
@@ -176,18 +181,18 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
-		copy_stmt.info = move(info);
+		copy_stmt.info = std::move(info);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union =
-			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                     move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
-			child_operator = move(copy_union);
+			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			                                     std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			child_operator = std::move(copy_union);
 		} else {
-			child_operator = move(bound_statement.plan);
+			child_operator = std::move(bound_statement.plan);
 		}
 	}
 
@@ -198,13 +203,13 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_unique<LogicalExport>(copy_function->function, move(stmt.info), exported_tables);
+	auto export_node = make_unique<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
 
 	if (child_operator) {
-		export_node->children.push_back(move(child_operator));
+		export_node->children.push_back(std::move(child_operator));
 	}
 
-	result.plan = move(export_node);
+	result.plan = std::move(export_node);
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

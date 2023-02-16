@@ -1128,6 +1128,7 @@ typedef struct PGInsertStmt {
 	PGRangeVar *relation;                 /* relation to insert into */
 	PGList *cols;                         /* optional: names of the target columns */
 	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
+	PGOnConflictActionAlias onConflictAlias; /* the (optional) shorthand provided for the onConflictClause */
 	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
 	PGList *returningList;                /* list of expressions to return */
 	PGWithClause *withClause;             /* WITH clause */
@@ -2069,6 +2070,31 @@ typedef struct PGAttachStmt
     PGNode *query;
 } PGAttachStmt;
 
+/* ----------------------
+ *		Dettach Statement
+ * ----------------------
+ */
+
+typedef struct PGDetachStmt
+{
+	PGNodeTag		type;
+	char *db_name;         /* list of names of attached databases */
+	bool missing_ok;
+} PGDetachStmt;
+
+
+
+/* ----------------------
+ *		CREATE DATABASE Statement
+ * ----------------------
+ */
+typedef struct PGCreateDatabaseStmt
+{
+	PGNodeTag	type;
+	PGRangeVar *name;			/* The name of the created database */
+	char *extension;			/* The name of the extension which will create the database */
+	char *path;					/* The file path of the to-be-created database */
+} PGCreateDatabaseStmt;
 
 /* ----------------------
  *		Use Statement

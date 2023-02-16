@@ -16,7 +16,7 @@ BoundCastInfo BindCastInput::GetCastFunction(const LogicalType &source, const Lo
 }
 
 BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<BindCastInfo> info_p)
-    : function(function_p), info(move(info_p)) {
+    : function(function_p), info(std::move(info_p)) {
 }
 
 CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
@@ -53,7 +53,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 
 struct MapCastNode {
 	MapCastNode(BoundCastInfo info, int64_t implicit_cast_cost)
-	    : cast_info(move(info)), bind_function(nullptr), implicit_cast_cost(implicit_cast_cost) {
+	    : cast_info(std::move(info)), bind_function(nullptr), implicit_cast_cost(implicit_cast_cost) {
 	}
 	MapCastNode(bind_cast_function_t func, int64_t implicit_cast_cost)
 	    : cast_info(nullptr), bind_function(func), implicit_cast_cost(implicit_cast_cost) {
@@ -106,7 +106,7 @@ BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, c
 
 void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
                                            int64_t implicit_cast_cost) {
-	RegisterCastFunction(source, target, MapCastNode(move(function), implicit_cast_cost));
+	RegisterCastFunction(source, target, MapCastNode(std::move(function), implicit_cast_cost));
 }
 
 void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target,
@@ -119,9 +119,9 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 		// create the cast map and the cast map function
 		auto info = make_unique<MapCastInfo>();
 		map_info = info.get();
-		bind_functions.emplace_back(MapCastFunction, move(info));
+		bind_functions.emplace_back(MapCastFunction, std::move(info));
 	}
-	map_info->casts[source].insert(make_pair(target, move(node)));
+	map_info->casts[source].insert(make_pair(target, std::move(node)));
 }
 
 } // namespace duckdb

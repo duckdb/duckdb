@@ -20,6 +20,7 @@ class AttachStatement;
 class CallStatement;
 class CopyStatement;
 class CreateStatement;
+class DetachStatement;
 class DeleteStatement;
 class DropStatement;
 class ExtensionStatement;
@@ -88,7 +89,6 @@ class ForeignKeyConstraint;
 class TableRef;
 
 class BaseTableRef;
-class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;

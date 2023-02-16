@@ -47,11 +47,11 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 
 void StrTimeFormat::AddLiteral(string literal) {
 	constant_size += literal.size();
-	literals.push_back(move(literal));
+	literals.push_back(std::move(literal));
 }
 
 void StrTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
-	AddLiteral(move(preceding_literal));
+	AddLiteral(std::move(preceding_literal));
 	specifiers.push_back(specifier);
 }
 
@@ -65,7 +65,7 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 		// constant size specifier
 		constant_size += specifier_size;
 	}
-	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
+	StrTimeFormat::AddFormatSpecifier(std::move(preceding_literal), specifier);
 }
 
 idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
@@ -259,7 +259,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 }
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
-                                             char *target) {
+                                             size_t tz_len, char *target) {
 	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec, [7] utc
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
@@ -338,7 +338,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	}
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
-			strcpy(target, tz_name);
+			memcpy(target, tz_name, tz_len);
 			target += strlen(tz_name);
 		}
 		break;
@@ -391,7 +391,8 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_n
 		if (is_date_specifier[i]) {
 			target = WriteDateSpecifier(specifiers[i], date, target);
 		} else {
-			target = WriteStandardSpecifier(specifiers[i], data, tz_name, target);
+			auto tz_len = tz_name ? strlen(tz_name) : 0;
+			target = WriteStandardSpecifier(specifiers[i], data, tz_name, tz_len, target);
 		}
 	}
 	// copy the final literal into the target
@@ -566,11 +567,11 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
 					D_ASSERT(error.empty());
 					// add the previous literal to the first literal of the subformat
-					locale_format.literals[0] = move(current_literal) + locale_format.literals[0];
+					locale_format.literals[0] = std::move(current_literal) + locale_format.literals[0];
 					current_literal = "";
 					// now push the subformat into the current format specifier
 					for (idx_t i = 0; i < locale_format.specifiers.size(); i++) {
-						format.AddFormatSpecifier(move(locale_format.literals[i]), locale_format.specifiers[i]);
+						format.AddFormatSpecifier(std::move(locale_format.literals[i]), locale_format.specifiers[i]);
 					}
 					pos = i + 1;
 					continue;
@@ -579,7 +580,7 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					return "Unrecognized format for strftime/strptime: %" + string(1, format_char);
 				}
 			}
-			format.AddFormatSpecifier(move(current_literal), specifier);
+			format.AddFormatSpecifier(std::move(current_literal), specifier);
 			current_literal = "";
 			pos = i + 1;
 		}
@@ -588,13 +589,13 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 	if (pos < format_string.size()) {
 		current_literal += format_string.substr(pos, format_string.size() - pos);
 	}
-	format.AddLiteral(move(current_literal));
+	format.AddLiteral(std::move(current_literal));
 	return string();
 }
 
 struct StrfTimeBindData : public FunctionData {
 	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p, bool is_null)
-	    : format(move(format_p)), format_string(move(format_string_p)), is_null(is_null) {
+	    : format(std::move(format_p)), format_string(std::move(format_string_p)), is_null(is_null) {
 	}
 
 	StrfTimeFormat format;
@@ -721,7 +722,7 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
 	numeric_width.push_back(NumericSpecifierWidth(specifier));
-	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
+	StrTimeFormat::AddFormatSpecifier(std::move(preceding_literal), specifier);
 }
 
 int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
@@ -1187,7 +1188,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 
 struct StrpTimeBindData : public FunctionData {
 	explicit StrpTimeBindData(StrpTimeFormat format_p, string format_string_p)
-	    : format(move(format_p)), format_string(move(format_string_p)) {
+	    : format(std::move(format_p)), format_string(std::move(format_string_p)) {
 	}
 
 	StrpTimeFormat format;

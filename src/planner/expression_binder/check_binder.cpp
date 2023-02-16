@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 
+#include "duckdb/planner/table_binding.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -7,7 +8,7 @@ namespace duckdb {
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, const ColumnList &columns,
                          physical_index_set_t &bound_columns)
-    : ExpressionBinder(binder, context), table(move(table_p)), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(std::move(table_p)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 
@@ -36,12 +37,25 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	}
 	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
 	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
-		result = CreateStructExtract(move(result), colref.column_names[i]);
+		result = CreateStructExtract(std::move(result), colref.column_names[i]);
 	}
 	return BindExpression(&result, 0);
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
+
+	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
+	// which we capture and remove later
+	if (lambda_bindings) {
+		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
+			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
+				// FIXME: support lambdas in CHECK constraints
+				// FIXME: like so: return (*lambda_bindings)[i].Bind(colref, i, depth);
+				throw NotImplementedException("Lambda functions are currently not supported in CHECK constraints.");
+			}
+		}
+	}
+
 	if (colref.column_names.size() > 1) {
 		return BindQualifiedColumnName(colref, table);
 	}

@@ -9,7 +9,7 @@ unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &i
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
-	return make_unique<ListBoundCastData>(move(child_cast));
+	return make_unique<ListBoundCastData>(std::move(child_cast));
 }
 
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -118,7 +118,6 @@ BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalTy
 	case LogicalTypeId::LIST:
 		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		return BoundCastInfo(ListToVarcharCast, ListBoundCastData::BindListToListCast(
 		                                            input, source, LogicalType::LIST(LogicalType::VARCHAR)));
 	default:
