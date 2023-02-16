@@ -400,7 +400,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SEM(const string &aggr_columns, c
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
-	D_ASSERT(aggregate_rel->result && aggregate_rel->result->result);
+	D_ASSERT(aggregate_rel->result);
 	auto tmp_res = std::move(aggregate_rel->result);
 	return tmp_res->FetchChunk()->GetValue(0, 0).GetValue<idx_t>();
 }
