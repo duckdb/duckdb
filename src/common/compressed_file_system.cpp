@@ -10,7 +10,7 @@ CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> 
 }
 
 CompressedFile::~CompressedFile() {
-	Close();
+	CompressedFile::Close();
 }
 
 void CompressedFile::Initialize(bool write) {

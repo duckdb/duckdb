@@ -26,6 +26,16 @@ enum class JSONScanType : uint8_t {
 	SAMPLE = 3,
 };
 
+enum class JSONScanTopLevelType : uint8_t {
+	INVALID = 0,
+	//! Sequential objects, e.g., NDJSON
+	OBJECTS = 1,
+	//! Top-level array containing objects
+	ARRAY_OF_OBJECTS = 2,
+	//! Other, e.g., array of integer, or just strings
+	OTHER = 3
+};
+
 //! Even though LogicalTypeId is just a uint8_t, this is still needed ...
 struct LogicalTypeIdHash {
 	inline std::size_t operator()(const LogicalTypeId &id) const {
@@ -37,14 +47,18 @@ struct DateFormatMap {
 public:
 	void Initialize(const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> &format_templates) {
 		for (const auto &entry : format_templates) {
-			auto &formats = candidate_formats.emplace(entry.first, vector<StrpTimeFormat>()).first->second;
-			formats.reserve(entry.second.size());
-			for (const auto &format : entry.second) {
-				formats.emplace_back();
-				formats.back().format_specifier = format;
-				StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+			const auto &type = entry.first;
+			for (const auto &format_string : entry.second) {
+				AddFormat(type, format_string);
 			}
 		}
+	}
+
+	void AddFormat(LogicalTypeId type, const string &format_string) {
+		auto &formats = candidate_formats[type];
+		formats.emplace_back();
+		formats.back().format_specifier = format_string;
+		StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
 	}
 
 	bool HasFormats(LogicalTypeId type) const {
@@ -70,6 +84,7 @@ public:
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
 	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
+	void InitializeFormats();
 
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
@@ -95,8 +110,15 @@ public:
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
 	//! Column names (in order)
 	vector<string> names;
+	//! Valid cols (ROW_TYPE cols are considered invalid)
+	vector<idx_t> valid_cols;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! Whether we're parsing objects (usually), or something else like arrays
+	JSONScanTopLevelType top_level_type = JSONScanTopLevelType::OBJECTS;
+	//! Forced date/timestamp formats
+	string date_format;
+	string timestamp_format;
 
 	//! Stored readers for when we're detecting the schema
 	vector<unique_ptr<BufferedJSONReader>> stored_readers;
@@ -167,14 +189,25 @@ public:
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	yyjson_alc *GetAllocator();
+	void ThrowTransformError(idx_t count, idx_t object_index, const string &error_message);
 
+	idx_t scan_count;
 	JSONLine lines[STANDARD_VECTOR_SIZE];
 	yyjson_val *objects[STANDARD_VECTOR_SIZE];
 
+	idx_t array_idx;
+	idx_t array_offset;
+	yyjson_val *array_objects[STANDARD_VECTOR_SIZE];
+
 	idx_t batch_index;
+
+	//! Options when transforming the JSON to columnar data
+	DateFormatMap date_format_map;
+	JSONTransformOptions transform_options;
 
 private:
 	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
+	idx_t GetObjectsFromArray();
 
 private:
 	//! Bind data
@@ -236,6 +269,13 @@ public:
 
 struct JSONScan {
 public:
+	static void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+	                       vector<string> &names);
+
+	static void InitializeBindData(ClientContext &context, JSONScanData &bind_data,
+	                               const named_parameter_map_t &named_parameters, vector<string> &names,
+	                               vector<LogicalType> &return_types);
+
 	static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                               const GlobalTableFunctionState *global_state) {
 		auto &gstate = ((JSONGlobalTableFunctionState &)*global_state).state;
@@ -276,7 +316,6 @@ public:
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;
 
-		// TODO: might be able to do some of these
 		table_function.projection_pushdown = false;
 		table_function.filter_pushdown = false;
 		table_function.filter_prune = false;

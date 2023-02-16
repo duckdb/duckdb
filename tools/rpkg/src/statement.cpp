@@ -22,41 +22,42 @@ using namespace cpp11::literals;
 }
 
 [[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query, bool enable_optimizer = true) {
-    if (!conn || !conn.get() || !conn->conn) {
-        cpp11::stop("rapi_get_substrait: Invalid connection");
-    }
+	if (!conn || !conn.get() || !conn->conn) {
+		cpp11::stop("rapi_get_substrait: Invalid connection");
+	}
 
-    named_parameter_map_t parameter_map;
-    parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
+	named_parameter_map_t parameter_map;
+	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
 
-    auto rel = conn->conn->TableFunction("get_substrait", {Value(query)}, parameter_map);
-    auto res = rel->Execute();
-    auto chunk = res->Fetch();
-    auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
+	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)}, parameter_map);
+	auto res = rel->Execute();
+	auto chunk = res->Fetch();
+	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
 
-    auto rawval = NEW_RAW(blob_string.size());
-    if (!rawval) {
-        throw std::bad_alloc();
-    }
-    memcpy(RAW_POINTER(rawval), blob_string.data(), blob_string.size());
+	auto rawval = NEW_RAW(blob_string.size());
+	if (!rawval) {
+		throw std::bad_alloc();
+	}
+	memcpy(RAW_POINTER(rawval), blob_string.data(), blob_string.size());
 
-    return rawval;
+	return rawval;
 }
 
-[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query, bool enable_optimizer = true) {
-    if (!conn || !conn.get() || !conn->conn) {
-        cpp11::stop("rapi_get_substrait_json: Invalid connection");
-    }
+[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query,
+                                                 bool enable_optimizer = true) {
+	if (!conn || !conn.get() || !conn->conn) {
+		cpp11::stop("rapi_get_substrait_json: Invalid connection");
+	}
 
-    named_parameter_map_t parameter_map;
-    parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
+	named_parameter_map_t parameter_map;
+	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
 
-    auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)}, parameter_map);
-    auto res = rel->Execute();
-    auto chunk = res->Fetch();
-    auto json = StringValue::Get(chunk->GetValue(0, 0));
+	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)}, parameter_map);
+	auto res = rel->Execute();
+	auto chunk = res->Fetch();
+	auto json = StringValue::Get(chunk->GetValue(0, 0));
 
-    return StringsToSexp({json});
+	return StringsToSexp({json});
 }
 
 static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {

@@ -6,7 +6,7 @@ namespace duckdb {
 
 struct JSONCreateFunctionData : public FunctionData {
 public:
-	JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
+	explicit JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
 	    : const_struct_names(std::move(const_struct_names)) {
 	}
 	unique_ptr<FunctionData> Copy() const override {

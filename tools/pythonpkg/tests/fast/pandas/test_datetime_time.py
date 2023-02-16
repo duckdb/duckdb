@@ -60,3 +60,12 @@ class TestDateTimeTime(object):
         )
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pd.testing.assert_frame_equal(df_out, duckdb_time)
+
+    def test_pandas_datetime_overflow(self):
+        duckdb_con = duckdb.connect()
+
+        duckdb_con.execute("create table test (date DATE)")
+        duckdb_con.execute("INSERT INTO TEST VALUES ('2263-02-28')")
+
+        with pytest.raises(duckdb.ConversionException):
+            res = duckdb_con.execute("select * from test").df()

@@ -201,6 +201,7 @@ public:
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
+	DUCKDB_API static IOException MissingFileException(const string &file_path, ClientContext &context);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);

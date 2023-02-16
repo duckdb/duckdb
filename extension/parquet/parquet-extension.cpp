@@ -174,6 +174,7 @@ public:
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -222,7 +223,7 @@ public:
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = fs.Glob(info.file_path, context);
 		if (files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
+			throw FileSystem::MissingFileException(info.file_path, context);
 		}
 
 		// The most likely path (Parquet read without union by name option)
@@ -362,8 +363,9 @@ public:
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
 		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
+
 		if (files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", glob);
+			throw FileSystem::MissingFileException(glob, context);
 		}
 		return files;
 	}

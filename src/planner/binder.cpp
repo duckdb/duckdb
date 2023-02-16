@@ -90,6 +90,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((LogicalPlanStatement &)statement);
 	case StatementType::ATTACH_STATEMENT:
 		return Bind((AttachStatement &)statement);
+	case StatementType::DETACH_STATEMENT:
+		return Bind((DetachStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -449,7 +451,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table);
+	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

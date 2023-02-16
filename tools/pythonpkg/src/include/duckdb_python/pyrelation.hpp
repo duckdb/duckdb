@@ -73,11 +73,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
+	                                                 bool enable_optimizer = true);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
-	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation>
+	GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr, bool enable_optimizer = true);
 	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
 	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -178,11 +178,11 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	py::object FetchOne();
+	Optional<py::tuple> FetchOne();
 
-	py::object FetchAll();
+	py::list FetchAll();
 
-	py::object FetchMany(idx_t size);
+	py::list FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
 
@@ -191,6 +191,8 @@ public:
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
+
+	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
@@ -204,7 +206,13 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
-	void WriteCsv(const string &file);
+	void ToParquet(const string &filename, const py::object &compression = py::none());
+
+	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
+	           const py::object &header = py::none(), const py::object &quotechar = py::none(),
+	           const py::object &escapechar = py::none(), const py::object &date_format = py::none(),
+	           const py::object &timestamp_format = py::none(), const py::object &quoting = py::none(),
+	           const py::object &encoding = py::none(), const py::object &compression = py::none());
 
 	static void WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -229,7 +237,8 @@ public:
 	py::list Columns();
 	py::list ColumnTypes();
 
-	string Print();
+	string ToString();
+	void Print();
 
 	string Explain();
 
@@ -244,6 +253,7 @@ private:
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;
 	void AssertResultOpen() const;
+	void AssertRelation() const;
 	void ExecuteOrThrow();
 	unique_ptr<QueryResult> ExecuteInternal();
 

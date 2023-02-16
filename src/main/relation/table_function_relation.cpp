@@ -13,7 +13,7 @@
 namespace duckdb {
 
 void TableFunctionRelation::AddNamedParameter(const string &name, Value argument) {
-	named_parameters[name] = move(argument);
+	named_parameters[name] = std::move(argument);
 }
 
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,
@@ -22,7 +22,7 @@ TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext
     : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
       parameters(std::move(parameters_p)), named_parameters(std::move(named_parameters)),
       input_relation(std::move(input_relation_p)), auto_initialize(auto_init) {
-	context->TryBindRelation(*this, this->columns);
+	InitializeColumns();
 }
 
 TableFunctionRelation::TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name_p,

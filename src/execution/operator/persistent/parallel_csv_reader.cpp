@@ -60,13 +60,16 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
 		// Unless we have a header
-		if (options.header && options.auto_detect) {
+		if (options.header) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					bool carrier_return = (*buffer)[position_buffer] == '\r';
 					position_buffer++;
-					if (carrier_return && position_buffer < end_buffer && (*buffer)[position_buffer] == '\n') {
+					if (carrier_return && position_buffer < buffer_size && (*buffer)[position_buffer] == '\n') {
 						position_buffer++;
+					}
+					if (position_buffer > end_buffer) {
+						return false;
 					}
 					return true;
 				}
@@ -435,7 +438,7 @@ final_state : {
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
-	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer->IsCSVFileLastBuffer())) {
+	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer && buffer->next_buffer->IsCSVFileLastBuffer())) {
 		if (column > 0 || try_add_line || (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);

@@ -3,6 +3,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection.hpp"
@@ -307,7 +308,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		return import_cache.decimal.Decimal()(val.ToString());
+		return import_cache.decimal().Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
@@ -315,6 +316,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
 		return py::bytes(StringValue::Get(val));
+	case LogicalTypeId::BIT:
+		return py::cast(Bit::ToString(StringValue::Get(val)));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -396,13 +399,13 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
+		return py::cast<py::object>(import_cache.uuid().UUID()(UUID::ToString(uuid_value)));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return py::cast<py::object>(
-		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		return py::cast<py::object>(import_cache.datetime().timedelta()(
+		    py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
 	}
 
 	default:

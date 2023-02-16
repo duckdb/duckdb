@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -138,6 +139,13 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 				}
 			}
 		}
+		while (!LengthFun::IsCharacter(input_data[start_pos])) {
+			start_pos++;
+		}
+		while (end_pos < input_size && !LengthFun::IsCharacter(input_data[end_pos])) {
+			end_pos++;
+		}
+
 		if (end_pos == DConstants::INVALID_INDEX) {
 			return SubstringEmptyString(result);
 		}

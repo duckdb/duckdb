@@ -20,6 +20,7 @@
 #include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
+#include "duckdb/common/types/bit.hpp"
 
 #include <cctype>
 #include <cmath>
@@ -945,13 +946,13 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					ExponentData exponent {0, false};
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation>(buf + pos, len - pos,
-						                                                                      exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation, decimal_separator>(
+						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation>(buf + pos, len - pos,
-						                                                                       exponent, strict)) {
+						if (!IntegerCastLoop<ExponentData, false, false, IntegerCastOperation, decimal_separator>(
+						        buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					}
@@ -1420,6 +1421,21 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Blob::ToString(input, result.GetDataWriteable());
 	result.Finalize();
+
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Bit
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromBit::Operation(string_t input, Vector &vector) {
+
+	idx_t result_size = Bit::BitLength(input);
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Bit::ToString(input, result.GetDataWriteable());
+	result.Finalize();
+
 	return result;
 }
 
@@ -1445,6 +1461,23 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 
 	result = StringVector::EmptyString(result_vector, result_size);
 	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
+	result.Finalize();
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Bit
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                             bool strict) {
+	idx_t result_size;
+	if (!Bit::TryGetBitStringSize(input, result_size, error_message)) {
+		return false;
+	}
+
+	result = StringVector::EmptyString(result_vector, result_size);
+	Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
 	return true;
 }
@@ -1521,16 +1554,22 @@ dtime_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
-		HandleCastError::AssignError(Timestamp::ConversionError(input), error_message);
-		return false;
+	auto cast_result = Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
+	if (cast_result == TimestampCastResult::SUCCESS) {
+		return true;
 	}
-	return true;
+	if (cast_result == TimestampCastResult::ERROR_INCORRECT_FORMAT) {
+		HandleCastError::AssignError(Timestamp::ConversionError(input), error_message);
+	} else {
+		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), error_message);
+	}
+	return false;
 }
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
+	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result) ==
+	       TimestampCastResult::SUCCESS;
 }
 
 template <>

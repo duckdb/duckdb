@@ -113,7 +113,7 @@ public:
 	static constexpr char const *TYPE_STRING_OBJECT = "OBJECT";
 
 	template <class YYJSON_VAL_T>
-	static inline const char *const ValTypeToString(YYJSON_VAL_T *val) {
+	static inline const char *ValTypeToString(YYJSON_VAL_T *val) {
 		switch (GetTag<YYJSON_VAL_T>(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_NULL;
@@ -143,7 +143,7 @@ public:
 	}
 
 	template <class YYJSON_VAL_T>
-	static inline const LogicalTypeId ValTypeToLogicalTypeId(YYJSON_VAL_T *val) {
+	static inline LogicalTypeId ValTypeToLogicalTypeId(YYJSON_VAL_T *val) {
 		switch (GetTag<YYJSON_VAL_T>(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::SQLNULL;
@@ -216,6 +216,7 @@ public:
 		auto data = WriteVal<YYJSON_VAL_T>(val, alc, len);
 		return string_t(data, len);
 	}
+	static string ValToString(yyjson_val *val, idx_t max_len = DConstants::INVALID_INDEX);
 	//! Throw an error with the printed yyjson_val
 	static void ThrowValFormatError(string error_string, yyjson_val *val);
 
