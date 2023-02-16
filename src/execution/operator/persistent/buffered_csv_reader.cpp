@@ -721,6 +721,9 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 			names.push_back(column_name);
 		}
 	}
+	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), options.name_list.size()); i++) {
+		names[i] = options.name_list[i];
+	}
 }
 
 vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
