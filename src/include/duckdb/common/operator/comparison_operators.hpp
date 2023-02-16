@@ -100,16 +100,17 @@ struct NotDistinctFrom {
 struct DistinctGreaterThan {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return GreaterThan::Operation(left_null, right_null) ||
-		       (!left_null && !right_null && GreaterThan::Operation(left, right));
+		if (left_null || right_null) {
+			return !right_null;
+		}
+		return GreaterThan::Operation(left, right);
 	}
 };
 
 struct DistinctGreaterThanNullsFirst {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return GreaterThan::Operation(right_null, left_null) ||
-		       (!left_null && !right_null && GreaterThan::Operation(left, right));
+		return DistinctGreaterThan::Operation(left, right, right_null, left_null);
 	}
 };
 
@@ -130,8 +131,7 @@ struct DistinctLessThan {
 struct DistinctLessThanNullsFirst {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return LessThan::Operation(right_null, left_null) ||
-		       (!left_null && !right_null && LessThan::Operation(left, right));
+		return DistinctGreaterThan::Operation(right, left, left_null, right_null);
 	}
 };
 
