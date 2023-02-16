@@ -1175,6 +1175,9 @@ DUCKDB_API duckdb_state duckdb_execute_pending(duckdb_pending_result pending_res
 /*!
 Execute the pending query result, returning a stream query result.
 
+If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
+Otherwise, all remaining tasks must be executed first.
+
 * pending_result: The pending result to execute.
 * out_result: The returned streaming result object.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
