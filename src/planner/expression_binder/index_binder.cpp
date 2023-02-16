@@ -38,7 +38,8 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			if (col_id_idx == DConstants::INVALID_INDEX) {
 				throw InternalException("failed to replay CREATE INDEX statement - column id not found");
 			}
-			return BindResult(make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx)));
+			return BindResult(
+			    make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx)));
 		}
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
