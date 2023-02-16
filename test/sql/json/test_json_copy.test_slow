@@ -80,6 +80,14 @@ UUID	11
 UUID	16
 UUID	6
 
+statement ok
+copy (select 42 as a, a + 1) to '__TEST_DIR__/out.json' (format json);
+
+query II
+select * from '__TEST_DIR__/out.json'
+----
+42	43
+
 require tpch
 
 statement ok
