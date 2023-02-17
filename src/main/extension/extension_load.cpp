@@ -32,7 +32,14 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 
 	// shorthand case
 	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
-		string local_path = fs.GetHomeDirectory(opener);
+		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
+		                                                                : fs.GetHomeDirectory(opener);
+
+		// convert random separators to platform-canonic
+		local_path = fs.ConvertSeparators(local_path);
+		// expand ~ in extension directory
+		local_path = fs.ExpandPath(local_path, opener);
+
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);

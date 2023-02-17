@@ -67,6 +67,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(EnableProgressBarPrintSetting),
                                                  DUCKDB_GLOBAL(ExperimentalParallelCSVSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
+                                                 DUCKDB_GLOBAL(ExtensionDirectorySetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
                                                  DUCKDB_LOCAL(FileSearchPathSetting),
                                                  DUCKDB_GLOBAL(ForceCompressionSetting),
