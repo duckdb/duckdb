@@ -72,6 +72,17 @@ SELECT *
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
 
+# expressions in pivot
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount+1) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'DEC'))
+      AS p
+  ORDER BY EMPID;
+----
+1	10402	8002	11002	NULL
+2	39502	90702	12002	NULL
+
 # not all columns are mentioned (columns not mentioned are dropped)
 query IIII
 SELECT *
@@ -138,14 +149,25 @@ ORDER BY EMP_ID_renamed;
 ----
 Scalar Function
 
+# subqueries not allowed
 statement error
 SELECT *
-  FROM monthly_sales
-    PIVOT(SUM(amount+1) FOR MONTHx IN ('JAN', 'FEB', 'MAR', 'DEC'))
-      AS p
-  ORDER BY EMPID;
+FROM monthly_sales
+PIVOT(SUM(amount + (SELECT 42)) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
 ----
-Pivot expression must have a single column reference as argument
+cannot contain subqueries
+
+# window functions not allowed
+statement error
+SELECT *
+FROM monthly_sales
+PIVOT(SUM(amount + row_number() over ()) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+  AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
+ORDER BY EMP_ID_renamed;
+----
+cannot contain window functions
 
 # unrecognized IN clause
 statement error

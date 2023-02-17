@@ -28,15 +28,27 @@ query IIIIIIIII
 SELECT *
   FROM sales
     PIVOT(
-    	SUM(amount)
-    	FOR YEAR IN (2020, 2021)
-    		MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
+        SUM(amount)
+        FOR YEAR IN (2020, 2021)
+            MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
     ) AS p
   ORDER BY EMPID;
 ----
 1	10000	5000	NULL	18000	400	3000	11000	NULL
 2	35000	90500	NULL	4500	4500	200	12000	800
 
+query IIIIIIIII
+SELECT *
+  FROM sales
+    PIVOT(
+        SUM(amount + year)
+        FOR YEAR IN (2020, 2021)
+            MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
+    ) AS p
+  ORDER BY EMPID;
+----
+1	12020	7020	NULL	22040	2421	5021	15042	NULL
+2	37020	92520	NULL	6520	6521	2221	16042	2821
 
 # too many pivots
 statement error

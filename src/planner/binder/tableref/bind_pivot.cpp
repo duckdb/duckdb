@@ -11,6 +11,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -52,6 +53,18 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 	}
 }
 
+static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set_t &handled_columns) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &child_colref = (ColumnRefExpression &)expr;
+		if (child_colref.IsQualified()) {
+			throw BinderException("PIVOT expression cannot contain qualified columns");
+		}
+		handled_columns.insert(child_colref.GetColumnName());
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { ExtractPivotExpressions(child, handled_columns); });
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	const static idx_t PIVOT_EXPRESSION_LIMIT = 10000;
 	if (!ref.source) {
@@ -80,21 +93,16 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	case_insensitive_set_t handled_columns;
 	// parse the aggregate, and extract the referenced columns from the aggregate
 	auto &aggr = ref.aggregate;
-	{
-		if (aggr->type != ExpressionType::FUNCTION) {
-			throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
-		}
-		auto &function = (FunctionExpression &)*aggr;
-		if (function.children.size() != 1) {
-			throw BinderException(FormatError(*aggr, "Pivot expression must have a single argument"));
-		}
-		if (function.children[0]->type != ExpressionType::COLUMN_REF) {
-			throw BinderException(
-			    FormatError(*aggr, "Pivot expression must have a single column reference as argument"));
-		}
-		auto &child_colref = (ColumnRefExpression &)*function.children[0];
-		handled_columns.insert(child_colref.GetColumnName());
+	if (aggr->type != ExpressionType::FUNCTION) {
+		throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
 	}
+	if (aggr->HasSubquery()) {
+		throw BinderException(FormatError(*aggr, "Pivot expression cannot contain subqueries"));
+	}
+	if (aggr->IsWindow()) {
+		throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
+	}
+	ExtractPivotExpressions(*aggr, handled_columns);
 
 	// now handle the pivots
 	auto select_node = make_unique<SelectNode>();
