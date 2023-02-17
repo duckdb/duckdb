@@ -15,7 +15,7 @@ on:
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
-      - '!tools/swiftpkg/**'
+      - '!tools/swiftpm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
 
