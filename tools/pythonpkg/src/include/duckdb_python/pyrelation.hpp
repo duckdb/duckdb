@@ -43,8 +43,6 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
-	shared_ptr<Relation> rel;
-
 public:
 	static void Initialize(py::handle &m);
 
@@ -155,6 +153,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
+	string ToSQL();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	idx_t Length();
@@ -244,6 +244,8 @@ public:
 
 	static bool IsRelation(const py::object &object);
 
+	Relation &GetRel();
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -258,6 +260,9 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
+	shared_ptr<Relation> rel;
+	vector<LogicalType> types;
+	vector<string> names;
 	unique_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
 };

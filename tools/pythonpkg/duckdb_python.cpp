@@ -58,7 +58,7 @@ static py::list PyTokenize(const string &query) {
 		}
 		result.append(tuple);
 	}
-	return std::move(result);
+	return result;
 }
 
 static void InitializeConnectionMethods(py::module_ &m) {

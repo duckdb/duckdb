@@ -397,8 +397,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	auto res = ExecuteInternal(query, std::move(params), many);
 	if (res) {
-		auto py_result = make_unique<DuckDBPyResult>();
-		py_result->result = std::move(res);
+		auto py_result = make_unique<DuckDBPyResult>(std::move(res));
 		result = make_unique<DuckDBPyRelation>(std::move(py_result));
 	}
 	return shared_from_this();
@@ -828,10 +827,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
-	auto rel = make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
+	rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
-	return rel;
+	return make_unique<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
@@ -907,15 +906,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
-	auto rel = make_unique<DuckDBPyRelation>(
-	    connection
-	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                       Value::POINTER((uintptr_t)stream_factory_produce),
-	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
-	        ->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection
+	               ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                              Value::POINTER((uintptr_t)stream_factory_produce),
+	                                              Value::POINTER((uintptr_t)stream_factory_get_schema)})
+	               ->Alias(name);
+	rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	return rel;
+	return make_unique<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
@@ -1128,7 +1126,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
 		auto select = make_unique<SelectStatement>();
-		select->node = pyrel->rel->GetQueryNode();
+		select->node = pyrel->GetRel().GetQueryNode();
 
 		auto subquery = make_unique<SubqueryRef>(std::move(select));
 		return std::move(subquery);

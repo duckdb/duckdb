@@ -1,7 +1,7 @@
 name: Extension Trigger
 on:
-  push:
-    branches: [ "master" ]
+  schedule:
+    - cron: "0 2 * * *"
 
 jobs:
   build-linux:

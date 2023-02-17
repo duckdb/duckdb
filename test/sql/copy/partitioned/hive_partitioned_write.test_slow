@@ -1,6 +1,6 @@
-# name: test/sql/copy/hive_partitioned_write.test_slow
+# name: test/sql/copy/partitioned/hive_partitioned_write.test_slow
 # description: slow test for the hive partitioned write
-# group: [copy]
+# group: [partitioned]
 
 require parquet
 
