@@ -5,6 +5,10 @@ on:
   push:
     paths-ignore:
       - '**.md'
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
   pull_request:
     paths-ignore:
       - '**.md'
