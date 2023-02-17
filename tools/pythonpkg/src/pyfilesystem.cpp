@@ -21,7 +21,6 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 	bool write = flags & FileFlags::FILE_FLAGS_WRITE;
 	bool append = flags & FileFlags::FILE_FLAGS_APPEND;
 	bool truncate = flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
-	bool create = flags & FileFlags::FILE_FLAGS_FILE_CREATE;
 
 	string flags_s;
 	if (read && write && truncate) {

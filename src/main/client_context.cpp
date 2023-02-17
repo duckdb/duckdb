@@ -665,6 +665,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 		case StatementType::COPY_STATEMENT:
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
@@ -685,6 +686,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(parser.statements[0]);
 			break;
 		}
+#endif
 		default:
 			statement = std::move(copied_statement);
 			break;
