@@ -39,9 +39,6 @@ MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVecto
 			auto value = keys.GetValue(index);
 			auto result = unique_keys.insert(value);
 			if (!result.second) {
-               for (auto &key : unique_keys) {
-                   printf("keys: %s ", key.ToString().c_str());
-               }
 				return MapInvalidReason::DUPLICATE_KEY;
 			}
 		}
@@ -69,132 +66,91 @@ void MapConversionVerify(Vector &vector, idx_t count) {
 	}
 }
 
-static void MapMixedVectorTypes(Vector &keys, Vector &values, Vector &result, idx_t count, bool keys_are_const) {
-    auto &key_vector = MapVector::GetKeys(result);
-    auto &value_vector = MapVector::GetValues(result);
-    auto result_data = ListVector::GetData(result);
+static void ExpandListVector(const Vector &source, Vector &target, idx_t expansion_factor) {
+	idx_t count = ListVector::GetListSize(source);
+	auto &entry = ListVector::GetEntry(source);
 
-    auto key_count = ListVector::GetListSize(keys);
-    auto value_count = ListVector::GetListSize(values);
+	ListVector::SetListSize(target, 0);
+	ListVector::Reserve(target, count * expansion_factor);
 
-    auto data = keys_are_const ? ListVector::GetData(values) : ListVector::GetData(keys);
-    auto entry_count = MaxValue(key_count, value_count);
-
-    if (keys_are_const) {
-        Vector temp(keys.GetType(), count);
-
-        ListVector::SetListSize(temp, 0);
-        ListVector::Reserve(temp, entry_count);
-        auto &source_child = ListVector::GetEntry(keys);
-
-        auto copy_count = value_count / key_count;
-
-        D_ASSERT(copy_count == count);
-        for (int i = 0; i < copy_count; i++) {
-            for(idx_t key_idx = 0; key_idx < key_count; key_idx++) {
-                ListVector::PushBack(temp, source_child.GetValue(key_idx));
-
-            }
-        }
-        D_ASSERT(ListVector::GetListSize(temp) == entry_count);
-
-        key_vector.Reference(ListVector::GetEntry(temp));
-        value_vector.Reference(ListVector::GetEntry(values));
-
-        ListVector::Reserve(result, entry_count);
-        ListVector::SetListSize(result, entry_count);
-    } else {
-        Vector temp(values.GetType(), count);
-
-        ListVector::SetListSize(temp, 0);
-        ListVector::Reserve(temp, entry_count);
-
-        auto &source_child = ListVector::GetEntry(values);
-
-        auto copy_count = key_count / value_count;
-        D_ASSERT(copy_count == count);
-        for (int i = 0; i < copy_count; i++) {
-            for(idx_t val_idx = 0; val_idx < value_count; val_idx++) {
-                ListVector::PushBack(temp, source_child.GetValue(val_idx));
-            }
-        }
-
-        D_ASSERT(ListVector::GetListSize(temp) == entry_count);
-
-        key_vector.Reference(ListVector::GetEntry(keys));
-        value_vector.Reference(ListVector::GetEntry(temp));
-    }
-
-    ListVector::Reserve(result, entry_count);
-    ListVector::SetListSize(result, entry_count);
-
-    for (idx_t i = 0; i < count; i++) {
-        result_data[i] = data[i];
-    }
-
-    MapConversionVerify(result, count);
-    result.Verify(count);
+	for (idx_t copy = 0; copy < expansion_factor; copy++) {
+		for (idx_t key_idx = 0; key_idx < count; key_idx++) {
+			ListVector::PushBack(target, entry.GetValue(key_idx));
+		}
+	}
+	D_ASSERT(ListVector::GetListSize(target) == count * expansion_factor);
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
-
 	auto &key_vector = MapVector::GetKeys(result);
 	auto &value_vector = MapVector::GetValues(result);
 	auto result_data = ListVector::GetData(result);
 
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	if (args.data.empty()) {
 		ListVector::SetListSize(result, 0);
-        result_data->offset = 0;
-        result_data->length = 0;
+		result_data->offset = 0;
+		result_data->length = 0;
 		result.Verify(args.size());
 		return;
 	}
 
-//    if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR && args.data[1].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-//        return MapMixedVectorTypes(args.data[0], args.data[1], result, args.size(), true);
-//    }
-//    if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && args.data[0].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-//        return MapMixedVectorTypes(args.data[0], args.data[1], result, args.size(), false);
-//    }
-
-    if (args.data[1].GetVectorType() != args.data[0].GetVectorType()) {
-        return MapMixedVectorTypes(args.data[0], args.data[1], result, args.size(), args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR);
-    }
+	bool keys_are_const = args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR;
+	bool values_are_const = args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!keys_are_const || !values_are_const) {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+	}
 
 	auto key_count = ListVector::GetListSize(args.data[0]);
 	auto value_count = ListVector::GetListSize(args.data[1]);
-    auto key_data = ListVector::GetData(args.data[0]);
-    auto value_data = ListVector::GetData(args.data[1]);
+	auto key_data = ListVector::GetData(args.data[0]);
+	auto value_data = ListVector::GetData(args.data[1]);
+	auto src_data = key_data;
 
-	if (key_count != value_count) {
-		throw InvalidInputException(
-		    "Error in MAP creation: key list has a different size from value list (%lld keys, %lld values)", key_count,
-		    value_count);
+	if (keys_are_const && !values_are_const) {
+		Vector expanded_const(args.data[0].GetType());
+
+		auto expansion_factor = value_count / key_count;
+		if (expansion_factor != args.size()) {
+			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
+			                            "size or incompatible structure");
+		}
+		ExpandListVector(args.data[0], expanded_const, expansion_factor);
+		key_vector.Reference(ListVector::GetEntry(expanded_const));
+		src_data = value_data;
+	} else if (values_are_const && !keys_are_const) {
+		Vector expanded_const(args.data[1].GetType());
+
+		auto expansion_factor = key_count / value_count;
+		if (expansion_factor != args.size()) {
+			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
+			                            "size or incompatible structure");
+		}
+		ExpandListVector(args.data[1], expanded_const, expansion_factor);
+		value_vector.Reference(ListVector::GetEntry(expanded_const));
+	} else {
+		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t))) {
+			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
+			                            "size or incompatible structure");
+		}
 	}
 
-    if(memcmp(key_data, value_data, args.size() * sizeof(list_entry_t))){
-        throw InvalidInputException(
-            "Error in MAP creation: key list has a different size from value list (%lld keys, %lld values)", key_count,
-            value_count);
-    }
-
-	ListVector::Reserve(result, key_count);
-	ListVector::SetListSize(result, key_count);
+	ListVector::Reserve(result, MaxValue(key_count, value_count));
+	ListVector::SetListSize(result, MaxValue(key_count, value_count));
 
 	for (idx_t i = 0; i < args.size(); i++) {
-        result_data[i] = key_data[i];
+		result_data[i] = src_data[i];
 	}
 
-	key_vector.Reference(ListVector::GetEntry(args.data[0]));
-	value_vector.Reference(ListVector::GetEntry(args.data[1]));
+	if (!(keys_are_const && !values_are_const)) {
+		key_vector.Reference(ListVector::GetEntry(args.data[0]));
+	}
+	if (!(values_are_const && !keys_are_const)) {
+		value_vector.Reference(ListVector::GetEntry(args.data[1]));
+	}
+
 	MapConversionVerify(result, args.size());
 	result.Verify(args.size());
 }
