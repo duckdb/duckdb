@@ -132,8 +132,6 @@ extension QueryResult {
 
 private extension QueryResult {
   
-  static let inlineLimit = UInt32(12)
-  
   func dataChunk(at index: DBInt) -> DataChunk {
     precondition(index < chunkCount, "data chunk out of bounds")
     return DataChunk(result: self, index: index)
