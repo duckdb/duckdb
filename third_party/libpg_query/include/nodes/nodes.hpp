@@ -194,6 +194,7 @@ typedef enum PGNodeTag {
 	T_PGOnConflictExpr,
 	T_PGIntoClause,
 	T_PGLambdaFunction,
+	T_PGPivotExpr,
 
 	/*
 	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)

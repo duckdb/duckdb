@@ -2106,6 +2106,18 @@ typedef struct PGUseStmt {
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
+/* ----------------------
+ *		Pivot Expression
+ * ----------------------
+ */
 
+typedef struct PGPivotExpr {
+	PGNodeTag type;
+	PGNode *source;      /* the source subtree */
+	PGList *aggrs;       /* The set of aggregations */
+	char *aliasname;     /* The column name to pivot on */
+	PGList *colnames;    /* The set of pivot values */
+	PGAlias *alias;   /* table alias & optional column aliases */
+} PGPivotExpr;
 
 }
