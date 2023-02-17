@@ -131,7 +131,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		ExpandListVector(args.data[1], expanded_const, expansion_factor);
 		value_vector.Reference(ListVector::GetEntry(expanded_const));
 	} else {
-		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t))) {
+		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t)) != 0) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
