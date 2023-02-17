@@ -936,7 +936,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-			| table_ref PIVOT '(' expr_list_opt_comma FOR ColIdOrString IN_P '(' name_list_opt_comma ')' ')' opt_alias_clause
+			| table_ref PIVOT '(' expr_list_opt_comma FOR ColIdOrString IN_P '(' expr_list_opt_comma ')' ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;

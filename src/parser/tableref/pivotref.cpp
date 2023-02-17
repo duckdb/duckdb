@@ -5,16 +5,15 @@
 
 namespace duckdb {
 
-
 string PivotColumn::ToString() const {
 	string result;
 	result = KeywordHelper::WriteOptionallyQuoted(name);
 	result += " IN (";
-	for(idx_t i = 0; i < values.size(); i++) {
+	for (idx_t i = 0; i < values.size(); i++) {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(values[i]);
+		result += values[i].ToSQLString();
 	}
 	result += ")";
 	return result;
@@ -23,14 +22,14 @@ string PivotColumn::ToString() const {
 string PivotRef::ToString() const {
 	string result;
 	result = source->ToString() + " PIVOT (";
-	for(idx_t i = 0; i < aggregates.size(); i++) {
+	for (idx_t i = 0; i < aggregates.size(); i++) {
 		if (i > 0) {
 			result += ", ";
 		}
 		result += aggregates[i]->ToString();
 	}
 	result += " FOR";
-	for(auto &pivot : pivots) {
+	for (auto &pivot : pivots) {
 		result += " ";
 		result += pivot.ToString();
 	}
@@ -60,7 +59,7 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 	if (pivots.size() != other->pivots.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < pivots.size(); i++) {
+	for (idx_t i = 0; i < pivots.size(); i++) {
 		if (pivots[i].name != other->pivots[i].name) {
 			return false;
 		}
@@ -77,7 +76,7 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 unique_ptr<TableRef> PivotRef::Copy() {
 	auto copy = make_unique<PivotRef>();
 	copy->source = source->Copy();
-	for(auto &aggr : aggregates) {
+	for (auto &aggr : aggregates) {
 		copy->aggregates.push_back(aggr->Copy());
 	}
 	copy->pivots = pivots;

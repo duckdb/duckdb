@@ -16,7 +16,7 @@ struct PivotColumn {
 	//! The name of the pivot column
 	string name;
 	//! The set of values to pivot on
-	vector<string> values;
+	vector<Value> values;
 
 	string ToString() const;
 };
@@ -24,8 +24,7 @@ struct PivotColumn {
 //! Represents a JOIN between two expressions
 class PivotRef : public TableRef {
 public:
-	explicit PivotRef()
-	    : TableRef(TableReferenceType::PIVOT) {
+	explicit PivotRef() : TableRef(TableReferenceType::PIVOT) {
 	}
 
 	//! The source table of the pivot
@@ -34,6 +33,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> aggregates;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
+	//! Aliases for the column names
+	vector<string> column_name_alias;
 
 public:
 	string ToString() const override;
