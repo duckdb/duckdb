@@ -75,6 +75,7 @@ public:
 
 private:
 	idx_t ReadFromCache(const char *&pointer, idx_t &size, idx_t &position);
+	idx_t ReadInternal(const char *pointer, const idx_t requested_size);
 
 private:
 	//! The JSON file handle

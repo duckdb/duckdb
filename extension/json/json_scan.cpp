@@ -236,7 +236,8 @@ idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 		// Unstructured necessitates single thread
 		readers_per_file = 1;
 	} else if (!state.json_readers.empty() && state.json_readers[0]->IsOpen()) {
-		const auto &options = state.json_readers[0]->GetOptions();
+		auto &reader = *state.json_readers[0];
+		const auto &options = reader.GetOptions();
 		if (options.format == JSONFormat::UNSTRUCTURED || options.compression != FileCompressionType::UNCOMPRESSED) {
 			// Auto-detected unstructured - same story, compression also really limits parallelism
 			readers_per_file = 1;

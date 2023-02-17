@@ -90,13 +90,13 @@ void JSONFileHandle::ReadAtPosition(const char *pointer, idx_t size, idx_t posit
 idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size, bool sample_run) {
 	D_ASSERT(requested_size != 0);
 	if (plain_file_source) {
-		auto actual_size = file_handle->Read((void *)pointer, requested_size);
+		auto actual_size = ReadInternal(pointer, requested_size);
 		read_position += actual_size;
 		return actual_size;
 	}
 
 	if (sample_run) { // Cache the buffer
-		auto actual_size = file_handle->Read((void *)pointer, requested_size);
+		auto actual_size = ReadInternal(pointer, requested_size);
 		if (actual_size > 0) {
 			cached_buffers.emplace_back(allocator.Allocate(actual_size));
 			memcpy(cached_buffers.back().get(), pointer, actual_size);
@@ -111,7 +111,7 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size, bool sampl
 		actual_size += ReadFromCache(pointer, requested_size, read_position);
 	}
 	if (requested_size != 0) {
-		actual_size += file_handle->Read((void *)pointer, requested_size);
+		actual_size += ReadInternal(pointer, requested_size);
 	}
 	return actual_size;
 }
@@ -119,7 +119,10 @@ idx_t JSONFileHandle::Read(const char *pointer, idx_t requested_size, bool sampl
 idx_t JSONFileHandle::ReadFromCache(const char *&pointer, idx_t &size, idx_t &position) {
 	idx_t read_size = 0;
 	idx_t total_offset = 0;
-	for (auto &cached_buffer : cached_buffers) {
+
+	idx_t cached_buffer_idx;
+	for (cached_buffer_idx = 0; cached_buffer_idx < cached_buffers.size(); cached_buffer_idx++) {
+		auto &cached_buffer = cached_buffers[cached_buffer_idx];
 		if (size == 0) {
 			break;
 		}
@@ -135,7 +138,21 @@ idx_t JSONFileHandle::ReadFromCache(const char *&pointer, idx_t &size, idx_t &po
 		}
 		total_offset += cached_buffer.GetSize();
 	}
+
 	return read_size;
+}
+
+idx_t JSONFileHandle::ReadInternal(const char *pointer, const idx_t requested_size) {
+	// Deal with reading from pipes
+	idx_t total_read_size = 0;
+	while (total_read_size < requested_size) {
+		auto read_size = file_handle->Read((void *)(pointer + total_read_size), requested_size - total_read_size);
+		if (read_size == 0) {
+			break;
+		}
+		total_read_size += read_size;
+	}
+	return total_read_size;
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, string file_path_p)
