@@ -265,6 +265,15 @@ DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object
 	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors));
 }
 
+py::dict DuckDBPyResult::FetchPyTorch() {
+	auto result_dict = FetchNumpyInternal();
+	auto from_numpy = py::module::import("torch").attr("from_numpy");
+	for (auto &item : result_dict) {
+		result_dict[item.first] = from_numpy(item.second);
+	}
+	return result_dict;
+}
+
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");

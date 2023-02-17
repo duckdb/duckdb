@@ -62,6 +62,7 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("batch_size") = 1000000)
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000)
+	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,

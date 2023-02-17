@@ -1,15 +1,21 @@
 #include "duckdb_python/pyconnection.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -40,12 +46,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
-
-template <class T>
-static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
-}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -123,6 +123,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
+	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -1076,6 +1078,13 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	return result->ToArrowTable(chunk_size);
 }
 
+py::dict DuckDBPyConnection::FetchPyTorch() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchPyTorch();
+}
+
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
 	auto arrow = FetchArrow(chunk_size);
 	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
@@ -1299,22 +1308,6 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
 	import_cache.reset();
-}
-
-bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
-}
-
-bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
