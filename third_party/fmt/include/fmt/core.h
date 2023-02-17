@@ -359,12 +359,11 @@ using wstring_view = basic_string_view<wchar_t>;
 #if FMT_HAS_FEATURE(__cpp_char8_t)
 typedef char8_t fmt_char8_t;
 #else
-typedef unsigned char fmt_char8_t;
+typedef char fmt_char8_t;
 #endif
 
 /** Specifies if ``T`` is a character type. Can be specialized by users. */
 template <typename T> struct is_char : std::false_type {};
-template <> struct is_char<char> : std::true_type {};
 template <> struct is_char<wchar_t> : std::true_type {};
 template <> struct is_char<fmt_char8_t> : std::true_type {};
 template <> struct is_char<char16_t> : std::true_type {};
