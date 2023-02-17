@@ -936,18 +936,37 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-			| table_ref PIVOT '(' expr_list_opt_comma FOR ColIdOrString IN_P '(' expr_list_opt_comma ')' ')' opt_alias_clause
+			| table_ref PIVOT '(' a_expr FOR pivot_value_list ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
-					n->aggrs = $4;
-					n->aliasname = $6;
-					n->colnames = $9;
-					n->alias = $12;
+					n->aggr = $4;
+					n->pivots = $6;
+					n->alias = $8;
 					$$ = (PGNode *) n;
 				}
 		;
 
+
+pivot_value:
+	ColIdOrString IN_P '(' expr_list_opt_comma ')'
+		{
+			PGPivot *n = makeNode(PGPivot);
+			n->pivot_column = $1;
+			n->pivot_value = $4;
+			$$ = (PGNode *) n;
+		}
+	;
+
+pivot_value_list:	pivot_value
+				{
+					$$ = list_make1($1);
+				}
+			| pivot_value_list pivot_value
+				{
+					$$ = lappend($1, $2);
+				}
+		;
 
 /*
  * It may seem silly to separate joined_table from table_ref, but there is

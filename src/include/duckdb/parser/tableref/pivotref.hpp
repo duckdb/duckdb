@@ -29,8 +29,8 @@ public:
 
 	//! The source table of the pivot
 	unique_ptr<TableRef> source;
-	//! The set of aggregates to pivot over
-	vector<unique_ptr<ParsedExpression>> aggregates;
+	//! The aggregate to compute over the pivot
+	unique_ptr<ParsedExpression> aggregate;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
 	//! Aliases for the column names

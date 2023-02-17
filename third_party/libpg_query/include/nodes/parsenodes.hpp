@@ -2110,14 +2110,18 @@ typedef struct PGUseStmt {
  *		Pivot Expression
  * ----------------------
  */
+typedef struct PGPivot {
+	PGNodeTag type;
+	char *pivot_column;  /* The column name to pivot on */
+	PGList *pivot_value; /* The set of pivot values */
+} PGPivot;
 
 typedef struct PGPivotExpr {
 	PGNodeTag type;
 	PGNode *source;      /* the source subtree */
-	PGList *aggrs;       /* The set of aggregations */
-	char *aliasname;     /* The column name to pivot on */
-	PGList *colnames;    /* The set of pivot values */
-	PGAlias *alias;   /* table alias & optional column aliases */
+	PGNode *aggr;        /* The aggregation to pivot over */
+	PGList *pivots;      /* The set of pivot values */
+	PGAlias *alias;      /* table alias & optional column aliases */
 } PGPivotExpr;
 
 }

@@ -22,15 +22,14 @@
 %type <str>		all_Op
 %type <conststr> MathOp
 
-
 %type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
 				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
-				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select
+				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select pivot_value_list
 %type <list>	group_by_list group_by_list_opt_comma
-%type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
+%type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id pivot_value
 %type <range>	OptTempTableName
 %type <into>	into_clause
 

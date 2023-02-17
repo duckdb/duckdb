@@ -1,19 +1,59 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
+static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<ParsedExpression>> &pivot_expressions,
+                            unique_ptr<ParsedExpression> current_expr = nullptr, string current_name = string()) {
+	auto &pivot = ref.pivots[pivot_idx];
+	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
+	for (auto &value : pivot.values) {
+		auto column_ref = make_unique<ColumnRefExpression>(pivot.name);
+		auto constant_value = make_unique<ConstantExpression>(value);
+		auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                                   std::move(column_ref), std::move(constant_value));
+
+		unique_ptr<ParsedExpression> expr;
+		string name;
+		if (current_expr) {
+			expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, current_expr->Copy(),
+			                                          std::move(comp_expr));
+		} else {
+			expr = std::move(comp_expr);
+		}
+		if (!current_name.empty()) {
+			name = current_name + " " + value.ToString();
+		} else {
+			name = value.ToString();
+		}
+		if (last_pivot) {
+			// construct the aggregate
+			auto copy = ref.aggregate->Copy();
+			auto &function = (FunctionExpression &)*copy;
+			// add the filter and alias to the aggregate function
+			function.filter = std::move(expr);
+			function.alias = name;
+			pivot_expressions.push_back(std::move(copy));
+		} else {
+			// need to recurse
+			ConstructPivots(ref, pivot_idx + 1, pivot_expressions, std::move(expr), std::move(name));
+		}
+	}
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
+	const static idx_t PIVOT_EXPRESSION_LIMIT = 10000;
 	if (!ref.source) {
 		throw InternalException("Pivot without a source!?");
 	}
@@ -35,48 +75,54 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 		names.push_back(columnref.GetColumnName());
 	}
 
-	// now handle the actual pivot
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
-	auto select_node = make_unique<SelectNode>();
 	case_insensitive_set_t handled_columns;
-	case_insensitive_set_t pivots;
-	vector<unique_ptr<ParsedExpression>> pivot_expressions;
+	// parse the aggregate, and extract the referenced columns from the aggregate
+	auto &aggr = ref.aggregate;
+	{
+		if (aggr->type != ExpressionType::FUNCTION) {
+			throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
+		}
+		auto &function = (FunctionExpression &)*aggr;
+		if (function.children.size() != 1) {
+			throw BinderException(FormatError(*aggr, "Pivot expression must have a single argument"));
+		}
+		if (function.children[0]->type != ExpressionType::COLUMN_REF) {
+			throw BinderException(
+			    FormatError(*aggr, "Pivot expression must have a single column reference as argument"));
+		}
+		auto &child_colref = (ColumnRefExpression &)*function.children[0];
+		handled_columns.insert(child_colref.GetColumnName());
+	}
+
+	// now handle the pivots
+	auto select_node = make_unique<SelectNode>();
+	// first add all pivots to the set of handled columns, and check for duplicates
+	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
+		total_pivots *= pivot.values.size();
 		// add the pivoted column to the columns that have been handled
 		handled_columns.insert(pivot.name);
+		value_set_t pivots;
 		for (auto &val : pivot.values) {
-			for (auto &aggr : ref.aggregates) {
-				if (aggr->type != ExpressionType::FUNCTION) {
-					throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
-				}
-				auto copy = aggr->Copy();
-				auto &function = (FunctionExpression &)*copy;
-				if (function.children.size() != 1) {
-					throw BinderException(FormatError(*aggr, "Pivot expression must have a single argument"));
-				}
-				if (function.children[0]->type != ExpressionType::COLUMN_REF) {
-					throw BinderException(
-					    FormatError(*aggr, "Pivot expression must have a single column reference as argument"));
-				}
-				auto &child_colref = (ColumnRefExpression &)*function.children[0];
-				handled_columns.insert(child_colref.GetColumnName());
-
-				auto column_ref = make_unique<ColumnRefExpression>(pivot.name);
-				auto constant_value = make_unique<ConstantExpression>(val);
-				auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-				                                                   std::move(column_ref), std::move(constant_value));
-				function.filter = std::move(comp_expr);
-				function.alias = val.ToString();
-				if (pivots.find(function.alias) != pivots.end()) {
-					throw BinderException(FormatError(
-					    *aggr, StringUtil::Format("The column \"%s\" was specified multiple times", function.alias)));
-				}
-				pivots.insert(function.alias);
-				pivot_expressions.push_back(std::move(copy));
+			if (pivots.find(val) != pivots.end()) {
+				throw BinderException(FormatError(
+				    *aggr, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
+				                              val.ToString())));
 			}
+			pivots.insert(val);
 		}
 	}
+	if (total_pivots >= PIVOT_EXPRESSION_LIMIT) {
+		throw BinderException("Pivot column limit of %llu exceeded", PIVOT_EXPRESSION_LIMIT);
+	}
+	// now construct the actual aggregates
+	// note that we construct a cross-product of all pivots
+	// we do this recursively
+	vector<unique_ptr<ParsedExpression>> pivot_expressions;
+	ConstructPivots(ref, 0, pivot_expressions);
+
 	// any columns that are not pivoted/aggregated on are added to the GROUP BY clause
 	for (auto &entry : all_columns) {
 		if (entry->type != ExpressionType::COLUMN_REF) {
