@@ -15,11 +15,8 @@ on:
       - 'data/**'
       - 'examples/**'
       - 'test/**'
-      - 'tools/odbc/**'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/nodejs/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
 

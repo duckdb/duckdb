@@ -12,11 +12,8 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
 

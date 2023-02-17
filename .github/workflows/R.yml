@@ -14,11 +14,8 @@ on:
       - '**.md'
       - 'examples/**'
       - 'test/**'
-      - 'tools/odbc/**'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/pythonpkg/**'
+      - 'tools/**'
+      - '!tools/rpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/R.yml'
 
