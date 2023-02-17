@@ -11,6 +11,8 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/query_result.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
 
@@ -284,6 +286,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	              DescribeAggregateInfo("max"),          DescribeAggregateInfo("median", true)};
 	auto expressions = CreateExpressionList(columns, aggregates);
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expressions));
+}
+
+string DuckDBPyRelation::ToSQL() {
+	if (!rel) {
+		// This relation is just a wrapper around a result set, can't figure out what the SQL was
+		return "";
+	}
+	try {
+		return rel->GetQueryNode()->ToString();
+	} catch (const std::exception &e) {
+		return "";
+	}
 }
 
 string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
@@ -897,7 +911,24 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain() {
 	AssertRelation();
-	return rel->ToString(0);
+	auto res = rel->Explain();
+	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
+	auto &coll = materialized.Collection();
+	string result;
+	bool skipped_first = false;
+	for (auto &row : coll.Rows()) {
+		// Skip the first column because it just contains 'physical plan'
+		for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {
+			if (col_idx > 1) {
+				result += "\t";
+			}
+			auto val = row.GetValue(col_idx);
+			result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
+		}
+		result += "\n";
+	}
+	return result;
 }
 
 // TODO: RelationType to a python enum

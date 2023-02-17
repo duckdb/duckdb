@@ -153,6 +153,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
+	string ToSQL();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	idx_t Length();
