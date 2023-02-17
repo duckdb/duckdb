@@ -40,7 +40,7 @@ protected:
 	SQLStatement(const SQLStatement &other) = default;
 
 public:
-	virtual string ToString() const {
+	DUCKDB_API virtual string ToString() const {
 		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
 		                        StatementTypeToString(type));
 	}
