@@ -20,7 +20,7 @@ public:
 	using py::object::object;
 
 public:
-	static bool check_(const py::handle &object);
+	static bool check_(const py::handle &object); // NOLINT
 };
 
 class PolarsDataFrame : public py::object {
@@ -32,6 +32,6 @@ public:
 public:
 	static bool IsDataFrame(const py::handle &object);
 	static bool IsLazyFrame(const py::handle &object);
-	static bool check_(const py::handle &object);
+	static bool check_(const py::handle &object); // NOLINT
 };
 } // namespace duckdb
