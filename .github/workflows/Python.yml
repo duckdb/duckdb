@@ -9,6 +9,12 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
   pull_request:
     paths-ignore:
       - '**.md'

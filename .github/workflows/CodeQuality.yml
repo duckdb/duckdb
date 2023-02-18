@@ -9,6 +9,8 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     paths-ignore:

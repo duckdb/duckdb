@@ -9,6 +9,9 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
   pull_request:
     paths-ignore:
       - '**.md'

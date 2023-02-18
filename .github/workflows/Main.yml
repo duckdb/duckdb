@@ -3,12 +3,15 @@ on:
   schedule:
     - cron: "0 2 * * *"
   push:
-    paths-ignore:
-      - '**.md'
     branches:
       - '**'
       - '!master'
       - '!feature'
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
   pull_request:
     paths-ignore:
       - '**.md'

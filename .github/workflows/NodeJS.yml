@@ -9,6 +9,13 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'data/**'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/nodejs/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/NodeJS.yml'
   pull_request:
     paths-ignore:
       - '**.md'
