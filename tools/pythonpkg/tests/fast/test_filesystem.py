@@ -77,7 +77,7 @@ class TestPythonFilesystem:
         assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
-    def test_multiple_protocol_filesystems(self):
+    def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
         class ExtendedMemoryFileSystem(MemoryFileSystem):
             protocol = ('file', 'local')
             # defer to the original implementation doesn't hardcode the protocol

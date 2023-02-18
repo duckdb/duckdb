@@ -39,9 +39,6 @@ class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
-	py::str stripProtocol(const string &input) const {
-		return filesystem.attr("_strip_protocol")(py::str(input));
-	}
 	std::string DecodeFlags(uint8_t flags);
 
 public:
