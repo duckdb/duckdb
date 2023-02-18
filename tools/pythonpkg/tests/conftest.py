@@ -5,13 +5,12 @@ from os.path import abspath
 import glob
 import duckdb
 
-
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     return cursor
-
+ 
 
 @pytest.fixture(scope="function")
 def require():
@@ -21,14 +20,14 @@ def require():
             "../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../build/debug/extension/*/*.duckdb_extension",
             "../../*.duckdb_extension",
-            "../../../../../build/release/extension/*/*.duckdb_extension",
+             "../../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../../build/debug/extension/*/*.duckdb_extension",
             "../../../*.duckdb_extension"
         ]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
         if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
-            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH')
+            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH');
             env_extension_path = env_extension_path.rstrip('/')
             extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
             extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
@@ -42,17 +41,17 @@ def require():
 
         for path in extension_paths_found:
             print(path)
-            if (path.endswith(extension_name + ".duckdb_extension")):
-                conn = duckdb.connect(db_name, config={'allow_unsigned_extensions': 'true'})
+            if (path.endswith(extension_name+".duckdb_extension")):
+                conn = duckdb.connect(db_name, config={'allow_unsigned_extensions' : 'true'})
                 conn.execute(f"LOAD '{path}'")
                 return conn
         pytest.skip(f'could not load {extension_name}')
 
     return _require
 
-
 @pytest.fixture(scope='session', autouse=True)
 def duckdb_cursor(request):
+
     connection = duckdb.connect('')
     cursor = connection.cursor()
     cursor.execute('CREATE TABLE integers (i integer)')
@@ -64,26 +63,32 @@ def duckdb_cursor(request):
 
 
 @pytest.fixture(scope="function")
-def duckdb_cursor_autocommit(tmp_path):
+def duckdb_cursor_autocommit(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 
-    try:
-        with duckdb.connect(test_dbfarm) as connection:
-            connection.set_autocommit(True)
-            with connection.cursor() as cursor:
-                yield (cursor, connection, test_dbfarm)
-    finally:
+    def finalizer():
+        duckdb.shutdown()
         if tmp_path.is_dir():
             shutil.rmtree(test_dbfarm)
+
+    request.addfinalizer(finalizer)
+
+    connection = duckdb.connect(test_dbfarm)
+    connection.set_autocommit(True)
+    cursor = connection.cursor()
+    return (cursor, connection, test_dbfarm)
 
 
 @pytest.fixture(scope="function")
-def initialize_duckdb(tmp_path):
+def initialize_duckdb(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 
-    try:
-        with duckdb.connect(test_dbfarm):
-            yield test_dbfarm
-    finally:
+    def finalizer():
+        duckdb.shutdown()
         if tmp_path.is_dir():
             shutil.rmtree(test_dbfarm)
+
+    request.addfinalizer(finalizer)
+
+    duckdb.connect(test_dbfarm)
+    return test_dbfarm
