@@ -1,6 +1,6 @@
-# name: test/sql/copy/hive_partitioned_write.test
+# name: test/sql/copy/partitioned/hive_partitioned_write.test
 # description: basic tests for the hive partitioned write
-# group: [copy]
+# group: [partitioned]
 
 require parquet
 

@@ -97,17 +97,20 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			use_tmp_file =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			user_set_use_tmp_file = true;
 			continue;
 		}
 		if (loption == "allow_overwrite") {
-			allow_overwrite = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			allow_overwrite =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
 
 		if (loption == "per_thread_output") {
-			per_thread_output = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			per_thread_output =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
 		if (loption == "partition_by") {

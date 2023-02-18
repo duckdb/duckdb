@@ -122,7 +122,7 @@ class TestRuntimeError(object):
             conn.table_function("bla")
 
         with closed():
-            conn.from_df("bla")
+            conn.from_df(df_in)
 
         with closed():
             conn.from_csv_auto("bla")
