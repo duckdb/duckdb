@@ -86,7 +86,7 @@ class TestPythonFilesystem:
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
         class ExtendedMemoryFileSystem(MemoryFileSystem):
             protocol = ('file', 'local')
-            # defer to the original implementation doesn't hardcode the protocol
+            # defer to the original implementation that doesn't hardcode the protocol
             _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
 
         memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
