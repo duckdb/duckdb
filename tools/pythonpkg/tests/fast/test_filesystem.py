@@ -23,14 +23,21 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
     error_occured = []
     orig = getattr(obj, name)
 
-    def ceptor(*args,**kwargs):
+    def ceptor(*args, **kwargs):
         try:
-            return orig(*args,**kwargs)
+            return orig(*args, **kwargs)
         except Exception as e:
             error_occured.append(e)
             raise e
+
     monkeypatch.setattr(obj, name, ceptor)
     return error_occured
+
+
+@fixture()
+def duckdb_cursor():
+    with duckdb.connect('') as connection:
+        yield connection
 
 
 @fixture()
@@ -168,3 +175,20 @@ class TestPythonFilesystem:
         # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
         # isn't happening
         assert not write_errors
+
+    def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a))")
+
+        assert memory.open('/root/a=1/data_0.csv').read() == b'1\n'
+
+    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
+            fh.write(b'1\n')
+
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+
+        assert duckdb_cursor.fetchall() == [(1, '1')]

@@ -159,4 +159,30 @@ void PythonFilesystem::FileSync(FileHandle &handle) {
 
 	PythonFileHandle::GetHandle(handle).attr("flush")();
 }
+bool PythonFilesystem::DirectoryExists(const string &directory) {
+	return FileExists(directory);
+}
+void PythonFilesystem::RemoveDirectory(const string &directory) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("rmdir")(py::str(directory));
+}
+void PythonFilesystem::CreateDirectory(const string &directory) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("mkdir")(py::str(directory));
+}
+bool PythonFilesystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                 FileOpener *opener) {
+	PythonGILWrapper gil;
+	bool nonempty = false;
+
+	for (auto item : filesystem.attr("ls")(py::str(directory), py::arg("detail") = false)) {
+		bool is_dir = py::bool_(filesystem.attr("isdir")(item));
+		callback(py::str(item), is_dir);
+		nonempty = true;
+	}
+
+	return nonempty;
+}
 } // namespace duckdb

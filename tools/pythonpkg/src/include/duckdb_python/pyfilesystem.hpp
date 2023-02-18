@@ -87,6 +87,11 @@ public:
 	void MoveFile(const string &source, const string &dest) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	void FileSync(FileHandle &handle) override;
+	bool DirectoryExists(const string &directory) override;
+	void CreateDirectory(const string &directory) override;
+	void RemoveDirectory(const string &directory) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override;
 };
 
 } // namespace duckdb
