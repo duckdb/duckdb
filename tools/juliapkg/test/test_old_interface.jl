@@ -135,7 +135,7 @@ end
     con = DuckDB.connect(db)
     DuckDB.execute(con, "SET TimeZone='Asia/Shanghai'") # UTC+8
 
-    res  = DuckDB.execute(con, "SELECT TIMESTAMPTZ '2021-09-27 11:30:00' tz, TIMESTAMP '2021-09-27 11:30:00' ts;")
+    res = DuckDB.execute(con, "SELECT TIMESTAMPTZ '2021-09-27 11:30:00' tz, TIMESTAMP '2021-09-27 11:30:00' ts;")
     @test isequal(res.df[1, "tz"], DateTime(2021, 9, 27, 3, 30, 0))
     @test isequal(res.df[1, "ts"], DateTime(2021, 9, 27, 11, 30, 0))
 
