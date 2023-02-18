@@ -50,6 +50,43 @@ SELECT empid, dept, april, month, sales FROM monthly_sales
 3	cars	50	Feb	400
 3	cars	50	Mar	100
 
+# alias in pivots
+query IIII
+SELECT * FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan AS January, feb AS February, mar AS March, april))
+    ORDER BY empid;
+----
+1	electronics	January	100
+1	electronics	February	200
+1	electronics	March	300
+1	electronics	April	100
+2	clothes	January	100
+2	clothes	February	300
+2	clothes	March	150
+2	clothes	April	200
+3	cars	January	200
+3	cars	February	400
+3	cars	March	100
+3	cars	April	50
+
+# alias the unpivot clause
+query IIII
+SELECT p.id, p.type, p.m, p.vals FROM monthly_sales
+    UNPIVOT(sales FOR month IN (jan, feb, mar, april)) AS p(id, type, m, vals);
+----
+1	electronics	Jan	100
+1	electronics	Feb	200
+1	electronics	Mar	300
+1	electronics	April	100
+2	clothes	Jan	100
+2	clothes	Feb	300
+2	clothes	Mar	150
+2	clothes	April	200
+3	cars	Jan	200
+3	cars	Feb	400
+3	cars	Mar	100
+3	cars	April	50
+
 # unrecognized entry in unpivot
 statement error
 SELECT empid, dept, april, month, sales FROM monthly_sales

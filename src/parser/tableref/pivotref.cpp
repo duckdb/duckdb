@@ -17,6 +17,9 @@ string PivotColumn::ToString() const {
 				result += ", ";
 			}
 			result += values[i].ToSQLString();
+			if (!aliases[i].empty()) {
+				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aliases[i]);
+			}
 		}
 		result += ")";
 	} else {
@@ -77,6 +80,9 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 			return false;
 		}
 		if (pivots[i].values != other->pivots[i].values) {
+			return false;
+		}
+		if (pivots[i].aliases != other->pivots[i].aliases) {
 			return false;
 		}
 	}

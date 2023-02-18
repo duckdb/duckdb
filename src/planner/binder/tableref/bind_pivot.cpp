@@ -18,8 +18,11 @@ namespace duckdb {
 static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<ParsedExpression>> &pivot_expressions,
                             unique_ptr<ParsedExpression> current_expr = nullptr, string current_name = string()) {
 	auto &pivot = ref.pivots[pivot_idx];
+	D_ASSERT(pivot.values.size() == pivot.aliases.size());
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
-	for (auto &value : pivot.values) {
+	for (idx_t v_idx = 0; v_idx < pivot.values.size(); v_idx++) {
+		auto &value = pivot.values[v_idx];
+		auto &alias = pivot.aliases[v_idx];
 		auto column_ref = make_unique<ColumnRefExpression>(pivot.name);
 		auto constant_value = make_unique<ConstantExpression>(value);
 		auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
@@ -33,10 +36,11 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 		} else {
 			expr = std::move(comp_expr);
 		}
+		auto value_name = alias.empty() ? value.ToString() : alias;
 		if (!current_name.empty()) {
-			name = current_name + " " + value.ToString();
+			name = current_name + " " + value_name;
 		} else {
-			name = value.ToString();
+			name = std::move(value_name);
 		}
 		if (last_pivot) {
 			// construct the aggregate
@@ -97,7 +101,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			}
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {
-				pivot.values.emplace_back(EnumType::GetValue(Value::ENUM(i, type)));
+				auto enum_value = EnumType::GetValue(Value::ENUM(i, type));
+				pivot.values.emplace_back(enum_value);
+				pivot.aliases.push_back(enum_value);
 			}
 		}
 		total_pivots *= pivot.values.size();
@@ -183,7 +189,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<Pars
 			select_node->select_list.push_back(std::move(col_expr));
 		} else {
 			auto idx = entry->second;
-			unpivot_names[idx] = column_name;
+			auto &alias = unpivot.aliases[idx];
+			unpivot_names[idx] = alias.empty() ? column_name : alias;
 			unpivot_expressions[idx] = make_unique<ColumnRefExpression>(column_name);
 			handled_columns.erase(entry);
 		}

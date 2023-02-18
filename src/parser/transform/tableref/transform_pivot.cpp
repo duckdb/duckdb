@@ -37,6 +37,7 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 				} else {
 					throw ParserException("PIVOT IN list cannot contain expressions");
 				}
+				col.aliases.push_back(expr->alias);
 				col.values.emplace_back(std::move(val));
 			}
 		} else {

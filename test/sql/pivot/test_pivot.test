@@ -83,6 +83,17 @@ SELECT *
 1	10402	8002	11002	NULL
 2	39502	90702	12002	NULL
 
+# test pivot aliases
+query IIIII
+SELECT empid, January, February, March, April
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('JAN' AS January, 'FEB' AS February, 'MAR' AS March, 'APR' AS April))
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
 # not all columns are mentioned (columns not mentioned are dropped)
 query IIII
 SELECT *

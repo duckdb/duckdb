@@ -989,7 +989,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 
 
 pivot_value:
-	ColIdOrString IN_P '(' expr_list_opt_comma ')'
+	ColIdOrString IN_P '(' target_list_opt_comma ')'
 		{
 			PGPivot *n = makeNode(PGPivot);
 			n->pivot_column = $1;
