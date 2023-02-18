@@ -38,6 +38,12 @@ class UpdateSetInfo;
 class Transformer {
 	friend class StackChecker;
 
+	struct CreatePivotEntry {
+		string enum_name;
+		unique_ptr<TableRef> source;
+		string column_name;
+	};
+
 public:
 	explicit Transformer(idx_t max_expression_depth_p);
 	explicit Transformer(Transformer *parent);
@@ -59,6 +65,10 @@ private:
 	case_insensitive_map_t<idx_t> named_param_map;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
 	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
+	//! The set of pivot entries to create
+	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
+
+	void Clear();
 
 	void SetParamCount(idx_t new_count) {
 		if (parent) {
@@ -90,6 +100,9 @@ private:
 	bool HasNamedParameters() const {
 		return parent ? parent->HasNamedParameters() : !named_param_map.empty();
 	}
+
+	void AddPivotEntry(string enum_name, unique_ptr<TableRef> source, string column_name);
+	bool HasPivotEntries();
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -163,7 +176,8 @@ private:
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
-	unique_ptr<PragmaStatement> TransformPivotStatement(duckdb_libpgquery::PGNode *stmt);
+	unique_ptr<QueryNode> TransformPivotStatement(duckdb_libpgquery::PGPivotStmt *stmt);
+	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform

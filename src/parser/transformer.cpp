@@ -28,13 +28,21 @@ Transformer::Transformer(Transformer *parent)
     : parent(parent), max_expression_depth(parent->max_expression_depth), stack_depth(DConstants::INVALID_INDEX) {
 }
 
+void Transformer::Clear() {
+	SetParamCount(0);
+	pivot_entries.clear();
+}
+
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
 	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
-		SetParamCount(0);
+		Clear();
 		auto n = (duckdb_libpgquery::PGNode *)entry->data.ptr_value;
 		auto stmt = TransformStatement(n);
 		D_ASSERT(stmt);
+		if (HasPivotEntries()) {
+			stmt = CreatePivotStatement(std::move(stmt));
+		}
 		stmt->n_param = ParamCount();
 		statements.push_back(std::move(stmt));
 	}
@@ -152,12 +160,9 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformUse(stmt);
 	case duckdb_libpgquery::T_PGCreateDatabaseStmt:
 		return TransformCreateDatabase(stmt);
-	case duckdb_libpgquery::T_PGPivotStmt:
-		return TransformPivotStatement(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}
-	return nullptr;
 }
 
 } // namespace duckdb

@@ -143,17 +143,26 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	vector<unique_ptr<ParsedExpression>> pivot_expressions;
 	ConstructPivots(ref, 0, pivot_expressions);
 
-	// any columns that are not pivoted/aggregated on are added to the GROUP BY clause
-	for (auto &entry : all_columns) {
-		if (entry->type != ExpressionType::COLUMN_REF) {
-			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
+	if (ref.rows.empty()) {
+		// if rows are not specified any columns that are not pivoted/aggregated on are added to the GROUP BY clause
+		for (auto &entry : all_columns) {
+			if (entry->type != ExpressionType::COLUMN_REF) {
+				throw InternalException("Unexpected child of pivot source - not a ColumnRef");
+			}
+			auto &columnref = (ColumnRefExpression &)*entry;
+			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
+				// not handled - add to grouping set
+				select_node->groups.group_expressions.push_back(
+				    make_unique<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
+				select_node->select_list.push_back(std::move(entry));
+			}
 		}
-		auto &columnref = (ColumnRefExpression &)*entry;
-		if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
-			// not handled - add to grouping set
+	} else {
+		// if rows are specified only the columns mentioned in rows are added as groups
+		for (auto &row : ref.rows) {
 			select_node->groups.group_expressions.push_back(
 			    make_unique<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
-			select_node->select_list.push_back(std::move(entry));
+			select_node->select_list.push_back(make_unique<ColumnRefExpression>(row));
 		}
 	}
 	// add the pivot expressions to the select list

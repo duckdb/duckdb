@@ -41,6 +41,7 @@ class SetVariableStatement;
 class ResetVariableStatement;
 class LoadStatement;
 class LogicalPlanStatement;
+class MultiStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

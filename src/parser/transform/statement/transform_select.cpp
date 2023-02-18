@@ -18,7 +18,11 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNo
 		}
 	}
 
-	result->node = TransformSelectNode(stmt);
+	if (stmt->pivot) {
+		result->node = TransformPivotStatement(stmt->pivot);
+	} else {
+		result->node = TransformSelectNode(stmt);
+	}
 	return result;
 }
 
