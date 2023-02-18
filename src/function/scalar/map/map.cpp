@@ -70,11 +70,11 @@ static void ExpandVector(const Vector &source, Vector &target, idx_t expansion_f
 	idx_t count = ListVector::GetListSize(source);
 	auto &entry = ListVector::GetEntry(source);
 
-    idx_t target_idx = 0;
+	idx_t target_idx = 0;
 	for (idx_t copy = 0; copy < expansion_factor; copy++) {
 		for (idx_t key_idx = 0; key_idx < count; key_idx++) {
-            target.SetValue(target_idx, entry.GetValue(key_idx));
-            target_idx++;
+			target.SetValue(target_idx, entry.GetValue(key_idx));
+			target_idx++;
 		}
 	}
 	D_ASSERT(target_idx == count * expansion_factor);
@@ -116,19 +116,19 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
-        ExpandVector(args.data[0], expanded_const, expansion_factor);
-        key_vector.Reference(expanded_const);
+		ExpandVector(args.data[0], expanded_const, expansion_factor);
+		key_vector.Reference(expanded_const);
 
-        src_data = value_data;
+		src_data = value_data;
 	} else if (values_are_const && !keys_are_const) {
-        Vector expanded_const(ListType::GetChildType(args.data[1].GetType()), key_count);
+		Vector expanded_const(ListType::GetChildType(args.data[1].GetType()), key_count);
 
 		auto expansion_factor = key_count / value_count;
 		if (expansion_factor != args.size()) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
-        ExpandVector(args.data[1], expanded_const, expansion_factor);
+		ExpandVector(args.data[1], expanded_const, expansion_factor);
 		value_vector.Reference(expanded_const);
 	} else {
 		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t)) != 0) {
@@ -139,7 +139,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	ListVector::SetListSize(result, MaxValue(key_count, value_count));
 
-    result_data = ListVector::GetData(result);
+	result_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = src_data[i];
 	}
