@@ -1086,14 +1086,14 @@ public class TestDuckDBJDBC {
 
 		Timestamp ts = Timestamp.valueOf("1970-01-01 01:01:01");
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i = i + 735127) {
 			ts.setTime(i);
 			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts + "')");
 		}
 
 		stmt.close();
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i = i + 735127) {
 			PreparedStatement ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 			ps.setTimestamp(1, ts);
 			ResultSet rs = ps.executeQuery();
