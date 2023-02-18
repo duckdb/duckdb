@@ -66,19 +66,18 @@ void MapConversionVerify(Vector &vector, idx_t count) {
 	}
 }
 
-static void ExpandListVector(const Vector &source, Vector &target, idx_t expansion_factor) {
+static void ExpandVector(const Vector &source, Vector &target, idx_t expansion_factor) {
 	idx_t count = ListVector::GetListSize(source);
 	auto &entry = ListVector::GetEntry(source);
 
-	ListVector::SetListSize(target, 0);
-	ListVector::Reserve(target, count * expansion_factor);
-
+    idx_t target_idx = 0;
 	for (idx_t copy = 0; copy < expansion_factor; copy++) {
 		for (idx_t key_idx = 0; key_idx < count; key_idx++) {
-			ListVector::PushBack(target, entry.GetValue(key_idx));
+            target.SetValue(target_idx, entry.GetValue(key_idx));
+            target_idx++;
 		}
 	}
-	D_ASSERT(ListVector::GetListSize(target) == count * expansion_factor);
+	D_ASSERT(target_idx == count * expansion_factor);
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -110,26 +109,27 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto src_data = key_data;
 
 	if (keys_are_const && !values_are_const) {
-		Vector expanded_const(args.data[0].GetType());
+		Vector expanded_const(ListType::GetChildType(args.data[0].GetType()), value_count);
 
 		auto expansion_factor = value_count / key_count;
 		if (expansion_factor != args.size()) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
-		ExpandListVector(args.data[0], expanded_const, expansion_factor);
-		key_vector.Reference(ListVector::GetEntry(expanded_const));
-		src_data = value_data;
+        ExpandVector(args.data[0], expanded_const, expansion_factor);
+        key_vector.Reference(expanded_const);
+
+        src_data = value_data;
 	} else if (values_are_const && !keys_are_const) {
-		Vector expanded_const(args.data[1].GetType());
+        Vector expanded_const(ListType::GetChildType(args.data[1].GetType()), key_count);
 
 		auto expansion_factor = key_count / value_count;
 		if (expansion_factor != args.size()) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
-		ExpandListVector(args.data[1], expanded_const, expansion_factor);
-		value_vector.Reference(ListVector::GetEntry(expanded_const));
+        ExpandVector(args.data[1], expanded_const, expansion_factor);
+		value_vector.Reference(expanded_const);
 	} else {
 		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t)) != 0) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
@@ -137,9 +137,9 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
-	ListVector::Reserve(result, MaxValue(key_count, value_count));
 	ListVector::SetListSize(result, MaxValue(key_count, value_count));
 
+    result_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = src_data[i];
 	}
