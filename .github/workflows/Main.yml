@@ -1,8 +1,14 @@
 name: Main
 on:
+  schedule:
+    - cron: "0 2 * * *"
   push:
     paths-ignore:
       - '**.md'
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -170,6 +176,7 @@ jobs:
       BUILD_EXCEL: 1
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -383,7 +390,8 @@ jobs:
     - name: Dependencies
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip 
+        sudo apt-get update -y -qq
+        sudo apt-get install -y -qq ninja-build unixodbc-dev
         pip3 install pyodbc
 
     - name: Install nanodbc

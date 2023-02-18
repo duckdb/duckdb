@@ -23,6 +23,8 @@ struct UpdateNode;
 class UpdateSegment {
 public:
 	UpdateSegment(ColumnData &column_data);
+	// Construct a duplicate of 'other' with 'new_owner' as it's column data
+	UpdateSegment(UpdateSegment &other, ColumnData &new_owner);
 	~UpdateSegment();
 
 	ColumnData &column_data;

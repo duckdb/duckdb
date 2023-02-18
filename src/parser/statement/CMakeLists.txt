@@ -6,6 +6,7 @@ add_library_unity(
   call_statement.cpp
   copy_statement.cpp
   create_statement.cpp
+  detach_statement.cpp
   delete_statement.cpp
   drop_statement.cpp
   execute_statement.cpp

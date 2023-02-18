@@ -1,6 +1,10 @@
 name: Regression
 on:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
     paths-ignore:
       - '**.md'
   pull_request:
