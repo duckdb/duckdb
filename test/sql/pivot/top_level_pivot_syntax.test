@@ -1,0 +1,41 @@
+# name: test/sql/pivot/top_level_pivot_syntax.test
+# description: Test top-level pivot syntax
+# group: [pivot]
+
+# pivot using an enum
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 10000, 'JAN'),
+    (1, 400, 'JAN'),
+    (2, 4500, 'JAN'),
+    (2, 35000, 'JAN'),
+    (1, 5000, 'FEB'),
+    (1, 3000, 'FEB'),
+    (2, 200, 'FEB'),
+    (2, 90500, 'FEB'),
+    (1, 6000, 'MAR'),
+    (1, 5000, 'MAR'),
+    (2, 2500, 'MAR'),
+    (2, 9500, 'MAR'),
+    (1, 8000, 'APR'),
+    (1, 10000, 'APR'),
+    (2, 800, 'APR'),
+    (2, 4500, 'APR');
+
+# top level PIVOT syntax
+query IIIII
+PIVOT monthly_sales USING SUM(AMOUNT) ON COLUMNS(MONTH);
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+mode skip
+
+query IIIII
+PIVOT monthly_sales USING SUM(AMOUNT) ON ROWS(empid) COLUMNS(MONTH)
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
