@@ -4,6 +4,7 @@ from pathlib import Path
 from shutil import copyfileobj
 from typing import Callable, List
 from os.path import exists
+from pathlib import PurePosixPath
 
 import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
@@ -145,7 +146,8 @@ class TestPythonFilesystem:
         local = fs.LocalFileSystem()
         local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
         local_fsspec.protocol = "local"
-        filename = str(tmp_path / "test.csv")
+        # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
+        filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:
             f.write("a,b,c\n")
             f.write("1,2,3\n")
