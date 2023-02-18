@@ -79,7 +79,15 @@ important	45000	90500	NULL	10000
 regular	4900	8200	23000	13300
 
 # GROUP BY syntax in the SQL standard PIVOT clause
-
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN ('1-JAN', '2-FEB', '3-MAR', '4-APR') GROUP BY status)
+      AS p
+  ORDER BY 1;
+----
+important	45000	90500	NULL	10000
+regular	4900	8200	23000	13300
 
 # in CTE
 query IIIII

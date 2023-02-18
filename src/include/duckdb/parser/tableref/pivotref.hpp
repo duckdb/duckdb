@@ -35,8 +35,8 @@ public:
 	unique_ptr<ParsedExpression> aggregate;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
-	//! The row selection (if any)
-	vector<string> rows;
+	//! The groups to pivot over. If none are specified all columns not included in the pivots/aggregate are chosen.
+	vector<string> groups;
 	//! Aliases for the column names
 	vector<string> column_name_alias;
 

@@ -143,7 +143,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	vector<unique_ptr<ParsedExpression>> pivot_expressions;
 	ConstructPivots(ref, 0, pivot_expressions);
 
-	if (ref.rows.empty()) {
+	if (ref.groups.empty()) {
 		// if rows are not specified any columns that are not pivoted/aggregated on are added to the GROUP BY clause
 		for (auto &entry : all_columns) {
 			if (entry->type != ExpressionType::COLUMN_REF) {
@@ -159,7 +159,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 		}
 	} else {
 		// if rows are specified only the columns mentioned in rows are added as groups
-		for (auto &row : ref.rows) {
+		for (auto &row : ref.groups) {
 			select_node->groups.group_expressions.push_back(
 			    make_unique<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
 			select_node->select_list.push_back(make_unique<ColumnRefExpression>(row));

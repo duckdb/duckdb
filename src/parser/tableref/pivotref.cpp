@@ -34,6 +34,15 @@ string PivotRef::ToString() const {
 		result += " ";
 		result += pivot.ToString();
 	}
+	if (!groups.empty()) {
+		result += " GROUP BY ";
+		for (idx_t i = 0; i < groups.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += groups[i];
+		}
+	}
 	result += ")";
 	if (!alias.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
@@ -66,7 +75,7 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 	if (alias != other->alias) {
 		return false;
 	}
-	if (rows != other->rows) {
+	if (groups != other->groups) {
 		return false;
 	}
 	return true;
@@ -77,7 +86,7 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	copy->source = source->Copy();
 	copy->aggregate = aggregate->Copy();
 	copy->pivots = pivots;
-	copy->rows = rows;
+	copy->groups = groups;
 	copy->alias = alias;
 	return std::move(copy);
 }

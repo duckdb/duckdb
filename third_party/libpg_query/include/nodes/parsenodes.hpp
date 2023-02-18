@@ -1178,6 +1178,7 @@ typedef struct PGPivotExpr {
 	PGNode *source;      /* the source subtree */
 	PGNode *aggr;        /* The aggregation to pivot over */
 	PGList *pivots;      /* The set of pivot values */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
 	PGAlias *alias;      /* table alias & optional column aliases */
 } PGPivotExpr;
 
@@ -1186,7 +1187,7 @@ typedef struct PGPivotStmt {
 	PGNode *source;      /* The source to pivot */
 	PGNode *aggr;        /* The aggregation to pivot over */
 	PGList *columns;     /* The set of columns to pivot over */
-	PGList *rows;        /* The set of rows to include in the rows to pivot over */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
 } PGPivotStmt;
 
 /* ----------------------

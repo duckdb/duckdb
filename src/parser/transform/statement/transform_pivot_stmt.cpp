@@ -109,8 +109,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	auto pivot_ref = make_unique<PivotRef>();
 	pivot_ref->source = std::move(source);
 	pivot_ref->aggregate = std::move(aggregate);
-	if (pivot->rows) {
-		pivot_ref->rows = TransformStringList(pivot->rows);
+	if (pivot->groups) {
+		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
 	for (idx_t c = 0; c < columns.size(); c++) {
 		PivotColumn col;

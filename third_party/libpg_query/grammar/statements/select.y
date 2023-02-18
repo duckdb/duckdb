@@ -285,7 +285,7 @@ simple_select:
 					n->source = $2;
 					n->aggr = $4;
 					n->columns = $6;
-					n->rows = $9;
+					n->groups = $9;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -966,13 +966,14 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->alias = $8;
 					$$ = (PGNode *) n;
 				}
-			| table_ref PIVOT '(' a_expr FOR pivot_value_list ROWS name_list_opt_comma ')' opt_alias_clause
+			| table_ref PIVOT '(' a_expr FOR pivot_value_list GROUP_P BY name_list_opt_comma ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
 					n->aggr = $4;
 					n->pivots = $6;
-					n->alias = $10;
+					n->groups = $9;
+					n->alias = $11;
 					$$ = (PGNode *) n;
 				}
 		;

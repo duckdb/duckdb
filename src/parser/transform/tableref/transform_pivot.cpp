@@ -29,6 +29,9 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 		}
 		result->pivots.push_back(std::move(col));
 	}
+	if (root->groups) {
+		result->groups = TransformStringList(root->groups);
+	}
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	return std::move(result);
 }
