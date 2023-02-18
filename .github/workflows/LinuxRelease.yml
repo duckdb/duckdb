@@ -13,7 +13,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
 
