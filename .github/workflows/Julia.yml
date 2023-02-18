@@ -87,6 +87,7 @@ jobs:
         run: |
           export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
           export JULIA_NUM_THREADS=2
+          export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
           ls $JULIA_DUCKDB_LIBRARY
           cd tools/juliapkg
           julia -e "import Pkg; Pkg.activate(\".\"); Pkg.instantiate(); include(\"test/runtests.jl\")"
