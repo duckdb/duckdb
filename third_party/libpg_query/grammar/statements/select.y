@@ -268,35 +268,24 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
-			| PIVOT table_ref USING func_application ON COLUMNS '(' name_list_opt_comma ')'
+			| PIVOT table_ref USING func_application COLUMNS name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->aggr = $4;
-					n->columns = $8;
+					n->columns = $6;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| PIVOT table_ref USING func_application ON COLUMNS '(' name_list_opt_comma ')' ROWS '(' name_list_opt_comma ')'
+			| PIVOT table_ref USING func_application COLUMNS name_list_opt_comma_opt_bracket GROUP_P BY name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->aggr = $4;
-					n->columns = $8;
-					n->rows = $12;
-					res->pivot = n;
-					$$ = (PGNode *)res;
-				}
-			| PIVOT table_ref USING func_application ON ROWS '(' name_list_opt_comma ')' COLUMNS '(' name_list_opt_comma ')'
-				{
-					PGSelectStmt *res = makeNode(PGSelectStmt);
-					PGPivotStmt *n = makeNode(PGPivotStmt);
-					n->source = $2;
-					n->aggr = $4;
-					n->columns = $12;
-					n->rows = $8;
+					n->columns = $6;
+					n->rows = $9;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -975,6 +964,15 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->aggr = $4;
 					n->pivots = $6;
 					n->alias = $8;
+					$$ = (PGNode *) n;
+				}
+			| table_ref PIVOT '(' a_expr FOR pivot_value_list ROWS name_list_opt_comma ')' opt_alias_clause
+				{
+					PGPivotExpr *n = makeNode(PGPivotExpr);
+					n->source = $1;
+					n->aggr = $4;
+					n->pivots = $6;
+					n->alias = $10;
 					$$ = (PGNode *) n;
 				}
 		;
@@ -3619,6 +3617,11 @@ name_list:	name
 name_list_opt_comma:
 			name_list								{ $$ = $1; }
 			| name_list ','							{ $$ = $1; }
+		;
+
+name_list_opt_comma_opt_bracket:
+			name_list_opt_comma										{ $$ = $1; }
+			| '(' name_list_opt_comma ')'							{ $$ = $2; }
 		;
 
 name:		ColIdOrString							{ $$ = $1; };

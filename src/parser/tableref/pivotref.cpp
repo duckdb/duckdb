@@ -66,6 +66,9 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 	if (alias != other->alias) {
 		return false;
 	}
+	if (rows != other->rows) {
+		return false;
+	}
 	return true;
 }
 
@@ -74,6 +77,7 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	copy->source = source->Copy();
 	copy->aggregate = aggregate->Copy();
 	copy->pivots = pivots;
+	copy->rows = rows;
 	copy->alias = alias;
 	return std::move(copy);
 }
