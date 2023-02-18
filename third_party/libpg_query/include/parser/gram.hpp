@@ -476,57 +476,58 @@
      UNKNOWN = 692,
      UNLISTEN = 693,
      UNLOGGED = 694,
-     UNTIL = 695,
-     UPDATE = 696,
-     USE_P = 697,
-     USER = 698,
-     USING = 699,
-     VACUUM = 700,
-     VALID = 701,
-     VALIDATE = 702,
-     VALIDATOR = 703,
-     VALUE_P = 704,
-     VALUES = 705,
-     VARCHAR = 706,
-     VARIADIC = 707,
-     VARYING = 708,
-     VERBOSE = 709,
-     VERSION_P = 710,
-     VIEW = 711,
-     VIEWS = 712,
-     VIRTUAL = 713,
-     VOLATILE = 714,
-     WHEN = 715,
-     WHERE = 716,
-     WHITESPACE_P = 717,
-     WINDOW = 718,
-     WITH = 719,
-     WITHIN = 720,
-     WITHOUT = 721,
-     WORK = 722,
-     WRAPPER = 723,
-     WRITE_P = 724,
-     XML_P = 725,
-     XMLATTRIBUTES = 726,
-     XMLCONCAT = 727,
-     XMLELEMENT = 728,
-     XMLEXISTS = 729,
-     XMLFOREST = 730,
-     XMLNAMESPACES = 731,
-     XMLPARSE = 732,
-     XMLPI = 733,
-     XMLROOT = 734,
-     XMLSERIALIZE = 735,
-     XMLTABLE = 736,
-     YEAR_P = 737,
-     YEARS_P = 738,
-     YES_P = 739,
-     ZONE = 740,
-     NOT_LA = 741,
-     NULLS_LA = 742,
-     WITH_LA = 743,
-     POSTFIXOP = 744,
-     UMINUS = 745
+     UNPIVOT = 695,
+     UNTIL = 696,
+     UPDATE = 697,
+     USE_P = 698,
+     USER = 699,
+     USING = 700,
+     VACUUM = 701,
+     VALID = 702,
+     VALIDATE = 703,
+     VALIDATOR = 704,
+     VALUE_P = 705,
+     VALUES = 706,
+     VARCHAR = 707,
+     VARIADIC = 708,
+     VARYING = 709,
+     VERBOSE = 710,
+     VERSION_P = 711,
+     VIEW = 712,
+     VIEWS = 713,
+     VIRTUAL = 714,
+     VOLATILE = 715,
+     WHEN = 716,
+     WHERE = 717,
+     WHITESPACE_P = 718,
+     WINDOW = 719,
+     WITH = 720,
+     WITHIN = 721,
+     WITHOUT = 722,
+     WORK = 723,
+     WRAPPER = 724,
+     WRITE_P = 725,
+     XML_P = 726,
+     XMLATTRIBUTES = 727,
+     XMLCONCAT = 728,
+     XMLELEMENT = 729,
+     XMLEXISTS = 730,
+     XMLFOREST = 731,
+     XMLNAMESPACES = 732,
+     XMLPARSE = 733,
+     XMLPI = 734,
+     XMLROOT = 735,
+     XMLSERIALIZE = 736,
+     XMLTABLE = 737,
+     YEAR_P = 738,
+     YEARS_P = 739,
+     YES_P = 740,
+     ZONE = 741,
+     NOT_LA = 742,
+     NULLS_LA = 743,
+     WITH_LA = 744,
+     POSTFIXOP = 745,
+     UMINUS = 746
    };
 #endif
 /* Tokens.  */
@@ -967,57 +968,58 @@
 #define UNKNOWN 692
 #define UNLISTEN 693
 #define UNLOGGED 694
-#define UNTIL 695
-#define UPDATE 696
-#define USE_P 697
-#define USER 698
-#define USING 699
-#define VACUUM 700
-#define VALID 701
-#define VALIDATE 702
-#define VALIDATOR 703
-#define VALUE_P 704
-#define VALUES 705
-#define VARCHAR 706
-#define VARIADIC 707
-#define VARYING 708
-#define VERBOSE 709
-#define VERSION_P 710
-#define VIEW 711
-#define VIEWS 712
-#define VIRTUAL 713
-#define VOLATILE 714
-#define WHEN 715
-#define WHERE 716
-#define WHITESPACE_P 717
-#define WINDOW 718
-#define WITH 719
-#define WITHIN 720
-#define WITHOUT 721
-#define WORK 722
-#define WRAPPER 723
-#define WRITE_P 724
-#define XML_P 725
-#define XMLATTRIBUTES 726
-#define XMLCONCAT 727
-#define XMLELEMENT 728
-#define XMLEXISTS 729
-#define XMLFOREST 730
-#define XMLNAMESPACES 731
-#define XMLPARSE 732
-#define XMLPI 733
-#define XMLROOT 734
-#define XMLSERIALIZE 735
-#define XMLTABLE 736
-#define YEAR_P 737
-#define YEARS_P 738
-#define YES_P 739
-#define ZONE 740
-#define NOT_LA 741
-#define NULLS_LA 742
-#define WITH_LA 743
-#define POSTFIXOP 744
-#define UMINUS 745
+#define UNPIVOT 695
+#define UNTIL 696
+#define UPDATE 697
+#define USE_P 698
+#define USER 699
+#define USING 700
+#define VACUUM 701
+#define VALID 702
+#define VALIDATE 703
+#define VALIDATOR 704
+#define VALUE_P 705
+#define VALUES 706
+#define VARCHAR 707
+#define VARIADIC 708
+#define VARYING 709
+#define VERBOSE 710
+#define VERSION_P 711
+#define VIEW 712
+#define VIEWS 713
+#define VIRTUAL 714
+#define VOLATILE 715
+#define WHEN 716
+#define WHERE 717
+#define WHITESPACE_P 718
+#define WINDOW 719
+#define WITH 720
+#define WITHIN 721
+#define WITHOUT 722
+#define WORK 723
+#define WRAPPER 724
+#define WRITE_P 725
+#define XML_P 726
+#define XMLATTRIBUTES 727
+#define XMLCONCAT 728
+#define XMLELEMENT 729
+#define XMLEXISTS 730
+#define XMLFOREST 731
+#define XMLNAMESPACES 732
+#define XMLPARSE 733
+#define XMLPI 734
+#define XMLROOT 735
+#define XMLSERIALIZE 736
+#define XMLTABLE 737
+#define YEAR_P 738
+#define YEARS_P 739
+#define YES_P 740
+#define ZONE 741
+#define NOT_LA 742
+#define NULLS_LA 743
+#define WITH_LA 744
+#define POSTFIXOP 745
+#define UMINUS 746
 
 
 
@@ -1071,7 +1073,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 1529 of yacc.c.  */
-#line 1075 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 1077 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

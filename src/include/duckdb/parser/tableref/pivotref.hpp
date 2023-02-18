@@ -23,7 +23,7 @@ struct PivotColumn {
 	string ToString() const;
 };
 
-//! Represents a JOIN between two expressions
+//! Represents a PIVOT or UNPIVOT expression
 class PivotRef : public TableRef {
 public:
 	explicit PivotRef() : TableRef(TableReferenceType::PIVOT) {
@@ -31,8 +31,10 @@ public:
 
 	//! The source table of the pivot
 	unique_ptr<TableRef> source;
-	//! The aggregate to compute over the pivot
+	//! The aggregate to compute over the pivot (PIVOT only)
 	unique_ptr<ParsedExpression> aggregate;
+	//! The name of the unpivot expression (UNPIVOT only)
+	string unpivot_name;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
 	//! The groups to pivot over. If none are specified all columns not included in the pivots/aggregate are chosen.

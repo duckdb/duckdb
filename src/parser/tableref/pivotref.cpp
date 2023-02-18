@@ -27,8 +27,16 @@ string PivotColumn::ToString() const {
 
 string PivotRef::ToString() const {
 	string result;
-	result = source->ToString() + " PIVOT (";
-	result += aggregate->ToString();
+	result = source->ToString();
+	if (aggregate) {
+		// pivot
+		result += " PIVOT (";
+		result += aggregate->ToString();
+	} else {
+		// unpivot
+		result += " UNPIVOT (";
+		result += unpivot_name;
+	}
 
 	for (auto &pivot : pivots) {
 		result += " ";
@@ -58,7 +66,7 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 	if (!source->Equals(other->source.get())) {
 		return false;
 	}
-	if (!aggregate->Equals(other->aggregate.get())) {
+	if (!BaseExpression::Equals(aggregate.get(), other->aggregate.get())) {
 		return false;
 	}
 	if (pivots.size() != other->pivots.size()) {
@@ -72,6 +80,9 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 			return false;
 		}
 	}
+	if (unpivot_name != other->unpivot_name) {
+		return false;
+	}
 	if (alias != other->alias) {
 		return false;
 	}
@@ -84,7 +95,8 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 unique_ptr<TableRef> PivotRef::Copy() {
 	auto copy = make_unique<PivotRef>();
 	copy->source = source->Copy();
-	copy->aggregate = aggregate->Copy();
+	copy->aggregate = aggregate ? aggregate->Copy() : nullptr;
+	copy->unpivot_name = unpivot_name;
 	copy->pivots = pivots;
 	copy->groups = groups;
 	copy->alias = alias;

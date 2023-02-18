@@ -65,29 +65,8 @@ static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set
 	    expr, [&](ParsedExpression &child) { ExtractPivotExpressions(child, handled_columns); });
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
+unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
 	const static idx_t PIVOT_EXPRESSION_LIMIT = 10000;
-	if (!ref.source) {
-		throw InternalException("Pivot without a source!?");
-	}
-
-	// bind the source of the pivot
-	auto child_binder = Binder::CreateBinder(context, this);
-	auto from_table = child_binder->Bind(*ref.source);
-
-	// figure out the set of column names that are in the source of the pivot
-	vector<unique_ptr<ParsedExpression>> all_columns;
-	child_binder->ExpandStarExpression(make_unique<StarExpression>(), all_columns);
-
-	vector<string> names;
-	for (auto &entry : all_columns) {
-		if (entry->type != ExpressionType::COLUMN_REF) {
-			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
-		}
-		auto &columnref = (ColumnRefExpression &)*entry;
-		names.push_back(columnref.GetColumnName());
-	}
-
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
 	case_insensitive_set_t handled_columns;
@@ -168,6 +147,90 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	// add the pivot expressions to the select list
 	for (auto &pivot_expr : pivot_expressions) {
 		select_node->select_list.push_back(std::move(pivot_expr));
+	}
+	return select_node;
+}
+
+unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
+	D_ASSERT(ref.groups.empty());
+	D_ASSERT(ref.pivots.size() == 1);
+
+	unique_ptr<ParsedExpression> expr;
+	auto select_node = make_unique<SelectNode>();
+
+	// handle the pivot
+	auto &unpivot = ref.pivots[0];
+	vector<Value> unpivot_names;
+	vector<unique_ptr<ParsedExpression>> unpivot_expressions;
+
+	case_insensitive_map_t<idx_t> handled_columns;
+	for (idx_t i = 0; i < unpivot.values.size(); i++) {
+		auto &col = unpivot.values[i];
+		handled_columns[col.ToString()] = i;
+	}
+
+	unpivot_names.resize(handled_columns.size());
+	unpivot_expressions.resize(handled_columns.size());
+	for (auto &col_expr : all_columns) {
+		if (col_expr->type != ExpressionType::COLUMN_REF) {
+			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
+		}
+		auto &columnref = (ColumnRefExpression &)*col_expr;
+		auto column_name = columnref.GetColumnName();
+		auto entry = handled_columns.find(column_name);
+		if (entry == handled_columns.end()) {
+			// not handled - add to the set of regularly selected columns
+			select_node->select_list.push_back(std::move(col_expr));
+		} else {
+			auto idx = entry->second;
+			unpivot_names[idx] = column_name;
+			unpivot_expressions[idx] = make_unique<ColumnRefExpression>(column_name);
+			handled_columns.erase(entry);
+		}
+	}
+	if (!handled_columns.empty()) {
+		for (auto &entry : handled_columns) {
+			throw BinderException("Column \"%s\" referenced in UNPIVOT but no matching entry was found in the table",
+			                      entry.first);
+		}
+	}
+	// construct the UNNEST expression for the set of names (constant)
+	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
+	auto unpivot_name_expr = make_unique<ConstantExpression>(std::move(unpivot_list));
+	vector<unique_ptr<ParsedExpression>> unnest_name_children;
+	unnest_name_children.push_back(std::move(unpivot_name_expr));
+	auto unnest_name_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_name_children));
+	unnest_name_expr->alias = unpivot.name;
+	select_node->select_list.push_back(std::move(unnest_name_expr));
+
+	// construct the UNNEST expression for the set of unpivoted columns
+	auto list_expr = make_unique<FunctionExpression>("list_value", std::move(unpivot_expressions));
+	vector<unique_ptr<ParsedExpression>> unnest_val_children;
+	unnest_val_children.push_back(std::move(list_expr));
+	auto unnest_val_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_val_children));
+	unnest_val_expr->alias = ref.unpivot_name;
+	select_node->select_list.push_back(std::move(unnest_val_expr));
+	return select_node;
+}
+
+unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
+	if (!ref.source) {
+		throw InternalException("Pivot without a source!?");
+	}
+
+	// bind the source of the pivot
+	auto child_binder = Binder::CreateBinder(context, this);
+	auto from_table = child_binder->Bind(*ref.source);
+
+	// figure out the set of column names that are in the source of the pivot
+	vector<unique_ptr<ParsedExpression>> all_columns;
+	child_binder->ExpandStarExpression(make_unique<StarExpression>(), all_columns);
+
+	unique_ptr<SelectNode> select_node;
+	if (ref.aggregate) {
+		select_node = BindPivot(ref, std::move(all_columns));
+	} else {
+		select_node = BindUnpivot(ref, std::move(all_columns));
 	}
 	// bind the generated select node
 	auto bound_select_node = child_binder->BindSelectNode(*select_node, std::move(from_table));
