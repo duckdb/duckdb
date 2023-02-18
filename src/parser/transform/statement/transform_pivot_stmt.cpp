@@ -91,14 +91,17 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGPivotStmt *pivot) {
 	auto source = TransformTableRefNode(pivot->source);
 	auto aggregate = TransformExpression(pivot->aggr);
-	auto columns = TransformStringList(pivot->columns);
+	auto columns = TransformPivotList(pivot->columns);
 
-	// generate CREATE TYPE statements for each of the columns
-	vector<string> enum_names;
+	// generate CREATE TYPE statements for each of the columns that do not have an IN list
 	for (idx_t c = 0; c < columns.size(); c++) {
+		auto &col = columns[c];
+		if (!col.pivot_enum.empty() || !col.values.empty()) {
+			continue;
+		}
 		auto enum_name = "__pivot_enum_" + std::to_string(pivot_entries.size()) + "_" + std::to_string(c);
-		AddPivotEntry(enum_name, source->Copy(), columns[c]);
-		enum_names.push_back(std::move(enum_name));
+		AddPivotEntry(enum_name, source->Copy(), col.name);
+		col.pivot_enum = enum_name;
 	}
 
 	// generate the actual query, including the pivot
@@ -111,12 +114,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	if (pivot->groups) {
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
-	for (idx_t c = 0; c < columns.size(); c++) {
-		PivotColumn col;
-		col.name = columns[c];
-		col.pivot_enum = enum_names[c];
-		pivot_ref->pivots.push_back(col);
-	}
+	pivot_ref->pivots = std::move(columns);
 	select_node->from_table = std::move(pivot_ref);
 	return std::move(select_node);
 }

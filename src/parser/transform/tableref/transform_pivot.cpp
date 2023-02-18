@@ -6,6 +6,45 @@
 
 namespace duckdb {
 
+PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot) {
+	PivotColumn col;
+	col.name = pivot->pivot_column;
+	if (pivot->pivot_value) {
+		for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
+			auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+			auto expr = TransformExpression(n);
+			Value val;
+			if (expr->type == ExpressionType::COLUMN_REF) {
+				auto &colref = (ColumnRefExpression &)*expr;
+				if (colref.IsQualified()) {
+					throw ParserException("PIVOT IN list cannot contain qualified column references");
+				}
+				val = Value(colref.GetColumnName());
+			} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
+				auto &constant_expr = (ConstantExpression &)*expr;
+				val = std::move(constant_expr.value);
+			} else {
+				throw ParserException("PIVOT IN list cannot contain expressions");
+			}
+			col.aliases.push_back(expr->alias);
+			col.values.emplace_back(std::move(val));
+		}
+	}
+	if (pivot->pivot_enum) {
+		col.pivot_enum = pivot->pivot_enum;
+	}
+	return col;
+}
+
+vector<PivotColumn> Transformer::TransformPivotList(duckdb_libpgquery::PGList *list) {
+	vector<PivotColumn> result;
+	for (auto node = list->head; node != nullptr; node = node->next) {
+		auto pivot = (duckdb_libpgquery::PGPivot *)node->data.ptr_value;
+		result.push_back(TransformPivotColumn(pivot));
+	}
+	return result;
+}
+
 unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr *root) {
 	auto result = make_unique<PivotRef>();
 	result->source = TransformTableRefNode(root->source);
@@ -15,36 +54,7 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 	if (root->unpivot) {
 		result->unpivot_name = root->unpivot;
 	}
-	for (auto node = root->pivots->head; node != nullptr; node = node->next) {
-		auto pivot = (duckdb_libpgquery::PGPivot *)node->data.ptr_value;
-
-		PivotColumn col;
-		col.name = pivot->pivot_column;
-		if (pivot->pivot_value) {
-			for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
-				auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
-				auto expr = TransformExpression(n);
-				Value val;
-				if (expr->type == ExpressionType::COLUMN_REF) {
-					auto &colref = (ColumnRefExpression &)*expr;
-					if (colref.IsQualified()) {
-						throw ParserException("PIVOT IN list cannot contain qualified column references");
-					}
-					val = Value(colref.GetColumnName());
-				} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
-					auto &constant_expr = (ConstantExpression &)*expr;
-					val = std::move(constant_expr.value);
-				} else {
-					throw ParserException("PIVOT IN list cannot contain expressions");
-				}
-				col.aliases.push_back(expr->alias);
-				col.values.emplace_back(std::move(val));
-			}
-		} else {
-			col.pivot_enum = pivot->pivot_enum;
-		}
-		result->pivots.push_back(std::move(col));
-	}
+	result->pivots = TransformPivotList(root->pivots);
 	if (root->groups) {
 		result->groups = TransformStringList(root->groups);
 	}

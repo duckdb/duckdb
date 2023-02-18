@@ -268,7 +268,7 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
-			| PIVOT table_ref USING func_application COLUMNS name_list_opt_comma_opt_bracket
+			| PIVOT table_ref USING func_application COLUMNS pivot_column_list
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -278,7 +278,7 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| PIVOT table_ref USING func_application COLUMNS name_list_opt_comma_opt_bracket GROUP_P BY name_list_opt_comma_opt_bracket
+			| PIVOT table_ref USING func_application COLUMNS pivot_column_list GROUP_P BY name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -289,6 +289,30 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
+		;
+
+pivot_column_entry:
+			ColIdOrString
+			{
+				PGPivot *n = makeNode(PGPivot);
+				n->pivot_column = $1;
+				$$ = (PGNode *) n;
+			}
+			| pivot_value													{ $$ = $1; }
+
+pivot_column_list_internal:
+			pivot_column_entry												{ $$ = list_make1($1); }
+			| pivot_column_list_internal ',' pivot_column_entry 			{ $$ = lappend($1, $3); }
+		;
+
+pivot_column_list_opt_comma:
+			pivot_column_list_internal										{ $$ = $1; }
+			| pivot_column_list_internal ','								{ $$ = $1; }
+		;
+
+pivot_column_list:
+			pivot_column_list_opt_comma										{ $$ = $1; }
+			| '(' pivot_column_list_opt_comma ')'							{ $$ = $2; }
 		;
 
 /*
