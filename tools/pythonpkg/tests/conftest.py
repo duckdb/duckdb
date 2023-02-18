@@ -49,9 +49,9 @@ def require():
 
     return _require
 
-@pytest.fixture(scope='session', autouse=True)
-def duckdb_cursor(request):
 
+@pytest.fixture(scope='function', autouse=True)
+def duckdb_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     cursor.execute('CREATE TABLE integers (i integer)')

@@ -37,6 +37,11 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
 @fixture()
 def memory():
     fs = filesystem('memory', skip_instance_cache=True)
+
+    # ensure each instance is independent (to work around a weird quirk in fsspec)
+    fs.store = {}
+    fs.pseudo_dirs = ['']
+
     # copy csv into memory filesystem
     add_file(fs)
     return fs
