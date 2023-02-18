@@ -14,14 +14,18 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 
 		PivotColumn col;
 		col.name = pivot->pivot_column;
-		for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
-			auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
-			if (n->type != duckdb_libpgquery::T_PGAConst) {
-				throw ParserException("PIVOT IN list can only contain constant values");
+		if (pivot->pivot_value) {
+			for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
+				auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+				if (n->type != duckdb_libpgquery::T_PGAConst) {
+					throw ParserException("PIVOT IN list can only contain constant values");
+				}
+				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)n);
+				auto &constant_expr = (ConstantExpression &)*constant;
+				col.values.emplace_back(std::move(constant_expr.value));
 			}
-			auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)n);
-			auto &constant_expr = (ConstantExpression &)*constant;
-			col.values.emplace_back(std::move(constant_expr.value));
+		} else {
+			col.pivot_enum = pivot->pivot_enum;
 		}
 		result->pivots.push_back(std::move(col));
 	}

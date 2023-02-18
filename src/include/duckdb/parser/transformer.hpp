@@ -163,6 +163,7 @@ private:
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
+	unique_ptr<PragmaStatement> TransformPivotStatement(duckdb_libpgquery::PGNode *stmt);
 
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform

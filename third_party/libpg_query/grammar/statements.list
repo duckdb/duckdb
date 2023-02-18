@@ -24,6 +24,7 @@ ImportStmt
 IndexStmt
 InsertStmt
 LoadStmt
+PivotStmt
 PragmaStmt
 PrepareStmt
 RenameStmt

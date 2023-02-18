@@ -109,6 +109,18 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	// first add all pivots to the set of handled columns, and check for duplicates
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
+		if (!pivot.pivot_enum.empty()) {
+			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
+			if (type.id() != LogicalTypeId::ENUM) {
+				throw BinderException(
+				    FormatError(*aggr, StringUtil::Format("Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
+				                                          pivot.pivot_enum, type.ToString())));
+			}
+			auto enum_size = EnumType::GetSize(type);
+			for (idx_t i = 0; i < enum_size; i++) {
+				pivot.values.emplace_back(EnumType::GetValue(Value::ENUM(i, type)));
+			}
+		}
 		total_pivots *= pivot.values.size();
 		// add the pivoted column to the columns that have been handled
 		handled_columns.insert(pivot.name);

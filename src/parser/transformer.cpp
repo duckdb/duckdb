@@ -32,7 +32,8 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
 		SetParamCount(0);
-		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
+		auto n = (duckdb_libpgquery::PGNode *)entry->data.ptr_value;
+		auto stmt = TransformStatement(n);
 		D_ASSERT(stmt);
 		stmt->n_param = ParamCount();
 		statements.push_back(std::move(stmt));
@@ -151,6 +152,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformUse(stmt);
 	case duckdb_libpgquery::T_PGCreateDatabaseStmt:
 		return TransformCreateDatabase(stmt);
+	case duckdb_libpgquery::T_PGPivotStmt:
+		return TransformPivotStatement(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

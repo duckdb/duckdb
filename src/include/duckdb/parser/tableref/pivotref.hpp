@@ -17,6 +17,8 @@ struct PivotColumn {
 	string name;
 	//! The set of values to pivot on
 	vector<Value> values;
+	//! The enum to read pivot values from (if any)
+	string pivot_enum;
 
 	string ToString() const;
 };

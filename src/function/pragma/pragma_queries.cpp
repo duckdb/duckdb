@@ -7,6 +7,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -134,6 +135,34 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	return final_query;
 }
 
+string PragmaPivotStatement(ClientContext &context, const FunctionParameters &parameters) {
+	auto from_clause = parameters.values[0].ToString();
+	auto aggregate = parameters.values[1].ToString();
+	auto columns = ListValue::GetChildren(parameters.values[2]);
+
+	auto uuid = UUID::ToString(UUID::GenerateRandomUUID());
+	vector<string> enum_names;
+	string result;
+	for (idx_t c = 0; c < columns.size(); c++) {
+		auto enum_name = "__pivot_enum_" + uuid + std::to_string(c);
+		// CREATE TYPE [enum_name] AS ENUM (SELECT [column] FROM [source]);
+		result += StringUtil::Format(R"(
+			CREATE TYPE "%s" AS ENUM (SELECT DISTINCT %s::VARCHAR FROM %s ORDER BY %s);
+		)",
+		                             enum_name, columns[c].ToString(), from_clause, columns[c].ToString());
+		enum_names.push_back(std::move(enum_name));
+	}
+	result += StringUtil::Format(R"(
+		SELECT * FROM %s PIVOT (%s FOR
+	)",
+	                             from_clause, aggregate);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		result += StringUtil::Format("%s IN \"%s\"", columns[c].ToString(), enum_names[c]);
+	}
+	result += ");";
+	return result;
+}
+
 string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_database_size();";
 }
@@ -156,6 +185,9 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
+	set.AddFunction(PragmaFunction::PragmaCall(
+	    "pivot_statement", PragmaPivotStatement,
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)}));
 }
 
 } // namespace duckdb

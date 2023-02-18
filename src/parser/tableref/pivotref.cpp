@@ -9,14 +9,19 @@ string PivotColumn::ToString() const {
 	string result;
 	result += " FOR";
 	result = KeywordHelper::WriteOptionallyQuoted(name);
-	result += " IN (";
-	for (idx_t i = 0; i < values.size(); i++) {
-		if (i > 0) {
-			result += ", ";
+	result += " IN ";
+	if (pivot_enum.empty()) {
+		result += "(";
+		for (idx_t i = 0; i < values.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += values[i].ToSQLString();
 		}
-		result += values[i].ToSQLString();
+		result += ")";
+	} else {
+		result += KeywordHelper::WriteOptionallyQuoted(pivot_enum);
 	}
-	result += ")";
 	return result;
 }
 

@@ -956,6 +956,14 @@ pivot_value:
 			n->pivot_value = $4;
 			$$ = (PGNode *) n;
 		}
+	|
+	ColIdOrString IN_P ColIdOrString
+		{
+			PGPivot *n = makeNode(PGPivot);
+			n->pivot_column = $1;
+			n->pivot_enum = $3;
+			$$ = (PGNode *) n;
+		}
 	;
 
 pivot_value_list:	pivot_value
