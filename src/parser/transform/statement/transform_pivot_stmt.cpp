@@ -1,4 +1,3 @@
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
@@ -42,6 +41,7 @@ unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<T
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
 	info->name = enum_name;
+	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
 	auto select_node = make_unique<SelectNode>();
@@ -93,11 +93,10 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	auto aggregate = TransformExpression(pivot->aggr);
 	auto columns = TransformStringList(pivot->columns);
 
-	auto uuid = UUID::ToString(UUID::GenerateRandomUUID());
 	// generate CREATE TYPE statements for each of the columns
 	vector<string> enum_names;
 	for (idx_t c = 0; c < columns.size(); c++) {
-		auto enum_name = "__pivot_enum_" + uuid + std::to_string(c);
+		auto enum_name = "__pivot_enum_" + std::to_string(pivot_entries.size()) + "_" + std::to_string(c);
 		AddPivotEntry(enum_name, source->Copy(), columns[c]);
 		enum_names.push_back(std::move(enum_name));
 	}

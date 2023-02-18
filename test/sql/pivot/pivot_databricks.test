@@ -1,0 +1,108 @@
+# name: test/sql/pivot/pivot_databricks.test
+# description: Tests from the databricks docs
+# group: [pivot]
+
+# https://docs.databricks.com/sql/language-manual/sql-ref-syntax-qry-select-pivot.html
+
+# pivot
+
+statement ok
+CREATE TEMP VIEW sales(year, quarter, region, sales) AS
+   VALUES (2018, 1, 'east', 100),
+          (2018, 2, 'east',  20),
+          (2018, 3, 'east',  40),
+          (2018, 4, 'east',  40),
+          (2019, 1, 'east', 120),
+          (2019, 2, 'east', 110),
+          (2019, 3, 'east',  80),
+          (2019, 4, 'east',  60),
+          (2018, 1, 'west', 105),
+          (2018, 2, 'west',  25),
+          (2018, 3, 'west',  45),
+          (2018, 4, 'west',  45),
+          (2019, 1, 'west', 125),
+          (2019, 2, 'west', 115),
+          (2019, 3, 'west',  85),
+          (2019, 4, 'west',  65);
+
+
+query IIIIII
+SELECT year, region, q1, q2, q3, q4
+  FROM sales
+  PIVOT (sum(sales)
+    FOR quarter
+    IN (1 AS q1, 2 AS q2, 3 AS q3, 4 AS q4));
+----
+2018	east	100	20	40	40
+2019	east	120	110	80	60
+2018	west	105	25	45	45
+2019	west	125	115	85	65
+
+# FIXME: not yet supported
+# multiple matches with aliases
+#query IIIIIIIII
+#SELECT year, q1_east, q1_west, q2_east, q2_west, q3_east, q3_west, q4_east, q4_west
+#    FROM sales
+#    PIVOT (sum(sales)
+#      FOR (quarter, region)
+#      IN ((1, 'east') AS q1_east, (1, 'west') AS q1_west, (2, 'east') AS q2_east, (2, 'west') AS q2_west,
+#          (3, 'east') AS q3_east, (3, 'west') AS q3_west, (4, 'east') AS q4_east, (4, 'west') AS q4_west));
+#----
+
+query IIIII
+SELECT year, q1, q2, q3, q4
+  FROM (SELECT year, quarter, sales FROM sales) AS s
+  PIVOT (sum(sales)
+    FOR quarter
+    IN (1 AS q1, 2 AS q2, 3 AS q3, 4 AS q4));
+----
+2018	205	45	85	85
+2019	245	225	165	125
+
+# FIXME: not yet supported
+# multiple aggregations
+#SELECT year, q1_total, q1_avg, q2_total, q2_avg, q3_total, q3_avg, q4_total, q4_avg
+#    FROM (SELECT year, quarter, sales FROM sales) AS s
+#    PIVOT (sum(sales) AS total, avg(sales) AS avg
+#      FOR quarter
+#      IN (1 AS q1, 2 AS q2, 3 AS q3, 4 AS q4));
+
+
+# unpivot
+statement ok
+CREATE OR REPLACE TEMPORARY VIEW sales(location, year, q1, q2, q3, q4) AS
+  VALUES ('Toronto'      , 2020, 100 , 80 , 70, 150),
+         ('San Francisco', 2020, NULL, 20 , 50,  60),
+         ('Toronto'      , 2021, 110 , 90 , 80, 170),
+         ('San Francisco', 2021, 70  , 120, 85, 105);
+
+# FIXME: INCLUDE NULLS/EXCLUDE NULLS
+query IIII
+SELECT *
+    FROM sales UNPIVOT --INCLUDE NULLS
+    (sales FOR quarter IN (q1       AS "Jan-Mar",
+                           q2       AS "Apr-Jun",
+                           q3       AS "Jul-Sep",
+                           q4 AS "Oct-Dec"));
+----
+Toronto	2020	Jan-Mar	100
+Toronto	2020	Apr-Jun	80
+Toronto	2020	Jul-Sep	70
+Toronto	2020	Oct-Dec	150
+San Francisco	2020	Jan-Mar	NULL
+San Francisco	2020	Apr-Jun	20
+San Francisco	2020	Jul-Sep	50
+San Francisco	2020	Oct-Dec	60
+Toronto	2021	Jan-Mar	110
+Toronto	2021	Apr-Jun	90
+Toronto	2021	Jul-Sep	80
+Toronto	2021	Oct-Dec	170
+San Francisco	2021	Jan-Mar	70
+San Francisco	2021	Apr-Jun	120
+San Francisco	2021	Jul-Sep	85
+San Francisco	2021	Oct-Dec	105
+
+# FIXME: multi-column unpivot
+#SELECT *
+#    FROM oncall UNPIVOT ((name, email, phone) FOR precedence IN ((name1, email1, phone1) AS primary,
+#                                                                 (name2, email2, phone2) AS secondary));
