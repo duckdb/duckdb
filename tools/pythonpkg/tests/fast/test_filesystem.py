@@ -35,6 +35,12 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
 
 
 @fixture()
+def duckdb_cursor():
+    with duckdb.connect() as conn:
+        yield conn
+
+
+@fixture()
 def memory():
     fs = filesystem('memory', skip_instance_cache=True)
 
@@ -85,7 +91,6 @@ class TestPythonFilesystem:
 
         memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
         add_file(memory)
-        duckdb_cursor = duckdb.connect()
         duckdb_cursor.register_filesystem(memory)
         for protocol in memory.protocol:
             duckdb_cursor.execute(f"select * from '{protocol}://{FILENAME}'")
@@ -133,7 +138,7 @@ class TestPythonFilesystem:
             duckdb_cursor.register_filesystem(None)
 
     @mark.skipif(sys.version_info < (3, 8), reason="ArrowFSWrapper requires python 3.8 or higher")
-    def test_arrow_fs_wrapper(self, tmp_path: Path):
+    def test_arrow_fs_wrapper(self, tmp_path: Path, duckdb_cursor: DuckDBPyConnection):
         fs = importorskip('pyarrow.fs')
         from fsspec.implementations.arrow import ArrowFSWrapper
 
@@ -146,7 +151,6 @@ class TestPythonFilesystem:
             f.write("1,2,3\n")
             f.write("4,5,6\n")
 
-        duckdb_cursor = duckdb.connect()
         duckdb_cursor.register_filesystem(local_fsspec)
         duckdb_cursor.execute(f"select * from read_csv_auto('local://{filename}', header=true)")
 
