@@ -44,6 +44,15 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 	return flags_s;
 }
 
+unique_ptr<FileHandle> PythonFilesystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+	PythonGILWrapper gil;
+
+	const auto &newHandle =
+	    filesystem.attr("open")(py::str(stripPrefix(handle->path)), py::arg("compression") = "auto");
+
+	return make_unique<PythonFileHandle>(*this, handle->path, newHandle);
+}
+
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
 	PythonGILWrapper gil;
@@ -184,5 +193,22 @@ bool PythonFilesystem::ListFiles(const string &directory, const std::function<vo
 	}
 
 	return nonempty;
+}
+void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("touch")(handle.path, py::arg("truncate") = true);
+}
+bool PythonFilesystem::IsPipe(const string &filename) {
+	PythonGILWrapper gil;
+
+	int64_t mode = py::int_(filesystem.attr("stat")(filename)["st_mode"]);
+
+	return S_ISFIFO(mode);
+}
+idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {
+	PythonGILWrapper gil;
+
+	return py::int_(PythonFileHandle::GetHandle(handle).attr("tell")());
 }
 } // namespace duckdb

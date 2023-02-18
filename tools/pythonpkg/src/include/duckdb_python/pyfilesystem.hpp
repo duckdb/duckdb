@@ -92,6 +92,10 @@ public:
 	void RemoveDirectory(const string &directory) override;
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
+	void Truncate(FileHandle &handle, int64_t new_size) override;
+	bool IsPipe(const string &filename) override;
+	idx_t SeekPosition(FileHandle &handle) override;
+	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;
 };
 
 } // namespace duckdb
