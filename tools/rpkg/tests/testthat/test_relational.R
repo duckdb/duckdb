@@ -121,6 +121,18 @@ test_that("we can get the relation object back from an altrep df", {
   expect_true(TRUE)
 })
 
+test_that("rel_order() sorts NAs last", {
+  test_df <- rel_from_df(con, data.frame(a = c(NA, 1:3)))
+
+  orders <- list(expr_reference("a"))
+
+  rel <- rel_order(test_df, orders)
+  rel_df <- rel_to_altrep(rel)
+  expect_false(df_is_materialized(rel_df))
+
+  expected_result <- data.frame(a = c(1:3, NA))
+  expect_equal(rel_df, expected_result)
+})
 
 test_that("Inner join returns all inner relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
