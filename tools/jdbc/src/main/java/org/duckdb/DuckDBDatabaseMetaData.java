@@ -815,15 +815,16 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		}
 
 		// need to figure out the java types for the sql types :/
-		String values_str = "VALUES(NULL::STRING, NULL::INTEGER)";
+		StringBuilder values_str = new StringBuilder(256);
+		values_str.append("VALUES(NULL::STRING, NULL::INTEGER)");
 		try (Statement gunky_statement = conn.createStatement();
 			// TODO this could get slow with many many columns and we really only need the
 			// types :/
 			ResultSet rs = gunky_statement
 					.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type")) {
 			while (rs.next()) {
-				values_str += ", ('" + rs.getString(1) + "', " + Integer.toString(
-						DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))) + ")";
+			values_str.append(", ('").append(rs.getString(1)).append("', ").append(
+					DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))).append(")");
 			}
 		}
 
