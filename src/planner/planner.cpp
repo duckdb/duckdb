@@ -31,6 +31,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	BoundParameterMap bound_parameters(parameter_data);
 
+	// first transform any anti and semi joins to select * from A where a.x (not) in (subquery involving table B)
+	auto a = 0;
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {

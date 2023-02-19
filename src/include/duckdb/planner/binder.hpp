@@ -269,6 +269,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<SubqueryRef> TransformJoinFilter(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte = nullptr);

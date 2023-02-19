@@ -3,8 +3,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -149,15 +150,29 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	}
 }
 
+unique_ptr<SubqueryRef> Binder::TransformJoinFilter(JoinRef &ref) {
+	return nullptr;
+}
+
+
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind((BaseTableRef &)ref);
 		break;
-	case TableReferenceType::JOIN:
+	case TableReferenceType::JOIN: {
+		auto &my_join = (JoinRef &)ref;
+		if (my_join.type == JoinType::ANTI || my_join.type == JoinType::SEMI) {
+			auto transformed_anti_semi_join = TransformJoinFilter(my_join);
+//			return Binder::Bind(transformed_anti_semi_join);
+		}
 		result = Bind((JoinRef &)ref);
+		// can check for anti semi here, then transform if necessary.
+		// basically if the join type is anti semi, transform the query
+		// and call bind on the same node.
 		break;
+	}
 	case TableReferenceType::SUBQUERY:
 		result = Bind((SubqueryRef &)ref);
 		break;

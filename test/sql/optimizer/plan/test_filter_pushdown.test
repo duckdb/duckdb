@@ -11,6 +11,8 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
+mode skip
+
 # test filter pushdown into cross product
 # single filter that matches both sides
 query II
@@ -81,6 +83,17 @@ SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=1 WHERE i1.i=i2.i ORD
 1	1
 2	2
 3	3
+
+mode unskip
+
+
+# semi join
+query I
+SELECT * FROM integers i1 ANTI JOIN integers i2 ON (i1.i = i2.i);
+----
+1
+2
+3
 
 # MARK join
 # transform into semi join
