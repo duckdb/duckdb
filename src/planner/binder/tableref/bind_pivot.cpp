@@ -18,7 +18,8 @@
 namespace duckdb {
 
 static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<ParsedExpression>> &pivot_expressions,
-                            unique_ptr<ParsedExpression> current_expr = nullptr, string current_name = string()) {
+                            unique_ptr<ParsedExpression> current_expr = nullptr,
+                            const string &current_name = string()) {
 	auto &pivot = ref.pivots[pivot_idx];
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
 	for (auto &entry : pivot.entries) {

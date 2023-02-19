@@ -40,12 +40,12 @@ unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<T
 	info->internal = false;
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
-	info->name = enum_name;
+	info->name = std::move(enum_name);
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
 	auto select_node = make_unique<SelectNode>();
-	auto columnref = make_unique<ColumnRefExpression>(column_name);
+	auto columnref = make_unique<ColumnRefExpression>(std::move(column_name));
 	auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, columnref->Copy());
 	select_node->select_list.push_back(std::move(cast));
 	select_node->from_table = std::move(source);

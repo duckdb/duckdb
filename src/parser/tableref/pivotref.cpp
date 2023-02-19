@@ -256,7 +256,7 @@ unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 	result->groups = reader.ReadRequiredList<string>();
 	result->column_name_alias = reader.ReadRequiredList<string>();
 	result->include_nulls = reader.ReadRequired<bool>();
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -29,7 +29,8 @@ INSERT INTO monthly_sales VALUES
     (2, 4500, 'APR');
 
 statement ok
-CREATE TYPE unique_months AS ENUM (SELECT month FROM monthly_sales);
+CREATE TYPE unique_months AS ENUM (SELECT DISTINCT month FROM monthly_sales ORDER BY
+	CASE month WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 ELSE 4 END);
 
 query IIIII
 SELECT *
