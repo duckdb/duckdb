@@ -15,11 +15,8 @@ on:
       - 'data/**'
       - 'examples/**'
       - 'test/**'
-      - 'tools/odbc/**'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/nodejs/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
 
@@ -226,7 +223,7 @@ jobs:
             node: 18
 
     steps:
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.8'
 
