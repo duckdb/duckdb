@@ -216,7 +216,9 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	case TableReferenceType::PIVOT: {
 		auto &p_ref = (PivotRef &)ref;
 		EnumerateTableRefChildren(*p_ref.source, callback);
-		callback(p_ref.aggregate);
+		for (auto &aggr : p_ref.aggregates) {
+			callback(aggr);
+		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {

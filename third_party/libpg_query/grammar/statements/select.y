@@ -273,7 +273,7 @@ simple_select:
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->aggr = $4;
+					n->aggrs = list_make1($4);
 					n->columns = $6;
 					res->pivot = n;
 					$$ = (PGNode *)res;
@@ -283,7 +283,7 @@ simple_select:
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->aggr = $4;
+					n->aggrs = list_make1($4);
 					n->columns = $6;
 					n->groups = $9;
 					res->pivot = n;
@@ -977,20 +977,20 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-			| table_ref PIVOT '(' func_application FOR pivot_value_list ')' opt_alias_clause
+			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
-					n->aggr = $4;
+					n->aggrs = $4;
 					n->pivots = $6;
 					n->alias = $8;
 					$$ = (PGNode *) n;
 				}
-			| table_ref PIVOT '(' func_application FOR pivot_value_list GROUP_P BY name_list_opt_comma ')' opt_alias_clause
+			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list GROUP_P BY name_list_opt_comma ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
-					n->aggr = $4;
+					n->aggrs = $4;
 					n->pivots = $6;
 					n->groups = $9;
 					n->alias = $11;
@@ -1006,7 +1006,6 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$$ = (PGNode *) n;
 				}
 		;
-
 
 pivot_header:
 		ColIdOrString 				  { $$ = list_make1(makeString($1)); }

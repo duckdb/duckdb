@@ -1176,7 +1176,7 @@ typedef struct PGPivot {
 typedef struct PGPivotExpr {
 	PGNodeTag type;
 	PGNode *source;      /* the source subtree */
-	PGNode *aggr;        /* The aggregation to pivot over (PIVOT only) */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
 	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
 	PGList *pivots;      /* The set of pivot values */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
@@ -1186,7 +1186,7 @@ typedef struct PGPivotExpr {
 typedef struct PGPivotStmt {
 	PGNodeTag type;
 	PGNode *source;      /* The source to pivot */
-	PGNode *aggr;        /* The aggregation to pivot over (PIVOT only) */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
 	PGList *columns;     /* The set of columns to pivot over */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 } PGPivotStmt;

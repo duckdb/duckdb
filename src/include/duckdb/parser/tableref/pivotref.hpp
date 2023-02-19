@@ -41,8 +41,8 @@ public:
 
 	//! The source table of the pivot
 	unique_ptr<TableRef> source;
-	//! The aggregate to compute over the pivot (PIVOT only)
-	unique_ptr<ParsedExpression> aggregate;
+	//! The aggregates to compute over the pivot (PIVOT only)
+	vector<unique_ptr<ParsedExpression>> aggregates;
 	//! The names of the unpivot expressions (UNPIVOT only)
 	vector<string> unpivot_names;
 	//! The set of pivots

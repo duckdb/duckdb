@@ -47,13 +47,20 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 			name = current_name + "_" + name;
 		}
 		if (last_pivot) {
-			// construct the aggregate
-			auto copy = ref.aggregate->Copy();
-			auto &function = (FunctionExpression &)*copy;
-			// add the filter and alias to the aggregate function
-			function.filter = std::move(expr);
-			function.alias = name;
-			pivot_expressions.push_back(std::move(copy));
+			// construct the aggregates
+			for (auto &aggr : ref.aggregates) {
+				auto copy = aggr->Copy();
+				auto &function = (FunctionExpression &)*copy;
+				// add the filter and alias to the aggregate function
+				function.filter = expr->Copy();
+				if (ref.aggregates.size() > 1) {
+					// if there are multiple aggregates specified we add the name of the aggregate as well
+					function.alias = name + "_" + function.GetName();
+				} else {
+					function.alias = name;
+				}
+				pivot_expressions.push_back(std::move(copy));
+			}
 		} else {
 			// need to recurse
 			ConstructPivots(ref, pivot_idx + 1, pivot_expressions, std::move(expr), std::move(name));
@@ -79,18 +86,19 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
 	case_insensitive_set_t handled_columns;
 	// parse the aggregate, and extract the referenced columns from the aggregate
-	auto &aggr = ref.aggregate;
-	if (aggr->type != ExpressionType::FUNCTION) {
-		throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
-	}
-	if (aggr->HasSubquery()) {
-		throw BinderException(FormatError(*aggr, "Pivot expression cannot contain subqueries"));
-	}
-	if (aggr->IsWindow()) {
-		throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
+	for (auto &aggr : ref.aggregates) {
+		if (aggr->type != ExpressionType::FUNCTION) {
+			throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
+		}
+		if (aggr->HasSubquery()) {
+			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain subqueries"));
+		}
+		if (aggr->IsWindow()) {
+			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
+		}
+		ExtractPivotExpressions(*aggr, handled_columns);
 	}
 	value_set_t pivots;
-	ExtractPivotExpressions(*aggr, handled_columns);
 
 	// now handle the pivots
 	auto select_node = make_unique<SelectNode>();
@@ -101,8 +109,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(
-				    FormatError(*aggr, StringUtil::Format("Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
-				                                          pivot.pivot_enum, type.ToString())));
+				    FormatError(ref, StringUtil::Format("Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
+				                                        pivot.pivot_enum, type.ToString())));
 			}
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {
@@ -128,8 +136,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			}
 			if (pivots.find(val) != pivots.end()) {
 				throw BinderException(FormatError(
-				    *aggr, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
-				                              val.ToString())));
+				    ref, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
+				                            val.ToString())));
 			}
 			pivots.insert(val);
 		}
@@ -274,7 +282,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	child_binder->ExpandStarExpression(make_unique<StarExpression>(), all_columns);
 
 	unique_ptr<SelectNode> select_node;
-	if (ref.aggregate) {
+	if (!ref.aggregates.empty()) {
 		select_node = BindPivot(ref, std::move(all_columns));
 	} else {
 		select_node = BindUnpivot(ref, std::move(all_columns));

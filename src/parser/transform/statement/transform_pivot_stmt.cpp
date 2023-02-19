@@ -90,7 +90,6 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 
 unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGPivotStmt *pivot) {
 	auto source = TransformTableRefNode(pivot->source);
-	auto aggregate = TransformExpression(pivot->aggr);
 	auto columns = TransformPivotList(pivot->columns);
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
@@ -113,7 +112,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 
 	auto pivot_ref = make_unique<PivotRef>();
 	pivot_ref->source = std::move(source);
-	pivot_ref->aggregate = std::move(aggregate);
+	TransformExpressionList(*pivot->aggrs, pivot_ref->aggregates);
 	if (pivot->groups) {
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}

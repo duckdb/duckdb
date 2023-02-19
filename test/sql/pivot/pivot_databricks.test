@@ -92,14 +92,16 @@ SELECT year, q1, q2, q3, q4
 2018	205	45	85	85
 2019	245	225	165	125
 
-# FIXME: not yet supported
 # multiple aggregations
-#SELECT year, q1_total, q1_avg, q2_total, q2_avg, q3_total, q3_avg, q4_total, q4_avg
-#    FROM (SELECT year, quarter, sales FROM sales) AS s
-#    PIVOT (sum(sales) AS total, avg(sales) AS avg
-#      FOR quarter
-#      IN (1 AS q1, 2 AS q2, 3 AS q3, 4 AS q4));
-
+query IIIIIIIII
+SELECT year, q1_total, q1_avg, q2_total, q2_avg, q3_total, q3_avg, q4_total, q4_avg
+    FROM (SELECT year, quarter, sales FROM sales) AS s
+    PIVOT (sum(sales) AS total, avg(sales) AS avg
+      FOR quarter
+      IN (1 AS q1, 2 AS q2, 3 AS q3, 4 AS q4));
+----
+2018	205	102.5	45	22.5	85	42.5	85	42.5
+2019	245	122.5	225	112.5	165	82.5	125	62.5
 
 # unpivot
 statement ok
