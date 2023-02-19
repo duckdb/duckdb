@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.Calendar;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 public class DuckDBResultSet implements ResultSet {
@@ -37,9 +38,12 @@ public class DuckDBResultSet implements ResultSet {
 	// Constant to construct BigDecimals from hugeint_t
 	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
 
-	private DuckDBPreparedStatement stmt;
-	private DuckDBResultSetMetaData meta;
+	private final DuckDBPreparedStatement stmt;
+	private final DuckDBResultSetMetaData meta;
 
+	/**
+	 * {@code null} if this result set is closed.
+	 */
 	private ByteBuffer result_ref;
 	private DuckDBVector[] current_chunk = {};
 	private int chunk_idx = 0;
@@ -48,9 +52,9 @@ public class DuckDBResultSet implements ResultSet {
 
 	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref)
 			throws SQLException {
-		this.stmt = stmt;
-		this.result_ref = result_ref;
-		this.meta = meta;
+		this.stmt = Objects.requireNonNull(stmt);
+		this.result_ref = Objects.requireNonNull(result_ref);
+		this.meta = Objects.requireNonNull(meta);
 	}
 
 	public Statement getStatement() throws SQLException {
@@ -89,11 +93,15 @@ public class DuckDBResultSet implements ResultSet {
 	public synchronized void close() throws SQLException {
 		if (result_ref != null) {
 			DuckDBNative.duckdb_jdbc_free_result(result_ref);
+			// Nullness is used to determine whether we're closed
 			result_ref = null;
+
+			// isCloseOnCompletion() throws if already closed, and we can't check for isClosed() because it could change between
+			// when we check and call isCloseOnCompletion, so access the field directly.
+			if (stmt.closeOnCompletion) {
+				stmt.close();
+			}
 		}
-		stmt = null;
-		meta = null;
-		current_chunk = null;
 	}
 
 	protected void finalize() throws Throwable {
