@@ -27,6 +27,11 @@ struct BitXorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct BitStringAggFun {
+    static AggregateFunction GetBitStringAggregate(PhysicalType type);
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CountStarFun {
 	static AggregateFunction GetFunction();
 

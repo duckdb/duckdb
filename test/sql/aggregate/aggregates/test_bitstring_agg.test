@@ -1,0 +1,101 @@
+# name: test/sql/aggregate/aggregates/test_bitstring_agg.test
+# description: Test BITSTRING_AGG operator
+# group: [aggregates]
+
+require skip_reload
+
+statement ok
+CREATE TABLE smallints(i SMALLINT)
+
+statement ok
+INSERT INTO smallints VALUES(1), (8), (3), (12), (7), (1), (2), (8)
+
+query I
+SELECT BITSTRING_AGG(i) FROM smallints
+----
+11010110001
+
+query I
+SELECT bit_count(BITSTRING_AGG(i)) FROM smallints
+----
+6
+
+query I
+SELECT COUNT(DISTINCT i) FROM smallints
+----
+6
+
+statement ok
+CREATE TABLE ints(i INTEGER);
+
+statement ok
+INSERT INTO ints VALUES(10), (5), (11), (NULL), (30), (11), (23), (17), (27), (15), (5), (14)
+
+query I
+SELECT BITSTRING_AGG(i) FROM ints
+----
+10000110011010000010001
+
+query I
+SELECT bit_count(BITSTRING_AGG(i)) FROM ints
+----
+9
+
+
+
+statement ok
+CREATE TABLE bigints(i BIGINT);
+
+statement ok
+INSERT INTO bigints VALUES(2378097), (2378100), (2378095), (2378104), (NULL), (2378113), (2378100), (2378095), (12378105), (2378097)
+
+query I
+SELECT BITSTRING_AGG(i) FROM bigints
+----
+1010010001100000001
+
+query I
+SELECT bit_count(BITSTRING_AGG(i)) FROM bigints
+----
+6
+
+
+
+
+statement ok
+CREATE TABLE hugeints(i HUGEINT);
+
+statement ok
+INSERT INTO hugeints VALUES(677111093), (6771110849), (677111093), (981011015), (42), (2378100), (35), (2378100), (9999999), (0)
+
+query I
+SELECT bit_count(BITSTRING_AGG(i)) FROM hugeints
+----
+8
+
+query I
+SELECT bit_count(BITSTRING_AGG(i)) FROM hugeints WHERE i > 1000
+----
+5
+
+
+# test on scalar values
+query II
+SELECT BITSTRING_AGG(3), BITSTRING_AGG(NULL)
+----
+3
+NULL
+
+
+# test incorrect usage
+statement error
+SELECT BITSTRING_AGG()
+
+statement error
+SELECT BITSTRING_AGG(1, 2, 3)
+
+
+
+# query I
+# SELECT COUNT(DISTINCT i)
+# ----

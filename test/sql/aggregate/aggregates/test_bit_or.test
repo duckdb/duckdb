@@ -5,25 +5,25 @@
 require skip_reload
 
 # test on scalar values
-# query II
-# SELECT BIT_OR(3), BIT_OR(NULL)
-# ----
-# 3
-# NULL
+query II
+SELECT BIT_OR(3), BIT_OR(NULL)
+----
+3
+NULL
 
-# # test on a sequence
-# statement ok
-# CREATE SEQUENCE seq;
+# test on a sequence
+statement ok
+CREATE SEQUENCE seq;
 
-# query I
-# SELECT BIT_OR(nextval('seq'))
-# ----
-# 1
+query I
+SELECT BIT_OR(nextval('seq'))
+----
+1
 
-# query I
-# SELECT BIT_OR(nextval('seq'))
-# ----
-# 2
+query I
+SELECT BIT_OR(nextval('seq'))
+----
+2
 
 # test on a set of integers
 statement ok
