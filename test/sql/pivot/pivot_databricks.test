@@ -38,16 +38,49 @@ SELECT year, region, q1, q2, q3, q4
 2018	west	105	25	45	45
 2019	west	125	115	85	65
 
-# FIXME: not yet supported
 # multiple matches with aliases
-#query IIIIIIIII
-#SELECT year, q1_east, q1_west, q2_east, q2_west, q3_east, q3_west, q4_east, q4_west
-#    FROM sales
-#    PIVOT (sum(sales)
-#      FOR (quarter, region)
-#      IN ((1, 'east') AS q1_east, (1, 'west') AS q1_west, (2, 'east') AS q2_east, (2, 'west') AS q2_west,
-#          (3, 'east') AS q3_east, (3, 'west') AS q3_west, (4, 'east') AS q4_east, (4, 'west') AS q4_west));
-#----
+query IIIIIIIII
+SELECT year, q1_east, q1_west, q2_east, q2_west, q3_east, q3_west, q4_east, q4_west
+    FROM sales
+    PIVOT (sum(sales)
+      FOR (quarter, region)
+      IN ((1, 'east') AS q1_east, (1, 'west') AS q1_west, (2, 'east') AS q2_east, (2, 'west') AS q2_west,
+          (3, 'east') AS q3_east, (3, 'west') AS q3_west, (4, 'east') AS q4_east, (4, 'west') AS q4_west));
+----
+2018	100	105	20	25	40	45	40	45
+2019	120	125	110	115	80	85	60	65
+
+# inconsistent amount of names
+statement error
+SELECT year, q1_east, q1_west, q2_east, q2_west, q3_east, q3_west, q4_east, q4_west
+    FROM sales
+    PIVOT (sum(sales)
+      FOR (quarter, region, too_many_names)
+      IN ((1, 'east') AS q1_east, (1, 'west') AS q1_west, (2, 'east') AS q2_east, (2, 'west') AS q2_west,
+          (3, 'east') AS q3_east, (3, 'west') AS q3_west, (4, 'east') AS q4_east, (4, 'west') AS q4_west));
+----
+inconsistent amount of rows
+
+# inconsistent amount of rows in the IN list
+statement error
+SELECT year, q1_east, q1_west, q2_east, q2_west, q3_east, q3_west, q4_east, q4_west
+    FROM sales
+    PIVOT (sum(sales)
+      FOR (quarter, region)
+      IN ((1, 'east', 'west') AS q1_east, (1, 'west') AS q1_west, (2, 'east') AS q2_east, (2, 'west') AS q2_west,
+          (3, 'east') AS q3_east, (3, 'west') AS q3_west, (4, 'east') AS q4_east, (4, 'west') AS q4_west));
+----
+inconsistent amount of rows
+
+# duplicate values in IN list
+statement error
+SELECT *
+    FROM sales
+    PIVOT (sum(sales)
+      FOR (quarter, region)
+      IN ((1, 'east') AS q1_east, (1, 'east') AS q1_east_2));
+----
+specified multiple times in the IN clause
 
 query IIIII
 SELECT year, q1, q2, q3, q4
@@ -102,7 +135,24 @@ San Francisco	2021	Apr-Jun	120
 San Francisco	2021	Jul-Sep	85
 San Francisco	2021	Oct-Dec	105
 
-# FIXME: multi-column unpivot
-#SELECT *
-#    FROM oncall UNPIVOT ((name, email, phone) FOR precedence IN ((name1, email1, phone1) AS primary,
-#                                                                 (name2, email2, phone2) AS secondary));
+statement ok
+CREATE OR REPLACE TEMPORARY VIEW oncall
+         (year, week, area      , name1   , email1              , phone1     , name2   , email2              , phone2) AS
+  VALUES (2022, 1   , 'frontend', 'Freddy', 'fred@alwaysup.org' , 15551234567, 'Fanny' , 'fanny@lwaysup.org' , 15552345678),
+         (2022, 1   , 'backend' , 'Boris' , 'boris@alwaysup.org', 15553456789, 'Boomer', 'boomer@lwaysup.org', 15554567890),
+         (2022, 2   , 'frontend', 'Franky', 'frank@lwaysup.org' , 15555678901, 'Fin'   , 'fin@alwaysup.org'  , 15556789012),
+         (2022, 2   , 'backend' , 'Bonny' , 'bonny@alwaysup.org', 15557890123, 'Bea'   , 'bea@alwaysup.org'  , 15558901234);
+
+query IIIIIII
+SELECT *
+    FROM oncall UNPIVOT ((name, email, phone) FOR precedence IN ((name1, email1, phone1) AS primary,
+                                                                 (name2, email2, phone2) AS secondary));
+----
+2022	1	frontend	primary	Freddy	fred@alwaysup.org	15551234567
+2022	1	frontend	secondary	Fanny	fanny@lwaysup.org	15552345678
+2022	1	backend	primary	Boris	boris@alwaysup.org	15553456789
+2022	1	backend	secondary	Boomer	boomer@lwaysup.org	15554567890
+2022	2	frontend	primary	Franky	frank@lwaysup.org	15555678901
+2022	2	frontend	secondary	Fin	fin@alwaysup.org	15556789012
+2022	2	backend	primary	Bonny	bonny@alwaysup.org	15557890123
+2022	2	backend	secondary	Bea	bea@alwaysup.org	15558901234

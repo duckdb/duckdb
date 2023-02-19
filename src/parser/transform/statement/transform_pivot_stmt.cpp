@@ -96,11 +96,14 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
-		if (!col.pivot_enum.empty() || !col.values.empty()) {
+		if (!col.pivot_enum.empty() || !col.entries.empty()) {
 			continue;
 		}
+		if (col.names.size() != 1) {
+			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
+		}
 		auto enum_name = "__pivot_enum_" + std::to_string(pivot_entries.size()) + "_" + std::to_string(c);
-		AddPivotEntry(enum_name, source->Copy(), col.name);
+		AddPivotEntry(enum_name, source->Copy(), col.names[0]);
 		col.pivot_enum = enum_name;
 	}
 

@@ -1168,16 +1168,16 @@ typedef struct PGUpdateStmt {
  */
 typedef struct PGPivot {
 	PGNodeTag type;
-	char *pivot_column;  /* The column name to pivot on */
-	PGList *pivot_value; /* The set of pivot values */
-	char *pivot_enum;    /* The enum to fetch the unique values from */
+	PGList *pivot_columns;  /* The column names to pivot on */
+	PGList *pivot_value;    /* The set of pivot values */
+	char *pivot_enum;       /* The enum to fetch the unique values from */
 } PGPivot;
 
 typedef struct PGPivotExpr {
 	PGNodeTag type;
 	PGNode *source;      /* the source subtree */
 	PGNode *aggr;        /* The aggregation to pivot over (PIVOT only) */
-	char *unpivot;       /* The name to unpivot over (UNPIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
 	PGList *pivots;      /* The set of pivot values */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 	PGAlias *alias;      /* table alias & optional column aliases */

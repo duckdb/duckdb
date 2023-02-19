@@ -18,29 +18,33 @@ namespace duckdb {
 static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<ParsedExpression>> &pivot_expressions,
                             unique_ptr<ParsedExpression> current_expr = nullptr, string current_name = string()) {
 	auto &pivot = ref.pivots[pivot_idx];
-	D_ASSERT(pivot.values.size() == pivot.aliases.size());
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
-	for (idx_t v_idx = 0; v_idx < pivot.values.size(); v_idx++) {
-		auto &value = pivot.values[v_idx];
-		auto &alias = pivot.aliases[v_idx];
-		auto column_ref = make_unique<ColumnRefExpression>(pivot.name);
-		auto constant_value = make_unique<ConstantExpression>(value);
-		auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                                   std::move(column_ref), std::move(constant_value));
-
-		unique_ptr<ParsedExpression> expr;
-		string name;
-		if (current_expr) {
-			expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, current_expr->Copy(),
-			                                          std::move(comp_expr));
-		} else {
-			expr = std::move(comp_expr);
+	for (auto &entry : pivot.entries) {
+		unique_ptr<ParsedExpression> expr = current_expr ? current_expr->Copy() : nullptr;
+		string name = entry.alias;
+		D_ASSERT(entry.values.size() == pivot.names.size());
+		for (idx_t v = 0; v < entry.values.size(); v++) {
+			auto &value = entry.values[v];
+			auto column_ref = make_unique<ColumnRefExpression>(pivot.names[v]);
+			auto constant_value = make_unique<ConstantExpression>(value);
+			auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                   std::move(column_ref), std::move(constant_value));
+			if (expr) {
+				expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+				                                          std::move(comp_expr));
+			} else {
+				expr = std::move(comp_expr);
+			}
+			if (entry.alias.empty()) {
+				if (name.empty()) {
+					name = value.ToString();
+				} else {
+					name += "_" + value.ToString();
+				}
+			}
 		}
-		auto value_name = alias.empty() ? value.ToString() : alias;
 		if (!current_name.empty()) {
-			name = current_name + " " + value_name;
-		} else {
-			name = std::move(value_name);
+			name = current_name + "_" + name;
 		}
 		if (last_pivot) {
 			// construct the aggregate
@@ -85,6 +89,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	if (aggr->IsWindow()) {
 		throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
 	}
+	value_set_t pivots;
 	ExtractPivotExpressions(*aggr, handled_columns);
 
 	// now handle the pivots
@@ -102,15 +107,25 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {
 				auto enum_value = EnumType::GetValue(Value::ENUM(i, type));
-				pivot.values.emplace_back(enum_value);
-				pivot.aliases.push_back(enum_value);
+				PivotColumnEntry entry;
+				entry.values.emplace_back(enum_value);
+				entry.alias = std::move(enum_value);
+				pivot.entries.push_back(std::move(entry));
 			}
 		}
-		total_pivots *= pivot.values.size();
+		total_pivots *= pivot.entries.size();
 		// add the pivoted column to the columns that have been handled
-		handled_columns.insert(pivot.name);
+		for (auto &pivot_name : pivot.names) {
+			handled_columns.insert(pivot_name);
+		}
 		value_set_t pivots;
-		for (auto &val : pivot.values) {
+		for (auto &entry : pivot.entries) {
+			Value val;
+			if (entry.values.size() == 1) {
+				val = entry.values[0];
+			} else {
+				val = Value::LIST(LogicalType::VARCHAR, entry.values);
+			}
 			if (pivots.find(val) != pivots.end()) {
 				throw BinderException(FormatError(
 				    *aggr, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
@@ -166,17 +181,15 @@ unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<Pars
 
 	// handle the pivot
 	auto &unpivot = ref.pivots[0];
-	vector<Value> unpivot_names;
-	vector<unique_ptr<ParsedExpression>> unpivot_expressions;
 
-	case_insensitive_map_t<idx_t> handled_columns;
-	for (idx_t i = 0; i < unpivot.values.size(); i++) {
-		auto &col = unpivot.values[i];
-		handled_columns[col.ToString()] = i;
+	case_insensitive_set_t handled_columns;
+	case_insensitive_map_t<string> name_map;
+	for (auto &entry : unpivot.entries) {
+		for (auto &value : entry.values) {
+			handled_columns.insert(value.ToString());
+		}
 	}
 
-	unpivot_names.resize(handled_columns.size());
-	unpivot_expressions.resize(handled_columns.size());
 	for (auto &col_expr : all_columns) {
 		if (col_expr->type != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
@@ -188,35 +201,62 @@ unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<Pars
 			// not handled - add to the set of regularly selected columns
 			select_node->select_list.push_back(std::move(col_expr));
 		} else {
-			auto idx = entry->second;
-			auto &alias = unpivot.aliases[idx];
-			unpivot_names[idx] = alias.empty() ? column_name : alias;
-			unpivot_expressions[idx] = make_unique<ColumnRefExpression>(column_name);
+			name_map[column_name] = column_name;
 			handled_columns.erase(entry);
 		}
 	}
 	if (!handled_columns.empty()) {
 		for (auto &entry : handled_columns) {
 			throw BinderException("Column \"%s\" referenced in UNPIVOT but no matching entry was found in the table",
-			                      entry.first);
+			                      entry);
 		}
 	}
+	vector<Value> unpivot_names;
+	for (auto &entry : unpivot.entries) {
+		string generated_name;
+		for (auto &val : entry.values) {
+			auto name_entry = name_map.find(val.ToString());
+			if (name_entry == name_map.end()) {
+				throw InternalException("Unpivot - could not find column name in name map");
+			}
+			if (!generated_name.empty()) {
+				generated_name += "_";
+			}
+			generated_name += name_entry->second;
+		}
+		unpivot_names.emplace_back(!entry.alias.empty() ? entry.alias : generated_name);
+	}
+	vector<vector<unique_ptr<ParsedExpression>>> unpivot_expressions;
+	for (idx_t v_idx = 0; v_idx < unpivot.entries[0].values.size(); v_idx++) {
+		vector<unique_ptr<ParsedExpression>> expressions;
+		for (auto &entry : unpivot.entries) {
+			expressions.push_back(make_unique<ColumnRefExpression>(entry.values[v_idx].ToString()));
+		}
+		unpivot_expressions.push_back(std::move(expressions));
+	}
+
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
 	auto unpivot_name_expr = make_unique<ConstantExpression>(std::move(unpivot_list));
 	vector<unique_ptr<ParsedExpression>> unnest_name_children;
 	unnest_name_children.push_back(std::move(unpivot_name_expr));
 	auto unnest_name_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_name_children));
-	unnest_name_expr->alias = unpivot.name;
+	unnest_name_expr->alias = unpivot.names[0];
 	select_node->select_list.push_back(std::move(unnest_name_expr));
 
 	// construct the UNNEST expression for the set of unpivoted columns
-	auto list_expr = make_unique<FunctionExpression>("list_value", std::move(unpivot_expressions));
-	vector<unique_ptr<ParsedExpression>> unnest_val_children;
-	unnest_val_children.push_back(std::move(list_expr));
-	auto unnest_val_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_val_children));
-	unnest_val_expr->alias = ref.unpivot_name;
-	select_node->select_list.push_back(std::move(unnest_val_expr));
+	if (ref.unpivot_names.size() != unpivot_expressions.size()) {
+		throw BinderException("UNPIVOT name count mismatch - got %d names but %d expressions", ref.unpivot_names.size(),
+		                      unpivot_expressions.size());
+	}
+	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
+		auto list_expr = make_unique<FunctionExpression>("list_value", std::move(unpivot_expressions[i]));
+		vector<unique_ptr<ParsedExpression>> unnest_val_children;
+		unnest_val_children.push_back(std::move(list_expr));
+		auto unnest_val_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_val_children));
+		unnest_val_expr->alias = ref.unpivot_names[i];
+		select_node->select_list.push_back(std::move(unnest_val_expr));
+	}
 	return select_node;
 }
 

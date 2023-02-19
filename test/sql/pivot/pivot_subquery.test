@@ -23,29 +23,29 @@ INSERT INTO sales VALUES
 
 # PIVOT over a subquery
 query IIIIIII
-PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS(YEAR, MONTH);
+PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS YEAR, MONTH;
 ----
 1	10400	8000	11000	NULL	NULL	NULL
 2	NULL	NULL	NULL	39500	90700	12000
 
 # PIVOT over a PIVOT
 query II
-PIVOT (PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS(YEAR, MONTH))
-USING SUM(COALESCE("2000 1",0) + COALESCE("2000 2",0) + COALESCE("2000 3",0) + COALESCE("2001 1",0) + COALESCE("2001 2",0) + COALESCE("2001 3",0)) COLUMNS (empid)
+PIVOT (PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS YEAR, MONTH)
+USING SUM(COALESCE("2000_1",0) + COALESCE("2000_2",0) + COALESCE("2000_3",0) + COALESCE("2001_1",0) + COALESCE("2001_2",0) + COALESCE("2001_3",0)) COLUMNS empid
 ----
 29400	142200
 
 statement error
-CREATE VIEW pivot_view AS PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS(YEAR, MONTH);
+CREATE VIEW pivot_view AS PIVOT (SELECT YEAR(d) AS year, MONTH(d) AS month, empid, amount FROM sales) USING SUM(AMOUNT) COLUMNS YEAR, MONTH;
 ----
 Cannot use PIVOT statement syntax in a view
 
 statement error
-CREATE MACRO xt2(a) as TABLE PIVOT sales USING SUM(amount) COLUMNS(d)
+CREATE MACRO xt2(a) as TABLE PIVOT sales USING SUM(amount) COLUMNS d
 ----
 Cannot use PIVOT statement syntax in a macro
 
 statement error
-CREATE MACRO xt2(a) as (PIVOT sales USING SUM(amount) COLUMNS(d))
+CREATE MACRO xt2(a) as (PIVOT sales USING SUM(amount) COLUMNS d)
 ----
 Cannot use PIVOT statement syntax in a macro

@@ -218,7 +218,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-cannot contain expressions
+must contain columns or lists of columns
 
 # type mismatch
 statement error

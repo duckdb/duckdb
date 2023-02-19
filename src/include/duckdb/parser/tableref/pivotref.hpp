@@ -12,17 +12,25 @@
 
 namespace duckdb {
 
-struct PivotColumn {
-	//! The name of the pivot column
-	string name;
-	//! The set of values to pivot on
+struct PivotColumnEntry {
+	//! The set of values to match on
 	vector<Value> values;
-	//! The set of aliases for the value (if any)
-	vector<string> aliases;
+	//! The alias of the pivot column entry
+	string alias;
+
+	bool Equals(const PivotColumnEntry &other) const;
+};
+
+struct PivotColumn {
+	//! The column names to (un)pivot
+	vector<string> names;
+	//! The set of values to pivot on
+	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)
 	string pivot_enum;
 
 	string ToString() const;
+	bool Equals(const PivotColumn &other) const;
 };
 
 //! Represents a PIVOT or UNPIVOT expression
@@ -35,8 +43,8 @@ public:
 	unique_ptr<TableRef> source;
 	//! The aggregate to compute over the pivot (PIVOT only)
 	unique_ptr<ParsedExpression> aggregate;
-	//! The name of the unpivot expression (UNPIVOT only)
-	string unpivot_name;
+	//! The names of the unpivot expressions (UNPIVOT only)
+	vector<string> unpivot_names;
 	//! The set of pivots
 	vector<PivotColumn> pivots;
 	//! The groups to pivot over. If none are specified all columns not included in the pivots/aggregate are chosen.

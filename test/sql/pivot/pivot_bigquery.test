@@ -54,8 +54,7 @@ SELECT * FROM
 ----
 199	108	45
 
-
-# FIXME: multi-column aggregations
+# FIXME: multiple aggregations
 #query IIIIII
 #SELECT * FROM
 #  (SELECT product, sales, quarter FROM Produce)
@@ -81,11 +80,14 @@ Kale	Q2	23
 Kale	Q3	45
 Kale	Q4	3
 
-# FIXME: multi-column unpivot
-#query II
-#SELECT * FROM Produce
-#UNPIVOT(
-#  (first_half_sales, second_half_sales)
-#  FOR semesters
-#  IN ((Q1, Q2) AS 'semester_1', (Q3, Q4) AS 'semester_2'))
-#----
+query IIII
+SELECT product, first_half_sales, second_half_sales, semesters FROM Produce
+UNPIVOT(
+  (first_half_sales, second_half_sales)
+  FOR semesters
+  IN ((Q1, Q2) AS 'semester_1', (Q3, Q4) AS 'semester_2'))
+----
+Kale	51	23	semester_1
+Kale	45	3	semester_2
+Apple	77	0	semester_1
+Apple	25	2	semester_2

@@ -8,17 +8,40 @@ namespace duckdb {
 string PivotColumn::ToString() const {
 	string result;
 	result += " FOR";
-	result = KeywordHelper::WriteOptionallyQuoted(name);
+	if (names.size() == 1) {
+		result += KeywordHelper::WriteOptionallyQuoted(names[0]);
+	} else {
+		result += "(";
+		for (idx_t n = 0; n < names.size(); n++) {
+			if (n > 0) {
+				result += ", ";
+			}
+			result += KeywordHelper::WriteOptionallyQuoted(names[n]);
+		}
+		result += ")";
+	}
 	result += " IN ";
 	if (pivot_enum.empty()) {
 		result += "(";
-		for (idx_t i = 0; i < values.size(); i++) {
-			if (i > 0) {
+		for (idx_t e = 0; e < entries.size(); e++) {
+			auto &entry = entries[e];
+			if (e > 0) {
 				result += ", ";
 			}
-			result += values[i].ToSQLString();
-			if (!aliases[i].empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aliases[i]);
+			if (entry.values.size() == 1) {
+				result += entry.values[0].ToSQLString();
+			} else {
+				result += "(";
+				for (idx_t v = 0; v < entry.values.size(); v++) {
+					if (v > 0) {
+						result += ", ";
+					}
+					result += entry.values[v].ToSQLString();
+				}
+				result += ")";
+			}
+			if (!entry.alias.empty()) {
+				result += " AS " + KeywordHelper::WriteOptionallyQuoted(entry.alias);
 			}
 		}
 		result += ")";
@@ -26,6 +49,34 @@ string PivotColumn::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(pivot_enum);
 	}
 	return result;
+}
+
+bool PivotColumnEntry::Equals(const PivotColumnEntry &other) const {
+	if (alias != other.alias) {
+		return false;
+	}
+	if (values != other.values) {
+		return false;
+	}
+	return true;
+}
+
+bool PivotColumn::Equals(const PivotColumn &other) const {
+	if (other.names != names) {
+		return false;
+	}
+	if (other.pivot_enum != pivot_enum) {
+		return false;
+	}
+	if (other.entries.size() != entries.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < entries.size(); i++) {
+		if (!entries[i].Equals(other.entries[i])) {
+			return false;
+		}
+	}
+	return true;
 }
 
 string PivotRef::ToString() const {
@@ -38,7 +89,18 @@ string PivotRef::ToString() const {
 	} else {
 		// unpivot
 		result += " UNPIVOT (";
-		result += unpivot_name;
+		if (unpivot_names.size() == 1) {
+			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+		} else {
+			result += "(";
+			for (idx_t n = 0; n < unpivot_names.size(); n++) {
+				if (n > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+			}
+			result += ")";
+		}
 	}
 
 	for (auto &pivot : pivots) {
@@ -76,17 +138,11 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 		return false;
 	}
 	for (idx_t i = 0; i < pivots.size(); i++) {
-		if (pivots[i].name != other->pivots[i].name) {
-			return false;
-		}
-		if (pivots[i].values != other->pivots[i].values) {
-			return false;
-		}
-		if (pivots[i].aliases != other->pivots[i].aliases) {
+		if (!pivots[i].Equals(other->pivots[i])) {
 			return false;
 		}
 	}
-	if (unpivot_name != other->unpivot_name) {
+	if (unpivot_names != other->unpivot_names) {
 		return false;
 	}
 	if (alias != other->alias) {
@@ -102,7 +158,7 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	auto copy = make_unique<PivotRef>();
 	copy->source = source->Copy();
 	copy->aggregate = aggregate ? aggregate->Copy() : nullptr;
-	copy->unpivot_name = unpivot_name;
+	copy->unpivot_names = unpivot_names;
 	copy->pivots = pivots;
 	copy->groups = groups;
 	copy->alias = alias;

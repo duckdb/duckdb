@@ -295,24 +295,20 @@ pivot_column_entry:
 			ColIdOrString
 			{
 				PGPivot *n = makeNode(PGPivot);
-				n->pivot_column = $1;
+				n->pivot_columns = list_make1(makeString($1));
 				$$ = (PGNode *) n;
 			}
 			| pivot_value													{ $$ = $1; }
+		;
 
 pivot_column_list_internal:
 			pivot_column_entry												{ $$ = list_make1($1); }
 			| pivot_column_list_internal ',' pivot_column_entry 			{ $$ = lappend($1, $3); }
 		;
 
-pivot_column_list_opt_comma:
+pivot_column_list:
 			pivot_column_list_internal										{ $$ = $1; }
 			| pivot_column_list_internal ','								{ $$ = $1; }
-		;
-
-pivot_column_list:
-			pivot_column_list_opt_comma										{ $$ = $1; }
-			| '(' pivot_column_list_opt_comma ')'							{ $$ = $2; }
 		;
 
 /*
@@ -1000,31 +996,36 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->alias = $11;
 					$$ = (PGNode *) n;
 				}
-			| table_ref UNPIVOT '(' ColIdOrString FOR pivot_value ')' opt_alias_clause
+			| table_ref UNPIVOT '(' pivot_header FOR pivot_value_list ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
-					n->unpivot = $4;
-					n->pivots = list_make1($6);
+					n->unpivots = $4;
+					n->pivots = $6;
 					n->alias = $8;
 					$$ = (PGNode *) n;
 				}
 		;
 
 
+pivot_header:
+		ColIdOrString 				  { $$ = list_make1(makeString($1)); }
+		| '(' name_list_opt_comma ')' { $$ = $2; }
+	;
+
 pivot_value:
-	ColIdOrString IN_P '(' target_list_opt_comma ')'
+	pivot_header IN_P '(' target_list_opt_comma ')'
 		{
 			PGPivot *n = makeNode(PGPivot);
-			n->pivot_column = $1;
+			n->pivot_columns = $1;
 			n->pivot_value = $4;
 			$$ = (PGNode *) n;
 		}
 	|
-	ColIdOrString IN_P ColIdOrString
+	pivot_header IN_P ColIdOrString
 		{
 			PGPivot *n = makeNode(PGPivot);
-			n->pivot_column = $1;
+			n->pivot_columns = $1;
 			n->pivot_enum = $3;
 			$$ = (PGNode *) n;
 		}
