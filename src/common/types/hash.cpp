@@ -90,33 +90,48 @@ hash_t HashBytes(const void *ptr, size_t len) noexcept {
 		h *= M;
 	}
 
+	union {
+		uint64_t u64;
+		uint8_t u8[8];
+	} u;
+	uint64_t &k1 = u.u64;
+	k1 = 0;
 	auto const *const data8 = reinterpret_cast<uint8_t const *>(data64 + n_blocks);
 	switch (len & 7U) {
 	case 7:
-		h ^= static_cast<uint64_t>(data8[6]) << 48U;
+		u.u8[6] = data8[6];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 6:
-		h ^= static_cast<uint64_t>(data8[5]) << 40U;
+		u.u8[5] = data8[5];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 5:
-		h ^= static_cast<uint64_t>(data8[4]) << 32U;
+		u.u8[4] = data8[4];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 4:
-		h ^= static_cast<uint64_t>(data8[3]) << 24U;
+		u.u8[3] = data8[3];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 3:
-		h ^= static_cast<uint64_t>(data8[2]) << 16U;
+		u.u8[2] = data8[2];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 2:
-		h ^= static_cast<uint64_t>(data8[1]) << 8U;
+		u.u8[1] = data8[1];
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case 1:
-		h ^= static_cast<uint64_t>(data8[0]);
-		h *= M;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	default:
+		u.u8[0] = data8[0];
+
+		k1 *= M;
+		k1 ^= k1 >> R;
+		k1 *= M;
+
+		h ^= k1;
+		break;
+	case 0:
+		// Nothing to do;
 		break;
 	}
+
+	h *= M;
+
 	h ^= h >> R;
 	h *= M;
 	h ^= h >> R;
