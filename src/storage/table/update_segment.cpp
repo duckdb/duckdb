@@ -36,6 +36,21 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 }
 
+UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
+    : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
+
+	this->heap.Move(other.heap);
+
+	initialize_update_function = other.initialize_update_function;
+	merge_update_function = other.merge_update_function;
+	fetch_update_function = other.fetch_update_function;
+	fetch_committed_function = other.fetch_committed_function;
+	fetch_committed_range = other.fetch_committed_range;
+	fetch_row_function = other.fetch_row_function;
+	rollback_update_function = other.rollback_update_function;
+	statistics_update_function = other.statistics_update_function;
+}
+
 UpdateSegment::~UpdateSegment() {
 }
 

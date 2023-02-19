@@ -133,6 +133,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXECUTE_STATEMENT:
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 	case StatementType::ATTACH_STATEMENT:
+	case StatementType::DETACH_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

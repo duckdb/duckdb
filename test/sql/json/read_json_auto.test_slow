@@ -2,6 +2,9 @@
 # description: Read json files - schema detection
 # group: [json]
 
+statement ok
+pragma enable_verification
+
 require json
 
 # some arrow tests (python/pyarrow/tests/test_json.py) on their github
@@ -24,6 +27,11 @@ select * from '__TEST_DIR__/my_file.json'
 ----
 1
 2
+3
+
+query I
+select count(*) from '__TEST_DIR__/my_file.json'
+----
 3
 
 statement ok
@@ -76,11 +84,38 @@ select * from '__TEST_DIR__/my_file.json'
 bar	0
 baz	1
 
-# we can read even if the top-level json is not object
+# we can read objects from a top-level list
 query I
 select * from 'data/json/top_level_array.json'
 ----
+cancelled
+cancelled
+
+query I
+select count(*) from 'data/json/top_level_array.json'
+----
+2
+
+# for maximum_depth=0 this is an array of objects
+query I
+select * from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
+----
+[{"conclusion":"cancelled"}, {"conclusion":"cancelled"}]
+
+# for 1 it's 1 column of JSON
+query I
+select * from read_json_auto('data/json/top_level_array.json', maximum_depth=1)
+----
+"cancelled"
+"cancelled"
+
+# however, if there are multiple top-level arrays, we default to reading them as lists
+query I
+select * from 'data/json/top_level_two_arrays.json'
+----
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
+[{'conclusion': cancelled}, {'conclusion': cancelled}]
+
 
 # issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
 statement ok
@@ -115,7 +150,7 @@ Invalid Input Error: JSON transform error in file "data/json/inconsistent_schema
 query II
 select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=2)
 ----
-1	NULL
+"1"	NULL
 2	Home for the Holidays
 [3]	The Firm
 4	Broadcast News
@@ -131,17 +166,20 @@ select typeof(id) from '__TEST_DIR__/my_file.json'
 BIGINT
 BIGINT
 
+statement ok
+pragma disable_verification
+
 require httpfs
 
 # this is one big object - yyjson uses it as a benchmark
 query II
-select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=2);
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=2);
 ----
 VARCHAR	STRUCT(type JSON, properties JSON, geometry JSON)[]
 
 # let's crank up maximum_depth and see if we can fully unnest this big object
 query II
-select typeof("type"), typeof(features) from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=7);
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=7);
 ----
 VARCHAR	STRUCT(type VARCHAR, properties STRUCT(name VARCHAR), geometry STRUCT(type VARCHAR, coordinates DOUBLE[][][]))[]
 
@@ -150,6 +188,6 @@ VARCHAR	STRUCT(type VARCHAR, properties STRUCT(name VARCHAR), geometry STRUCT(ty
 # the "coordinates" array in "features.geometry" is huge, let's just check the length - not all the values
 query IIIII
 select type, features[1].type, features[1].properties.name, features[1].geometry.type, length(features[1].geometry.coordinates)
-from read_json_auto('https://raw.githubusercontent.com/miloyip/nativejson-benchmark/master/data/canada.json', maximum_object_size=4194304, maximum_depth=7);
+from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=7);
 ----
 FeatureCollection	Feature	Canada	Polygon	480

@@ -2071,6 +2071,20 @@ typedef struct PGAttachStmt
 } PGAttachStmt;
 
 /* ----------------------
+ *		Dettach Statement
+ * ----------------------
+ */
+
+typedef struct PGDetachStmt
+{
+	PGNodeTag		type;
+	char *db_name;         /* list of names of attached databases */
+	bool missing_ok;
+} PGDetachStmt;
+
+
+
+/* ----------------------
  *		CREATE DATABASE Statement
  * ----------------------
  */

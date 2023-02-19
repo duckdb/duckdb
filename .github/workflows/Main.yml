@@ -1,16 +1,18 @@
 name: Main
 on:
+  schedule:
+    - cron: "0 2 * * *"
   push:
     paths-ignore:
       - '**.md'
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/nodejs/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
 
@@ -170,6 +172,7 @@ jobs:
       BUILD_EXCEL: 1
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -290,7 +293,7 @@ jobs:
       run: git clone https://github.com/duckdb/duckdb-web
 
     - name: Set up Python 3.9
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -376,14 +379,15 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
     - name: Dependencies
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc unixodbc-dev python3 python3-pip 
+        sudo apt-get update -y -qq
+        sudo apt-get install -y -qq ninja-build unixodbc-dev
         pip3 install pyodbc
 
     - name: Install nanodbc
