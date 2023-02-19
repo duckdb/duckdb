@@ -54,12 +54,14 @@ SELECT * FROM
 ----
 199	108	45
 
-# FIXME: multiple aggregations
-#query IIIIII
-#SELECT * FROM
-#  (SELECT product, sales, quarter FROM Produce)
-#  PIVOT(SUM(sales) total_sales, COUNT(*) num_records FOR quarter IN ('Q1', 'Q2'))
-#----
+query IIIII
+SELECT * FROM
+  (SELECT product, sales, quarter FROM Produce)
+  PIVOT(SUM(sales) total_sales, COUNT(*) num_records FOR quarter IN ('Q1', 'Q2'))
+ORDER BY ALL
+----
+Apple	78	2	0	1
+Kale	121	2	108	2
 
 statement ok
 CREATE OR REPLACE TABLE Produce AS

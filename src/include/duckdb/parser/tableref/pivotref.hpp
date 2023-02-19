@@ -36,7 +36,7 @@ struct PivotColumn {
 //! Represents a PIVOT or UNPIVOT expression
 class PivotRef : public TableRef {
 public:
-	explicit PivotRef() : TableRef(TableReferenceType::PIVOT) {
+	explicit PivotRef() : TableRef(TableReferenceType::PIVOT), include_nulls(false) {
 	}
 
 	//! The source table of the pivot
@@ -51,6 +51,8 @@ public:
 	vector<string> groups;
 	//! Aliases for the column names
 	vector<string> column_name_alias;
+	//! Whether or not to include nulls in the result (UNPIVOT only)
+	bool include_nulls;
 
 public:
 	string ToString() const override;

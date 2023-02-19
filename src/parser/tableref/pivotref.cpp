@@ -93,7 +93,11 @@ string PivotRef::ToString() const {
 		}
 	} else {
 		// unpivot
-		result += " UNPIVOT (";
+		result += " UNPIVOT ";
+		if (include_nulls) {
+			result += "INCLUDE NULLS ";
+		}
+		result += "(";
 		if (unpivot_names.size() == 1) {
 			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
 		} else {
@@ -161,6 +165,9 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 	if (groups != other->groups) {
 		return false;
 	}
+	if (include_nulls != other->include_nulls) {
+		return false;
+	}
 	return true;
 }
 
@@ -173,6 +180,7 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	copy->unpivot_names = unpivot_names;
 	copy->pivots = pivots;
 	copy->groups = groups;
+	copy->include_nulls = include_nulls;
 	copy->alias = alias;
 	return std::move(copy);
 }

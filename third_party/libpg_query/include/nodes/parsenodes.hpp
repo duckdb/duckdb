@@ -1181,6 +1181,7 @@ typedef struct PGPivotExpr {
 	PGList *pivots;      /* The set of pivot values */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 	PGAlias *alias;      /* table alias & optional column aliases */
+	bool include_nulls;  /* Whether or not to include NULL values (UNPIVOT only */
 } PGPivotExpr;
 
 typedef struct PGPivotStmt {

@@ -996,16 +996,22 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->alias = $11;
 					$$ = (PGNode *) n;
 				}
-			| table_ref UNPIVOT '(' pivot_header FOR pivot_value_list ')' opt_alias_clause
+			| table_ref UNPIVOT opt_include_nulls '(' pivot_header FOR pivot_value_list ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
-					n->unpivots = $4;
-					n->pivots = $6;
-					n->alias = $8;
+					n->include_nulls = $3;
+					n->unpivots = $5;
+					n->pivots = $7;
+					n->alias = $9;
 					$$ = (PGNode *) n;
 				}
 		;
+
+opt_include_nulls:
+	INCLUDE_P NULLS_P					{ $$ = true; }
+	| EXCLUDE NULLS_P					{ $$ = false; }
+	| /* empty */						{ $$ = false; }
 
 pivot_header:
 		ColIdOrString 				  { $$ = list_make1(makeString($1)); }

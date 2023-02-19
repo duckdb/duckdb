@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
 
@@ -180,7 +181,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	return select_node;
 }
 
-unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
+unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns,
+                                           unique_ptr<ParsedExpression> &where_clause) {
 	D_ASSERT(ref.groups.empty());
 	D_ASSERT(ref.pivots.size() == 1);
 
@@ -262,8 +264,20 @@ unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<Pars
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(list_expr));
 		auto unnest_val_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_val_children));
-		unnest_val_expr->alias = ref.unpivot_names[i];
+		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
+		unnest_val_expr->alias = unnest_name;
 		select_node->select_list.push_back(std::move(unnest_val_expr));
+		if (!ref.include_nulls) {
+			// if we are running with EXCLUDE NULLS we need to add an IS NOT NULL filter
+			auto colref = make_unique<ColumnRefExpression>(unnest_name);
+			auto filter = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(colref));
+			if (where_clause) {
+				where_clause = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                  std::move(where_clause), std::move(filter));
+			} else {
+				where_clause = std::move(filter);
+			}
+		}
 	}
 	return select_node;
 }
@@ -282,19 +296,37 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	child_binder->ExpandStarExpression(make_unique<StarExpression>(), all_columns);
 
 	unique_ptr<SelectNode> select_node;
+	unique_ptr<ParsedExpression> where_clause;
 	if (!ref.aggregates.empty()) {
 		select_node = BindPivot(ref, std::move(all_columns));
 	} else {
-		select_node = BindUnpivot(ref, std::move(all_columns));
+		select_node = BindUnpivot(ref, std::move(all_columns), where_clause);
 	}
 	// bind the generated select node
 	auto bound_select_node = child_binder->BindSelectNode(*select_node, std::move(from_table));
+	auto root_index = bound_select_node->GetRootIndex();
+	BoundQueryNode *bound_select_ptr = bound_select_node.get();
+
+	unique_ptr<BoundTableRef> result;
+	result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	auto alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	SubqueryRef subquery_ref(nullptr, alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
-	bind_context.AddSubquery(bound_select_node->GetRootIndex(), subquery_ref.alias, subquery_ref, *bound_select_node);
-	auto result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
-	return std::move(result);
+	if (where_clause) {
+		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
+		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
+		child_binder = Binder::CreateBinder(context, this);
+		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
+		auto where_query = make_unique<SelectNode>();
+		where_query->select_list.push_back(make_unique<StarExpression>());
+		where_query->where_clause = std::move(where_clause);
+		bound_select_node = child_binder->BindSelectNode(*where_query, std::move(result));
+		bound_select_ptr = bound_select_node.get();
+		root_index = bound_select_node->GetRootIndex();
+		result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+	}
+	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
+	return result;
 }
 
 } // namespace duckdb

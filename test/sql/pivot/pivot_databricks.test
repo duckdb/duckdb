@@ -111,10 +111,9 @@ CREATE OR REPLACE TEMPORARY VIEW sales(location, year, q1, q2, q3, q4) AS
          ('Toronto'      , 2021, 110 , 90 , 80, 170),
          ('San Francisco', 2021, 70  , 120, 85, 105);
 
-# FIXME: INCLUDE NULLS/EXCLUDE NULLS
 query IIII
 SELECT *
-    FROM sales UNPIVOT --INCLUDE NULLS
+    FROM sales UNPIVOT INCLUDE NULLS
     (sales FOR quarter IN (q1       AS "Jan-Mar",
                            q2       AS "Apr-Jun",
                            q3       AS "Jul-Sep",
