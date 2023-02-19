@@ -1046,14 +1046,9 @@ int sqlite3_complete(const char *zSql) {
 
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
-	Value val;
-	if (!sqlite3_column_has_value(pStmt, iCol, LogicalType::VARCHAR, val)) {
-		if (!sqlite3_column_has_value(pStmt, iCol, LogicalType::BLOB, val)) {
-			return 0;
-		}
-	}
-	auto r = StringValue::Get(val);
-	return r.size();
+	// fprintf(stderr, "sqlite3_column_bytes: unsupported.\n");
+	return pStmt->current_text[iCol].data_len;
+	// return -1;
 }
 
 sqlite3_value *sqlite3_column_value(sqlite3_stmt *, int iCol) {
