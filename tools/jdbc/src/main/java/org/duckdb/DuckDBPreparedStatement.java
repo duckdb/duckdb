@@ -74,9 +74,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		this.conn.transactionRunning = true;
 
 		// Start transaction via Statement
-		Statement s = conn.createStatement();
-		s.execute("BEGIN TRANSACTION;");
-		s.close();
+		try (Statement s = conn.createStatement()) {
+			s.execute("BEGIN TRANSACTION;");
+		}
 	}
 
 	private void prepare(String sql) throws SQLException {
