@@ -308,6 +308,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	BoundQueryNode *bound_select_ptr = bound_select_node.get();
 
 	unique_ptr<BoundTableRef> result;
+	MoveCorrelatedExpressions(*child_binder);
 	result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	auto alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	SubqueryRef subquery_ref(nullptr, alias);
