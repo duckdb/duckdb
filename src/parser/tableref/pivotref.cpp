@@ -7,7 +7,6 @@ namespace duckdb {
 
 string PivotColumn::ToString() const {
 	string result;
-	result += " FOR";
 	if (names.size() == 1) {
 		result += KeywordHelper::WriteOptionallyQuoted(names[0]);
 	} else {
@@ -55,8 +54,13 @@ bool PivotColumnEntry::Equals(const PivotColumnEntry &other) const {
 	if (alias != other.alias) {
 		return false;
 	}
-	if (values != other.values) {
+	if (values.size() != other.values.size()) {
 		return false;
+	}
+	for (idx_t i = 0; i < values.size(); i++) {
+		if (!Value::NotDistinctFrom(values[i], other.values[i])) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -79,6 +83,40 @@ bool PivotColumn::Equals(const PivotColumn &other) const {
 	return true;
 }
 
+void PivotColumn::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteList<string>(names);
+	writer.WriteRegularSerializableList(entries);
+	writer.WriteString(pivot_enum);
+	writer.Finalize();
+}
+
+PivotColumn PivotColumn::Deserialize(Deserializer &source) {
+	PivotColumn result;
+	FieldReader reader(source);
+	result.names = reader.ReadRequiredList<string>();
+	result.entries = reader.ReadRequiredSerializableList<PivotColumnEntry, PivotColumnEntry>();
+	result.pivot_enum = reader.ReadRequired<string>();
+	reader.Finalize();
+	return result;
+}
+
+void PivotColumnEntry::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteRegularSerializableList(values);
+	writer.WriteString(alias);
+	writer.Finalize();
+}
+
+PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
+	PivotColumnEntry result;
+	FieldReader reader(source);
+	result.values = reader.ReadRequiredSerializableList<Value, Value>();
+	result.alias = reader.ReadRequired<string>();
+	reader.Finalize();
+	return result;
+}
+
 string PivotRef::ToString() const {
 	string result;
 	result = source->ToString();
@@ -90,6 +128,9 @@ string PivotRef::ToString() const {
 				result += ", ";
 			}
 			result += aggregates[aggr_idx]->ToString();
+			if (!aggregates[aggr_idx]->alias.empty()) {
+				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->alias);
+			}
 		}
 	} else {
 		// unpivot
@@ -111,7 +152,7 @@ string PivotRef::ToString() const {
 			result += ")";
 		}
 	}
-
+	result += " FOR";
 	for (auto &pivot : pivots) {
 		result += " ";
 		result += pivot.ToString();
@@ -128,6 +169,16 @@ string PivotRef::ToString() const {
 	result += ")";
 	if (!alias.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		if (!column_name_alias.empty()) {
+			result += "(";
+			for (idx_t i = 0; i < column_name_alias.size(); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+			}
+			result += ")";
+		}
 	}
 	return result;
 }
@@ -180,17 +231,32 @@ unique_ptr<TableRef> PivotRef::Copy() {
 	copy->unpivot_names = unpivot_names;
 	copy->pivots = pivots;
 	copy->groups = groups;
+	copy->column_name_alias = column_name_alias;
 	copy->include_nulls = include_nulls;
 	copy->alias = alias;
 	return std::move(copy);
 }
 
 void PivotRef::Serialize(FieldWriter &writer) const {
-	throw InternalException("FIXME: serialize pivot");
+	writer.WriteSerializable(*source);
+	writer.WriteSerializableList(aggregates);
+	writer.WriteList<string>(unpivot_names);
+	writer.WriteRegularSerializableList(pivots);
+	writer.WriteList<string>(groups);
+	writer.WriteList<string>(column_name_alias);
+	writer.WriteField<bool>(include_nulls);
 }
 
 unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
-	throw InternalException("FIXME: deserialize pivot");
+	auto result = make_unique<PivotRef>();
+	result->source = reader.ReadRequiredSerializable<TableRef>();
+	result->aggregates = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result->unpivot_names = reader.ReadRequiredList<string>();
+	result->pivots = reader.ReadRequiredSerializableList<PivotColumn, PivotColumn>();
+	result->groups = reader.ReadRequiredList<string>();
+	result->column_name_alias = reader.ReadRequiredList<string>();
+	result->include_nulls = reader.ReadRequired<bool>();
+	return result;
 }
 
 } // namespace duckdb

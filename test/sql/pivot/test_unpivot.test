@@ -5,6 +5,8 @@
 # example taken from the snowflake docs
 # https://docs.snowflake.com/en/sql-reference/constructs/unpivot
 
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE OR REPLACE TABLE monthly_sales(empid INT, dept TEXT, Jan INT, Feb INT, Mar INT, April INT);

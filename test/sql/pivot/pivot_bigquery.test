@@ -7,6 +7,9 @@
 # pivot
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE Produce AS
   SELECT 'Kale' as product, 51 as sales, 'Q1' as quarter, 2020 as year UNION ALL
   SELECT 'Kale', 23, 'Q2', 2020 UNION ALL

@@ -3,6 +3,9 @@
 # group: [pivot]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE OR REPLACE TABLE sales(empid INT, amount INT, month TEXT, year INT);
 
 statement ok

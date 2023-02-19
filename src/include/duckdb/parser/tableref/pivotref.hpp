@@ -19,6 +19,8 @@ struct PivotColumnEntry {
 	string alias;
 
 	bool Equals(const PivotColumnEntry &other) const;
+	void Serialize(Serializer &serializer) const;
+	static PivotColumnEntry Deserialize(Deserializer &source);
 };
 
 struct PivotColumn {
@@ -31,6 +33,8 @@ struct PivotColumn {
 
 	string ToString() const;
 	bool Equals(const PivotColumn &other) const;
+	void Serialize(Serializer &serializer) const;
+	static PivotColumn Deserialize(Deserializer &source);
 };
 
 //! Represents a PIVOT or UNPIVOT expression
