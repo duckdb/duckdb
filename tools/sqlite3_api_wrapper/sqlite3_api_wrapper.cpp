@@ -1101,7 +1101,7 @@ const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
 	}
 
 	auto &&names = pStmt->prepared->GetNames();
-	if (names.size() <= iCol) {
+	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
 		return nullptr;
 	}
 
@@ -1114,7 +1114,7 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	}
 
 	auto &&types = pStmt->prepared->GetTypes();
-	if (types.size() <= iCol) {
+	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
 		return nullptr;
 	}
 
