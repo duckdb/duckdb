@@ -820,7 +820,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		PendingQueryParameters parameters;
 		parameters.allow_stream_result = allow_stream_result && is_last_statement;
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
-		auto has_result = pending_query->properties.return_type == StatementReturnType::NOTHING;
+		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
 			current_result = make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
