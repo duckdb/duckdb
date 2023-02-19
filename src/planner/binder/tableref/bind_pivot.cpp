@@ -13,6 +13,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
