@@ -237,7 +237,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 		}
 		auto &columnref = (ColumnRefExpression &)*col_expr;
-		auto column_name = columnref.GetColumnName();
+		auto &column_name = columnref.GetColumnName();
 		auto entry = handled_columns.find(column_name);
 		if (entry == handled_columns.end()) {
 			// not handled - add to the set of regularly selected columns
