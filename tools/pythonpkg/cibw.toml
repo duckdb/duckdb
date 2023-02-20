@@ -4,7 +4,7 @@
 [tool.cibuildwheel]
 environment = "PIP_CONSTRAINT='build-constraints.txt'"
 before-build = 'pip install oldest-supported-numpy'
-before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "psutil>=5.9.0" "requests>=2.26" fsspec && (pip install --prefer-binary "pyarrow>=8.0" || true) && (pip install --prefer-binary "polars" || true)'
+before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "psutil>=5.9.0" "requests>=2.26" fsspec   && (pip install --prefer-binary "pyarrow>=8.0" || true) && (pip install --prefer-binary "torch" || true) && (pip install --prefer-binary "polars" || true)'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
 
