@@ -352,7 +352,9 @@ public:
 		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(
 		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
 
-		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
+		for (auto &dummy_reader : dummy_readers) {
+			result->union_readers.emplace_back(shared_ptr<ParquetReader>(dummy_reader.release()));
+		}
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		result->SetInitialReader(result->union_readers[0]);
@@ -471,7 +473,7 @@ public:
 		auto result = make_unique<ParquetReadGlobalState>();
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
-		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
+		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (!bind_data.parquet_options.union_by_name) {
 			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			if (bind_data.initial_reader) {

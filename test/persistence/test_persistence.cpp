@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test transactional integrity when facing process aborts", "[persistence][.]") {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 
 	// shared memory to keep track of insertions
 	size_t *count = (size_t *)mmap(NULL, sizeof(size_t), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
@@ -48,7 +48,7 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
 		}
-		unique_ptr<DuckDB> db;
+		duckdb::unique_ptr<DuckDB> db;
 		// it may take some time for the OS to reclaim the lock
 		// loop and wait until the database is successfully started again
 		for (size_t i = 0; i < 1000; i++) {

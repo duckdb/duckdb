@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 static void test_in_memory_initialization(string dbdir) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<Connection> con;
 	string in_memory_tmp = ".tmp";
 
 	// make sure the temporary folder does not exist

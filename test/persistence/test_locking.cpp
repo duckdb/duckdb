@@ -38,7 +38,7 @@ TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
 			usleep(100);
 		}
 	} else if (pid > 0) {
-		unique_ptr<DuckDB> db;
+		duckdb::unique_ptr<DuckDB> db;
 		// parent process
 		// sleep a bit to wait for child process
 		while (*count == 0) {
@@ -86,7 +86,7 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 			con.Query("SELECT * FROM a");
 		}
 	} else if (pid > 0) {
-		unique_ptr<DuckDB> db;
+		duckdb::unique_ptr<DuckDB> db;
 		// parent process
 		// sleep a bit to wait for child process
 		while (*count == 0) {

@@ -140,7 +140,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		if (gstate.finalized_hts.empty()) {
 			// Create a finalized ht in the global state, that we can populate
 			gstate.finalized_hts.push_back(
-			    make_unique<GroupedAggregateHashTable>(context.client, Allocator::Get(context.client), group_types,
+			    make_shared<GroupedAggregateHashTable>(context.client, Allocator::Get(context.client), group_types,
 			                                           op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);

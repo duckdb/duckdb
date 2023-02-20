@@ -7,8 +7,8 @@ using namespace std;
 
 TEST_CASE("Test connection using a read only database", "[readonly]") {
 	auto dbdir = TestCreatePath("read_only_test");
-	unique_ptr<DuckDB> db, db2;
-	unique_ptr<Connection> con;
+	duckdb::unique_ptr<DuckDB> db, db2;
+	duckdb::unique_ptr<Connection> con;
 	// make sure the database does not exist
 	DeleteDatabase(dbdir);
 
@@ -106,8 +106,8 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 
 TEST_CASE("Test view creation using a read only database", "[readonly]") {
 	auto dbdir = TestCreatePath("read_only_view_test");
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
+	duckdb::unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<Connection> con;
 	// make sure the database does not exist
 	DeleteDatabase(dbdir);
 

@@ -36,7 +36,7 @@
 namespace duckdb {
 
 struct IcuBindData : public FunctionData {
-	std::unique_ptr<icu::Collator> collator;
+	unique_ptr<icu::Collator> collator;
 	string language;
 	string country;
 
@@ -46,7 +46,7 @@ struct IcuBindData : public FunctionData {
 		if (locale.isBogus()) {
 			throw InternalException("Locale is bogus!?");
 		}
-		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
+		this->collator = unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
 			auto error_name = u_errorName(status);
 			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
@@ -158,7 +158,7 @@ static ScalarFunction GetICUFunction(const string &collation) {
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	icu::StringPiece utf8(StringValue::Get(parameter));
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
-	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
+	unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz == icu::TimeZone::getUnknown()) {
 		throw NotImplementedException("Unknown TimeZone setting");
 	}
@@ -171,7 +171,7 @@ struct ICUCalendarData : public GlobalTableFunctionState {
 		calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
 	}
 
-	std::unique_ptr<icu::StringEnumeration> calendars;
+	unique_ptr<icu::StringEnumeration> calendars;
 };
 
 static unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFunctionBindInput &input,
@@ -216,7 +216,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	icu::Locale locale(locale_key.c_str());
 
 	UErrorCode status = U_ZERO_ERROR;
-	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
+	unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
 	if (U_FAILURE(status) || name != cal->getType()) {
 		throw NotImplementedException("Unknown Calendar setting");
 	}
@@ -254,7 +254,7 @@ void ICUExtension::Load(DuckDB &db) {
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
-	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
+	unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
@@ -272,7 +272,7 @@ void ICUExtension::Load(DuckDB &db) {
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
-	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
+	unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
 	                          SetICUCalendar);
 

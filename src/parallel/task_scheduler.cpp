@@ -58,7 +58,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<std::unique_ptr<Task>> q;
+	std::queue<unique_ptr<Task>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, unique_ptr<Task> task);

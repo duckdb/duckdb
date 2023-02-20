@@ -24,18 +24,18 @@ public:
 
 	string dbpath;
 	vector<string> loaded_databases;
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
-	unique_ptr<DBConfig> config;
+	duckdb::unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<Connection> con;
+	duckdb::unique_ptr<DBConfig> config;
 	unordered_set<string> extensions;
-	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+	unordered_map<string, duckdb::unique_ptr<Connection>> named_connection_map;
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	atomic<bool> finished_processing_file;
 	int32_t hash_threshold = 0;
 	vector<LoopCommand *> active_loops;
-	unique_ptr<Command> top_level_loop;
+	duckdb::unique_ptr<Command> top_level_loop;
 	bool original_sqlite_test = false;
 	bool output_sql = false;
 	bool enable_verification = false;
@@ -49,7 +49,7 @@ public:
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
-	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
+	unordered_map<string, duckdb::unique_ptr<QueryResult>> result_label_map;
 	mutex log_lock;
 
 public:
@@ -61,7 +61,7 @@ public:
 	bool InLoop() {
 		return !active_loops.empty();
 	}
-	void ExecuteCommand(unique_ptr<Command> command);
+	void ExecuteCommand(duckdb::unique_ptr<Command> command);
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);

@@ -68,7 +68,7 @@ public:
 		return duckdb_result_chunk_count(result);
 	}
 
-	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
+	duckdb::unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
 		auto chunk = duckdb_result_get_chunk(result, chunk_idx);
 		if (!chunk) {
 			return nullptr;
@@ -199,7 +199,7 @@ public:
 		return true;
 	}
 
-	unique_ptr<CAPIResult> Query(string query) {
+	duckdb::unique_ptr<CAPIResult> Query(string query) {
 		D_ASSERT(connection);
 		auto result = make_unique<CAPIResult>();
 		result->Query(connection, query);

@@ -63,7 +63,7 @@ public:
 	}
 
 	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
-	                                   unique_ptr<LogicalOperator> &plan) {
+	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
 			return;
 		}

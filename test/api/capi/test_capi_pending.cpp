@@ -42,7 +42,7 @@ struct CAPIPending {
 		return duckdb_pending_execute_task(pending);
 	}
 
-	unique_ptr<CAPIResult> Execute() {
+	duckdb::unique_ptr<CAPIResult> Execute() {
 		duckdb_result result;
 		auto success = duckdb_execute_pending(pending, &result) == DuckDBSuccess;
 		return make_unique<CAPIResult>(result, success);
@@ -55,7 +55,7 @@ TEST_CASE("Test pending statements in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
 	CAPIPending pending;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

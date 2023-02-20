@@ -93,7 +93,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		Event *pipeline_finish_event_ptr;
 		if (meta_pipeline->HasFinishEvent(pipeline.get())) {
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
-			auto pipeline_finish_event = make_unique<PipelineFinishEvent>(pipeline);
+			auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
 			pipeline_finish_event_ptr = pipeline_finish_event.get();
 			events.push_back(std::move(pipeline_finish_event));
 			base_stack.pipeline_complete_event->AddDependency(*pipeline_finish_event_ptr);

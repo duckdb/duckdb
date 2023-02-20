@@ -181,9 +181,9 @@ public:
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
-	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
+	vector<unique_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
-	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
+	case_insensitive_map_t<unique_ptr<StorageExtension>> storage_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

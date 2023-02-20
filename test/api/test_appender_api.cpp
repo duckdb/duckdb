@@ -10,8 +10,8 @@ template <class SRC>
 void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
-	unique_ptr<Appender> appender;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
 	REQUIRE_NO_FAIL(conn->Query(StringUtil::Format("CREATE TABLE decimals(i DECIMAL(%d,%d))", width, scale)));
 	appender = make_unique<Appender>(*conn, "decimals");
 
@@ -52,8 +52,8 @@ TEST_CASE("Test appending to a decimal column", "[api]") {
 TEST_CASE("Test using appender after connection is gone", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
-	unique_ptr<Appender> appender;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
 	// create an appender for a non-existing table fails
 	REQUIRE_THROWS(make_unique<Appender>(*conn, "integers"));
 	// now create the table and create the appender
@@ -187,7 +187,7 @@ TEST_CASE("Test using appender after table is altered", "[api]") {
 TEST_CASE("Test appenders and transactions", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// now create the appender
@@ -219,7 +219,7 @@ TEST_CASE("Test appenders and transactions", "[api]") {
 TEST_CASE("Test using multiple appenders", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2(i VARCHAR, j DATE)"));
@@ -254,7 +254,7 @@ TEST_CASE("Test using multiple appenders", "[api]") {
 TEST_CASE("Test usage of appender interleaved with connection usage", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	Appender appender(con, "t1");

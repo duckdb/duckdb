@@ -193,7 +193,7 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 }
 
 TEST_CASE("Test multiple result sets", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
@@ -217,7 +217,7 @@ TEST_CASE("Test multiple result sets", "[api]") {
 }
 
 TEST_CASE("Test streaming API errors", "[api]") {
-	unique_ptr<QueryResult> result, result2;
+	duckdb::unique_ptr<QueryResult> result, result2;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -283,7 +283,7 @@ TEST_CASE("Test fetch API", "[api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// fetch from an error
 	result = con.Query("SELECT 'hello'::INT");
@@ -356,7 +356,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	REQUIRE(CHECK_COLUMN(result2, 0, {84}));
 }
 
-static void VerifyStreamResult(unique_ptr<QueryResult> result) {
+static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {
 	REQUIRE(result->types[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
 	int current_expected_value = 0;
@@ -423,7 +423,7 @@ TEST_CASE("Test streaming query during stack unwinding", "[api]") {
 }
 
 TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	auto con = make_unique<Connection>(db);
 	auto con2 = make_unique<Connection>(db);
@@ -494,7 +494,7 @@ TEST_CASE("Test parser tokenize", "[api]") {
 }
 
 TEST_CASE("Test opening an invalid database file", "[api]") {
-	unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<DuckDB> db;
 	bool success = false;
 	try {
 		db = make_unique<DuckDB>("data/parquet-testing/blob.parquet");
@@ -517,7 +517,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	auto context = make_unique<ClientContext>((*db).instance);
 	auto &connection_manager = ConnectionManager::Get(*context);
 
-	vector<unique_ptr<Connection>> connections;
+	vector<duckdb::unique_ptr<Connection>> connections;
 	size_t createdConnections = 5000;
 	size_t remainingConnections = 500;
 	size_t toRemove = createdConnections - remainingConnections;
@@ -540,7 +540,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	con.EnableQueryVerification();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));

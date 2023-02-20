@@ -12,11 +12,11 @@ namespace duckdb {
 struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
 		UErrorCode status = U_ZERO_ERROR;
-		std::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
+		unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
 		now = calendar->getNow();
 	}
 
-	std::unique_ptr<icu::StringEnumeration> tzs;
+	unique_ptr<icu::StringEnumeration> tzs;
 	UDate now;
 };
 
@@ -71,7 +71,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		}
 		output.SetValue(1, index, Value(short_id));
 
-		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
+		unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
 		int32_t dst_offset_ms;
 		tz->getOffset(data.now, false, raw_offset_ms, dst_offset_ms, status);

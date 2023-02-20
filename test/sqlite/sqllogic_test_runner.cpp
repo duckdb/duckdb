@@ -32,7 +32,7 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	}
 }
 
-void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
+void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
 		active_loops.back()->loop_commands.push_back(std::move(command));
 	} else {

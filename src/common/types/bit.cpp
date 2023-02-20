@@ -82,7 +82,7 @@ void Bit::ToString(string_t bits, char *output) {
 
 string Bit::ToString(string_t str) {
 	auto len = BitLength(str);
-	auto buffer = std::unique_ptr<char[]>(new char[len]);
+	auto buffer = unique_ptr<char[]>(new char[len]);
 	ToString(str, buffer.get());
 	return string(buffer.get(), len);
 }
@@ -146,7 +146,7 @@ void Bit::ToBit(string_t str, data_ptr_t output) {
 
 string Bit::ToBit(string_t str) {
 	auto bit_len = GetBitSize(str);
-	auto buffer = std::unique_ptr<char[]>(new char[bit_len]);
+	auto buffer = unique_ptr<char[]>(new char[bit_len]);
 	Bit::ToBit(str, (data_ptr_t)buffer.get());
 	return string(buffer.get(), bit_len);
 }

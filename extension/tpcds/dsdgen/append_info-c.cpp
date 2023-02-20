@@ -15,7 +15,7 @@
 using namespace tpcds;
 
 append_info *append_info_get(void *info_list, int table_id) {
-	auto &append_vector = *((std::vector<std::unique_ptr<tpcds_append_information>> *)info_list);
+	auto &append_vector = *((std::vector<unique_ptr<tpcds_append_information>> *)info_list);
 	return (append_info *)append_vector[table_id].get();
 }
 

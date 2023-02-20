@@ -107,7 +107,7 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 	auto config = GetTestConfig();
 	auto storage_database = TestCreatePath("concurrent_checkpoint");
 	DeleteDatabase(storage_database);
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
@@ -185,7 +185,7 @@ TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
 	auto config = GetTestConfig();
 	auto storage_database = TestCreatePath("concurrent_checkpoint");
 	DeleteDatabase(storage_database);
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
@@ -226,7 +226,7 @@ TEST_CASE("Force concurrent checkpoint with single updater", "[interquery][.]") 
 	auto config = GetTestConfig();
 	auto storage_database = TestCreatePath("concurrent_checkpoint");
 	DeleteDatabase(storage_database);
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
@@ -267,7 +267,7 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	auto config = GetTestConfig();
 	auto storage_database = TestCreatePath("concurrent_checkpoint");
 	DeleteDatabase(storage_database);
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	config->options.checkpoint_wal_size = 1;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);

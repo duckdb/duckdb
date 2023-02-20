@@ -17,7 +17,8 @@ static void query_break(int line) {
 	(void)line;
 }
 
-static Connection *GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map,
+static Connection *GetConnection(DuckDB &db,
+                                 unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
                                  string con_name) {
 	auto entry = named_connection_map.find(con_name);
 	if (entry == named_connection_map.end()) {
@@ -57,7 +58,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		// cannot restart in parallel
 		return;
 	}
-	vector<unique_ptr<SQLStatement>> statements;
+	vector<duckdb::unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
 		statements = connection->context->ParseStatements(sql_query);
@@ -117,13 +118,13 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
 }
 
 struct ParallelExecuteContext {
-	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<unique_ptr<Command>> &loop_commands,
+	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
 	    : runner(runner), loop_commands(loop_commands), definition(std::move(definition)), success(true) {
 	}
 
 	SQLLogicTestRunner &runner;
-	const vector<unique_ptr<Command>> &loop_commands;
+	const vector<duckdb::unique_ptr<Command>> &loop_commands;
 	LoopDefinition definition;
 	atomic<bool> success;
 	string error_message;

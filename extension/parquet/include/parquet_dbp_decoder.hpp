@@ -15,7 +15,7 @@ public:
 		// some derivatives
 		D_ASSERT(miniblocks_per_block > 0);
 		values_per_miniblock = block_value_count / miniblocks_per_block;
-		miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
+		miniblock_bit_widths = unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
 
 		// init state to something sane
 		values_left_in_block = 0;
@@ -112,7 +112,7 @@ private:
 	int64_t start_value;
 	idx_t values_per_miniblock;
 
-	std::unique_ptr<uint8_t[]> miniblock_bit_widths;
+	unique_ptr<uint8_t[]> miniblock_bit_widths;
 	idx_t values_left_in_block;
 	idx_t values_left_in_miniblock;
 	idx_t miniblock_offset;

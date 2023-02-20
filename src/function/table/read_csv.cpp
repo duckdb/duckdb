@@ -262,7 +262,8 @@ public:
 			bytes_per_local_state = file_size / MaxThreads();
 		}
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
+		next_buffer =
+		    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
 		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
@@ -411,7 +412,8 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
 			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
+			next_buffer =
+			    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
 		} else {
 			// We are done scanning.
 			return nullptr;
@@ -430,7 +432,8 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position);
+			next_buffer =
+			    shared_ptr<CSVBuffer>(next_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
 		}
 	}
 	return result;

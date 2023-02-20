@@ -15,7 +15,8 @@ class NewOperator : public LogicalOperator {
 
 public:
 	explicit NewOperator(double_t value)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN, vector<unique_ptr<Expression>>()), value(value) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN, vector<duckdb::unique_ptr<Expression>>()),
+	      value(value) {
 	}
 
 	double_t value;
@@ -34,8 +35,8 @@ public:
 			writer.WriteField(static_cast<int32_t>(value));
 		}
 	}
-	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
-	                                               FieldReader &reader) {
+	static duckdb::unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                                       FieldReader &reader) {
 		double_t value;
 		if (reader.GetSource().GetVersion() >= MINIMUM_VERSION_FOR_FLOAT) {
 			value = reader.ReadField<double_t>(-1.2);
@@ -62,8 +63,8 @@ public:
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField(value);
 	}
-	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
-	                                               FieldReader &reader) {
+	static duckdb::unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                                       FieldReader &reader) {
 		int32_t value = reader.ReadField(0);
 		return make_unique_base<LogicalOperator, OldOperator>(value);
 	}
@@ -76,15 +77,15 @@ private:
 template <typename S, typename T, typename V>
 static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(V),
                         const uint64_t targetVersion,
-                        unique_ptr<LogicalOperator> target_deserialize(ClientContext &, LogicalOperatorType,
-                                                                       FieldReader &)) {
+                        duckdb::unique_ptr<LogicalOperator> target_deserialize(ClientContext &, LogicalOperatorType,
+                                                                               FieldReader &)) {
 	DuckDB db;
 	Connection con(db);
 	BufferedSerializer serializer;
 	serializer.SetVersion(min(sourceVersion, targetVersion));
 	INFO("source version: " << serializer.GetVersion());
 	serializer.Write(serializer.GetVersion());
-	unique_ptr<S> write_op(source_factory(version_compatible_value));
+	duckdb::unique_ptr<S> write_op(source_factory(version_compatible_value));
 	FieldWriter writer(serializer);
 	write_op->Serialize(writer);
 	writer.Finalize();

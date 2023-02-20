@@ -570,7 +570,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
+	auto new_storage = make_shared<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -580,7 +580,7 @@ void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t remove
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
+	auto new_storage = make_shared<LocalTableStorage>(*new_dt, *storage, removed_column);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -592,7 +592,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	auto new_storage =
-	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	    make_shared<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

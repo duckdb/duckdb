@@ -124,14 +124,15 @@ public:
 		idx_t offset;
 	};
 
-	static unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                          vector<LogicalType> &return_types, vector<string> &names) {
+	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
+	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
 		return make_unique<QuackBindData>(BigIntValue::Get(input.inputs[0]));
 	}
 
-	static unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context, TableFunctionInitInput &input) {
+	static duckdb::unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context,
+	                                                              TableFunctionInitInput &input) {
 		return make_unique<QuackGlobalData>();
 	}
 
@@ -163,7 +164,7 @@ struct QuackExtensionData : public ParserExtensionParseData {
 
 	idx_t number_of_quacks;
 
-	unique_ptr<ParserExtensionParseData> Copy() const override {
+	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
 		return make_unique<QuackExtensionData>(number_of_quacks);
 	}
 };
@@ -199,7 +200,7 @@ public:
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
-	                                                   unique_ptr<ParserExtensionParseData> parse_data) {
+	                                                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
 		auto &quack_data = (QuackExtensionData &)*parse_data;
 
 		ParserExtensionPlanResult result;

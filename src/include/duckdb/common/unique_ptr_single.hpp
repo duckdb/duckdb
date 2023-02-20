@@ -2,6 +2,7 @@
 
 #include <type_traits>
 #include <memory>
+#include "duckdb/common/unique_ptr_utils.hpp"
 
 using std::common_type;
 using std::false_type;
@@ -17,16 +18,20 @@ using std::is_default_constructible;
 using std::is_function;
 using std::is_pointer;
 using std::is_reference;
+using std::is_rvalue_reference;
 using std::is_same;
 using std::is_void;
 
 using std::add_lvalue_reference;
+using std::auto_ptr;
 using std::forward;
 using std::integral_constant;
 using std::less;
 using std::runtime_error;
 using std::swap;
 
+using std::__compressed_pair;
+using std::__default_init_tag;
 using std::__dependent_type;
 using std::__enable_hash_helper;
 using std::__is_swappable;
@@ -111,20 +116,24 @@ struct __identity {
 template <class _Tp>
 using __identity_t = typename __identity<_Tp>::type;
 
-template <class T, class D = default_delete<T>>
+template <class _Tp, class _Dp = default_delete<_Tp>>
 class unique_ptr {
 public:
-	typedef T element_type;
-	typedef D deleter_type;
-	//! We use __pointer for the case where T is an array type
-	typedef typename __pointer<element_type, deleter_type>::type pointer;
+	typedef _Tp element_type;
+	typedef _Dp deleter_type;
+	typedef typename __pointer<_Tp, deleter_type>::type pointer;
+
+	static_assert(!is_rvalue_reference<deleter_type>::value,
+	              "the specified deleter type cannot be an rvalue reference");
 
 private:
+	__compressed_pair<pointer, deleter_type> __ptr_;
+
 	struct __nat {
 		int __for_bool_;
 	};
 
-	typedef __unique_ptr_deleter_sfinae<deleter_type> _DeleterSFINAE;
+	typedef __unique_ptr_deleter_sfinae<_Dp> _DeleterSFINAE;
 
 	template <bool _Dummy>
 	using _LValRefType = typename __dependent_type<_DeleterSFINAE, _Dummy>::__lval_ref_type;
@@ -140,7 +149,7 @@ private:
 	    typename enable_if<is_default_constructible<_Deleter>::value && !is_pointer<_Deleter>::value>::type;
 
 	template <class _ArgType>
-	using _EnableIfDeleterConstructible = typename enable_if<is_constructible<D, _ArgType>::value>::type;
+	using _EnableIfDeleterConstructible = typename enable_if<is_constructible<deleter_type, _ArgType>::value>::type;
 
 	template <class _UPtr, class _Up>
 	using _EnableIfMoveConvertible =
@@ -148,119 +157,146 @@ private:
 
 	template <class _UDel>
 	using _EnableIfDeleterConvertible =
-	    typename enable_if<(is_reference<D>::value && is_same<D, _UDel>::value) ||
-	                       (!is_reference<D>::value && is_convertible<_UDel, D>::value)>::type;
+	    typename enable_if<(is_reference<_Dp>::value && is_same<_Dp, _UDel>::value) ||
+	                       (!is_reference<_Dp>::value && is_convertible<_UDel, _Dp>::value)>::type;
 
 	template <class _UDel>
-	using _EnableIfDeleterAssignable = typename enable_if<is_assignable<D &, _UDel &&>::value>::type;
+	using _EnableIfDeleterAssignable = typename enable_if<is_assignable<_Dp &, _UDel &&>::value>::type;
 
 public:
-	//===--------------------------------------------------------------------===//
-	// Constructors
-	//===--------------------------------------------------------------------===//
-
 	template <bool _Dummy = true, class = _EnableIfDeleterDefaultConstructible<_Dummy>>
-	inline constexpr unique_ptr() throw() : ptr(pointer()), deleter(deleter_type()) {
+
+	_LIBCPP_CONSTEXPR unique_ptr() _NOEXCEPT : __ptr_(pointer(), __default_init_tag()) {
 	}
 
 	template <bool _Dummy = true, class = _EnableIfDeleterDefaultConstructible<_Dummy>>
-	inline constexpr unique_ptr(nullptr_t) throw() : ptr(pointer()), deleter(deleter_type()) {
+
+	_LIBCPP_CONSTEXPR unique_ptr(nullptr_t) _NOEXCEPT : __ptr_(pointer(), __default_init_tag()) {
 	}
 
 	template <bool _Dummy = true, class = _EnableIfDeleterDefaultConstructible<_Dummy>>
-	inline explicit unique_ptr(pointer __p) throw() : ptr(__p), deleter(deleter_type()) {
+
+	explicit unique_ptr(pointer __p) _NOEXCEPT : __ptr_(__p, __default_init_tag()) {
 	}
 
 	template <bool _Dummy = true, class = _EnableIfDeleterConstructible<_LValRefType<_Dummy>>>
-	inline unique_ptr(pointer __p, _LValRefType<_Dummy> __d) throw() : ptr(__p), deleter(__d) {
+
+	unique_ptr(pointer __p, _LValRefType<_Dummy> __d) _NOEXCEPT : __ptr_(__p, __d) {
 	}
 
 	template <bool _Dummy = true, class = _EnableIfDeleterConstructible<_GoodRValRefType<_Dummy>>>
-	inline unique_ptr(pointer __p, _GoodRValRefType<_Dummy> __d) throw() : ptr(__p), deleter(std::move(__d)) {
+
+	unique_ptr(pointer __p, _GoodRValRefType<_Dummy> __d) _NOEXCEPT : __ptr_(__p, _VSTD::move(__d)) {
 		static_assert(!is_reference<deleter_type>::value, "rvalue deleter bound to reference");
 	}
 
 	template <bool _Dummy = true, class = _EnableIfDeleterConstructible<_BadRValRefType<_Dummy>>>
-	inline unique_ptr(pointer __p, _BadRValRefType<_Dummy> __d) = delete;
 
-	inline unique_ptr(unique_ptr &&__u) throw()
-	    : ptr(__u.release()), deleter(std::forward<deleter_type>(__u.get_deleter())) {
+	unique_ptr(pointer __p, _BadRValRefType<_Dummy> __d) = delete;
+
+	unique_ptr(unique_ptr &&__u) _NOEXCEPT : __ptr_(__u.release(), _VSTD::forward<deleter_type>(__u.get_deleter())) {
 	}
 
 	template <class _Up, class _Ep, class = _EnableIfMoveConvertible<unique_ptr<_Up, _Ep>, _Up>,
 	          class = _EnableIfDeleterConvertible<_Ep>>
-	inline unique_ptr(unique_ptr<_Up, _Ep> &&__u) throw()
-	    : ptr(__u.release()), deleter(std::forward<_Ep>(__u.get_deleter())) {
+
+	unique_ptr(unique_ptr<_Up, _Ep> &&__u) _NOEXCEPT : __ptr_(__u.release(), _VSTD::forward<_Ep>(__u.get_deleter())) {
+	}
+
+#if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
+	template <class _Up>
+
+	unique_ptr(auto_ptr<_Up> &&__p,
+	           typename enable_if<is_convertible<_Up *, _Tp *>::value && is_same<_Dp, default_delete<_Tp>>::value,
+	                              __nat>::type = __nat()) _NOEXCEPT : __ptr_(__p.release(), __default_init_tag()) {
+	}
+#endif
+
+	unique_ptr &operator=(unique_ptr &&__u) _NOEXCEPT {
+		reset(__u.release());
+		__ptr_.second() = _VSTD::forward<deleter_type>(__u.get_deleter());
+		return *this;
 	}
 
 	template <class _Up, class _Ep, class = _EnableIfMoveConvertible<unique_ptr<_Up, _Ep>, _Up>,
 	          class = _EnableIfDeleterAssignable<_Ep>>
-	inline unique_ptr &operator=(unique_ptr<_Up, _Ep> &&__u) throw() {
+
+	unique_ptr &operator=(unique_ptr<_Up, _Ep> &&__u) _NOEXCEPT {
 		reset(__u.release());
-		deleter = forward<_Ep>(__u.get_deleter());
+		__ptr_.second() = _VSTD::forward<_Ep>(__u.get_deleter());
 		return *this;
 	}
 
-	inline unique_ptr &operator=(nullptr_t) throw() {
+#if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
+	template <class _Up>
+
+	typename enable_if<is_convertible<_Up *, _Tp *>::value && is_same<_Dp, default_delete<_Tp>>::value,
+	                   unique_ptr &>::type
+	operator=(auto_ptr<_Up> __p) {
+		reset(__p.release());
+		return *this;
+	}
+#endif
+
+#ifdef _LIBCPP_CXX03_LANG
+	unique_ptr(unique_ptr const &) = delete;
+	unique_ptr &operator=(unique_ptr const &) = delete;
+#endif
+
+	~unique_ptr() {
+		reset();
+	}
+
+	unique_ptr &operator=(nullptr_t) _NOEXCEPT {
 		reset();
 		return *this;
 	}
 
-	operator bool() const {
-		return ptr;
+	typename add_lvalue_reference<_Tp>::type operator*() const {
+		__unique_ptr_utils::AssertNotNull((void *)__ptr_.first());
+		return *__ptr_.first();
 	}
 
-	inline deleter_type &get_deleter() throw() {
-		return deleter;
-	}
-	inline const deleter_type &get_deleter() const throw() {
-		return deleter;
-	}
-
-	inline typename add_lvalue_reference<element_type>::type operator*() const {
-		if (!ptr) {
-			throw runtime_error("Attempting to dereference a unique pointer that is not set");
-		}
-		return *ptr;
-	}
 	pointer operator->() const {
-		return ptr;
+		__unique_ptr_utils::AssertNotNull((void *)__ptr_.first());
+		return __ptr_.first();
 	}
 
-	inline pointer get() const throw() {
-		return ptr;
-	}
-	pointer release() noexcept {
-		auto res = ptr;
-		ptr = nullptr;
-		return res;
-	}
-	void reset(pointer new_ptr = nullptr) noexcept {
-		if (ptr) {
-			delete ptr;
-		}
-		ptr = new_ptr;
-	}
-	void swap(unique_ptr &other) noexcept {
-		std::swap(ptr, other.ptr);
-		std::swap(deleter, other.deleter);
+	pointer get() const _NOEXCEPT {
+		return __ptr_.first();
 	}
 
-	inline typename add_lvalue_reference<element_type>::type operator[](size_t __i) const {
-		AssertNotNull();
-		return ptr[__i];
+	deleter_type &get_deleter() _NOEXCEPT {
+		return __ptr_.second();
+	}
+
+	const deleter_type &get_deleter() const _NOEXCEPT {
+		return __ptr_.second();
+	}
+
+	explicit operator bool() const _NOEXCEPT {
+		return __ptr_.first() != nullptr;
+	}
+
+	pointer release() _NOEXCEPT {
+		pointer __t = __ptr_.first();
+		__ptr_.first() = pointer();
+		return __t;
+	}
+
+	void reset(pointer __p = pointer()) _NOEXCEPT {
+		pointer __tmp = __ptr_.first();
+		__ptr_.first() = __p;
+		if (__tmp)
+			__ptr_.second()(__tmp);
+	}
+
+	void swap(unique_ptr &__u) _NOEXCEPT {
+		__ptr_.swap(__u.__ptr_);
 	}
 
 private:
-	inline void AssertNotNull() const {
-		if (!ptr) {
-			throw runtime_error("Attempting to reference a unique pointer that is not set");
-		}
-	}
-
-private:
-	pointer ptr;
-	deleter_type deleter;
+	static void AssertNotNull(void *ptr);
 };
 
 //===--------------------------------------------------------------------===//
@@ -268,23 +304,23 @@ private:
 //===--------------------------------------------------------------------===//
 
 template <class _Tp, class _Dp>
-inline _LIBCPP_INLINE_VISIBILITY typename enable_if<__is_swappable<_Dp>::value, void>::type
-swap(unique_ptr<_Tp, _Dp> &__x, unique_ptr<_Tp, _Dp> &__y) _NOEXCEPT {
+inline typename enable_if<__is_swappable<_Dp>::value, void>::type swap(unique_ptr<_Tp, _Dp> &__x,
+                                                                       unique_ptr<_Tp, _Dp> &__y) _NOEXCEPT {
 	__x.swap(__y);
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator==(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator==(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	return __x.get() == __y.get();
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator!=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator!=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	return !(__x == __y);
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator<(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	typedef typename unique_ptr<_T1, _D1>::pointer _P1;
 	typedef typename unique_ptr<_T2, _D2>::pointer _P2;
 	typedef typename common_type<_P1, _P2>::type _Vp;
@@ -292,79 +328,79 @@ inline _LIBCPP_INLINE_VISIBILITY bool operator<(const unique_ptr<_T1, _D1> &__x,
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator>(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	return __y < __x;
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator<=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	return !(__y < __x);
 }
 
 template <class _T1, class _D1, class _T2, class _D2>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
+inline bool operator>=(const unique_ptr<_T1, _D1> &__x, const unique_ptr<_T2, _D2> &__y) {
 	return !(__x < __y);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator==(const unique_ptr<_T1, _D1> &__x, nullptr_t) _NOEXCEPT {
+inline bool operator==(const unique_ptr<_T1, _D1> &__x, nullptr_t) _NOEXCEPT {
 	return !__x;
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator==(nullptr_t, const unique_ptr<_T1, _D1> &__x) _NOEXCEPT {
+inline bool operator==(nullptr_t, const unique_ptr<_T1, _D1> &__x) _NOEXCEPT {
 	return !__x;
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator!=(const unique_ptr<_T1, _D1> &__x, nullptr_t) _NOEXCEPT {
+inline bool operator!=(const unique_ptr<_T1, _D1> &__x, nullptr_t) _NOEXCEPT {
 	return static_cast<bool>(__x);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator!=(nullptr_t, const unique_ptr<_T1, _D1> &__x) _NOEXCEPT {
+inline bool operator!=(nullptr_t, const unique_ptr<_T1, _D1> &__x) _NOEXCEPT {
 	return static_cast<bool>(__x);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
+inline bool operator<(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
 	typedef typename unique_ptr<_T1, _D1>::pointer _P1;
 	return less<_P1>()(__x.get(), nullptr);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
+inline bool operator<(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
 	typedef typename unique_ptr<_T1, _D1>::pointer _P1;
 	return less<_P1>()(nullptr, __x.get());
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
+inline bool operator>(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
 	return nullptr < __x;
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
+inline bool operator>(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
 	return __x < nullptr;
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<=(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
+inline bool operator<=(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
 	return !(nullptr < __x);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator<=(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
+inline bool operator<=(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
 	return !(__x < nullptr);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>=(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
+inline bool operator>=(const unique_ptr<_T1, _D1> &__x, nullptr_t) {
 	return !(__x < nullptr);
 }
 
 template <class _T1, class _D1>
-inline _LIBCPP_INLINE_VISIBILITY bool operator>=(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
+inline bool operator>=(nullptr_t, const unique_ptr<_T1, _D1> &__x) {
 	return !(nullptr < __x);
 }
 
@@ -383,7 +419,6 @@ struct _LIBCPP_TEMPLATE_VIS hash<__enable_hash_helper<unique_ptr<_Tp, _Dp>, type
 	_LIBCPP_DEPRECATED_IN_CXX17 typedef size_t result_type;
 #endif
 
-	_LIBCPP_INLINE_VISIBILITY
 	size_t operator()(const unique_ptr<_Tp, _Dp> &__ptr) const {
 		typedef typename unique_ptr<_Tp, _Dp>::pointer pointer;
 		return hash<pointer>()(__ptr.get());

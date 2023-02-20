@@ -549,7 +549,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 
 	// create the version_info if it doesn't exist yet
 	if (!version_info) {
-		version_info = make_unique<VersionNode>();
+		version_info = make_shared<VersionNode>();
 	}
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
@@ -908,7 +908,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 		Flush();
 
 		if (!info.version_info) {
-			info.version_info = make_unique<VersionNode>();
+			info.version_info = make_shared<VersionNode>();
 		}
 
 		if (!info.version_info->info[vector_idx]) {

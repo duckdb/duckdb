@@ -16,7 +16,7 @@ using namespace duckdb;
 
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                      unique_ptr<QueryResult> result_p, bool big_result)
+	                      duckdb::unique_ptr<QueryResult> result_p, bool big_result)
 	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
 	      big_result(big_result) {
 	}
@@ -24,7 +24,7 @@ struct ArrowRoundtripFactory {
 	vector<LogicalType> types;
 	vector<string> names;
 	string tz;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	bool big_result;
 
 public:
@@ -86,8 +86,8 @@ public:
 		stream->private_data = nullptr;
 	}
 
-	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                     ArrowStreamParameters &parameters) {
+	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
+	                                                                        ArrowStreamParameters &parameters) {
 		//! Create a new batch reader
 		auto &factory = *reinterpret_cast<ArrowRoundtripFactory *>(this_ptr); //! NOLINT
 		if (!factory.result) {
