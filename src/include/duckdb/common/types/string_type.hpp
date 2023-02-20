@@ -176,8 +176,7 @@ public:
 				return A > B;
 #endif
 			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_length);
-			auto final_res = (memcmp_res == 0) ? (left_length > right_length) : (memcmp_res > 0);
-			return final_res;
+			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
 		}
 	};
 
