@@ -66,6 +66,9 @@ void MapConversionVerify(Vector &vector, idx_t count) {
 	}
 }
 
+// Example ExpandVector:
+// source: [1,2,3], expansion_factor: 4
+// target (result): [1,2,3,1,2,3,1,2,3,1,2,3]
 static void ExpandVector(const Vector &source, Vector &target, idx_t expansion_factor) {
 	idx_t count = ListVector::GetListSize(source);
 	auto &entry = ListVector::GetEntry(source);
@@ -144,6 +147,8 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		result_data[i] = src_data[i];
 	}
 
+	// check whether one of the vectors has already been referenced to an expanded vector in the case of const/non-const
+	// combination. If not, then referencing is still necessary
 	if (!(keys_are_const && !values_are_const)) {
 		key_vector.Reference(ListVector::GetEntry(args.data[0]));
 	}
