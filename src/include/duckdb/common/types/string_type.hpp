@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cstring>
 
@@ -125,15 +126,15 @@ public:
 				return false;
 			return (memcmp(a.GetDataUnsafe(), b.GetDataUnsafe(), a.GetSize()) == 0);
 #endif
-			uint64_t A = Load<uint64_t>(&a);
-			uint64_t B = Load<uint64_t>(&b);
+			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
+			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
 			if (A != B) {
 				// Either lenght or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			A = Load<uint64_t>((const char *)&a + 8u);
-			B = Load<uint64_t>((const char *)&b + 8u);
+			A = Load<uint64_t>((const_data_ptr_t)&a + 8u);
+			B = Load<uint64_t>((const_data_ptr_t)&b + 8u);
 			if (A == B) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
@@ -159,10 +160,8 @@ public:
 				return (left_length > 0u);
 
 #ifdef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A;
-			uint32_t B;
-			memcpy(&A, left.value.pointer.prefix, 4u);
-			memcpy(&B, left.value.pointer.prefix, 4u);
+			uint32_t A = Load<uint32_t>(left.value.pointer.prefix);
+			uint32_t B = Load<uint32_t>(right.value.pointer.prefix);
 
 			// Check on prefix -----
 			// We dont' need to mask since:
