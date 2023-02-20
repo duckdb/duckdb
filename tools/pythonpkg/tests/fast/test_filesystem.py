@@ -4,6 +4,7 @@ from pathlib import Path
 from shutil import copyfileobj
 from typing import Callable, List
 from os.path import exists
+from pathlib import PurePosixPath
 
 import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
@@ -36,13 +37,18 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
 
 @fixture()
 def duckdb_cursor():
-    with duckdb.connect('') as connection:
-        yield connection
+    with duckdb.connect() as conn:
+        yield conn
 
 
 @fixture()
 def memory():
     fs = filesystem('memory', skip_instance_cache=True)
+
+    # ensure each instance is independent (to work around a weird quirk in fsspec)
+    fs.store = {}
+    fs.pseudo_dirs = ['']
+
     # copy csv into memory filesystem
     add_file(fs)
     return fs
@@ -79,11 +85,14 @@ class TestPythonFilesystem:
         duckdb_cursor.unregister_filesystem('S3FileSystem')
 
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
-        memory = MemoryFileSystem(skip_instance_cache=True)
-        add_file(memory)
-        memory.protocol = ('file', 'local')
-        duckdb_cursor.register_filesystem(memory)
+        class ExtendedMemoryFileSystem(MemoryFileSystem):
+            protocol = ('file', 'local')
+            # defer to the original implementation that doesn't hardcode the protocol
+            _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
 
+        memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
+        add_file(memory)
+        duckdb_cursor.register_filesystem(memory)
         for protocol in memory.protocol:
             duckdb_cursor.execute(f"select * from '{protocol}://{FILENAME}'")
 
@@ -130,20 +139,20 @@ class TestPythonFilesystem:
             duckdb_cursor.register_filesystem(None)
 
     @mark.skipif(sys.version_info < (3, 8), reason="ArrowFSWrapper requires python 3.8 or higher")
-    def test_arrow_fs_wrapper(self, tmp_path: Path):
+    def test_arrow_fs_wrapper(self, tmp_path: Path, duckdb_cursor: DuckDBPyConnection):
         fs = importorskip('pyarrow.fs')
         from fsspec.implementations.arrow import ArrowFSWrapper
 
         local = fs.LocalFileSystem()
         local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
         local_fsspec.protocol = "local"
-        filename = str(tmp_path / "test.csv")
+        # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
+        filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:
             f.write("a,b,c\n")
             f.write("1,2,3\n")
             f.write("4,5,6\n")
 
-        duckdb_cursor = duckdb.connect()
         duckdb_cursor.register_filesystem(local_fsspec)
         duckdb_cursor.execute(f"select * from read_csv_auto('local://{filename}', header=true)")
 
@@ -170,7 +179,7 @@ class TestPythonFilesystem:
             conn.execute('INSERT INTO hello.t VALUES (1)')
 
             conn.execute('FROM hello.t')
-            assert conn.fetchall() == [(0, ), (1, )]
+            assert conn.fetchall() == [(0,), (1,)]
 
         # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
         # isn't happening

@@ -29,7 +29,7 @@ public:
 	}
 
 	static const py::object &GetHandle(const FileHandle &handle) {
-		return ((PythonFileHandle &)handle).handle;
+		return ((const PythonFileHandle &)handle).handle;
 	}
 
 private:
@@ -39,15 +39,6 @@ class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
-	string stripPrefix(string input) {
-		for (const auto &protocol : protocols) {
-			auto prefix = protocol + "://";
-			if (StringUtil::StartsWith(input, prefix)) {
-				return input.substr(prefix.size());
-			}
-		}
-		return input;
-	}
 	std::string DecodeFlags(uint8_t flags);
 
 public:

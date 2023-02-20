@@ -46,7 +46,7 @@ SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 
 # we can auto-detect that it's newline-delimited
 query I
-SELECT * FROM read_json_objects('data/json/example_n.ndjson', format='auto')
+SELECT * FROM read_json_objects('data/json/example_n.ndjson', lines='auto')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -66,7 +66,7 @@ SELECT * FROM read_json_objects('data/json/example_r.ndjson')
 
 # we can detect that it's not newline-delimited
 query I
-SELECT * FROM read_json_objects('data/json/example_r.ndjson', format='auto')
+SELECT * FROM read_json_objects('data/json/example_r.ndjson', lines='auto')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -183,7 +183,7 @@ Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjso
 
 # we can auto-detect and ignore the error (becomes NULL)
 query I
-select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson', format='auto', ignore_errors=true)
+select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson', lines='auto', ignore_errors=true)
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -191,7 +191,7 @@ NULL
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
-# multiple objects per line (works for read_json_objects)
+# multiple values per line (works for read_json_objects)
 query I
 select * from read_json_objects('data/json/multiple_objects_per_line.ndjson')
 ----
