@@ -57,8 +57,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 	string flags_s = DecodeFlags(flags);
 
 	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
-	const auto &handle =
-	    filesystem.attr("open")(py::str(stripPrefix(path)), py::str(flags_s), py::arg("seekable") = true);
+	const auto &handle = filesystem.attr("open")(path, py::str(flags_s), py::arg("seekable") = true);
 	return make_unique<PythonFileHandle>(*this, path, handle);
 }
 
@@ -105,7 +104,7 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	if (!path.size()) {
 		return {path};
 	}
-	auto returner = py::list(filesystem.attr("glob")(py::str(stripPrefix(path))));
+	auto returner = py::list(filesystem.attr("glob")(path));
 
 	std::vector<string> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
@@ -118,7 +117,7 @@ int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
-	return py::int_(filesystem.attr("size")(stripPrefix(handle.path)));
+	return py::int_(filesystem.attr("size")(handle.path));
 }
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 	PythonGILWrapper gil;
