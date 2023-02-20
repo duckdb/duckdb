@@ -1,8 +1,9 @@
 # name: test/sql/overflow/double_float_overflow.test
-# description: Test handling of overflow doubles and floats; 
+# description: Test handling of overflow doubles and floats;
+# group: [overflow]
+
 #              this is tested extra because floats and doubles can represent inf and nan as well. And we 
 #				want to make sure we still catch overflows for these functions
-# group: [overflow]
 
 statement ok
 PRAGMA enable_verification

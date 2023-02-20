@@ -7,7 +7,6 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/operator/nan_inf_handling.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
@@ -20,25 +19,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <>
 float AddOperator::Operation(float left, float right) {
-	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
-		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::ADD);
-	}
 	auto result = left + right;
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in addition of float!");
-	}
 	return result;
 }
 
 template <>
 double AddOperator::Operation(double left, double right) {
-	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
-		return NanInfHandler::HandleAddSub(left, right, ScalarOperator::ADD);
-	}
 	auto result = left + right;
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in addition of double!");
-	}
 	return result;
 }
 

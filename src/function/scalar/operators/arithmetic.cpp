@@ -422,9 +422,6 @@ struct NegateOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		auto cast = (TR)input;
-		if (!Value::IsFinite(input)) {
-			return NanInfHandler::HandleNegate(input);
-		}
 		if (!CanNegate<TR>(cast)) {
 			throw OutOfRangeException("Overflow in negation of integer!");
 		}
@@ -805,25 +802,13 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float DivideOperator::Operation(float left, float right) {
-	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
-		return NanInfHandler::HandleDiv(left, right);
-	}
 	auto result = left / right;
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in division of float!");
-	}
 	return result;
 }
 
 template <>
 double DivideOperator::Operation(double left, double right) {
-	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
-		return NanInfHandler::HandleDiv(left, right);
-	}
 	auto result = left / right;
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in division of double!");
-	}
 	return result;
 }
 
@@ -953,27 +938,15 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float ModuloOperator::Operation(float left, float right) {
-	if (!(Value::FloatIsFinite(left) && Value::FloatIsFinite(right))) {
-		return NanInfHandler::HandleMod(left, right);
-	}
 	D_ASSERT(right != 0);
 	auto result = std::fmod(left, right);
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in modulo of float!");
-	}
 	return result;
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
-	if (!(Value::DoubleIsFinite(left) && Value::DoubleIsFinite(right))) {
-		return NanInfHandler::HandleMod(left, right);
-	}
 	auto result = std::fmod(left, right);
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in modulo of double!");
-	}
 	return result;
 }
 
