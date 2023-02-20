@@ -1,0 +1,42 @@
+# name: test/fuzzer/pedro/wrong_result_for_query.test
+# description: Issue #5982: Out of range errors
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1),(2),(3);
+
+query I
+SELECT 1 FROM t1;
+----
+1
+1
+1
+
+statement error
+SELECT -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486));
+----
+Out of Range Error: Overflow in subtraction of INT64
+
+statement error
+SELECT NOT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)));
+----
+Out of Range Error: Overflow in subtraction of INT64
+
+statement error
+SELECT 1 FROM t1 WHERE -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))
+----
+Out of Range Error: Overflow in subtraction of INT64
+
+statement error
+SELECT 1 FROM t1 WHERE (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))) IS NULL
+----
+Out of Range Error: Overflow in subtraction of INT64
+
+# check hugeint out of range
+statement error
+SELECT 1 FROM t1 WHERE (-170141183460469231731687303715884105728 >=  (89070581734562392861637894029983261872 - (-81070601725906838870049409685900843999)));
+----
+Out of Range Error: Underflow in HUGEINT

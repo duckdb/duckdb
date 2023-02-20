@@ -126,6 +126,8 @@ bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Express
 		return true;
 	} catch (InternalException &ex) {
 		throw ex;
+	} catch (OutOfRangeException &ex) {
+		throw ex;
 	} catch (...) {
 		return false;
 	}

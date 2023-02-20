@@ -39,10 +39,10 @@ SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)
 ----
 inf
 
-statement error
+query I
 SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)
 ----
-Out of Range Error: AVG is out of range!
+inf
 
 # overflow in arithmetic as well
 query I
