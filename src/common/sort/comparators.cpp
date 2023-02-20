@@ -173,12 +173,15 @@ int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	left_ptr += left_string_size;
 	right_ptr += right_string_size;
 
-	if (memcmp_res != 0)
+	if (memcmp_res != 0) {
 		return memcmp_res;
-	if (left_string_size == right_string_size)
+	}
+	if (left_string_size == right_string_size) {
 		return 0;
-	if (left_string_size < right_string_size)
+	}
+	if (left_string_size < right_string_size) {
 		return -1;
+	}
 	return 1;
 }
 

@@ -156,7 +156,7 @@ hash_t Hash(string_t val) {
 		static constexpr uint64_t SEED = UINT64_C(0xe17a1465);
 		static constexpr unsigned int R = 47;
 
-		const_data_ptr_t data64 = static_cast<const_data_ptr_t>(val.getInlined());
+		const_data_ptr_t data64 = static_cast<const_data_ptr_t>(val.GetInlined());
 		uint64_t h = SEED ^ (val.GetSize() * M);
 
 		uint64_t k = Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(data64));

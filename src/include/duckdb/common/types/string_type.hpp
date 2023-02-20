@@ -66,7 +66,7 @@ public:
 	bool IsInlined() const {
 		return GetSize() <= INLINE_LENGTH;
 	}
-	void const *getInlined() {
+	void const *GetInlined() {
 		return (void const *)value.inlined.inlined;
 	}
 
