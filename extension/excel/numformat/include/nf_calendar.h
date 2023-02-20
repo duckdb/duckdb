@@ -378,7 +378,7 @@ enum NfKeywordIndex
 
 class NfKeywordTable
 {
-    typedef ::std::vector<String> Keywords_t;
+    typedef ::vector<String> Keywords_t;
     Keywords_t m_keywords;
 
 public:
@@ -420,7 +420,7 @@ enum NfSymbolType
 
 class DigitGroupingIterator
 {
-	std::vector<int32_t> maGroupings;
+	vector<int32_t> maGroupings;
     sal_Int32   mnGroup;        // current active grouping
     sal_Int32   mnDigits;       // current active digits per group
     sal_Int32   mnNextPos;      // position (in digits) of next grouping
@@ -484,7 +484,7 @@ class DigitGroupingIterator
 
 public:
 
-    explicit DigitGroupingIterator(std::vector<int32_t>& digit_grouping)
+    explicit DigitGroupingIterator(vector<int32_t>& digit_grouping)
         : maGroupings(digit_grouping)
     {
         initGrouping();

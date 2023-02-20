@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
+using vector;
 using std::make_pair;
 using std::map;
 using std::pair;
 using std::shared_ptr;
 using std::string;
-using std::vector;
 
 struct sqltype {
 	string name;

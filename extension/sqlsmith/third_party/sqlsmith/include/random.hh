@@ -14,7 +14,7 @@ extern std::mt19937_64 rng;
 }
 
 template <typename T>
-T &random_pick(std::vector<T> &container) {
+T &random_pick(vector<T> &container) {
 	if (!container.size())
 		throw std::runtime_error("No candidates available");
 

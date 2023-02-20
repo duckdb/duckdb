@@ -7,9 +7,9 @@
 #include "prod.hh"
 #include <string>
 
+using vector;
 using std::shared_ptr;
 using std::string;
-using std::vector;
 
 struct value_expr : prod {
 	sqltype *type;

@@ -16,7 +16,7 @@ TEST_CASE("Single thread delete", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<unique_ptr<Connection>> connections;
+	duckdb::vector<unique_ptr<Connection>> connections;
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
@@ -51,7 +51,7 @@ TEST_CASE("Sequential delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<unique_ptr<Connection>> connections;
+	duckdb::vector<unique_ptr<Connection>> connections;
 	Value count;
 
 	// enable detailed profiling
@@ -112,7 +112,7 @@ TEST_CASE("Rollback delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<unique_ptr<Connection>> connections;
+	duckdb::vector<unique_ptr<Connection>> connections;
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");

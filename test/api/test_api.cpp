@@ -517,7 +517,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	auto context = make_unique<ClientContext>((*db).instance);
 	auto &connection_manager = ConnectionManager::Get(*context);
 
-	vector<unique_ptr<Connection>> connections;
+	duckdb::vector<unique_ptr<Connection>> connections;
 	size_t createdConnections = 5000;
 	size_t remainingConnections = 500;
 	size_t toRemove = createdConnections - remainingConnections;

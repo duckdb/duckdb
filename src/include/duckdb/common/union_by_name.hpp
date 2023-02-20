@@ -11,8 +11,8 @@
 #include <string>
 #include "duckdb/common/types.hpp"
 
+using duckdb::vector;
 using std::string;
-using std::vector;
 
 namespace duckdb {
 

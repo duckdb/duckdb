@@ -80,7 +80,7 @@ public:
 struct string_t;
 
 template <class T>
-using child_list_t = std::vector<std::pair<std::string, T>>;
+using child_list_t = vector<std::pair<std::string, T>>;
 //! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;

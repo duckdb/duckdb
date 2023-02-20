@@ -291,7 +291,7 @@ public:
 				// If we don't have an initial reader anymore we need to create a reader
 				auto &current_reader = bind_data.initial_reader ? bind_data.initial_reader : reader;
 				if (!current_reader) {
-					std::vector<column_t> ids(bind_data.names.size());
+					vector<column_t> ids(bind_data.names.size());
 					std::iota(std::begin(ids), std::end(ids), 0); // fill with 0,1,2,3.. etc
 
 					current_reader =
@@ -470,10 +470,10 @@ public:
 
 		auto result = make_unique<ParquetReadGlobalState>();
 
-		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
+		result->file_opening = vector<bool>(bind_data.files.size(), false);
 		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (!bind_data.parquet_options.union_by_name) {
-			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+			result->readers = vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			if (bind_data.initial_reader) {
 				result->initial_reader = bind_data.initial_reader;
 				result->readers[0] = bind_data.initial_reader;

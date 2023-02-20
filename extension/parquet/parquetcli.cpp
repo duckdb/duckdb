@@ -44,8 +44,8 @@ int main(int argc, const char **argv) {
 	ParquetReader reader(allocator, fs->OpenFile(filename, FileFlags::FILE_FLAGS_READ));
 
 	// only return columns first_name and last_name
-	std::vector<column_t> column_ids;
-	std::vector<LogicalType> return_types;
+	vector<column_t> column_ids;
+	vector<LogicalType> return_types;
 	std::unordered_map<std::string, int> name_map;
 	for (idx_t col_idx = 0; col_idx < reader.names.size(); col_idx++) {
 		auto &colname = reader.names[col_idx];
@@ -62,7 +62,7 @@ int main(int argc, const char **argv) {
 	}
 
 	// read all row groups
-	std::vector<idx_t> groups;
+	vector<idx_t> groups;
 	for (idx_t i = 0; i < reader.NumRowGroups(); i++) {
 		groups.push_back(i);
 	}

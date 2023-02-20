@@ -58,9 +58,9 @@ struct sqlite3_stmt {
 	//! The current row into the current chunk that we are iterating over
 	int64_t current_row;
 	//! Bound values, used for binding to the prepared statement
-	vector<Value> bound_values;
+	duckdb::vector<Value> bound_values;
 	//! Names of the prepared parameters
-	vector<string> bound_names;
+	duckdb::vector<string> bound_names;
 	//! The current column values converted to string, used and filled by sqlite3_column_text
 	unique_ptr<sqlite3_string_buffer[]> current_text;
 };
@@ -172,7 +172,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		bool set_remainder = next_location < query.size();
 
 		// extract the first statement
-		vector<unique_ptr<SQLStatement>> statements;
+		duckdb::vector<unique_ptr<SQLStatement>> statements;
 		statements.push_back(std::move(parser.statements[0]));
 
 		db->con->context->HandlePragmaStatements(statements);
@@ -1236,7 +1236,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 		nArg = 0;
 	}
 
-	vector<LogicalType> argv_types(nArg);
+	duckdb::vector<LogicalType> argv_types(nArg);
 	for (idx_t i = 0; i < (idx_t)nArg; ++i) {
 		argv_types[i] = LogicalType::ANY;
 	}

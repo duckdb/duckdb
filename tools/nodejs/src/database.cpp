@@ -71,7 +71,7 @@ struct OpenTask : public Task {
 		auto &database = Get<Database>();
 		Napi::Env env = database.Env();
 
-		std::vector<napi_value> args;
+		vector<napi_value> args;
 		if (!success) {
 			args.push_back(Utils::CreateError(env, error.Message()));
 		} else {
@@ -272,7 +272,7 @@ Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
 struct JSRSArgs {
 	std::string table = "";
 	std::string function = "";
-	std::vector<duckdb::Value> parameters;
+	vector<duckdb::Value> parameters;
 	bool done = false;
 	duckdb::PreservedError error;
 };
@@ -323,7 +323,7 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 	}
 	if (jsargs.function != "") {
 		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
-		std::vector<std::unique_ptr<duckdb::ParsedExpression>> children;
+		vector<std::unique_ptr<duckdb::ParsedExpression>> children;
 		for (auto &param : jsargs.parameters) {
 			children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(std::move(param)));
 		}

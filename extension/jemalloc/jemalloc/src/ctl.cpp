@@ -4108,7 +4108,7 @@ label_return:
  *
  * (b) It facilitates usage needs especially common in C++.  A vast variety of
  * C++ objects are instantiated with multiple dynamic memory allocations.  For
- * example, std::string and std::vector typically use at least two allocations,
+ * example, std::string and vector typically use at least two allocations,
  * one for the metadata and one for the actual content.  Other types may use
  * even more allocations.  When inquiring about utilization statistics, the
  * caller often wants to examine into all such allocations, especially internal

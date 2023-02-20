@@ -22,7 +22,7 @@ namespace duckdb {
 namespace py = pybind11;
 
 template <class T, typename... ARGS>
-void DefineMethod(std::vector<const char *> aliases, T &mod, ARGS &&... args) {
+void DefineMethod(vector<const char *> aliases, T &mod, ARGS &&... args) {
 	for (auto &alias : aliases) {
 		mod.def(alias, args...);
 	}

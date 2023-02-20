@@ -189,9 +189,9 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	return value;
 }
 
-static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names, duckdb::DataChunk &chunk) {
+static Napi::Value convert_chunk(Napi::Env &env, vector<std::string> names, duckdb::DataChunk &chunk) {
 	Napi::EscapableHandleScope scope(env);
-	std::vector<Napi::String> node_names;
+	vector<Napi::String> node_names;
 	assert(names.size() == chunk.ColumnCount());
 	node_names.reserve(names.size());
 	for (auto &name : names) {
@@ -215,7 +215,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 enum RunType { RUN, EACH, ALL, ARROW_ALL };
 
 struct StatementParam {
-	std::vector<duckdb::Value> params;
+	vector<duckdb::Value> params;
 	Napi::Function callback;
 	Napi::Function complete;
 };

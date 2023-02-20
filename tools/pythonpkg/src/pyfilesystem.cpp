@@ -107,7 +107,7 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	}
 	auto returner = py::list(filesystem.attr("glob")(py::str(stripPrefix(path))));
 
-	std::vector<string> results;
+	vector<string> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
 	for (auto item : returner) {
 		results.push_back(py::str(unstrip_protocol(py::str(item))));

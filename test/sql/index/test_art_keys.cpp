@@ -31,7 +31,7 @@ static void TestKeyBigger(Key &big_key, Key &small_key) {
 	REQUIRE(!(small_key > big_key));
 }
 
-static void TestKeys(vector<Key> &keys) {
+static void TestKeys(duckdb::vector<Key> &keys) {
 	for (idx_t outer = 0; outer < keys.size(); outer++) {
 		for (idx_t inner = 0; inner < keys.size(); inner++) {
 			if (inner == outer) {
@@ -61,7 +61,7 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
 
 	// Test tiny int
-	vector<Key> keys;
+	duckdb::vector<Key> keys;
 	keys.push_back(Key::CreateKey<int8_t>(arena_allocator, -127));
 	keys.push_back(Key::CreateKey<int8_t>(arena_allocator, -55));
 	keys.push_back(Key::CreateKey<int8_t>(arena_allocator, -1));
@@ -214,7 +214,7 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 	{
 		// EncodeFloat
 		// positive values
-		vector<float> values;
+		duckdb::vector<float> values;
 		float current_value = 0.00001f;
 		while (isfinite(current_value)) {
 			values.push_back(current_value);
@@ -243,7 +243,7 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 	{
 		// EncodeDouble
 		// positive values
-		vector<double> values;
+		duckdb::vector<double> values;
 		double current_value = 0.0000001;
 		while (isfinite(current_value)) {
 			values.push_back(current_value);

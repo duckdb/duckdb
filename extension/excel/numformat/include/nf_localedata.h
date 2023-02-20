@@ -56,17 +56,17 @@ struct FormatCodeInfo {
 struct LocaleInfo {
 	SeparatorInfo seperators;
 	// std::wstring		num_thousand_separator;	// ','
-	std::vector<int32_t> digit_grouping; // {3, 0} or {3, 2, 0} (India and Bhutan)
+	vector<int32_t> digit_grouping; // {3, 0} or {3, 2, 0} (India and Bhutan)
 	std::wstring cur_currency_id;        // "USD"
 	std::map<std::wstring, CurrencyInfo> currency;
 	std::wstring time_am;
 	std::wstring time_pm;
 	DateFormat date_format;
-	std::vector<AbbrvFullNameInfo> months_of_year;
-	std::vector<AbbrvFullNameInfo> days_of_week;
+	vector<AbbrvFullNameInfo> months_of_year;
+	vector<AbbrvFullNameInfo> days_of_week;
 	std::wstring reserved_words[reservedWords::COUNT];
 	FormatCodeInfo format_codes;
-	std::vector<AbbrvFullNameInfo> eras;
+	vector<AbbrvFullNameInfo> eras;
 
 public:
 	std::wstring &getCurrentCurrencyId() {
@@ -129,7 +129,7 @@ public:
 		return m_locale_list[m_cur_locale_id].seperators.longdateday;
 	}
 
-	std::vector<int32_t> &getDigitGrouping() {
+	vector<int32_t> &getDigitGrouping() {
 		return m_locale_list[m_cur_locale_id].digit_grouping;
 	}
 

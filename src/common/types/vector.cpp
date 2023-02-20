@@ -244,7 +244,7 @@ struct DataArrays {
 	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {};
 };
 
-void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
+void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
 		auto &buffer = (VectorListBuffer &)auxiliary;
 		auto &child = buffer.GetChild();
@@ -280,7 +280,7 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 	}
 }
 void Vector::Resize(idx_t cur_size, idx_t new_size) {
-	std::vector<DataArrays> to_resize;
+	vector<DataArrays> to_resize;
 	if (!buffer) {
 		buffer = make_unique<VectorBuffer>(0);
 	}
@@ -548,7 +548,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::MAP: {
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
-		std::vector<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
@@ -573,7 +573,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::LIST: {
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
-		std::vector<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}

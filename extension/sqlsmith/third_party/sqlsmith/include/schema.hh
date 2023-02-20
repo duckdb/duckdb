@@ -18,12 +18,12 @@ struct schema {
 	sqltype *internaltype;
 	sqltype *arraytype;
 
-	std::vector<sqltype *> types;
+	vector<sqltype *> types;
 
-	std::vector<table> tables;
-	std::vector<op> operators;
-	std::vector<routine> routines;
-	std::vector<routine> aggregates;
+	vector<table> tables;
+	vector<op> operators;
+	vector<routine> routines;
+	vector<routine> aggregates;
 
 	typedef std::tuple<sqltype *, sqltype *, sqltype *> typekey;
 	std::multimap<typekey, op> index;
@@ -35,7 +35,7 @@ struct schema {
 	std::multimap<sqltype *, table *> tables_with_columns_of_type;
 	std::multimap<sqltype *, op *> operators_returning_type;
 	std::multimap<sqltype *, sqltype *> concrete_type;
-	std::vector<table *> base_tables;
+	vector<table *> base_tables;
 
 	string version;
 	int version_num; // comparable version number

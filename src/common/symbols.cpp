@@ -1,5 +1,5 @@
 // this file is used to instantiate symbols for LLDB so e.g.
-// std::vector and std::unique_ptr can be accessed from the debugger
+// vector and std::unique_ptr can be accessed from the debugger
 
 #ifdef DEBUG
 
@@ -159,36 +159,38 @@ template class std::unique_ptr<PrivateAllocatorData>;
 	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
-INSTANTIATE_VECTOR(std::vector<ColumnDefinition>)
-template class std::vector<ExpressionType>;
-INSTANTIATE_VECTOR(std::vector<JoinCondition>)
-INSTANTIATE_VECTOR(std::vector<OrderByNode>)
-template class std::vector<uint64_t>;
-template class std::vector<string>;
-INSTANTIATE_VECTOR(std::vector<Expression *>)
-INSTANTIATE_VECTOR(std::vector<BoundParameterExpression *>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinNode>>)
-template class std::vector<PhysicalType>;
-template class std::vector<Value>;
-template class std::vector<int>;
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Event>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::weak_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<MetaPipeline>>)
-template class std::vector<std::vector<Expression *>>;
-template class std::vector<LogicalType>;
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinHashTable>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<ColumnDataCollection>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<ColumnDataAllocator>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<RowDataBlock>>)
+template class duckdb::vector<ExpressionType>;
+template class duckdb::vector<uint64_t>;
+template class duckdb::vector<string>;
+template class duckdb::vector<PhysicalType>;
+template class duckdb::vector<Value>;
+template class duckdb::vector<int>;
+template class duckdb::vector<duckdb::vector<Expression *>>;
+template class duckdb::vector<LogicalType>;
+INSTANTIATE_VECTOR(duckdb::vector<ColumnDefinition>)
+INSTANTIATE_VECTOR(duckdb::vector<JoinCondition>)
+INSTANTIATE_VECTOR(duckdb::vector<OrderByNode>)
+INSTANTIATE_VECTOR(duckdb::vector<Expression *>)
+INSTANTIATE_VECTOR(duckdb::vector<BoundParameterExpression *>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<Expression>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<DataChunk>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<SQLStatement>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<PhysicalOperator>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<LogicalOperator>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<Transaction>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<JoinNode>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<Rule>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::shared_ptr<Event>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::shared_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::weak_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::shared_ptr<MetaPipeline>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<JoinHashTable>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<ColumnDataCollection>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(duckdb::vector<std::unique_ptr<RowDataBlock>>)
+
+namespace duckdb {} // namespace duckdb
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;
@@ -208,7 +210,7 @@ INSTANTIATE_UNORDERED_MAP(catalog_map)
 */
 
 template class std::unordered_map<string, uint64_t>;
-template class std::unordered_map<string, std::vector<string>>;
+template class std::unordered_map<string, vector<string>>;
 template class std::unordered_map<string, std::pair<uint64_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;

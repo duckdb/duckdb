@@ -202,7 +202,7 @@ public:
 	static bool OtherIsInt(Napi::Number source);
 
 	template <class T>
-	static T *NewUnwrap(std::vector<napi_value> args) {
+	static T *NewUnwrap(vector<napi_value> args) {
 		auto obj = T::constructor.New(args);
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}

@@ -100,7 +100,7 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 100 keys
 	idx_t n = 100;
@@ -172,7 +172,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 100 keys
 	idx_t n = 100;
@@ -244,7 +244,7 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 10k keys
 	idx_t n = 10000;
@@ -316,7 +316,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 10000 keys
 	idx_t n = 10000;
