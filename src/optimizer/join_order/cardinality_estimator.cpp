@@ -399,7 +399,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
-	TableCatalogEntry *catalog_table = nullptr;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	idx_t distinct_count = node->GetBaseTableCardinality();
 
@@ -409,6 +408,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
+		TableCatalogEntry *catalog_table = nullptr;
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		auto actual_binding = relation_column_to_original_column.find(key);
 		// each relation has columns that are either projected or used as filters
@@ -583,12 +583,11 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	D_ASSERT(node->set->count == 1);
 	auto relation_id = node->set->relations[0];
 
-	TableFilterSet *table_filters = nullptr;
-
 	double lowest_card_found = NumericLimits<double>::Maximum();
 	for (auto &column : relation_attributes[relation_id].columns) {
 		auto card_after_filters = node->GetBaseTableCardinality();
 		ColumnBinding key = ColumnBinding(relation_id, column);
+		TableFilterSet *table_filters = nullptr;
 		auto actual_binding = relation_column_to_original_column.find(key);
 		if (actual_binding != relation_column_to_original_column.end()) {
 			table_filters = GetTableFilters(op, actual_binding->second.table_index);
