@@ -74,7 +74,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	InitializeDSDgen(scale);
 
 	// populate append info
-	vector<unique_ptr<tpcds_append_information>> append_info;
+	vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 

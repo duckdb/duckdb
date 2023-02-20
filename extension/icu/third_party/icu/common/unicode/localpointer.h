@@ -43,6 +43,7 @@
 #if U_SHOW_CPLUSPLUS_API
 
 #include <memory>
+#include "duckdb/common/unique_ptr.hpp"
 
 U_NAMESPACE_BEGIN
 
@@ -236,7 +237,7 @@ public:
      * @param p The unique_ptr from which the pointer will be stolen.
      * @draft ICU 64
      */
-    explicit LocalPointer(unique_ptr<T> &&p)
+    explicit LocalPointer(duckdb::unique_ptr<T> &&p)
         : LocalPointerBase<T>(p.release()) {}
 #endif  /* U_HIDE_DRAFT_API */
 
@@ -270,7 +271,7 @@ public:
      * @return *this
      * @draft ICU 64
      */
-    LocalPointer<T> &operator=(unique_ptr<T> &&p) U_NOEXCEPT {
+    LocalPointer<T> &operator=(duckdb::unique_ptr<T> &&p) U_NOEXCEPT {
         adoptInstead(p.release());
         return *this;
     }
@@ -344,8 +345,8 @@ public:
      *         icu::LocalPointer.
      * @draft ICU 64
      */
-    operator unique_ptr<T> () && {
-        return unique_ptr<T>(LocalPointerBase<T>::orphan());
+    operator duckdb::unique_ptr<T> () && {
+        return duckdb::unique_ptr<T>(LocalPointerBase<T>::orphan());
     }
 #endif  /* U_HIDE_DRAFT_API */
 };
@@ -417,7 +418,7 @@ public:
      * @param p The unique_ptr from which the array will be stolen.
      * @draft ICU 64
      */
-    explicit LocalArray(unique_ptr<T[]> &&p)
+    explicit LocalArray(duckdb::unique_ptr<T[]> &&p)
         : LocalPointerBase<T>(p.release()) {}
 #endif  /* U_HIDE_DRAFT_API */
 
@@ -451,7 +452,7 @@ public:
      * @return *this
      * @draft ICU 64
      */
-    LocalArray<T> &operator=(unique_ptr<T[]> &&p) U_NOEXCEPT {
+    LocalArray<T> &operator=(duckdb::unique_ptr<T[]> &&p) U_NOEXCEPT {
         adoptInstead(p.release());
         return *this;
     }
@@ -533,8 +534,8 @@ public:
      *         icu::LocalPointer.
      * @draft ICU 64
      */
-    operator unique_ptr<T[]> () && {
-        return unique_ptr<T[]>(LocalPointerBase<T>::orphan());
+    operator duckdb::unique_ptr<T[]> () && {
+        return duckdb::unique_ptr<T[]>(LocalPointerBase<T>::orphan());
     }
 #endif  /* U_HIDE_DRAFT_API */
 };
@@ -570,7 +571,7 @@ public:
             src.ptr=NULL; \
         } \
         /* TODO: Be agnostic of the deleter function signature from the user-provided unique_ptr? */ \
-        explicit LocalPointerClassName(unique_ptr<Type, decltype(&closeFunction)> &&p) \
+        explicit LocalPointerClassName(duckdb::unique_ptr<Type, decltype(&closeFunction)> &&p) \
                 : LocalPointerBase<Type>(p.release()) {} \
         ~LocalPointerClassName() { if (ptr != NULL) { closeFunction(ptr); } } \
         LocalPointerClassName &operator=(LocalPointerClassName &&src) U_NOEXCEPT { \
@@ -580,7 +581,7 @@ public:
             return *this; \
         } \
         /* TODO: Be agnostic of the deleter function signature from the user-provided unique_ptr? */ \
-        LocalPointerClassName &operator=(unique_ptr<Type, decltype(&closeFunction)> &&p) { \
+        LocalPointerClassName &operator=(duckdb::unique_ptr<Type, decltype(&closeFunction)> &&p) { \
             adoptInstead(p.release()); \
             return *this; \
         } \
@@ -593,8 +594,8 @@ public:
             if (ptr != NULL) { closeFunction(ptr); } \
             ptr=p; \
         } \
-        operator unique_ptr<Type, decltype(&closeFunction)> () && { \
-            return unique_ptr<Type, decltype(&closeFunction)>(LocalPointerBase<Type>::orphan(), closeFunction); \
+        operator duckdb::unique_ptr<Type, decltype(&closeFunction)> () && { \
+            return duckdb::unique_ptr<Type, decltype(&closeFunction)>(LocalPointerBase<Type>::orphan(), closeFunction); \
         } \
     }
 
