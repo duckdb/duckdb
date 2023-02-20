@@ -129,7 +129,7 @@ public:
 			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
 			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
 			if (A != B) {
-				// Either lenght or prefix are different -> not equal
+				// Either length or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
@@ -145,7 +145,7 @@ public:
 					return true;
 				}
 			}
-			// either they are short string of same lenght but different content
+			// either they are short string of same length but different content
 			//     or they point to string with different content
 			//     either way, they can't represent the same underlying string
 			return false;
@@ -154,9 +154,9 @@ public:
 		static bool GreaterThan(const string_t &left, const string_t &right) {
 			const uint32_t left_length = left.GetSize();
 			const uint32_t right_length = right.GetSize();
-			const uint32_t min_lenght = std::min<uint32_t>(left_length, right_length);
+			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
-			if (min_lenght == 0u)
+			if (min_length == 0u)
 				return (left_length > 0u);
 
 #ifdef DUCKDB_DEBUG_NO_INLINE
@@ -172,7 +172,7 @@ public:
 			if (A != B)
 				return A > B;
 #endif
-			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_lenght);
+			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_length);
 			auto final_res = (memcmp_res == 0) ? (left_length > right_length) : (memcmp_res > 0);
 			return final_res;
 		}
