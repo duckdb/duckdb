@@ -172,7 +172,7 @@ bool PythonFilesystem::DirectoryExists(const string &directory) {
 void PythonFilesystem::RemoveDirectory(const string &directory) {
 	PythonGILWrapper gil;
 
-	filesystem.attr("rmdir")(py::str(directory));
+	filesystem.attr("rm")(directory, py::arg("recursive") = true);
 }
 void PythonFilesystem::CreateDirectory(const string &directory) {
 	PythonGILWrapper gil;
