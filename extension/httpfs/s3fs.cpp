@@ -574,11 +574,10 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		query_param = url.substr(question_pos + 1);
 	}
 
-	if (!query_param.empty() && query_param.find('.') == string::npos) {
+	if (!query_param.empty()) {
 		path += url.substr(slash_pos, question_pos - slash_pos);
 	} else {
 		path += url.substr(slash_pos);
-		query_param = "";
 	}
 
 	if (path.empty()) {
