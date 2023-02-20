@@ -1,5 +1,6 @@
 name: Regression
 on:
+  workflow_dispatch:
   push:
     branches:
       - '**'
@@ -7,6 +8,10 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
   pull_request:
     paths-ignore:
       - '**.md'
