@@ -21,7 +21,7 @@ namespace duckdb {
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
-	SelectNode();
+	DUCKDB_API SelectNode();
 
 	//! The projection list
 	vector<unique_ptr<ParsedExpression>> select_list;
