@@ -58,7 +58,7 @@ public:
 	    : arrow_object(arrow_table), config(config) {};
 
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
+	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
 
 	//! Get the schema of the arrow object
 	static void GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema);

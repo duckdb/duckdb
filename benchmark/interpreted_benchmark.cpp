@@ -34,10 +34,10 @@ static string ParseGroupFromPath(string file) {
 }
 
 struct InterpretedBenchmarkState : public BenchmarkState {
-	unique_ptr<DBConfig> benchmark_config;
+	duckdb::unique_ptr<DBConfig> benchmark_config;
 	DuckDB db;
 	Connection con;
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 
 	explicit InterpretedBenchmarkState(string path)
 	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
@@ -47,7 +47,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 		D_ASSERT(!res->HasError());
 	}
 
-	unique_ptr<DBConfig> GetBenchmarkConfig() {
+	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig() {
 		auto result = make_unique<DBConfig>();
 		result->options.load_extensions = false;
 		return result;
@@ -160,7 +160,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}
 
-				auto buffer = unique_ptr<char[]>(new char[size]);
+				auto buffer = duckdb::unique_ptr<char[]>(new char[size]);
 				if (!file.read(buffer.get(), size)) {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}
@@ -308,9 +308,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	unique_ptr<InterpretedBenchmarkState> state;
+	duckdb::unique_ptr<InterpretedBenchmarkState> state;
 	auto full_db_path = GetDatabasePath();
 	try {
 		state = make_unique<InterpretedBenchmarkState>(full_db_path);
@@ -398,7 +398,7 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (queries.find("cleanup") != queries.end()) {
-		unique_ptr<QueryResult> result;
+		duckdb::unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {

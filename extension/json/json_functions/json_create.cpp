@@ -6,12 +6,12 @@ namespace duckdb {
 
 struct JSONCreateFunctionData : public FunctionData {
 public:
-	explicit JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
+	explicit JSONCreateFunctionData(unordered_map<string, duckdb::unique_ptr<Vector>> const_struct_names)
 	    : const_struct_names(std::move(const_struct_names)) {
 	}
-	unique_ptr<FunctionData> Copy() const override {
+	duckdb::unique_ptr<FunctionData> Copy() const override {
 		// Have to do this because we can't implicitly copy Vector
-		unordered_map<string, unique_ptr<Vector>> map_copy;
+		unordered_map<string, duckdb::unique_ptr<Vector>> map_copy;
 		for (const auto &kv : const_struct_names) {
 			// The vectors are const vectors of the key value
 			map_copy[kv.first] = make_unique<Vector>(Value(kv.first));
@@ -24,10 +24,11 @@ public:
 
 public:
 	// Const struct name vectors live here so they don't have to be re-initialized for every DataChunk
-	unordered_map<string, unique_ptr<Vector>> const_struct_names;
+	unordered_map<string, duckdb::unique_ptr<Vector>> const_struct_names;
 };
 
-static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_struct_names, const LogicalType &type) {
+static LogicalType GetJSONType(unordered_map<string, duckdb::unique_ptr<Vector>> &const_struct_names,
+                               const LogicalType &type) {
 	if (JSONCommon::LogicalTypeIsJSON(type)) {
 		return type;
 	}
@@ -85,9 +86,9 @@ static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_
 	}
 }
 
-static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments, bool object) {
-	unordered_map<string, unique_ptr<Vector>> const_struct_names;
+static duckdb::unique_ptr<FunctionData>
+JSONCreateBindParams(ScalarFunction &bound_function, vector<duckdb::unique_ptr<Expression>> &arguments, bool object) {
+	unordered_map<string, duckdb::unique_ptr<Vector>> const_struct_names;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->return_type;
 		if (arguments[i]->HasParameter()) {
@@ -106,29 +107,29 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 	return make_unique<JSONCreateFunctionData>(std::move(const_struct_names));
 }
 
-static unique_ptr<FunctionData> JSONObjectBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> JSONObjectBind(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (arguments.size() % 2 != 0) {
 		throw InvalidInputException("json_object() requires an even number of arguments");
 	}
 	return JSONCreateBindParams(bound_function, arguments, true);
 }
 
-static unique_ptr<FunctionData> JSONArrayBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> JSONArrayBind(ClientContext &context, ScalarFunction &bound_function,
+                                                      vector<duckdb::unique_ptr<Expression>> &arguments) {
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> ToJSONBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ToJSONBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
 		throw InvalidInputException("to_json() takes exactly one argument");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFunction &bound_function,
+                                                        vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
 		throw InvalidInputException("array_to_json() takes exactly one argument");
 	}
@@ -142,8 +143,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
 
-static unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunction &bound_function,
+                                                      vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
 		throw InvalidInputException("row_to_json() takes exactly one argument");
 	}

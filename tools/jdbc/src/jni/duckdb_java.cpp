@@ -374,7 +374,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNI
 }
 
 struct StatementHolder {
-	unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<PreparedStatement> stmt;
 };
 
 #include "utf8proc_wrapper.hpp"
@@ -391,7 +391,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 
 	// invalid sql raises a parse exception
 	// need to be caught and thrown via JNI
-	vector<unique_ptr<SQLStatement>> statements;
+	vector<duckdb::unique_ptr<SQLStatement>> statements;
 	try {
 		statements = conn_ref->ExtractStatements(query.c_str());
 	} catch (const std::exception &e) {
@@ -436,8 +436,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 }
 
 struct ResultHolder {
-	unique_ptr<QueryResult> res;
-	unique_ptr<DataChunk> chunk;
+	duckdb::unique_ptr<QueryResult> res;
+	duckdb::unique_ptr<DataChunk> chunk;
 };
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv *env, jclass, jobject stmt_ref_buf,
@@ -983,7 +983,7 @@ class JavaArrowTabularStreamFactory {
 public:
 	JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
 
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
 		if (!factory->stream_ptr->release) {

@@ -26,7 +26,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	const idx_t num_cols = bound_original.types.size();
 
 	// This loop also makes sure the columns have an alias (needed for struct_pack)
-	vector<unique_ptr<ParsedExpression>> strftime_children;
+	vector<duckdb::unique_ptr<ParsedExpression>> strftime_children;
 	for (idx_t i = 0; i < num_cols; i++) {
 		strftime_children.clear();
 		auto &col = select_stmt.select_list[i];
@@ -44,7 +44,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
-	vector<unique_ptr<ParsedExpression>> struct_pack_child;
+	vector<duckdb::unique_ptr<ParsedExpression>> struct_pack_child;
 	struct_pack_child.emplace_back(make_unique<FunctionExpression>("struct_pack", std::move(select_stmt.select_list)));
 	select_stmt.select_list.clear();
 	select_stmt.select_list.emplace_back(make_unique<FunctionExpression>("to_json", std::move(struct_pack_child)));
@@ -59,8 +59,9 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return binder.Bind(*stmt_copy);
 }
 
-static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                                 vector<LogicalType> &expected_types) {
+static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info,
+                                                         vector<string> &expected_names,
+                                                         vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<JSONScanData>();
 
 	bind_data->file_paths.emplace_back(info.file_path);

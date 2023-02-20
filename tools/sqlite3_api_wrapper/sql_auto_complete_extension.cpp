@@ -208,7 +208,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 
 enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
 
-static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
+static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// for auto-completion, we consider 4 scenarios
 	// * there is nothing in the buffer, or only one word -> suggest a keyword
 	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
@@ -353,8 +353,8 @@ standard_suggestion:
 	return make_unique<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
 
-static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

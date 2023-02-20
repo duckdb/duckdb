@@ -20,7 +20,7 @@ public:
 	virtual ~JupyterProgressBarDisplay() {
 	}
 
-	static unique_ptr<ProgressBarDisplay> Create();
+	static duckdb::unique_ptr<ProgressBarDisplay> Create();
 
 public:
 	void Update(double progress);

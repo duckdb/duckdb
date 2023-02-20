@@ -49,7 +49,7 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
 	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
@@ -273,7 +273,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			throw InvalidInputException("Node has no children but should");
 		}
 		child_list_t<LogicalType> child_types;
-		vector<unique_ptr<ColumnReader>> child_readers;
+		vector<duckdb::unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
@@ -289,7 +289,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			c_idx++;
 		}
 		D_ASSERT(!child_types.empty());
-		unique_ptr<ColumnReader> result;
+		duckdb::unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 
 		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
@@ -527,7 +527,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
+ParquetReader::ParquetReader(Allocator &allocator_p, duckdb::unique_ptr<FileHandle> file_handle_p,
                              const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
     : allocator(allocator_p) {
 	file_name = file_handle_p->path;
@@ -585,7 +585,7 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 // TODO also somewhat ugly, perhaps this can be moved to the column reader too
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, LogicalType &type,
                                                          column_t file_col_idx, const FileMetaData *file_meta_data) {
-	unique_ptr<BaseStatistics> column_stats;
+	duckdb::unique_ptr<BaseStatistics> column_stats;
 	auto root_reader = reader.CreateReader(file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
@@ -744,7 +744,8 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids) {
+void ParquetReader::RearrangeChildReaders(duckdb::unique_ptr<duckdb::ColumnReader> &root_reader,
+                                          vector<column_t> &column_ids) {
 	auto &root_struct_reader = (StructColumnReader &)*root_reader;
 	unordered_map<idx_t, idx_t> reverse_union_idx;
 

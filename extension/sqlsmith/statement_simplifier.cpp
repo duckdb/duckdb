@@ -47,7 +47,7 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 template <class T>
 void StatementSimplifier::SimplifyListReplaceNull(vector<T> &list) {
 	for (idx_t i = 0; i < list.size(); i++) {
-		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+		duckdb::unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
 		SimplifyReplace(list[i], constant);
 	}
 }
@@ -60,7 +60,7 @@ void StatementSimplifier::SimplifyListReplace(T &element, vector<T> &list) {
 }
 
 template <class T>
-void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
+void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
 	}
@@ -153,7 +153,7 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	SimplifyList(node.modifiers);
 }
 
-void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr) {
+void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return;
 	}
@@ -165,7 +165,7 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	default:
 		break;
 	}
-	unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+	duckdb::unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
 	SimplifyReplace(expr, constant);
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
@@ -228,7 +228,7 @@ void StatementSimplifier::Simplify(OrderModifier &modifier) {
 void StatementSimplifier::Simplify(SelectStatement &stmt) {
 	Simplify(*stmt.node);
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    *stmt.node, [&](unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
+	    *stmt.node, [&](duckdb::unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
 }
 
 void StatementSimplifier::Simplify(InsertStatement &stmt) {

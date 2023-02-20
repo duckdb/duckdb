@@ -271,7 +271,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	row_group.num_rows = buffer.Count();
 	row_group.__isset.file_offset = true;
 
-	vector<unique_ptr<ColumnWriterState>> states;
+	vector<duckdb::unique_ptr<ColumnWriterState>> states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {

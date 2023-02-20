@@ -57,7 +57,7 @@ public:
 
 struct JSONFileHandle {
 public:
-	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	JSONFileHandle(duckdb::unique_ptr<FileHandle> file_handle, Allocator &allocator);
 	void Close();
 
 	idx_t FileSize() const;
@@ -78,7 +78,7 @@ private:
 
 private:
 	//! The JSON file handle
-	unique_ptr<FileHandle> file_handle;
+	duckdb::unique_ptr<FileHandle> file_handle;
 	Allocator &allocator;
 
 	//! File properties
@@ -108,7 +108,7 @@ public:
 	JSONFileHandle &GetFileHandle() const;
 
 	//! Insert/get/remove buffer (grabs the lock)
-	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
+	void InsertBuffer(idx_t buffer_idx, duckdb::unique_ptr<JSONBufferHandle> &&buffer);
 	JSONBufferHandle *GetBuffer(idx_t buffer_idx);
 	AllocatedData RemoveBuffer(idx_t buffer_idx);
 
@@ -138,12 +138,12 @@ private:
 	BufferedJSONReaderOptions options;
 
 	//! File handle
-	unique_ptr<JSONFileHandle> file_handle;
+	duckdb::unique_ptr<JSONFileHandle> file_handle;
 
 	//! Next buffer index within the file
 	idx_t buffer_index;
 	//! Mapping from batch index to currently held buffers
-	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
+	unordered_map<idx_t, duckdb::unique_ptr<JSONBufferHandle>> buffer_map;
 
 	//! Line count per buffer
 	vector<int64_t> buffer_line_or_object_counts;

@@ -19,8 +19,8 @@ struct DuckDBPyResult {
 public:
 	idx_t chunk_offset = 0;
 
-	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<DataChunk> current_chunk;
 	// Holds the categories of Categorical/ENUM types
 	unordered_map<idx_t, py::list> categories;
 	// Holds the categorical type of Categorical/ENUM types
@@ -67,8 +67,8 @@ private:
 
 	void ChangeToTZType(DataFrame &df);
 	void ChangeDateToDatetime(DataFrame &df);
-	unique_ptr<DataChunk> FetchNext(QueryResult &result);
-	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+	duckdb::unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	duckdb::unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 
 private:
 	bool result_closed = false;

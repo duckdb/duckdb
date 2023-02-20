@@ -12,16 +12,16 @@ namespace duckdb {
 struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
 		UErrorCode status = U_ZERO_ERROR;
-		unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
+		duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
 		now = calendar->getNow();
 	}
 
-	unique_ptr<icu::StringEnumeration> tzs;
+	duckdb::unique_ptr<icu::StringEnumeration> tzs;
 	UDate now;
 };
 
-static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
+                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
@@ -34,7 +34,8 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-static unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context, TableFunctionInitInput &input) {
+static duckdb::unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context,
+                                                                    TableFunctionInitInput &input) {
 	return make_unique<ICUTimeZoneData>();
 }
 
@@ -71,7 +72,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		}
 		output.SetValue(1, index, Value(short_id));
 
-		unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
+		duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
 		int32_t dst_offset_ms;
 		tz->getOffset(data.now, false, raw_offset_ms, dst_offset_ms, status);
@@ -232,15 +233,15 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 			return BindData::Equals(other_p);
 		}
 
-		unique_ptr<FunctionData> Copy() const override {
+		duckdb::unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindDataNow>(*this);
 		}
 
 		timestamp_t now;
 	};
 
-	static unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
-	                                        vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
+	                                                vector<duckdb::unique_ptr<Expression>> &arguments) {
 		return make_unique<BindDataNow>(context);
 	}
 

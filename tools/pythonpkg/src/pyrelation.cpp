@@ -17,7 +17,8 @@ namespace duckdb {
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(std::move(rel)) {
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result) : rel(nullptr), result(std::move(result)) {
+DuckDBPyRelation::DuckDBPyRelation(duckdb::unique_ptr<DuckDBPyResult> result)
+    : rel(nullptr), result(std::move(result)) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
@@ -451,7 +452,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
-static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
+static duckdb::unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
 	if (!rel) {
 		return nullptr;
 	}

@@ -28,44 +28,50 @@ public:
 
 	static void LoadExtension(const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation",
-	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation",
+	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation",
-	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation",
+	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> Table(const string &tname, shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> Values(py::object params = py::none(),
-	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> View(const string &vname, shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list(),
+	static duckdb::unique_ptr<DuckDBPyRelation> Table(const string &tname,
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> Values(py::object params = py::none(),
+	                                                   shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
-	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                bool union_by_name, const py::object &compression = py::none(),
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
-	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 bool union_by_name, const py::object &compression = py::none(),
+	static duckdb::unique_ptr<DuckDBPyRelation> View(const string &vname,
 	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
-	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list(),
+	                                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value,
+	                                                   shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
+	                                                        bool file_row_number, bool filename, bool hive_partitioning,
+	                                                        bool union_by_name,
+	                                                        const py::object &compression = py::none(),
+	                                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
-	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                                         bool file_row_number, bool filename,
+	                                                         bool hive_partitioning, bool union_by_name,
+	                                                         const py::object &compression = py::none(),
+	                                                         shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static duckdb::unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
+	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static duckdb::unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto,
+	                                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static duckdb::unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
+	                                                         shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static duckdb::unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
+	                                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unordered_set<string> GetTableNames(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -88,11 +94,12 @@ public:
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn = nullptr,
-	                                             const py::object &columns = py::none(),
-	                                             const py::object &sample_size = py::none(),
-	                                             const py::object &maximum_depth = py::none());
-	static unique_ptr<DuckDBPyRelation>
+	static duckdb::unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename,
+	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr,
+	                                                     const py::object &columns = py::none(),
+	                                                     const py::object &sample_size = py::none(),
+	                                                     const py::object &maximum_depth = py::none());
+	static duckdb::unique_ptr<DuckDBPyRelation>
 	ReadCSV(const string &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
 	        const py::object &compression = py::none(), const py::object &sep = py::none(),
 	        const py::object &delimiter = py::none(), const py::object &dtype = py::none(),

@@ -17,7 +17,7 @@
 namespace duckdb {
 
 struct ICUDateFunc {
-	using CalendarPtr = unique_ptr<icu::Calendar>;
+	using CalendarPtr = duckdb::unique_ptr<icu::Calendar>;
 
 	struct BindData : public FunctionData {
 		explicit BindData(ClientContext &context);
@@ -28,23 +28,23 @@ struct ICUDateFunc {
 		CalendarPtr calendar;
 
 		bool Equals(const FunctionData &other_p) const override;
-		unique_ptr<FunctionData> Copy() const override;
+		duckdb::unique_ptr<FunctionData> Copy() const override;
 	};
 
 	struct CastData : public BoundCastData {
-		explicit CastData(unique_ptr<FunctionData> info_p) : info(std::move(info_p)) {
+		explicit CastData(duckdb::unique_ptr<FunctionData> info_p) : info(std::move(info_p)) {
 		}
 
-		unique_ptr<BoundCastData> Copy() const override {
+		duckdb::unique_ptr<BoundCastData> Copy() const override {
 			return make_unique<CastData>(info->Copy());
 		}
 
-		unique_ptr<FunctionData> info;
+		duckdb::unique_ptr<FunctionData> info;
 	};
 
 	//! Binds a default calendar object for use by the function
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                             vector<duckdb::unique_ptr<Expression>> &arguments);
 
 	//! Sets the time zone for the calendar.
 	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);

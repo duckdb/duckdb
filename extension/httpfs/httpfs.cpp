@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
+static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
@@ -68,7 +68,7 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
-static unique_ptr<ResponseWrapper>
+static duckdb::unique_ptr<ResponseWrapper>
 RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
                     const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
 	idx_t tries = 0;
@@ -127,7 +127,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                        unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+                                                        duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
@@ -157,7 +157,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 			if (out_offset + data_length > buffer_out_len) {
 				// Buffer too small, increase its size by at least 2x to fit the new value
 				auto new_size = MaxValue<idx_t>(out_offset + data_length, buffer_out_len * 2);
-				auto tmp = unique_ptr<char[]> {new char[new_size]};
+				auto tmp = duckdb::unique_ptr<char[]> {new char[new_size]};
 				memcpy(tmp.get(), buffer_out.get(), buffer_out_len);
 				buffer_out = std::move(tmp);
 				buffer_out_len = new_size;
@@ -475,7 +475,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			length = value.length;
 
 			if (flags & FileFlags::FILE_FLAGS_READ) {
-				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+				read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 			}
 			return;
 		}
@@ -506,7 +506,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 
 	// Initialize the read buffer now that we know the file exists
 	if (flags & FileFlags::FILE_FLAGS_READ) {
-		read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+		read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
 	if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {

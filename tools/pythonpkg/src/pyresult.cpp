@@ -162,7 +162,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			if (!stream_result->IsOpen()) {
 				break;
 			}
-			unique_ptr<DataChunk> chunk;
+			duckdb::unique_ptr<DataChunk> chunk;
 			{
 				py::gil_scoped_release release;
 				chunk = FetchNextRaw(*stream_result);

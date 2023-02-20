@@ -29,8 +29,8 @@ public:
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
 
-	unique_ptr<RawArrayWrapper> data;
-	unique_ptr<RawArrayWrapper> mask;
+	duckdb::unique_ptr<RawArrayWrapper> data;
+	duckdb::unique_ptr<RawArrayWrapper> mask;
 	bool requires_mask;
 
 public:

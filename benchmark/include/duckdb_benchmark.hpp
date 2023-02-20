@@ -22,7 +22,7 @@ namespace duckdb {
 struct DuckDBBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection conn;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	DuckDBBenchmarkState(string path) : db(path.empty() ? nullptr : path.c_str()), conn(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
@@ -84,11 +84,11 @@ public:
 		}
 	}
 
-	virtual unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() {
+	virtual duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() {
 		return make_unique<DuckDBBenchmarkState>(GetDatabasePath());
 	}
 
-	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {
+	duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {
 		auto state = CreateBenchmarkState();
 		Load(state.get());
 		return std::move(state);

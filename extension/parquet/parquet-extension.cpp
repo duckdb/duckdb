@@ -86,7 +86,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	//! Flag to indicate a file is being opened
 	vector<bool> file_opening;
 	//! Mutexes to wait for a file that is currently being opened
-	unique_ptr<mutex[]> file_mutexes;
+	duckdb::unique_ptr<mutex[]> file_mutexes;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	bool error_opening_file = false;
 
@@ -118,7 +118,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
+	duckdb::unique_ptr<ParquetWriter> writer;
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
@@ -196,9 +196,9 @@ public:
 		return set;
 	}
 
-	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
-	                                                vector<string> &expected_names,
-	                                                vector<LogicalType> &expected_types) {
+	static duckdb::unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
+	                                                        vector<string> &expected_names,
+	                                                        vector<LogicalType> &expected_types) {
 		D_ASSERT(expected_names.size() == expected_types.size());
 		ParquetOptions parquet_options(context);
 
@@ -240,8 +240,8 @@ public:
 		}
 	}
 
-	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                                   column_t column_index) {
+	static duckdb::unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+	                                                           column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
 		if (IsRowIdColumnId(column_index)) {
@@ -263,7 +263,7 @@ public:
 			}
 		} else if (config.options.object_cache_enable) {
 			// multiple files, object cache enabled: merge statistics
-			unique_ptr<BaseStatistics> overall_stats;
+			duckdb::unique_ptr<BaseStatistics> overall_stats;
 
 			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
@@ -320,9 +320,10 @@ public:
 		return nullptr;
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
-	                                                        vector<LogicalType> &return_types, vector<string> &names,
-	                                                        ParquetOptions parquet_options) {
+	static duckdb::unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
+	                                                                vector<LogicalType> &return_types,
+	                                                                vector<string> &names,
+	                                                                ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
 
 		// The most likely path (Parquet Scan without union by name option)
@@ -337,9 +338,10 @@ public:
 		}
 	}
 
-	static unique_ptr<FunctionData> ParquetUnionNamesBind(ClientContext &context, vector<string> files,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
-	                                                      ParquetOptions parquet_options) {
+	static duckdb::unique_ptr<FunctionData> ParquetUnionNamesBind(ClientContext &context, vector<string> files,
+	                                                              vector<LogicalType> &return_types,
+	                                                              vector<string> &names,
+	                                                              ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = std::move(files);
 
@@ -372,8 +374,8 @@ public:
 		return files;
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                vector<LogicalType> &return_types, vector<string> &names) {
+	static duckdb::unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
+	                                                        vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
@@ -399,8 +401,9 @@ public:
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
-	                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	static duckdb::unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
+	                                                            vector<LogicalType> &return_types,
+	                                                            vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
@@ -447,7 +450,7 @@ public:
 		return percentage;
 	}
 
-	static unique_ptr<LocalTableFunctionState>
+	static duckdb::unique_ptr<LocalTableFunctionState>
 	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
@@ -466,14 +469,14 @@ public:
 		return std::move(result);
 	}
 
-	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
-	                                                                  TableFunctionInitInput &input) {
+	static duckdb::unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
+	                                                                          TableFunctionInitInput &input) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 
 		auto result = make_unique<ParquetReadGlobalState>();
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
-		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
+		result->file_mutexes = duckdb::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (!bind_data.parquet_options.union_by_name) {
 			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			if (bind_data.initial_reader) {
@@ -528,8 +531,8 @@ public:
 		bind_data.parquet_options.Serialize(writer);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
-	                                                       TableFunction &function) {
+	static duckdb::unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                               TableFunction &function) {
 		auto files = reader.ReadRequiredList<string>();
 		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		auto names = reader.ReadRequiredList<string>();
@@ -569,7 +572,8 @@ public:
 		} while (true);
 	}
 
-	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
+	static duckdb::unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context,
+	                                                             const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
 		return make_unique<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}
@@ -641,7 +645,7 @@ public:
 	}
 
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	                                         vector<unique_ptr<Expression>> &filters) {
+	                                         vector<duckdb::unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
 		if (!data->files.empty()) {
 			auto initial_filename = data->files[0];
@@ -821,7 +825,7 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
 	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
 	return std::move(table_function);

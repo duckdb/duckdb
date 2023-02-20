@@ -30,7 +30,7 @@ int main(int argc, const char **argv) {
 	options.compression = "none";
 	options.auto_detect = true;
 
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	BufferedCSVReader reader(*fs, std::move(options));
 
 	if (reader.return_types.empty()) {

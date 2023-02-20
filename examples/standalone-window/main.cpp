@@ -49,7 +49,7 @@ int main() {
 	// -> select a, b, row_number() over () from tbl
 	// in this case the window function will receive [a, b] as input, and output [a, b, row_num] as output
 	vector<LogicalType> result_types {input_types[0], input_types[1], sum->return_type};
-	vector<unique_ptr<Expression>> expressions;
+	vector<duckdb::unique_ptr<Expression>> expressions;
 	expressions.push_back(std::move(sum));
 	// construct the window operator
 	auto window = make_unique<PhysicalWindow>(result_types, std::move(expressions), 0);

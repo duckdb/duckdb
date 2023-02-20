@@ -69,7 +69,7 @@ public:
 	void Process(Napi::Env env);
 	void TaskComplete(Napi::Env env);
 
-	void Schedule(Napi::Env env, unique_ptr<Task> task);
+	void Schedule(Napi::Env env, duckdb::unique_ptr<Task> task);
 
 	static bool HasInstance(Napi::Value val) {
 		Napi::Env env = val.Env();
@@ -93,11 +93,11 @@ public:
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;
 	constexpr static int DUCKDB_NODEJS_READONLY = 1;
-	unique_ptr<duckdb::DuckDB> database;
+	duckdb::unique_ptr<duckdb::DuckDB> database;
 
 private:
 	// TODO this task queue can also live in the connection?
-	std::queue<unique_ptr<Task>> task_queue;
+	std::queue<duckdb::unique_ptr<Task>> task_queue;
 	std::mutex task_mutex;
 	bool task_inflight;
 	static Napi::FunctionReference constructor;
@@ -137,7 +137,7 @@ public:
 
 public:
 	static Napi::FunctionReference constructor;
-	unique_ptr<duckdb::Connection> connection;
+	duckdb::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
 	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
 	std::unordered_map<std::string, Napi::Reference<Napi::Array>> array_references;
@@ -164,13 +164,13 @@ public:
 
 public:
 	static Napi::FunctionReference constructor;
-	unique_ptr<duckdb::PreparedStatement> statement;
+	duckdb::unique_ptr<duckdb::PreparedStatement> statement;
 	Connection *connection_ref;
 	bool ignore_first_param = true;
 	std::string sql;
 
 private:
-	unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
+	duckdb::unique_ptr<StatementParam> HandleArgs(const Napi::CallbackInfo &info);
 };
 
 class QueryResult : public Napi::ObjectWrap<QueryResult> {
@@ -178,7 +178,7 @@ public:
 	explicit QueryResult(const Napi::CallbackInfo &info);
 	~QueryResult() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
-	unique_ptr<duckdb::QueryResult> result;
+	duckdb::unique_ptr<duckdb::QueryResult> result;
 
 public:
 	static Napi::FunctionReference constructor;
@@ -191,7 +191,7 @@ private:
 };
 
 struct TaskHolder {
-	unique_ptr<Task> task;
+	duckdb::unique_ptr<Task> task;
 	napi_async_work request;
 	Database *db;
 };

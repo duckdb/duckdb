@@ -27,7 +27,7 @@ struct CastSQLite {
 
 	static VectorType ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
 	                                       vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlites,
-	                                       unique_ptr<UnifiedVectorFormat[]> vec_data);
+	                                       duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data);
 
 	static unique_ptr<vector<sqlite3_value>> ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
 	                                                  Vector &result);

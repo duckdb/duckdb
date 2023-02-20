@@ -272,7 +272,7 @@ int main(int argc, const char *argv[]) {
 				sims_per_thread = options.sim_count - sim_idx;
 			}
 			TPCE::Thread<TPCE::BucketSimulator> *thr =
-			    new TPCE::Thread<TPCE::BucketSimulator>(std::unique_ptr<TPCE::BucketSimulator>(
+			    new TPCE::Thread<TPCE::BucketSimulator>(duckdb::unique_ptr<TPCE::BucketSimulator>(
 			        new TPCE::BucketSimulator(options.sim_first + sim_idx, sims_per_thread, options.cust_count,
 			                                  options.calc_simorders(), options.base_seed, progress)));
 			;

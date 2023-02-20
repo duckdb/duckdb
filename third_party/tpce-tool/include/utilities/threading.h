@@ -69,7 +69,7 @@ extern "C" void *start_thread(void *arg);
 // spawn it in a thread of its own.
 template <typename T> class Thread : public ThreadBase {
 private:
-	std::unique_ptr<T> obj_;
+	duckdb::unique_ptr<T> obj_;
 	TThread tid_;
 #ifndef WIN32
 	TThreadAttr attr_;
@@ -77,7 +77,7 @@ private:
 	int stacksize_;
 
 public:
-	Thread(std::unique_ptr<T> throbj)
+	Thread(duckdb::unique_ptr<T> throbj)
 	    : obj_(throbj), tid_()
 #ifndef WIN32
 	      ,
@@ -89,7 +89,7 @@ public:
 		pthread_attr_init(&attr_);
 #endif
 	}
-	Thread(std::unique_ptr<T> throbj, int stacksize)
+	Thread(duckdb::unique_ptr<T> throbj, int stacksize)
 	    : obj_(throbj), tid_()
 #ifndef WIN32
 	      ,

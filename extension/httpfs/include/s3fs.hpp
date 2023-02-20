@@ -168,14 +168,15 @@ public:
 
 public:
 	// HTTP Requests
-	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                        unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char *buffer_in,
-	                                        idx_t buffer_in_len) override;
-	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map, char *buffer_in,
-	                                       idx_t buffer_in_len) override;
-	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
-	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map, idx_t file_offset,
-	                                            char *buffer_out, idx_t buffer_out_len) override;
+	duckdb::unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                                duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+	                                                char *buffer_in, idx_t buffer_in_len) override;
+	duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                               char *buffer_in, idx_t buffer_in_len) override;
+	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                                    idx_t file_offset, char *buffer_out,
+	                                                    idx_t buffer_out_len) override;
 
 	static void Verify();
 
@@ -214,9 +215,9 @@ public:
 	}
 
 protected:
-	unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
-	                                        FileLockType lock, FileCompressionType compression,
-	                                        FileOpener *opener) override;
+	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
+	                                                FileLockType lock, FileCompressionType compression,
+	                                                FileOpener *opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);

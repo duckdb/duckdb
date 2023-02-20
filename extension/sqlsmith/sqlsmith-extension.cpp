@@ -27,8 +27,8 @@ struct SQLSmithFunctionData : public TableFunctionData {
 	bool finished = false;
 };
 
-static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
+                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<SQLSmithFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "seed") {
@@ -82,8 +82,8 @@ struct ReduceSQLFunctionData : public TableFunctionData {
 	idx_t offset = 0;
 };
 
-static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("sql");
 

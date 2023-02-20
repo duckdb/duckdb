@@ -100,7 +100,7 @@ void CreateMyScanFunction(Connection &con);
 
 unique_ptr<TableRef> MyReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto table_function = make_unique<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
 	table_function->function = make_unique<FunctionExpression>("my_scan", std::move(children));
 	return std::move(table_function);
@@ -201,8 +201,8 @@ struct MyBindData : public TableFunctionData {
 // myothertable
 // k: 1, 10, 20
 // (see MyScanNode)
-static unique_ptr<FunctionData> MyScanBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> MyScanBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto table_name = input.inputs[0].ToString();
 	if (table_name == "mytable") {
 		names.emplace_back("i");
@@ -220,8 +220,8 @@ static unique_ptr<FunctionData> MyScanBind(ClientContext &context, TableFunction
 	return std::move(result);
 }
 
-static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                   column_t column_id) {
+static duckdb::unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
+                                                           column_t column_id) {
 	auto &bind_data = (MyBindData &)*bind_data_p;
 	if (bind_data.table_name == "mytable") {
 		if (column_id == 0) {
@@ -271,12 +271,12 @@ public:
 	}
 	virtual vector<int> GetNextRow() = 0;
 
-	unique_ptr<MyNode> child;
+	duckdb::unique_ptr<MyNode> child;
 };
 
 class MyPlanGenerator {
 public:
-	unique_ptr<MyNode> TransformPlan(LogicalOperator &op);
+	duckdb::unique_ptr<MyNode> TransformPlan(LogicalOperator &op);
 };
 
 void ExecuteQuery(Connection &con, const string &query) {
@@ -378,10 +378,10 @@ protected:
 //===--------------------------------------------------------------------===//
 class MyFilterNode : public MyNode {
 public:
-	MyFilterNode(unique_ptr<Expression> filter_node) : filter(std::move(filter_node)) {
+	MyFilterNode(duckdb::unique_ptr<Expression> filter_node) : filter(std::move(filter_node)) {
 	}
 
-	unique_ptr<Expression> filter;
+	duckdb::unique_ptr<Expression> filter;
 
 	bool ExecuteFilter(Expression &expr, const vector<int> &current_row) {
 		MyExpressionExecutor executor(current_row);
@@ -410,10 +410,10 @@ public:
 //===--------------------------------------------------------------------===//
 class MyProjectionNode : public MyNode {
 public:
-	MyProjectionNode(vector<unique_ptr<Expression>> projections_p) : projections(std::move(projections_p)) {
+	MyProjectionNode(vector<duckdb::unique_ptr<Expression>> projections_p) : projections(std::move(projections_p)) {
 	}
 
-	vector<unique_ptr<Expression>> projections;
+	vector<duckdb::unique_ptr<Expression>> projections;
 
 	vector<int> GetNextRow() override {
 		auto next = child->GetNextRow();
@@ -434,12 +434,12 @@ public:
 //===--------------------------------------------------------------------===//
 class MyAggregateNode : public MyNode {
 public:
-	MyAggregateNode(vector<unique_ptr<Expression>> aggregates_p) : aggregates(std::move(aggregates_p)) {
+	MyAggregateNode(vector<duckdb::unique_ptr<Expression>> aggregates_p) : aggregates(std::move(aggregates_p)) {
 		// initialize aggregate states to 0
 		aggregate_states.resize(aggregates.size(), 0);
 	}
 
-	vector<unique_ptr<Expression>> aggregates;
+	vector<duckdb::unique_ptr<Expression>> aggregates;
 	vector<int> aggregate_states;
 
 	void ExecuteAggregate(MyExpressionExecutor &executor, int index, BoundAggregateExpression &expr) {

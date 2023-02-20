@@ -87,7 +87,7 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 	return res;
 }
 
-static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
+static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
 	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
@@ -262,7 +262,7 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 
 	// AWS response is around 300~ chars in docs so this should be enough to not need a resize
 	idx_t response_buffer_len = 1000;
-	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
+	auto response_buffer = duckdb::unique_ptr<char[]> {new char[response_buffer_len]};
 
 	string query_param = "?" + UrlEncode("uploads") + "=";
 	auto res = s3fs.PostRequest(file_handle, file_handle.stripped_path + query_param, {}, response_buffer,
@@ -287,7 +287,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	string query_param = S3FileSystem::UrlEncode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
 	                     S3FileSystem::UrlEncode("uploadId") + "=" +
 	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
-	unique_ptr<ResponseWrapper> res;
+	duckdb::unique_ptr<ResponseWrapper> res;
 	case_insensitive_map_t<string>::iterator etag_lookup;
 
 	try {
@@ -421,7 +421,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	// Response is around ~400 in AWS docs so this should be enough to not need a resize
 	idx_t response_buffer_len = 1000;
-	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
+	auto response_buffer = duckdb::unique_ptr<char[]> {new char[response_buffer_len]};
 
 	string query_param = "?" + UrlEncode("uploadId") + "=" + file_handle.multipart_upload_id;
 	auto res = s3fs.PostRequest(file_handle, file_handle.stripped_path + query_param, {}, response_buffer,
@@ -618,7 +618,7 @@ static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url)
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-                                                      unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+                                                      duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                       char *buffer_in, idx_t buffer_in_len) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
 	auto parsed_url = S3UrlParse(url, auth_params);

@@ -184,7 +184,7 @@ ColumnWriterState::~ColumnWriterState() {
 }
 
 void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
-                                unique_ptr<data_t[]> &compressed_buf) {
+                                duckdb::unique_ptr<data_t[]> &compressed_buf) {
 	switch (writer.GetCodec()) {
 	case CompressionCodec::UNCOMPRESSED:
 		compressed_size = temp_writer.blob.size;
@@ -192,7 +192,7 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 		break;
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.blob.size);
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
 		duckdb_snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
 		                           (char *)compressed_buf.get(), &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -202,7 +202,7 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
 		compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
 		s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size, (char *)compressed_buf.get(),
 		           &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -210,7 +210,7 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 	}
 	case CompressionCodec::ZSTD: {
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.blob.size);
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
 		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
 		                                             (const void *)temp_writer.blob.data.get(), temp_writer.blob.size,
 		                                             ZSTD_CLEVEL_DEFAULT);
@@ -291,14 +291,14 @@ struct PageInformation {
 
 struct PageWriteInformation {
 	PageHeader page_header;
-	unique_ptr<BufferedSerializer> temp_writer;
-	unique_ptr<ColumnWriterPageState> page_state;
+	duckdb::unique_ptr<BufferedSerializer> temp_writer;
+	duckdb::unique_ptr<ColumnWriterPageState> page_state;
 	idx_t write_page_idx = 0;
 	idx_t write_count = 0;
 	idx_t max_write_count = 0;
 	size_t compressed_size;
 	data_ptr_t compressed_data;
-	unique_ptr<data_t[]> compressed_buf;
+	duckdb::unique_ptr<data_t[]> compressed_buf;
 };
 
 class BasicColumnWriterState : public ColumnWriterState {
@@ -313,7 +313,7 @@ public:
 	idx_t col_idx;
 	vector<PageInformation> page_info;
 	vector<PageWriteInformation> write_info;
-	unique_ptr<ColumnWriterStatistics> stats_state;
+	duckdb::unique_ptr<ColumnWriterStatistics> stats_state;
 	idx_t current_page = 0;
 };
 
@@ -343,8 +343,8 @@ public:
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	duckdb::unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                           Allocator &allocator) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
@@ -360,10 +360,10 @@ protected:
 	void FlushPage(BasicColumnWriterState &state);
 
 	//! Initializes the state used to track statistics during writing. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();
+	virtual duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState();
 
 	//! Initialize the writer for a specific page. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state);
+	virtual duckdb::unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state);
 
 	//! Flushes the writer for a specific page. Only used for scalar types.
 	virtual void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state);
@@ -379,7 +379,8 @@ protected:
 	}
 	//! The number of elements in the dictionary
 	virtual idx_t DictionarySize(BasicColumnWriterState &state_p);
-	void WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer, idx_t row_count);
+	void WriteDictionary(BasicColumnWriterState &state, duckdb::unique_ptr<BufferedSerializer> temp_writer,
+	                     idx_t row_count);
 	virtual void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	void SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
@@ -685,8 +686,8 @@ idx_t BasicColumnWriter::DictionarySize(BasicColumnWriterState &state) {
 	throw InternalException("This page does not have a dictionary");
 }
 
-void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer,
-                                        idx_t row_count) {
+void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state,
+                                        duckdb::unique_ptr<BufferedSerializer> temp_writer, idx_t row_count) {
 	D_ASSERT(temp_writer);
 	D_ASSERT(temp_writer->blob.size > 0);
 
@@ -748,7 +749,7 @@ public:
 
 struct BaseParquetOperator {
 	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+	static duckdb::unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return make_unique<NumericStatisticsState<SRC, TGT, BaseParquetOperator>>();
 	}
 
@@ -792,7 +793,7 @@ struct ParquetHugeintOperator {
 	}
 
 	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+	static duckdb::unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return make_unique<ColumnWriterStatistics>();
 	}
 
@@ -824,7 +825,7 @@ public:
 	~StandardColumnWriter() override = default;
 
 public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+	duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
@@ -884,7 +885,7 @@ public:
 	~BooleanColumnWriter() override = default;
 
 public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+	duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return make_unique<BooleanStatisticsState>();
 	}
 
@@ -915,7 +916,7 @@ public:
 		}
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
+	duckdb::unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
 		return make_unique<BooleanWriterPageState>();
 	}
 
@@ -1009,7 +1010,7 @@ public:
 	~FixedDecimalColumnWriter() override = default;
 
 public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+	duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return make_unique<FixedDecimalStatistics>();
 	}
 
@@ -1230,12 +1231,12 @@ public:
 	~StringColumnWriter() override = default;
 
 public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+	duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return make_unique<StringStatisticsState>();
 	}
 
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override {
+	duckdb::unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                           Allocator &allocator) override {
 		auto result = make_unique<StringColumnWriterState>(row_group, allocator, row_group.columns.size());
 		RegisterToRowGroup(row_group);
 		return std::move(result);
@@ -1346,7 +1347,7 @@ public:
 		}
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
+	duckdb::unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = (StringColumnWriterState &)state_p;
 		return make_unique<StringWriterPageState>(state.key_bit_width, state.dictionary);
 	}
@@ -1443,7 +1444,7 @@ public:
 	uint32_t bit_width;
 
 public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
+	duckdb::unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
 		return make_unique<StringStatisticsState>();
 	}
 
@@ -1486,7 +1487,7 @@ public:
 		}
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
+	duckdb::unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
 		return make_unique<EnumWriterPageState>(bit_width);
 	}
 
@@ -1544,17 +1545,17 @@ public:
 class StructColumnWriter : public ColumnWriter {
 public:
 	StructColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                   idx_t max_define, vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
+	                   idx_t max_define, vector<duckdb::unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
 	      child_writers(std::move(child_writers_p)) {
 	}
 	~StructColumnWriter() override = default;
 
-	vector<unique_ptr<ColumnWriter>> child_writers;
+	vector<duckdb::unique_ptr<ColumnWriter>> child_writers;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	duckdb::unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                           Allocator &allocator) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1574,7 +1575,7 @@ public:
 
 	duckdb_parquet::format::RowGroup &row_group;
 	idx_t col_idx;
-	vector<unique_ptr<ColumnWriterState>> child_states;
+	vector<duckdb::unique_ptr<ColumnWriterState>> child_states;
 };
 
 unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
@@ -1667,17 +1668,17 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 class ListColumnWriter : public ColumnWriter {
 public:
 	ListColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                 idx_t max_define, unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
+	                 idx_t max_define, duckdb::unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
 	    : ColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
 	      child_writer(std::move(child_writer_p)) {
 	}
 	~ListColumnWriter() override = default;
 
-	unique_ptr<ColumnWriter> child_writer;
+	duckdb::unique_ptr<ColumnWriter> child_writer;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	duckdb::unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
+	                                                           Allocator &allocator) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1697,7 +1698,7 @@ public:
 
 	duckdb_parquet::format::RowGroup &row_group;
 	idx_t col_idx;
-	unique_ptr<ColumnWriterState> child_state;
+	duckdb::unique_ptr<ColumnWriterState> child_state;
 	idx_t parent_index = 0;
 };
 
@@ -1825,7 +1826,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_path.push_back(name);
 
 		// construct the child types recursively
-		vector<unique_ptr<ColumnWriter>> child_writers;
+		vector<duckdb::unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
@@ -1903,7 +1904,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		// construct the child types recursively
 		vector<LogicalType> kv_types {MapType::KeyType(type), MapType::ValueType(type)};
 		vector<string> kv_names {"key", "value"};
-		vector<unique_ptr<ColumnWriter>> child_writers;
+		vector<duckdb::unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED

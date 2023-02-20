@@ -366,7 +366,7 @@ struct RunPreparedTask : public Task {
 		} break;
 		}
 	}
-	unique_ptr<duckdb::QueryResult> result;
+	duckdb::unique_ptr<duckdb::QueryResult> result;
 	duckdb::unique_ptr<StatementParam> params;
 	RunType run_type;
 };
@@ -406,7 +406,7 @@ struct RunQueryTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	unique_ptr<duckdb::QueryResult> result;
+	duckdb::unique_ptr<duckdb::QueryResult> result;
 	duckdb::unique_ptr<StatementParam> params;
 };
 
@@ -541,7 +541,7 @@ struct GetChunkTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	unique_ptr<duckdb::DataChunk> chunk;
+	duckdb::unique_ptr<duckdb::DataChunk> chunk;
 };
 
 struct GetNextArrowIpcTask : public Task {
@@ -571,10 +571,10 @@ struct GetNextArrowIpcTask : public Task {
 		duckdb::string_t blob = *(duckdb::string_t *)(chunk->data[0].GetData());
 
 		// Transfer ownership and Construct ArrayBuffer
-		auto data_chunk_ptr = new unique_ptr<duckdb::DataChunk>();
+		auto data_chunk_ptr = new duckdb::unique_ptr<duckdb::DataChunk>();
 		*data_chunk_ptr = std::move(chunk);
 		auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
-			delete static_cast<unique_ptr<duckdb::DataChunk> *>(hint);
+			delete static_cast<duckdb::unique_ptr<duckdb::DataChunk> *>(hint);
 		};
 		auto array_buffer =
 		    Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter, data_chunk_ptr);
@@ -583,7 +583,7 @@ struct GetNextArrowIpcTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	unique_ptr<duckdb::DataChunk> chunk;
+	duckdb::unique_ptr<duckdb::DataChunk> chunk;
 };
 
 Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {

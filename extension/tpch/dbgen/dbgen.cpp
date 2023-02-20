@@ -26,7 +26,7 @@ using namespace duckdb;
 namespace tpch {
 
 struct tpch_append_information {
-	unique_ptr<InternalAppender> appender;
+	duckdb::unique_ptr<InternalAppender> appender;
 };
 
 void append_value(tpch_append_information &info, int32_t value) {
@@ -499,7 +499,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
-	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+	auto append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);

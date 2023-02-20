@@ -319,7 +319,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		params = py::list();
 	}
 	result = nullptr;
-	unique_ptr<PreparedStatement> prep;
+	duckdb::unique_ptr<PreparedStatement> prep;
 	{
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
@@ -375,7 +375,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 			                            py::len(single_query_params));
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
-		unique_ptr<QueryResult> res;
+		duckdb::unique_ptr<QueryResult> res;
 		{
 			py::gil_scoped_release release;
 			unique_lock<std::mutex> lock(py_connection_lock);
@@ -1091,7 +1091,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
-                            vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
+                            vector<duckdb::unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
 	string name = "arrow_" + GenerateRandomName();
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -1106,15 +1106,15 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
 }
 
-static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
-                                           py::object &current_frame) {
+static duckdb::unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                                   py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
 	}
 	auto entry = dict[table_name];
 	auto table_function = make_unique<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		string name = "df_" + GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -1155,8 +1155,8 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	return std::move(table_function);
 }
 
-static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
-                                            ReplacementScanData *data) {
+static duckdb::unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                                    ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage

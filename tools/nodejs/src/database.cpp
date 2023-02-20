@@ -127,7 +127,7 @@ Database::~Database() {
 	Napi::MemoryManagement::AdjustExternalMemory(env, -bytes_allocated);
 }
 
-void Database::Schedule(Napi::Env env, unique_ptr<Task> task) {
+void Database::Schedule(Napi::Env env, duckdb::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
 		task_queue.push(std::move(task));
@@ -141,7 +141,7 @@ static void TaskExecuteCallback(napi_env e, void *data) {
 }
 
 static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
-	unique_ptr<TaskHolder> holder((TaskHolder *)data);
+	duckdb::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
 	holder->task->DoCallback();
 }
@@ -323,7 +323,7 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 	}
 	if (jsargs.function != "") {
 		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
-		std::vector<unique_ptr<duckdb::ParsedExpression>> children;
+		std::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 		for (auto &param : jsargs.parameters) {
 			children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(std::move(param)));
 		}

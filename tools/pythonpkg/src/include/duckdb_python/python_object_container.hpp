@@ -34,7 +34,7 @@ public:
 		py_obj.clear();
 	}
 
-	unique_ptr<PythonGILWrapper> GetLock() {
+	duckdb::unique_ptr<PythonGILWrapper> GetLock() {
 		return make_unique<PythonGILWrapper>();
 	}
 

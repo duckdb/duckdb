@@ -17,8 +17,8 @@
 
 namespace duckdb {
 
+using duckdb::unique_ptr;
 using std::string;
-using std::unique_ptr;
 using std::vector;
 
 //! Base class for any state that has to be kept by a Benchmark
@@ -44,7 +44,7 @@ public:
 	Benchmark(bool register_benchmark, string name, string group);
 
 	//! Initialize the benchmark state
-	virtual unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
+	virtual duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
 		return nullptr;
 	}
 	//! Run the benchmark

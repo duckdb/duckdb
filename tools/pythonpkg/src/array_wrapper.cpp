@@ -136,11 +136,11 @@ struct StringConvert {
 		// for short strings (less than 64 bytes) we simply statically allocate an array of 256 bytes (64x int32)
 		// this avoids memory allocation for small strings (common case)
 		idx_t remaining = len - start_pos;
-		unique_ptr<int32_t[]> allocated_codepoints;
+		duckdb::unique_ptr<int32_t[]> allocated_codepoints;
 		int32_t static_codepoints[64];
 		int32_t *codepoints;
 		if (remaining > 64) {
-			allocated_codepoints = unique_ptr<int32_t[]>(new int32_t[remaining]);
+			allocated_codepoints = duckdb::unique_ptr<int32_t[]>(new int32_t[remaining]);
 			codepoints = allocated_codepoints.get();
 		} else {
 			codepoints = static_codepoints;

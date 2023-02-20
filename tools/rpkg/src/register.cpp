@@ -51,7 +51,7 @@ public:
 	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p, ClientConfig &config)
 	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 		RProtector r;
 		auto res = make_unique<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
@@ -156,7 +156,7 @@ private:
 	}
 
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
-	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
+	                                  vector<duckdb::unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
 		RProtector r;
 		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
@@ -217,7 +217,7 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {
 			auto table_function = make_unique<TableFunctionRef>();
-			vector<unique_ptr<ParsedExpression>> children;
+			vector<duckdb::unique_ptr<ParsedExpression>> children;
 			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
 			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));

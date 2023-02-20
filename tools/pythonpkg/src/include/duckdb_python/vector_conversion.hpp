@@ -28,7 +28,7 @@ struct PandasColumnBindData {
 	PandasType pandas_type;
 	py::array numpy_col;
 	idx_t numpy_stride;
-	unique_ptr<NumPyArrayWrapper> mask;
+	duckdb::unique_ptr<NumPyArrayWrapper> mask;
 	// Only for categorical types
 	string internal_categorical_type;
 	// When object types are cast we must hold their data somewhere

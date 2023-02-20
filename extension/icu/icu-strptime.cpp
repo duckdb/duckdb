@@ -31,7 +31,7 @@ struct ICUStrptime : public ICUDateFunc {
 			auto &other = (ICUStrptimeBindData &)other_p;
 			return format.format_specifier == other.format.format_specifier;
 		}
-		unique_ptr<FunctionData> Copy() const override {
+		duckdb::unique_ptr<FunctionData> Copy() const override {
 			return make_unique<ICUStrptimeBindData>(*this);
 		}
 
@@ -39,8 +39,8 @@ struct ICUStrptime : public ICUDateFunc {
 			throw NotImplementedException("FIXME: serialize icu-strptime");
 		}
 
-		static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
-		                                            ScalarFunction &bound_function) {
+		static duckdb::unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+		                                                    ScalarFunction &bound_function) {
 			throw NotImplementedException("FIXME: serialize icu-strptime");
 		}
 	};
@@ -109,8 +109,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bind_scalar_function_t bind;
 
-	static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-	                                                     vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
+	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}

@@ -59,7 +59,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
 	}
-	vector<unique_ptr<ParsedExpression>> children;
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
 		// remove the alias since it is assumed to be the name of the argument for the function
@@ -102,14 +102,14 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_filter(duckdb::rel_extptr_t rel, list exprs) {
-	unique_ptr<ParsedExpression> filter_expr;
+	duckdb::unique_ptr<ParsedExpression> filter_expr;
 	if (exprs.size() == 0) { // nop
 		warning("rel_filter without filter expressions has no effect");
 		return rel;
 	} else if (exprs.size() == 1) {
 		filter_expr = ((expr_extptr_t)exprs[0])->Copy();
 	} else {
-		vector<unique_ptr<ParsedExpression>> filters;
+		vector<duckdb::unique_ptr<ParsedExpression>> filters;
 		for (expr_extptr_t expr : exprs) {
 			filters.push_back(expr->Copy());
 		}
@@ -124,7 +124,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 		warning("rel_project without projection expressions has no effect");
 		return rel;
 	}
-	vector<unique_ptr<ParsedExpression>> projections;
+	vector<duckdb::unique_ptr<ParsedExpression>> projections;
 	vector<string> aliases;
 
 	for (expr_extptr_t expr : exprs) {
@@ -138,7 +138,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
-	vector<unique_ptr<ParsedExpression>> res_groups, res_aggregates;
+	vector<duckdb::unique_ptr<ParsedExpression>> res_groups, res_aggregates;
 
 	// TODO deal with empty groups
 	vector<string> aliases;
@@ -177,14 +177,14 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                        std::string join) {
-	unique_ptr<ParsedExpression> cond;
+	duckdb::unique_ptr<ParsedExpression> cond;
 
 	if (conds.size() == 0) { // nop
 		stop("join needs conditions");
 	} else if (conds.size() == 1) {
 		cond = ((expr_extptr_t)conds[0])->Copy();
 	} else {
-		vector<unique_ptr<ParsedExpression>> cond_args;
+		vector<duckdb::unique_ptr<ParsedExpression>> cond_args;
 		for (expr_extptr_t expr : conds) {
 			cond_args.push_back(expr->Copy());
 		}
@@ -203,7 +203,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-static SEXP result_to_df(unique_ptr<QueryResult> res) {
+static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
 		stop(res->GetError());
 	}

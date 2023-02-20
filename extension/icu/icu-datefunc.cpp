@@ -46,7 +46,7 @@ unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
 }
 
 unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
 	return make_unique<BindData>(context);
 }
 

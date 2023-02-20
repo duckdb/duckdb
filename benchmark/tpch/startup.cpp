@@ -33,7 +33,7 @@ using namespace duckdb;
 	}
 
 #define NormalConfig()                                                                                                 \
-	unique_ptr<DBConfig> GetConfig() {                                                                                 \
+	duckdb::unique_ptr<DBConfig> GetConfig() {                                                                         \
 		return make_unique<DBConfig>();                                                                                \
 	}
 
