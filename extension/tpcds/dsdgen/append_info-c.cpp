@@ -4,6 +4,7 @@
 #include "config.h"
 #include "date.h"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "nulls.h"
@@ -15,7 +16,7 @@
 using namespace tpcds;
 
 append_info *append_info_get(void *info_list, int table_id) {
-	auto &append_vector = *((vector<std::unique_ptr<tpcds_append_information>> *)info_list);
+	auto &append_vector = *((duckdb::vector<std::unique_ptr<tpcds_append_information>> *)info_list);
 	return (append_info *)append_vector[table_id].get();
 }
 

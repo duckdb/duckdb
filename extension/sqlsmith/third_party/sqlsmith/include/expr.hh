@@ -6,8 +6,9 @@
 
 #include "prod.hh"
 #include <string>
+#include "duckdb/common/vector.hpp"
 
-using vector;
+using duckdb::vector;
 using std::shared_ptr;
 using std::string;
 

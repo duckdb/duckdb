@@ -12,6 +12,8 @@
 #include "random.hh"
 #include "relmodel.hh"
 
+using duckdb::vector;
+
 struct schema {
 	sqltype *booltype;
 	sqltype *inttype;

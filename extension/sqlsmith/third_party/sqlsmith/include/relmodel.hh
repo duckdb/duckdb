@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
-using vector;
+using duckdb::vector;
 using std::make_pair;
 using std::map;
 using std::pair;

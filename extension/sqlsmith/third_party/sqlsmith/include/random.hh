@@ -8,10 +8,13 @@
 #include <random>
 #include <stdexcept>
 #include <utility>
+#include "duckdb/common/vector.hpp"
 
 namespace smith {
 extern std::mt19937_64 rng;
 }
+
+using duckdb::vector;
 
 template <typename T>
 T &random_pick(vector<T> &container) {
