@@ -94,7 +94,7 @@ UNION ALL BY NAME
 PIVOT Cities ON Name USING SUM(Population);
 
 # join on pivots
-query IIII
+query IIIIIII
 FROM
 	(PIVOT Cities ON Year USING SUM(Population) GROUP BY Country)
 JOIN
