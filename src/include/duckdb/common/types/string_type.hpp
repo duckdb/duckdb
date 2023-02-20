@@ -125,17 +125,15 @@ public:
 				return false;
 			return (memcmp(a.GetDataUnsafe(), b.GetDataUnsafe(), a.GetSize()) == 0);
 #endif
-			uint64_t A;
-			uint64_t B;
-			memcpy(&A, &a, 8u);
-			memcpy(&B, &b, 8u);
+			uint64_t A = Load<uint64_t>(&a);
+			uint64_t B = Load<uint64_t>(&b);
 			if (A != B) {
 				// Either lenght or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			memcpy(&A, ((const char *)&a + 8u), 8u);
-			memcpy(&B, ((const char *)&b + 8u), 8u);
+			A = Load<uint64_t>((const char *)&a + 8u);
+			B = Load<uint64_t>((const char *)&b + 8u);
 			if (A == B) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
