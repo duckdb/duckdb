@@ -29,6 +29,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
+struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
@@ -137,6 +138,9 @@ public:
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info);
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	//! Creates an index in the catalog
+	DUCKDB_API CatalogEntry *CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info);
+	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
@@ -153,7 +157,7 @@ public:
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                        CreateFunctionInfo *info);
-	//! Creates a table in the catalog.
+	//! Creates a view in the catalog
 	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                    CreateViewInfo *info);
 	//! Creates a table in the catalog.

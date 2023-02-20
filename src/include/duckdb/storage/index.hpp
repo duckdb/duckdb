@@ -44,7 +44,7 @@ public:
 	vector<column_t> column_ids;
 	//! Unordered_set of column_ids used by the index
 	unordered_set<column_t> column_id_set;
-	//! Unbound expressions used by the index
+	//! Unbound expressions used by the index during optimizations
 	vector<unique_ptr<Expression>> unbound_expressions;
 	//! The physical types stored in the index
 	vector<PhysicalType> types;
@@ -137,9 +137,10 @@ public:
 		return serialized_data_pointer;
 	}
 
-protected:
+	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 
+protected:
 	//! Lock used for updating the index
 	mutex lock;
 
@@ -147,11 +148,11 @@ protected:
 	BlockPointer serialized_data_pointer;
 
 private:
-	//! Bound expressions used by the index
+	//! Bound expressions used by the index during expression execution
 	vector<unique_ptr<Expression>> bound_expressions;
 	//! Expression executor for the index expressions
 	ExpressionExecutor executor;
-
+	//! Bind the unbound expressions of the index
 	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
 };
 
