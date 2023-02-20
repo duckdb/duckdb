@@ -21,7 +21,8 @@ struct CreateTableFunctionInfo : public CreateFunctionInfo {
 	TableFunctionSet functions;
 
 public:
-	DUCKDB_API unique_ptr<CreateInfo> Copy() const;
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+	DUCKDB_API unique_ptr<AlterInfo> GetAlterInfo() const override;
 };
 
 } // namespace duckdb
