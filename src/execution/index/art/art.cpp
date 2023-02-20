@@ -108,7 +108,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			Key::CreateKey<T>(allocator, keys[i], input_data[idx]);
+			Key::CreateKey<T>(allocator, input.GetType(), keys[i], input_data[idx]);
 		}
 	}
 }
@@ -128,7 +128,7 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 				// this column entry is NULL, set whole key to NULL
 				keys[i] = Key();
 			} else {
-				auto other_key = Key::CreateKey<T>(allocator, input_data[idx]);
+				auto other_key = Key::CreateKey<T>(allocator, input.GetType(), input_data[idx]);
 				keys[i].ConcatenateKey(allocator, other_key);
 			}
 		}
@@ -604,31 +604,31 @@ static Key CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value)
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return Key::CreateKey<bool>(allocator, value);
+		return Key::CreateKey<bool>(allocator, value.type(), value);
 	case PhysicalType::INT8:
-		return Key::CreateKey<int8_t>(allocator, value);
+		return Key::CreateKey<int8_t>(allocator, value.type(), value);
 	case PhysicalType::INT16:
-		return Key::CreateKey<int16_t>(allocator, value);
+		return Key::CreateKey<int16_t>(allocator, value.type(), value);
 	case PhysicalType::INT32:
-		return Key::CreateKey<int32_t>(allocator, value);
+		return Key::CreateKey<int32_t>(allocator, value.type(), value);
 	case PhysicalType::INT64:
-		return Key::CreateKey<int64_t>(allocator, value);
+		return Key::CreateKey<int64_t>(allocator, value.type(), value);
 	case PhysicalType::UINT8:
-		return Key::CreateKey<uint8_t>(allocator, value);
+		return Key::CreateKey<uint8_t>(allocator, value.type(), value);
 	case PhysicalType::UINT16:
-		return Key::CreateKey<uint16_t>(allocator, value);
+		return Key::CreateKey<uint16_t>(allocator, value.type(), value);
 	case PhysicalType::UINT32:
-		return Key::CreateKey<uint32_t>(allocator, value);
+		return Key::CreateKey<uint32_t>(allocator, value.type(), value);
 	case PhysicalType::UINT64:
-		return Key::CreateKey<uint64_t>(allocator, value);
+		return Key::CreateKey<uint64_t>(allocator, value.type(), value);
 	case PhysicalType::INT128:
-		return Key::CreateKey<hugeint_t>(allocator, value);
+		return Key::CreateKey<hugeint_t>(allocator, value.type(), value);
 	case PhysicalType::FLOAT:
-		return Key::CreateKey<float>(allocator, value);
+		return Key::CreateKey<float>(allocator, value.type(), value);
 	case PhysicalType::DOUBLE:
-		return Key::CreateKey<double>(allocator, value);
+		return Key::CreateKey<double>(allocator, value.type(), value);
 	case PhysicalType::VARCHAR:
-		return Key::CreateKey<string_t>(allocator, value);
+		return Key::CreateKey<string_t>(allocator, value.type(), value);
 	default:
 		throw InternalException("Invalid type for index");
 	}
