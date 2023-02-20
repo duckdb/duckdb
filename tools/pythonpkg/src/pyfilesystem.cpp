@@ -198,11 +198,7 @@ void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
 	filesystem.attr("touch")(handle.path, py::arg("truncate") = true);
 }
 bool PythonFilesystem::IsPipe(const string &filename) {
-	PythonGILWrapper gil;
-
-	int64_t mode = py::int_(filesystem.attr("stat")(filename)["st_mode"]);
-
-	return S_ISFIFO(mode);
+	return false;
 }
 idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {
 	PythonGILWrapper gil;
