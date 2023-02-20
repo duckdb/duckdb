@@ -1,5 +1,6 @@
 name: CodeQuality
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,6 +10,8 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     paths-ignore:
