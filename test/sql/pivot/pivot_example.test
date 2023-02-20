@@ -1,0 +1,92 @@
+# name: test/sql/pivot/pivot_example.test
+# description: Test SQL pivot examples for documentation
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+query IIIII
+PIVOT Cities ON Year USING SUM(Population);
+----
+NL	Amsterdam	1005	1065	1158
+US	Seattle	564	608	738
+US	New York City	8015	8175	8772
+
+# sql syntax
+query IIIII
+FROM Cities PIVOT (SUM(Population) FOR Year IN (2000, 2010, 2020));
+----
+NL	Amsterdam	1005	1065	1158
+US	Seattle	564	608	738
+US	New York City	8015	8175	8772
+
+query IIII
+PIVOT Cities ON Year IN (2000, 2020) USING SUM(Population);
+----
+NL	Amsterdam	1005	1158
+US	Seattle	564	738
+US	New York City	8015	8772
+
+query IIII
+PIVOT Cities ON Year USING SUM(Population) GROUP BY Country;
+----
+NL	1005	1065	1158
+US	8579	8783	9510
+
+# unpivot
+statement ok
+CREATE TABLE PivotedCities AS PIVOT Cities ON Year USING SUM(Population);
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON 2000, 2010, 2020 INTO NAME Year VALUE Population;
+----
+
+query IIII nosort unpivot
+FROM PivotedCities UNPIVOT(Population FOR Year IN (2000, 2010, 2020));
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON 2000, 2010, 2020;
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON COLUMNS('\d+');
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON * EXCLUDE (Country, Name)
+----
+
+statement error
+PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
+----

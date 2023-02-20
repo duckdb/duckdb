@@ -143,6 +143,10 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 				    ref, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
 				                            val.ToString())));
 			}
+			if (entry.values.size() != pivot.names.size()) {
+				throw ParserException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
+				                      pivot.names.size(), entry.values.size());
+			}
 			pivots.insert(val);
 		}
 	}

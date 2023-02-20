@@ -129,5 +129,5 @@
 %type <str>		named_param
 
 %type <node> pivot_value pivot_column_entry
-%type <list> pivot_value_list pivot_column_list_internal pivot_column_list pivot_header
+%type <list> pivot_value_list pivot_column_list_internal pivot_column_list pivot_header opt_pivot_group_by
 %type <boolean> opt_include_nulls

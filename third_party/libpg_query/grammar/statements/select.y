@@ -303,6 +303,20 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
+			| UNPIVOT table_ref ON target_list_opt_comma
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->unpivots = list_make1(makeString("value"));
+					PGPivot *piv = makeNode(PGPivot);
+					piv->pivot_columns = list_make1(makeString("name"));
+					piv->pivot_value = $4;
+					n->columns = list_make1(piv);
+
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
 		;
 
 pivot_column_entry:
@@ -991,23 +1005,14 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list ')' opt_alias_clause
+			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list opt_pivot_group_by ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
 					n->source = $1;
 					n->aggrs = $4;
 					n->pivots = $6;
-					n->alias = $8;
-					$$ = (PGNode *) n;
-				}
-			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list GROUP_P BY name_list_opt_comma ')' opt_alias_clause
-				{
-					PGPivotExpr *n = makeNode(PGPivotExpr);
-					n->source = $1;
-					n->aggrs = $4;
-					n->pivots = $6;
-					n->groups = $9;
-					n->alias = $11;
+					n->groups = $7;
+					n->alias = $9;
 					$$ = (PGNode *) n;
 				}
 			| table_ref UNPIVOT opt_include_nulls '(' pivot_header FOR pivot_value_list ')' opt_alias_clause
@@ -1021,6 +1026,10 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$$ = (PGNode *) n;
 				}
 		;
+
+opt_pivot_group_by:
+	GROUP_P BY name_list_opt_comma		{ $$ = $3; }
+	| /* empty */						{ $$ = NULL; }
 
 opt_include_nulls:
 	INCLUDE_P NULLS_P					{ $$ = true; }
