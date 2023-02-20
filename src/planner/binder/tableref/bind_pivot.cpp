@@ -66,7 +66,7 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 			}
 		} else {
 			// need to recurse
-			ConstructPivots(ref, pivot_idx + 1, pivot_expressions, std::move(expr), std::move(name));
+			ConstructPivots(ref, pivot_idx + 1, pivot_expressions, std::move(expr), name);
 		}
 	}
 }

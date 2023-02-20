@@ -2,9 +2,10 @@
 # description: Tests from the databricks docs
 # group: [pivot]
 
-# https://docs.databricks.com/sql/language-manual/sql-ref-syntax-qry-select-pivot.html
+# temp table
+require skip_reload
 
-# pivot
+# https://docs.databricks.com/sql/language-manual/sql-ref-syntax-qry-select-pivot.html
 
 statement ok
 PRAGMA enable_verification
