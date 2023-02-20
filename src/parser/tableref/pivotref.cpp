@@ -5,6 +5,9 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// PivotColumn
+//===--------------------------------------------------------------------===//
 string PivotColumn::ToString() const {
 	string result;
 	if (names.size() == 1) {
@@ -27,7 +30,10 @@ string PivotColumn::ToString() const {
 			if (e > 0) {
 				result += ", ";
 			}
-			if (entry.values.size() == 1) {
+			if (entry.star_expr) {
+				D_ASSERT(entry.values.empty());
+				result += entry.star_expr->ToString();
+			} else if (entry.values.size() == 1) {
 				result += entry.values[0].ToSQLString();
 			} else {
 				result += "(";
@@ -83,6 +89,16 @@ bool PivotColumn::Equals(const PivotColumn &other) const {
 	return true;
 }
 
+PivotColumn PivotColumn::Copy() const {
+	PivotColumn result;
+	result.names = names;
+	for (auto &entry : entries) {
+		result.entries.push_back(entry.Copy());
+	}
+	result.pivot_enum = pivot_enum;
+	return result;
+}
+
 void PivotColumn::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteList<string>(names);
@@ -101,9 +117,21 @@ PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// PivotColumnEntry
+//===--------------------------------------------------------------------===//
+PivotColumnEntry PivotColumnEntry::Copy() const {
+	PivotColumnEntry result;
+	result.values = values;
+	result.star_expr = star_expr ? star_expr->Copy() : nullptr;
+	result.alias = alias;
+	return result;
+}
+
 void PivotColumnEntry::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteRegularSerializableList(values);
+	writer.WriteOptional(star_expr);
 	writer.WriteString(alias);
 	writer.Finalize();
 }
@@ -112,11 +140,15 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 	PivotColumnEntry result;
 	FieldReader reader(source);
 	result.values = reader.ReadRequiredSerializableList<Value, Value>();
+	result.star_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	result.alias = reader.ReadRequired<string>();
 	reader.Finalize();
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// PivotRef
+//===--------------------------------------------------------------------===//
 string PivotRef::ToString() const {
 	string result;
 	result = source->ToString();
@@ -229,7 +261,9 @@ unique_ptr<TableRef> PivotRef::Copy() {
 		copy->aggregates.push_back(aggr->Copy());
 	}
 	copy->unpivot_names = unpivot_names;
-	copy->pivots = pivots;
+	for (auto &entry : pivots) {
+		copy->pivots.push_back(entry.Copy());
+	}
 	copy->groups = groups;
 	copy->column_name_alias = column_name_alias;
 	copy->include_nulls = include_nulls;

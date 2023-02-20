@@ -15,11 +15,14 @@ namespace duckdb {
 struct PivotColumnEntry {
 	//! The set of values to match on
 	vector<Value> values;
+	//! The star expression (UNPIVOT only)
+	unique_ptr<ParsedExpression> star_expr;
 	//! The alias of the pivot column entry
 	string alias;
 
 	bool Equals(const PivotColumnEntry &other) const;
 	void Serialize(Serializer &serializer) const;
+	PivotColumnEntry Copy() const;
 	static PivotColumnEntry Deserialize(Deserializer &source);
 };
 
@@ -34,6 +37,7 @@ struct PivotColumn {
 	string ToString() const;
 	bool Equals(const PivotColumn &other) const;
 	void Serialize(Serializer &serializer) const;
+	PivotColumn Copy() const;
 	static PivotColumn Deserialize(Deserializer &source);
 };
 

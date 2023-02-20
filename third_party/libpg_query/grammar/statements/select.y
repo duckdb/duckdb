@@ -268,24 +268,38 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
-			| PIVOT table_ref USING func_application COLUMNS pivot_column_list
+			| PIVOT table_ref ON pivot_column_list USING func_application
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->aggrs = list_make1($4);
-					n->columns = $6;
+					n->columns = $4;
+					n->aggrs = list_make1($6);
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| PIVOT table_ref USING func_application COLUMNS pivot_column_list GROUP_P BY name_list_opt_comma_opt_bracket
+			| PIVOT table_ref ON pivot_column_list USING func_application GROUP_P BY name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->aggrs = list_make1($4);
-					n->columns = $6;
+					n->columns = $4;
+					n->aggrs = list_make1($6);
 					n->groups = $9;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
+			| UNPIVOT table_ref ON target_list_opt_comma INTO NAME_P name VALUE_P name
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->unpivots = list_make1(makeString($9));
+					PGPivot *piv = makeNode(PGPivot);
+					piv->pivot_columns = list_make1(makeString($7));
+					piv->pivot_value = $4;
+					n->columns = list_make1(piv);
+
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}

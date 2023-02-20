@@ -1188,6 +1188,7 @@ typedef struct PGPivotStmt {
 	PGNodeTag type;
 	PGNode *source;      /* The source to pivot */
 	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
 	PGList *columns;     /* The set of columns to pivot over */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 } PGPivotStmt;

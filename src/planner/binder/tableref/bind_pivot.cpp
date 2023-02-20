@@ -131,6 +131,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 		value_set_t pivots;
 		for (auto &entry : pivot.entries) {
+			D_ASSERT(!entry.star_expr);
 			Value val;
 			if (entry.values.size() == 1) {
 				val = entry.values[0];
@@ -183,7 +184,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	return select_node;
 }
 
-unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns,
+unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
+                                           vector<unique_ptr<ParsedExpression>> all_columns,
                                            unique_ptr<ParsedExpression> &where_clause) {
 	D_ASSERT(ref.groups.empty());
 	D_ASSERT(ref.pivots.size() == 1);
@@ -193,6 +195,30 @@ unique_ptr<SelectNode> Binder::BindUnpivot(PivotRef &ref, vector<unique_ptr<Pars
 
 	// handle the pivot
 	auto &unpivot = ref.pivots[0];
+
+	// handle star expressions in any entries
+	vector<PivotColumnEntry> new_entries;
+	for (auto &entry : unpivot.entries) {
+		if (entry.star_expr) {
+			D_ASSERT(entry.values.empty());
+			vector<unique_ptr<ParsedExpression>> star_columns;
+			child_binder.ExpandStarExpression(std::move(entry.star_expr), star_columns);
+
+			for (auto &col : star_columns) {
+				if (col->type != ExpressionType::COLUMN_REF) {
+					throw InternalException("Unexpected child of unpivot star - not a ColumnRef");
+				}
+				auto &columnref = (ColumnRefExpression &)*col;
+				PivotColumnEntry new_entry;
+				new_entry.values.emplace_back(columnref.GetColumnName());
+				new_entry.alias = columnref.GetColumnName();
+				new_entries.push_back(std::move(new_entry));
+			}
+		} else {
+			new_entries.push_back(std::move(entry));
+		}
+	}
+	unpivot.entries = std::move(new_entries);
 
 	case_insensitive_set_t handled_columns;
 	case_insensitive_map_t<string> name_map;
@@ -302,7 +328,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	if (!ref.aggregates.empty()) {
 		select_node = BindPivot(ref, std::move(all_columns));
 	} else {
-		select_node = BindUnpivot(ref, std::move(all_columns), where_clause);
+		select_node = BindUnpivot(*child_binder, ref, std::move(all_columns), where_clause);
 	}
 	// bind the generated select node
 	auto bound_select_node = child_binder->BindSelectNode(*select_node, std::move(from_table));

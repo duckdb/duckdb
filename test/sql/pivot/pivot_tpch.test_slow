@@ -8,7 +8,7 @@ statement ok
 CALL dbgen(sf=0.1);
 
 query IIIII
-FROM (PIVOT lineitem USING SUM(l_quantity) COLUMNS l_shipinstruct GROUP BY l_returnflag) ORDER BY ALL;
+FROM (PIVOT lineitem ON l_shipinstruct USING SUM(l_quantity) GROUP BY l_returnflag) ORDER BY ALL;
 ----
 A	943655	940094	946224	944227
 N	1938403	1930781	1951198	1954697
@@ -29,7 +29,7 @@ N	1938403	1930781	1951198	1954697
 R	950702	947111	937692	950018
 
 query IIIIIIII
-FROM (PIVOT (SELECT YEAR(l_shipdate) AS year, l_returnflag, l_quantity FROM lineitem) USING SUM(l_quantity) COLUMNS year) ORDER BY ALL
+FROM (PIVOT (SELECT YEAR(l_shipdate) AS year, l_returnflag, l_quantity FROM lineitem) ON year USING SUM(l_quantity)) ORDER BY ALL
 ----
 A	968197	1138593	1177788	489622	NULL	NULL	NULL
 N	NULL	NULL	NULL	1362746	2331027	2312320	1768986

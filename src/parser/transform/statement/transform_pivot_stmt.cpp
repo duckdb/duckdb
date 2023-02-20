@@ -112,7 +112,14 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 
 	auto pivot_ref = make_unique<PivotRef>();
 	pivot_ref->source = std::move(source);
-	TransformExpressionList(*pivot->aggrs, pivot_ref->aggregates);
+	if (pivot->aggrs) {
+		TransformExpressionList(*pivot->aggrs, pivot_ref->aggregates);
+	} else {
+		if (!pivot->unpivots) {
+			throw InternalException("No unpivots and no aggrs");
+		}
+		pivot_ref->unpivot_names = TransformStringList(pivot->unpivots);
+	}
 	if (pivot->groups) {
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
