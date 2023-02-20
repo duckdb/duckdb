@@ -48,7 +48,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenCompressedFile(unique_ptr<FileHandl
 	PythonGILWrapper gil;
 
 	const auto &newHandle =
-	    filesystem.attr("open")(py::str(stripPrefix(handle->path)), py::arg("compression") = "auto");
+	    filesystem.attr("open")(handle->path, py::arg("compression") = "auto");
 
 	return make_unique<PythonFileHandle>(*this, handle->path, newHandle);
 }
