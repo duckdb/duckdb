@@ -393,9 +393,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	unique_ptr<BoundStatement> test_ptr;
-	auto &test_val = *test_ptr;
-
 	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
 	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	D_ASSERT(table);
