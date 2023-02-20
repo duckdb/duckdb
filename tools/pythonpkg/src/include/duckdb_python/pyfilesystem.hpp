@@ -40,6 +40,7 @@ private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
 	std::string DecodeFlags(uint8_t flags);
+	bool Exists(const string &filename, const char *func_name) const;
 
 public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)

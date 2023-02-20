@@ -102,9 +102,12 @@ void PythonFilesystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr
 	Read(handle, buffer, nr_bytes);
 }
 bool PythonFilesystem::FileExists(const string &filename) {
+	return Exists(filename, "isfile");
+}
+bool PythonFilesystem::Exists(const string &filename, const char *func_name) const {
 	PythonGILWrapper gil;
 
-	return py::bool_(filesystem.attr("exists")(filename));
+	return py::bool_(filesystem.attr(func_name)(filename));
 }
 vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	PythonGILWrapper gil;
@@ -167,7 +170,7 @@ void PythonFilesystem::FileSync(FileHandle &handle) {
 	PythonFileHandle::GetHandle(handle).attr("flush")();
 }
 bool PythonFilesystem::DirectoryExists(const string &directory) {
-	return FileExists(directory);
+	return Exists(directory, "isdir");
 }
 void PythonFilesystem::RemoveDirectory(const string &directory) {
 	PythonGILWrapper gil;
