@@ -28,7 +28,7 @@ protected:
 	CopyStatement(const CopyStatement &other);
 
 public:
-	unique_ptr<SQLStatement> Copy() const override;
+	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 
 private:
 };
