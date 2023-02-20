@@ -893,6 +893,12 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	DetectCandidateTypes(type_candidates, format_template_candidates, info_candidates, original_options, best_num_cols,
 	                     best_sql_types_candidates, best_format_candidates, best_header_row);
 
+	if (best_format_candidates.empty() || best_header_row.size() == 0) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    original_options.file_path);
+	}
+
 	// #######
 	// ### header detection
 	// #######

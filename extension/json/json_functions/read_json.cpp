@@ -21,23 +21,30 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	while (remaining != 0) {
 		allocator.Reset();
 		auto read_count = lstate.ReadNext(gstate);
-		if (read_count > 1) {
+		if (lstate.scan_count > 1) {
 			more_than_one = true;
 		}
 		if (read_count == 0) {
 			break;
 		}
 		idx_t next = MinValue<idx_t>(read_count, remaining);
+		yyjson_val **values;
+		if (bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
+		    bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) {
+			values = lstate.array_values;
+		} else {
+			values = lstate.values;
+		}
 		for (idx_t i = 0; i < next; i++) {
-			if (lstate.objects[i]) {
-				JSONStructure::ExtractStructure(lstate.objects[i], node);
+			if (values[i]) {
+				JSONStructure::ExtractStructure(values[i], node);
 			}
 		}
 		if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 			continue;
 		}
 		node.InitializeCandidateTypes(bind_data.max_depth);
-		node.RefineCandidateTypes(lstate.objects, next, string_vector, allocator, bind_data.date_format_map);
+		node.RefineCandidateTypes(values, next, string_vector, allocator, bind_data.date_format_map);
 		remaining -= next;
 
 		if (gstate.file_index == 10) {
@@ -46,29 +53,48 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 	}
 	bind_data.type = original_scan_type;
-	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
+	// Convert structure to logical type
 	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
-	if (type.id() == LogicalTypeId::STRUCT) {
-		bind_data.top_level_type = JSONScanTopLevelType::OBJECTS;
-	} else if (!more_than_one && type.id() == LogicalTypeId::LIST &&
-	           ListType::GetChildType(type).id() == LogicalTypeId::STRUCT) {
-		bind_data.top_level_type = JSONScanTopLevelType::ARRAY_OF_OBJECTS;
-		bind_data.options.format = JSONFormat::UNSTRUCTURED;
-		type = ListType::GetChildType(type);
+
+	// Detect record type
+	if (bind_data.record_type == JSONRecordType::AUTO) {
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+			bind_data.record_type = JSONRecordType::RECORDS;
+			break;
+		case LogicalTypeId::LIST: {
+			if (more_than_one) {
+				bind_data.record_type = JSONRecordType::JSON;
+			} else {
+				type = ListType::GetChildType(type);
+				if (type.id() == LogicalTypeId::STRUCT) {
+					bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
+				} else {
+					bind_data.record_type = JSONRecordType::ARRAY_OF_JSON;
+				}
+			}
+			break;
+		}
+		default:
+			bind_data.record_type = JSONRecordType::JSON;
+		}
 	}
 
-	if (type.id() != LogicalTypeId::STRUCT) {
-		return_types.emplace_back(type);
-		names.emplace_back("json");
-		bind_data.top_level_type = JSONScanTopLevelType::OTHER;
-	} else {
-		const auto &child_types = StructType::GetChildTypes(type);
-		return_types.reserve(child_types.size());
-		names.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			return_types.emplace_back(child_type.second);
-			names.emplace_back(child_type.first);
+	// Detect return type
+	if (bind_data.auto_detect) {
+		bind_data.transform_options.date_format_map = &bind_data.date_format_map;
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return_types.emplace_back(type);
+			names.emplace_back("json");
+		} else {
+			const auto &child_types = StructType::GetChildTypes(type);
+			return_types.reserve(child_types.size());
+			names.reserve(child_types.size());
+			for (auto &child_type : child_types) {
+				return_types.emplace_back(child_type.second);
+				names.emplace_back(child_type.first);
+			}
 		}
 	}
 
@@ -149,6 +175,22 @@ void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_dat
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
+		} else if (loption == "json_format") {
+			auto arg = StringValue::Get(kv.second);
+			if (arg == "records") {
+				bind_data.record_type = JSONRecordType::RECORDS;
+			} else if (arg == "array_of_records") {
+				bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
+			} else if (arg == "values") {
+				bind_data.record_type = JSONRecordType::JSON;
+			} else if (arg == "array_of_values") {
+				bind_data.record_type = JSONRecordType::ARRAY_OF_JSON;
+			} else if (arg == "auto") {
+				bind_data.record_type = JSONRecordType::AUTO;
+			} else {
+				throw InvalidInputException("\"json_format\" must be one of ['records', 'array_of_records', 'json', "
+				                            "'array_of_json', 'auto']");
+			}
 		}
 	}
 }
@@ -169,7 +211,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 
 	bind_data.InitializeFormats();
 
-	if (bind_data.auto_detect) {
+	if (bind_data.auto_detect || bind_data.record_type == JSONRecordType::AUTO) {
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		bind_data.names = names;
 	}
@@ -189,9 +231,14 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
 
 	const auto count = lstate.ReadNext(gstate);
-	const auto objects = gstate.bind_data.top_level_type == JSONScanTopLevelType::ARRAY_OF_OBJECTS
-	                         ? lstate.array_objects
-	                         : lstate.objects;
+	yyjson_val **values;
+	if (gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
+	    gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) {
+		values = lstate.array_values;
+	} else {
+		D_ASSERT(gstate.bind_data.record_type != JSONRecordType::AUTO);
+		values = lstate.values;
+	}
 	output.SetCardinality(count);
 
 	vector<Vector *> result_vectors;
@@ -203,20 +250,21 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
 	bool success;
-	if (gstate.bind_data.top_level_type == JSONScanTopLevelType::OTHER) {
-		success = JSONTransform::Transform(objects, lstate.GetAllocator(), *result_vectors[0], count,
-		                                   lstate.transform_options);
-	} else {
-		success = JSONTransform::TransformObject(objects, lstate.GetAllocator(), count, gstate.bind_data.names,
+	if (gstate.bind_data.record_type == JSONRecordType::RECORDS ||
+	    gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS) {
+		success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.bind_data.names,
 		                                         result_vectors, lstate.transform_options);
+	} else {
+		success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
+		                                   lstate.transform_options);
 	}
 
 	if (!success) {
 		string hint = gstate.bind_data.auto_detect
 		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
-		                    "or setting 'ignore_errors' to true."
-		                  : "";
-		lstate.ThrowTransformError(count, lstate.transform_options.object_index,
+		                    "specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true."
+		                  : "\n Try specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true.";
+		lstate.ThrowTransformError(lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}
 }
@@ -234,6 +282,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(bool list_parameter, share
 	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["json_format"] = LogicalType::VARCHAR;
 
 	table_function.projection_pushdown = true;
 	// TODO: might be able to do filter pushdown/prune too
@@ -251,7 +300,8 @@ TableFunction GetReadJSONAutoTableFunction(bool list_parameter, shared_ptr<JSONS
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 	TableFunctionSet function_set("read_json");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, false);
+	auto function_info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS, false);
 	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -259,7 +309,8 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 	TableFunctionSet function_set("read_ndjson");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, false);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                               JSONRecordType::RECORDS, false);
 	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
 	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -267,7 +318,8 @@ CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
 	TableFunctionSet function_set("read_json_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, true);
+	auto function_info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO, true);
 	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);
@@ -275,7 +327,8 @@ CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
 	TableFunctionSet function_set("read_ndjson_auto");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, true);
+	auto function_info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::AUTO, true);
 	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
 	return CreateTableFunctionInfo(function_set);

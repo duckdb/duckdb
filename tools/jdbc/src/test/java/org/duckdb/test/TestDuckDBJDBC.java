@@ -1086,14 +1086,14 @@ public class TestDuckDBJDBC {
 
 		Timestamp ts = Timestamp.valueOf("1970-01-01 01:01:01");
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i = i + 735127) {
 			ts.setTime(i);
 			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts + "')");
 		}
 
 		stmt.close();
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i = i + 735127) {
 			PreparedStatement ps = conn.prepareStatement("SELECT COUNT(ts) FROM a WHERE ts = ?");
 			ps.setTimestamp(1, ts);
 			ResultSet rs = ps.executeQuery();
@@ -1821,6 +1821,96 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
+		conn.close();
+	}
+	
+	public static void test_get_tables_with_current_catalog() throws Exception {
+		ResultSet resultSet = null;
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		final String currentCatalog = conn.getCatalog();
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		
+		Statement statement = conn.createStatement();
+		statement.execute("CREATE TABLE T1(ID INT)");
+		// verify that the catalog argument is supported and does not throw
+		try {
+			resultSet = databaseMetaData.getTables(currentCatalog, null, "%", null);
+		}
+		catch (SQLException ex) {
+			assertFalse(ex.getMessage().startsWith("Actual catalog argument is not supported"));
+		}
+		assertTrue(resultSet.next(), "getTables should return exactly 1 table");
+		final String returnedCatalog = resultSet.getString("TABLE_CAT");
+		assertTrue(
+			currentCatalog.equals(returnedCatalog), 
+			String.format("Returned catalog %s should equal current catalog %s", returnedCatalog, currentCatalog)
+		);
+		assertTrue(resultSet.next() == false, "getTables should return exactly 1 table");
+		
+		resultSet.close();
+	}
+	
+	public static void test_get_tables_with_attached_catalog() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		final String currentCatalog = conn.getCatalog();
+		DatabaseMetaData databaseMetaData = conn.getMetaData();
+		Statement statement = conn.createStatement();
+		
+		// create one table in the current catalog
+		final String TABLE_NAME1 = "T1";
+		statement.execute(String.format("CREATE TABLE %s(ID INT)", TABLE_NAME1));
+
+		// create one table in an attached catalog
+		String returnedCatalog, returnedTableName;
+		ResultSet resultSet = null;
+		final String ATTACHED_CATALOG = "ATTACHED_CATALOG";
+		final String TABLE_NAME2 = "T2";
+		statement.execute(String.format("ATTACH '' AS \"%s\"", ATTACHED_CATALOG));
+		statement.execute(String.format("CREATE TABLE %s.%s(ID INT)", ATTACHED_CATALOG, TABLE_NAME2));
+
+		// test if getTables can get tables from the remote catalog.
+		resultSet = databaseMetaData.getTables(ATTACHED_CATALOG, null, "%", null);
+		assertTrue(resultSet.next(), "getTables should return exactly 1 table");
+		returnedCatalog = resultSet.getString("TABLE_CAT");
+		assertTrue(
+			ATTACHED_CATALOG.equals(returnedCatalog), 
+			String.format("Returned catalog %s should equal attached catalog %s", returnedCatalog, ATTACHED_CATALOG)
+		);
+		assertTrue(resultSet.next() == false, "getTables should return exactly 1 table");
+		resultSet.close();
+		
+		// test if getTables with null catalog returns all tables.
+		resultSet = databaseMetaData.getTables(null, null, "%", null);
+		
+		assertTrue(resultSet.next(), "getTables should return 2 tables, got 0");
+		// first table should be ATTACHED_CATALOG.T2
+		returnedCatalog = resultSet.getString("TABLE_CAT");
+		assertTrue(
+			ATTACHED_CATALOG.equals(returnedCatalog), 
+			String.format("Returned catalog %s should equal attached catalog %s", returnedCatalog, ATTACHED_CATALOG)
+		);
+		returnedTableName = resultSet.getString("TABLE_NAME");
+		assertTrue(
+			TABLE_NAME2.equals(returnedTableName), 
+			String.format("Returned table %s should equal %s", returnedTableName, TABLE_NAME2)
+		);
+		
+		assertTrue(resultSet.next(), "getTables should return 2 tables, got 1");
+		// second table should be <current catalog>.T1
+		returnedCatalog = resultSet.getString("TABLE_CAT");
+		assertTrue(
+			currentCatalog.equals(returnedCatalog), 
+			String.format("Returned catalog %s should equal current catalog %s", returnedCatalog, currentCatalog)
+		);
+		returnedTableName = resultSet.getString("TABLE_NAME");
+		assertTrue(
+			TABLE_NAME1.equals(returnedTableName), 
+			String.format("Returned table %s should equal %s", returnedTableName, TABLE_NAME1)
+		);
+		
+		assertTrue(resultSet.next() == false, "getTables should return 2 tables, got > 2");
+		resultSet.close();
+		statement.close();
 		conn.close();
 	}
 

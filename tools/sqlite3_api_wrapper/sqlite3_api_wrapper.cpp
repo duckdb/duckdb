@@ -1090,11 +1090,30 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
+const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return nullptr;
+	}
+
+	auto &&names = pStmt->prepared->GetNames();
+	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	return names[iCol].c_str();
+}
+
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
-		return NULL;
+		return nullptr;
 	}
-	auto column_type = pStmt->prepared->GetTypes()[iCol];
+
+	auto &&types = pStmt->prepared->GetTypes();
+	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	auto column_type = types[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";

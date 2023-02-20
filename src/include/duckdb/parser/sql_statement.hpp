@@ -40,11 +40,11 @@ protected:
 	SQLStatement(const SQLStatement &other) = default;
 
 public:
-	virtual string ToString() const {
+	DUCKDB_API virtual string ToString() const {
 		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
 		                        StatementTypeToString(type));
 	}
 	//! Create a copy of this SelectStatement
-	virtual unique_ptr<SQLStatement> Copy() const = 0;
+	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;
 };
 } // namespace duckdb
