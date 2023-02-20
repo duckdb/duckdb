@@ -104,6 +104,7 @@ private:
 
 	void AddPivotEntry(string enum_name, unique_ptr<TableRef> source, string column_name);
 	bool HasPivotEntries();
+	idx_t PivotEntryCount();
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -197,6 +198,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a QueryNode
 	unique_ptr<QueryNode> TransformSelectNode(duckdb_libpgquery::PGSelectStmt *node);
+	unique_ptr<QueryNode> TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *node);
 
 	//===--------------------------------------------------------------------===//
 	// Expression Transform

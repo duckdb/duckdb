@@ -87,6 +87,23 @@ query IIII nosort unpivot
 UNPIVOT PivotedCities ON * EXCLUDE (Country, Name)
 ----
 
+# use pivots in a set operation
+statement ok
+PIVOT Cities ON Year USING SUM(Population)
+UNION ALL BY NAME
+PIVOT Cities ON Name USING SUM(Population);
+
+# join on pivots
+query IIII
+FROM
+	(PIVOT Cities ON Year USING SUM(Population) GROUP BY Country)
+JOIN
+	(PIVOT Cities ON Name USING SUM(Population) GROUP BY Country)
+USING (Country)
+----
+NL	1005	1065	1158	3228	NULL	NULL
+US	8579	8783	9510	NULL	24962	1910
+
 statement error
 PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
 ----

@@ -4,6 +4,14 @@
 
 namespace duckdb {
 
+unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
+	if (stmt->pivot) {
+		return TransformPivotStatement(stmt->pivot);
+	} else {
+		return TransformSelectInternal(stmt);
+	}
+}
+
 unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNode *node, bool is_select) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(node);
 	auto result = make_unique<SelectStatement>();
@@ -18,11 +26,7 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNo
 		}
 	}
 
-	if (stmt->pivot) {
-		result->node = TransformPivotStatement(stmt->pivot);
-	} else {
-		result->node = TransformSelectNode(stmt);
-	}
+	result->node = TransformSelectNode(stmt);
 	return result;
 }
 

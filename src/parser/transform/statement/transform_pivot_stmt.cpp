@@ -29,7 +29,17 @@ void Transformer::AddPivotEntry(string enum_name, unique_ptr<TableRef> source, s
 }
 
 bool Transformer::HasPivotEntries() {
+	if (parent) {
+		return parent->HasPivotEntries();
+	}
 	return !pivot_entries.empty();
+}
+
+idx_t Transformer::PivotEntryCount() {
+	if (parent) {
+		return parent->PivotEntryCount();
+	}
+	return pivot_entries.size();
 }
 
 unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<TableRef> source, string enum_name) {
@@ -93,6 +103,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	auto columns = TransformPivotList(pivot->columns);
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
+	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
 		if (!col.pivot_enum.empty() || !col.entries.empty()) {
@@ -101,7 +112,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (col.names.size() != 1) {
 			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
 		}
-		auto enum_name = "__pivot_enum_" + std::to_string(pivot_entries.size()) + "_" + std::to_string(c);
+		auto enum_name = "__pivot_enum_" + std::to_string(pivot_idx) + "_" + std::to_string(c);
 		AddPivotEntry(enum_name, source->Copy(), col.names[0]);
 		col.pivot_enum = enum_name;
 	}
