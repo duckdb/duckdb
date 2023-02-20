@@ -588,9 +588,6 @@ struct UDFSum {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
-			if (!Value::DoubleIsFinite(state->value)) {
-				throw OutOfRangeException("SUM is out of range!");
-			}
 			target[idx] = state->value;
 		}
 	}

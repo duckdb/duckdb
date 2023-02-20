@@ -33,55 +33,55 @@ SELECT '1e100'::REAL
 ----
 inf
 
-# overflow in SUM/AVG results in an error
-statement error
+# overflow in SUM/AVG overflow
+query I
 SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)
 ----
-Out of Range Error
+inf
 
 statement error
 SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)
 ----
-Out of Range Error
+Out of Range Error: AVG is out of range!
 
 # overflow in arithmetic as well
-statement error
+query I
 SELECT 1e308+1e308
 ----
-Out of Range Error: Overflow
+inf
 
-statement error
+query I
 SELECT 1e308*2
 ----
-Out of Range Error: Overflow
+inf
 
-statement error
+query I
 SELECT -1e308-1e308
 ----
-Out of Range Error: Overflow
+-inf
 
-statement error
+query I
 SELECT 1e308/0.1
 ----
-Out of Range Error: Overflow
+inf
 
-statement error
+query I
 SELECT 2e38::REAL+2e38::REAL
 ----
-Out of Range Error: Overflow
+inf
 
-statement error
+query I
 SELECT 2e38::REAL*2
 ----
-Out of Range Error: Overflow
+inf
 
-statement error
+query I
 SELECT -2e38::REAL-2e38::REAL
 ----
-Out of Range Error: Overflow
+-inf
 
-statement error
+query I
 SELECT 2e38::REAL/0.1::REAL
 ----
-Out of Range Error: Overflow
+inf
 
