@@ -1163,6 +1163,37 @@ typedef struct PGUpdateStmt {
 } PGUpdateStmt;
 
 /* ----------------------
+ *		Pivot Expression
+ * ----------------------
+ */
+typedef struct PGPivot {
+	PGNodeTag type;
+	PGList *pivot_columns;  /* The column names to pivot on */
+	PGList *pivot_value;    /* The set of pivot values */
+	char *pivot_enum;       /* The enum to fetch the unique values from */
+} PGPivot;
+
+typedef struct PGPivotExpr {
+	PGNodeTag type;
+	PGNode *source;      /* the source subtree */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
+	PGList *pivots;      /* The set of pivot values */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
+	PGAlias *alias;      /* table alias & optional column aliases */
+	bool include_nulls;  /* Whether or not to include NULL values (UNPIVOT only */
+} PGPivotExpr;
+
+typedef struct PGPivotStmt {
+	PGNodeTag type;
+	PGNode *source;      /* The source to pivot */
+	PGList *aggrs;       /* The aggregations to pivot over (PIVOT only) */
+	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
+	PGList *columns;     /* The set of columns to pivot over */
+	PGList *groups;      /* The set of groups to pivot over (if any) */
+} PGPivotStmt;
+
+/* ----------------------
  *		Select Statement
  *
  * A "simple" SELECT is represented in the output of gram.y by a single
@@ -1203,6 +1234,9 @@ typedef struct PGSelectStmt {
 	 * analysis to reject that where not valid.
 	 */
 	PGList *valuesLists; /* untransformed list of expression lists */
+
+	/* When representing a pivot statement, all values are NULL besides the pivot field */
+	PGPivotStmt *pivot;       /* PIVOT statement */
 
 	/*
 	 * These fields are used in both "leaf" SelectStmts and upper-level
@@ -2105,7 +2139,6 @@ typedef struct PGUseStmt {
 	PGNodeTag type;
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
-
 
 
 }

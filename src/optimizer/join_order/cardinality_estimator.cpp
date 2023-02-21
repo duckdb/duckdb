@@ -399,9 +399,9 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *op) {
 	auto relation_id = node->set->relations[0];
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
-	TableCatalogEntry *catalog_table = nullptr;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	idx_t distinct_count = node->GetBaseTableCardinality();
+	TableCatalogEntry *catalog_table = nullptr;
 
 	bool direct_filter = false;
 	LogicalGet *get = nullptr;
@@ -419,6 +419,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		if (actual_binding != relation_column_to_original_column.end() &&
 		    (!get || get->table_index != actual_binding->second.table_index)) {
 			get = GetLogicalGet(op, actual_binding->second.table_index);
+			get_updated = true;
 		} else {
 			get_updated = false;
 		}
@@ -427,7 +428,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			catalog_table = GetCatalogTableEntry(get);
 		}
 
-		if (catalog_table) {
+		if (catalog_table && actual_binding != relation_column_to_original_column.end()) {
 			// Get HLL stats here
 			auto base_stats = catalog_table->GetStatistics(context, actual_binding->second.column_index);
 			if (base_stats) {
@@ -583,12 +584,11 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode *node, LogicalO
 	D_ASSERT(node->set->count == 1);
 	auto relation_id = node->set->relations[0];
 
-	TableFilterSet *table_filters = nullptr;
-
 	double lowest_card_found = NumericLimits<double>::Maximum();
 	for (auto &column : relation_attributes[relation_id].columns) {
 		auto card_after_filters = node->GetBaseTableCardinality();
 		ColumnBinding key = ColumnBinding(relation_id, column);
+		TableFilterSet *table_filters = nullptr;
 		auto actual_binding = relation_column_to_original_column.find(key);
 		if (actual_binding != relation_column_to_original_column.end()) {
 			table_filters = GetTableFilters(op, actual_binding->second.table_index);
