@@ -299,29 +299,9 @@ struct BitStringAggOperation {
 		return max - min + 1;
 	}
 
-	template <>
-	idx_t GetRange(hugeint_t min, hugeint_t max) {
-		idx_t val;
-		if (Hugeint::TryCast(max - min + 1, val)) {
-			return val;
-		} else {
-			throw OutOfRangeException("Range too large for bitstring aggregation");
-		}
-	}
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE *state, INPUT_TYPE input, INPUT_TYPE min) {
 		Bit::SetBit(state->value, input - min, 1);
-	}
-
-	template <class STATE>
-	static void Execute(STATE *state, hugeint_t input, hugeint_t min) {
-		idx_t val;
-		if (Hugeint::TryCast(input - min, val)) {
-			Bit::SetBit(state->value, val, 1);
-		} else {
-			throw OutOfRangeException("Range too large for bitstring aggregation");
-		}
 	}
 
 	template <class STATE, class OP>
@@ -370,6 +350,36 @@ struct BitStringAggOperation {
 		return true;
 	}
 };
+
+// template <class STATE>
+// void BitStringAggOperation::Execute<hugeint_t, STATE>(STATE *state, hugeint_t input, hugeint_t min) {
+//     idx_t val;
+//     if (Hugeint::TryCast(input - min, val)) {
+//         Bit::SetBit(state->value, val, 1);
+//     } else {
+//         throw OutOfRangeException("Range too large for bitstring aggregation");
+//     }
+// }
+
+template <>
+void BitStringAggOperation::Execute(BitAggState<string_t, hugeint_t> *state, hugeint_t input, hugeint_t min) {
+    idx_t val;
+    if (Hugeint::TryCast(input - min, val)) {
+        Bit::SetBit(state->value, val, 1);
+    } else {
+        throw OutOfRangeException("Range too large for bitstring aggregation");
+    }
+}
+
+template <>
+idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
+    idx_t val;
+    if (Hugeint::TryCast(max - min + 1, val)) {
+        return val;
+    } else {
+        throw OutOfRangeException("Range too large for bitstring aggregation");
+    }
+}
 
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    FunctionData *bind_data,
