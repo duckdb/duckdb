@@ -448,6 +448,7 @@ public:
 		static void ReserveSpace(BitpackingCompressState<T> *state, idx_t data_bytes) {
 			idx_t meta_bytes = sizeof(bitpacking_metadata_encoded_t);
 			state->FlushAndCreateSegmentIfFull(data_bytes, meta_bytes);
+			D_ASSERT(state->CanStore(data_bytes, meta_bytes));
 		}
 
 		static void UpdateStats(BitpackingCompressState<T> *state, idx_t count) {
