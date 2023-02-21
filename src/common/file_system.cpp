@@ -339,7 +339,7 @@ IOException FileSystem::MissingFileException(const string &file_path, ClientCont
 	const string prefixes[] = {"http://", "https://", "s3://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(file_path, prefix)) {
-			if (!context.db->LoadedExtensions().count("httpfs")) {
+			if (!context.db->ExtensionIsLoaded("httpfs")) {
 				return MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs "
 				                                 "extension is not loaded. Try loading the extension: LOAD HTTPFS",
 				                                 file_path);
