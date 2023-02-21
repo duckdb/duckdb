@@ -401,6 +401,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	relation_attributes[relation_id].cardinality = node->GetCardinality<double>();
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	idx_t distinct_count = node->GetBaseTableCardinality();
+	TableCatalogEntry *catalog_table = nullptr;
 
 	bool direct_filter = false;
 	LogicalGet *get = nullptr;
@@ -408,7 +409,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
-		TableCatalogEntry *catalog_table = nullptr;
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		auto actual_binding = relation_column_to_original_column.find(key);
 		// each relation has columns that are either projected or used as filters
@@ -419,6 +419,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		if (actual_binding != relation_column_to_original_column.end() &&
 		    (!get || get->table_index != actual_binding->second.table_index)) {
 			get = GetLogicalGet(op, actual_binding->second.table_index);
+			get_updated = true;
 		} else {
 			get_updated = false;
 		}
@@ -427,7 +428,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 			catalog_table = GetCatalogTableEntry(get);
 		}
 
-		if (catalog_table) {
+		if (catalog_table && actual_binding != relation_column_to_original_column.end()) {
 			// Get HLL stats here
 			auto base_stats = catalog_table->GetStatistics(context, actual_binding->second.column_index);
 			if (base_stats) {
