@@ -30,7 +30,10 @@ CREATE INDEX i2 ON t2 (c1);
 statement error
 INSERT INTO t2 VALUES (decode('g\x00'::BLOB)::VARCHAR),('g');
 ----
-TransactionContext Error: Failed to commit: Not implemented Error: Indexes cannot have contain null-terminated decoded BLOBs.
+TransactionContext Error: Failed to commit: Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
+
+statement ok
+INSERT INTO t2 VALUES ('\0');
 
 statement ok
 CREATE INDEX i22 ON t2 (c1);
@@ -89,7 +92,7 @@ CREATE INDEX i21 ON t21 (c1, "decode"('\x00'::BLOB));
 statement error
 INSERT INTO t21 VALUES (1);
 ----
-TransactionContext Error: Failed to commit: Not implemented Error: Indexes cannot have contain null-terminated decoded BLOBs.
+TransactionContext Error: Failed to commit: Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
 
 statement error
 CREATE INDEX i21 ON t21 (c1);
