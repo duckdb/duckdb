@@ -8,6 +8,8 @@
 #include <string>
 #include <regex>
 
+using std::unique_ptr;
+
 namespace node_duckdb {
 
 Napi::FunctionReference Statement::constructor;
@@ -28,51 +30,45 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
-struct PrepareTask : public Task {
-	PrepareTask(Statement &statement, Napi::Function callback) : Task(statement, callback) {
-	}
+static unique_ptr<duckdb::PreparedStatement> PrepareManyInternal(Statement &statement) {
+	auto &connection = statement.connection_ref->connection;
+	std::vector<unique_ptr<duckdb::SQLStatement>> statements;
+	try {
+		if (connection == nullptr) {
+			throw duckdb::ConnectionException("Connection was never established or has been closed already");
+		}
 
-	void DoWork() override {
-		auto &statement = Get<Statement>();
-
-		auto &connection = statement.connection_ref->connection;
-		std::vector<std::unique_ptr<duckdb::SQLStatement>> statements;
-		try {
-			if (connection == nullptr) {
-				throw duckdb::ConnectionException("Connection was never established or has been closed already");
-			}
-			statements = connection->ExtractStatements(statement.sql);
-			if (statements.empty()) {
-				throw duckdb::InvalidInputException("No statement to prepare!");
-			}
-		} catch (const duckdb::Exception &ex) {
-			statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
-			return;
-		} catch (std::exception &ex) {
-			statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
-			return;
+		// Prepare all statements
+		statements = connection->ExtractStatements(statement.sql);
+		if (statements.empty()) {
+			throw duckdb::InvalidInputException("No statement to prepare!");
 		}
 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto pending_query = connection->PendingQuery(std::move(statements[i]));
-			try {
-				auto res = pending_query->Execute();
-				if (res->HasError()) {
-					statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(res->GetErrorObject());
-					return;
-				}
-			} catch (const duckdb::Exception &ex) {
-				statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
-				return;
-			} catch (std::exception &ex) {
-				statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
-				return;
+			auto res = pending_query->Execute();
+			if (res->HasError()) {
+				return duckdb::make_unique<duckdb::PreparedStatement>(res->GetErrorObject());
 			}
 		}
 
-		statement.statement = connection->Prepare(std::move(statements.back()));
+		return connection->Prepare(std::move(statements.back()));
+	} catch (const duckdb::Exception &ex) {
+		return duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+	} catch (std::exception &ex) {
+		return duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+	}
+}
+
+struct PrepareTask : public Task {
+	PrepareTask(Statement &statement, Napi::Function callback) : Task(statement, callback) {
+	}
+
+	void DoWork() override {
+		auto &statement = Get<Statement>();
+		statement.statement = PrepareManyInternal(statement);
 	}
 
 	void Callback() override {
@@ -259,7 +255,7 @@ struct StatementParam {
 };
 
 struct RunPreparedTask : public Task {
-	RunPreparedTask(Statement &statement, duckdb::unique_ptr<StatementParam> params, RunType run_type)
+	RunPreparedTask(Statement &statement, unique_ptr<StatementParam> params, RunType run_type)
 	    : Task(statement, params->callback), params(std::move(params)), run_type(run_type) {
 	}
 
@@ -404,13 +400,13 @@ struct RunPreparedTask : public Task {
 		} break;
 		}
 	}
-	std::unique_ptr<duckdb::QueryResult> result;
-	duckdb::unique_ptr<StatementParam> params;
+	unique_ptr<duckdb::QueryResult> result;
+	unique_ptr<StatementParam> params;
 	RunType run_type;
 };
 
 struct RunQueryTask : public Task {
-	RunQueryTask(Statement &statement, duckdb::unique_ptr<StatementParam> params, Napi::Promise::Deferred deferred)
+	RunQueryTask(Statement &statement, unique_ptr<StatementParam> params, Napi::Promise::Deferred deferred)
 	    : Task(statement), deferred(deferred), params(std::move(params)) {
 	}
 
@@ -444,11 +440,11 @@ struct RunQueryTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	std::unique_ptr<duckdb::QueryResult> result;
-	duckdb::unique_ptr<StatementParam> params;
+	unique_ptr<duckdb::QueryResult> result;
+	unique_ptr<StatementParam> params;
 };
 
-duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
+unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
 	size_t start_idx = ignore_first_param ? 1 : 0;
 	auto params = duckdb::make_unique<StatementParam>();
 
@@ -579,7 +575,7 @@ struct GetChunkTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	std::unique_ptr<duckdb::DataChunk> chunk;
+	unique_ptr<duckdb::DataChunk> chunk;
 };
 
 struct GetNextArrowIpcTask : public Task {
@@ -609,10 +605,10 @@ struct GetNextArrowIpcTask : public Task {
 		duckdb::string_t blob = *(duckdb::string_t *)(chunk->data[0].GetData());
 
 		// Transfer ownership and Construct ArrayBuffer
-		auto data_chunk_ptr = new std::unique_ptr<duckdb::DataChunk>();
+		auto data_chunk_ptr = new unique_ptr<duckdb::DataChunk>();
 		*data_chunk_ptr = std::move(chunk);
 		auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
-			delete static_cast<std::unique_ptr<duckdb::DataChunk> *>(hint);
+			delete static_cast<unique_ptr<duckdb::DataChunk> *>(hint);
 		};
 		auto array_buffer =
 		    Napi::ArrayBuffer::New(env, (void *)blob.GetDataUnsafe(), blob.GetSize(), deleter, data_chunk_ptr);
@@ -621,7 +617,7 @@ struct GetNextArrowIpcTask : public Task {
 	}
 
 	Napi::Promise::Deferred deferred;
-	std::unique_ptr<duckdb::DataChunk> chunk;
+	unique_ptr<duckdb::DataChunk> chunk;
 };
 
 Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
