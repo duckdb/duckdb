@@ -1,5 +1,8 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
+#include "duckdb/common/constants.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 namespace duckdb {
 
 TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
@@ -54,6 +57,11 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 			heap_locations[offset] = GetHeapPointer(append_state.management_state, segment);
 			for (idx_t i = offset + 1; i < offset + next; i++) {
 				heap_locations[i] = heap_locations[i - 1] + heap_row_sizes[i - 1];
+			}
+
+			// Set a pointer to the heap in each row
+			for (idx_t i = offset; i < offset + next; i++) {
+				Store<data_ptr_t>(heap_locations[i], row_locations[i] + layout.GetHeapOffset());
 			}
 		}
 
