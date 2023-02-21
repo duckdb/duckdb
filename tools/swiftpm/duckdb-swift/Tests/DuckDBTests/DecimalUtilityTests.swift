@@ -22,26 +22,21 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
-@_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+import Foundation
+import XCTest
+@testable import DuckDB
+
+final class DecimalUtilityTests: XCTestCase {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  func test_decimal_huge_int_max() throws {
+    let maxInt128 = Decimal(string:  "170141183460469231731687303715884105727")!
+    XCTAssertEqual(Decimal(IntHuge.max), maxInt128)
   }
   
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
-  }
-  
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  func test_decimal_huge_int_min() throws {
+    let minInt128 = Decimal(string: "-170141183460469231731687303715884105728")!
+    XCTAssertEqual(Decimal(IntHuge.min), minInt128)
   }
 }
+

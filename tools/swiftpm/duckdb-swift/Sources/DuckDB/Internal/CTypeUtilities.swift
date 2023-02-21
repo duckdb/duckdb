@@ -36,21 +36,161 @@ extension duckdb_pending_state {
   static let error = duckdb_pending_state(2)
 }
 
-extension UnsafePointer where Pointee == duckdb_string {
+// MARK: - Type ID
+
+extension duckdb_type {
+  var asTypeID: DBTypeID { .init(rawValue: rawValue) }
+}
+
+// MARK: - String
+
+extension duckdb_string {
   
   private static let inlineLimit = UInt32(12)
   
-  var contents: String {
-    let contentsSize = UnsafeRawPointer(self).load(as: UInt32.self)
-    let strPtr: UnsafeRawPointer
-    if contentsSize <= Self.inlineLimit {
-      strPtr = UnsafeRawPointer(self).advanced(by: MemoryLayout<UInt32>.stride)
+  var asString: String {
+    withUnsafePointer(to: self) { ptr in
+      let contentsSize = UnsafeRawPointer(ptr).load(as: UInt32.self)
+      let strPtr: UnsafeRawPointer
+      if contentsSize <= Self.inlineLimit {
+        strPtr = UnsafeRawPointer(ptr).advanced(by: MemoryLayout<UInt32>.stride)
+      }
+      else {
+        let strPtrPtr = UnsafeRawPointer(ptr).advanced(by: MemoryLayout<UInt64>.stride)
+        strPtr = strPtrPtr.load(as: UnsafeRawPointer.self)
+      }
+      let stringData = Data(bytes: strPtr, count: Int(contentsSize))
+      return String(data: stringData, encoding:.utf8)!
     }
-    else {
-      let strPtrPtr = UnsafeRawPointer(self).advanced(by: MemoryLayout<UInt64>.stride)
-      strPtr = strPtrPtr.load(as: UnsafeRawPointer.self)
-    }
-    let stringData = Data(bytes: strPtr, count: Int(contentsSize))
-    return String(data: stringData, encoding:.utf8)!
   }
+}
+
+// MARK: - Huge Int
+
+extension duckdb_hugeint {
+  
+  var asUUID: UUID {
+    let components = upper < 0
+      ? (lower: lower, upper: UInt64(upper + Int64.max + 1))
+      : (lower: lower, upper: UInt64(upper) + UInt64(Int64.max) + 1)
+    return UUID(
+      uuid: uuid_t(
+        UInt8(truncatingIfNeeded: components.upper >> 56),
+        UInt8(truncatingIfNeeded: components.upper >> 48),
+        UInt8(truncatingIfNeeded: components.upper >> 40),
+        UInt8(truncatingIfNeeded: components.upper >> 32),
+        UInt8(truncatingIfNeeded: components.upper >> 24),
+        UInt8(truncatingIfNeeded: components.upper >> 16),
+        UInt8(truncatingIfNeeded: components.upper >> 8),
+        UInt8(truncatingIfNeeded: components.upper >> 0),
+        UInt8(truncatingIfNeeded: components.lower >> 56),
+        UInt8(truncatingIfNeeded: components.lower >> 48),
+        UInt8(truncatingIfNeeded: components.lower >> 40),
+        UInt8(truncatingIfNeeded: components.lower >> 32),
+        UInt8(truncatingIfNeeded: components.lower >> 24),
+        UInt8(truncatingIfNeeded: components.lower >> 16),
+        UInt8(truncatingIfNeeded: components.lower >> 8),
+        UInt8(truncatingIfNeeded: components.lower >> 0)
+      )
+    )
+  }
+}
+
+// MARK: - Time
+
+extension duckdb_time {
+  init(time: Time) { self = duckdb_time(micros: time.microseconds) }
+  var asTime: Time { Time(microseconds: micros) }
+}
+
+extension duckdb_time_struct {
+  
+  init(components: Time.Components) {
+    self = duckdb_time_struct(
+      hour: components.hour,
+      min: components.minute,
+      sec: components.second,
+      micros: components.microsecond
+    )
+  }
+  
+  var asTimeComponents: Time.Components {
+    .init(hour: hour, minute: min, second: sec, microsecond: micros)
+  }
+}
+
+// MARK: - Date
+
+extension duckdb_date {
+  init(date: Date) { self = duckdb_date(days: date.days) }
+  var asDate: Date { Date(days: days) }
+}
+
+extension duckdb_date_struct {
+  
+  init(components: Date.Components) {
+    self = duckdb_date_struct(year: components.year, month: components.month, day: components.day)
+  }
+  
+  var asDateComponents: Date.Components {
+    .init(year: year, month: month, day: day)
+  }
+}
+
+// MARK: - Timestamp
+
+extension duckdb_timestamp {
+  init(timestamp: Timestamp) { self = duckdb_timestamp(micros: timestamp.microseconds) }
+  var asTimestamp: Timestamp { Timestamp(microseconds: micros) }
+}
+
+extension duckdb_timestamp_struct {
+  
+  init(components: Timestamp.Components) {
+    self = duckdb_timestamp_struct(
+      date: duckdb_date_struct(components: components.date),
+      time: duckdb_time_struct(components: components.time)
+    )
+  }
+  
+  var asTimestampComponents: Timestamp.Components {
+    .init(date: date.asDateComponents, time: time.asTimeComponents)
+  }
+}
+
+// MARK: - Interval
+
+extension duckdb_interval {
+  
+  var asInterval: Interval {
+    Interval(months: months, days: days, microseconds: micros)
+  }
+}
+
+// MARK: - Blob
+
+extension duckdb_blob {
+  
+  private static let inlineLimit = UInt32(12)
+  
+  var asData: Data {
+    withUnsafePointer(to: self) { ptr in
+      let contentsSize = UnsafeRawPointer(ptr).load(as: UInt32.self)
+      let blobPtr: UnsafeRawPointer
+      if contentsSize <= Self.inlineLimit {
+        blobPtr = UnsafeRawPointer(ptr).advanced(by: MemoryLayout<UInt32>.stride)
+      }
+      else {
+        let blobPtrPtr = UnsafeRawPointer(ptr).advanced(by: MemoryLayout<UInt64>.stride)
+        blobPtr = blobPtrPtr.load(as: UnsafeRawPointer.self)
+      }
+      return Data(bytes: blobPtr, count: Int(contentsSize))
+    }
+  }
+}
+
+// MARK: - HugeInt
+
+extension duckdb_hugeint {
+  var asIntHuge: IntHuge { .init(lower: lower, upper: upper) }
 }

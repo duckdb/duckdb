@@ -25,7 +25,6 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-// TODO: - Check its safe to always assume UInt64 insetad of idx_t
 public typealias DBInt = UInt64
 
 public final class Database {

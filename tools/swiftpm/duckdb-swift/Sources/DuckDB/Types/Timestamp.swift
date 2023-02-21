@@ -23,25 +23,47 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+public struct Timestamp: Hashable, Equatable {
+  var microseconds: Int64
+}
+
+public extension Timestamp {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  struct Components: Hashable, Equatable {
+    public var date: Date.Components
+    public var time: Time.Components
   }
   
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
+  init(components: Components) {
+    let ctimestampstruct = duckdb_to_timestamp(duckdb_timestamp_struct(components: components))
+    self = ctimestampstruct.asTimestamp
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  var components: Components { Components(self) }
+}
+
+public extension Timestamp.Components {
+  
+  init(_ timestamp: Timestamp) {
+    let ctimestamp = duckdb_timestamp(timestamp: timestamp)
+    let ctimestampstruct = duckdb_from_timestamp(ctimestamp)
+    self = ctimestampstruct.asTimestampComponents
+  }
+}
+
+extension Timestamp.Components {
+  
+  init(
+    year: Int32,
+    month: Int8,
+    day: Int8,
+    hour: Int8,
+    minute: Int8,
+    second: Int8,
+    microsecond: Int32
+  ) {
+    self.date = .init(year: year, month: month, day: day)
+    self.time = .init(hour: hour, minute: minute, second: second, microsecond: microsecond)
   }
 }

@@ -23,6 +23,7 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
+import Foundation
 
 public struct Column<DataType> {
   
@@ -75,6 +76,11 @@ public extension Column {
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
+  func cast(to type: IntHuge.Type) -> Column<IntHuge> {
+    let transformer = result.transformer(forColumn: columnIndex, to: IntHuge.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
   func cast(to type: UInt8.Type) -> Column<UInt8> {
     let transformer = result.transformer(forColumn: columnIndex, to: UInt8.self)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
@@ -107,6 +113,41 @@ public extension Column {
   
   func cast(to type: String.Type) -> Column<String> {
     let transformer = result.transformer(forColumn: columnIndex, to: String.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: UUID.Type) -> Column<UUID> {
+    let transformer = result.transformer(forColumn: columnIndex, to: UUID.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Time.Type) -> Column<Time> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Time.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Date.Type) -> Column<Date> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Date.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Timestamp.Type) -> Column<Timestamp> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Timestamp.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Interval.Type) -> Column<Interval> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Interval.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Data.Type) -> Column<Data> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Data.self)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast(to type: Decimal.Type) -> Column<Decimal> {
+    let transformer = result.transformer(forColumn: columnIndex, to: Decimal.self)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
 }

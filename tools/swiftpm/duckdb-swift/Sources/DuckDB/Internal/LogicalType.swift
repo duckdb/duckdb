@@ -25,23 +25,46 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-final class DataChunk {
+final class LogicalType {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
+  private let ptr = UnsafeMutablePointer<duckdb_logical_type?>.allocate(capacity: 1)
   
   init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+    self.ptr.pointee = result.withCResult { duckdb_column_logical_type($0, index) }
   }
   
   deinit {
-    duckdb_destroy_data_chunk(ptr)
+    duckdb_destroy_logical_type(ptr)
     ptr.deallocate()
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  var dataType: DBTypeID {
+    let ctypeid = duckdb_get_type_id(ptr.pointee)
+    return ctypeid.asTypeID
+  }
+  
+  func withCLogicalType<T>(_ body: (duckdb_logical_type?) throws -> T) rethrows -> T {
+    try body(ptr.pointee)
+  }
+}
+
+// MARK: - Decimal
+
+extension LogicalType {
+  
+  struct DecimalProperties {
+    let width: UInt8
+    let scale: UInt8
+    let storageType: DBTypeID
+  }
+  
+  var decimalProperties: DecimalProperties? {
+    guard dataType == .decimal else { return nil }
+    let internalStorageType = duckdb_decimal_internal_type(ptr.pointee)
+    return .init(
+      width: duckdb_decimal_width(ptr.pointee),
+      scale: duckdb_decimal_scale(ptr.pointee),
+      storageType: internalStorageType.asTypeID
+    )
   }
 }

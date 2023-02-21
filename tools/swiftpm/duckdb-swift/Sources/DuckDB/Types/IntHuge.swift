@@ -22,26 +22,12 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
-@_implementationOnly import Cduckdb
-import Foundation
+public struct IntHuge: Hashable, Equatable {
+  public var lower: UInt64
+  public var upper: Int64
+}
 
-final class DataChunk {
-  
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
-  }
-  
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
-  }
-  
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
-  }
+public extension IntHuge {
+  static let min = IntHuge(lower: .min, upper: .min)
+  static let max = IntHuge(lower: .max, upper: .max)
 }
