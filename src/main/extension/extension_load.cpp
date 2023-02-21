@@ -138,7 +138,7 @@ string ExtensionHelper::GetExtensionName(const string &extension) {
 	if (splits.empty()) {
 		return extension;
 	}
-	return splits.front();
+	return StringUtil::Lower(splits.front());
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
