@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include "benchmark_configuration.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 

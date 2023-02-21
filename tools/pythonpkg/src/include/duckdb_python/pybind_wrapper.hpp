@@ -11,7 +11,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+#include "duckdb/common/unique_ptr.hpp"
 #include <vector>
+
+namespace py = pybind11;
+
+PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>);
 
 namespace duckdb {
 #ifdef __GNUG__
