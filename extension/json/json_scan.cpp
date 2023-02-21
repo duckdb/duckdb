@@ -75,10 +75,7 @@ void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<stri
                                        vector<string> &file_paths) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
-		auto found_files = fs.Glob(file_pattern, context);
-		if (found_files.empty()) {
-			throw FileSystem::MissingFileException(file_pattern, context);
-		}
+		auto found_files = fs.GlobFiles(file_pattern, context);
 		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());
 	}
 }

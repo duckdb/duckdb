@@ -28,10 +28,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &patterns) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
-		auto found_files = fs.Glob(file_pattern, context);
-		if (found_files.empty()) {
-			throw FileSystem::MissingFileException(file_pattern, context);
-		}
+		auto found_files = fs.GlobFiles(file_pattern, context);
 		files.insert(files.end(), found_files.begin(), found_files.end());
 	}
 }
