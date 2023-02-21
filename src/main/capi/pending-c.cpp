@@ -93,23 +93,6 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	}
 }
 
-duckdb_state duckdb_create_streaming_result(duckdb_pending_result pending_result, duckdb_result *out_result) {
-	if (!pending_result || !out_result) {
-		return DuckDBError;
-	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
-	if (!wrapper->statement || !wrapper->allow_streaming) {
-		return DuckDBError;
-	}
-	auto result = wrapper->statement->Execute();
-	if (result->type != duckdb::QueryResultType::STREAM_RESULT) {
-		// We are expecting to create a stream result, error should be communicated if the result is not streaming
-		return DuckDBError;
-	}
-	wrapper->statement.reset();
-	return duckdb_translate_result(std::move(result), out_result);
-}
-
 duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb_result *out_result) {
 	if (!pending_result || !out_result) {
 		return DuckDBError;
@@ -121,11 +104,6 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 
 	std::unique_ptr<duckdb::QueryResult> result;
 	result = wrapper->statement->Execute();
-	if (wrapper->allow_streaming && result->type == duckdb::QueryResultType::STREAM_RESULT) {
-		// Materialize the result into a MaterializedQueryResult
-		auto &stream_result = (duckdb::StreamQueryResult &)*result;
-		result = stream_result.Materialize();
-	}
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }

@@ -265,12 +265,6 @@ struct CAPIPending {
 		return duckdb_pending_execute_task(pending);
 	}
 
-	unique_ptr<CAPIResult> CreateStream() {
-		duckdb_result result;
-		auto success = duckdb_create_streaming_result(pending, &result) == DuckDBSuccess;
-		return make_unique<CAPIResult>(result, success);
-	}
-
 	unique_ptr<CAPIResult> Execute() {
 		duckdb_result result;
 		auto success = duckdb_execute_pending(pending, &result) == DuckDBSuccess;
