@@ -15,6 +15,7 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
