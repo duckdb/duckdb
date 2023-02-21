@@ -2911,6 +2911,8 @@ function duckdb_add_custom_buffer_manager(
         max_memory_func,
         used_memory_func
     )
+end
+
 """
 Returns true if execution of the current query is finished.
 
