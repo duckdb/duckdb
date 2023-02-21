@@ -875,7 +875,60 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getPrimaryKeys");
+		StringWriter sw = new StringWriter();
+		PrintWriter pw = new PrintWriter(sw);
+		pw.println("WITH constraint_columns AS (");
+		pw.println("SELECT");
+		pw.println("  database_name AS \"TABLE_CAT\"");
+		pw.println(", schema_name AS \"TABLE_SCHEM\"");
+		pw.println(", table_name AS \"TABLE_NAME\"");
+		pw.println(", unnest(constraint_column_names) AS \"COLUMN_NAME\"");
+		pw.println(", CAST(NULL AS VARCHAR) AS \"PK_NAME\"");
+		pw.println("FROM duckdb_constraints");
+		pw.println("WHERE constraint_type = 'PRIMARY KEY'");
+		// catalog param
+		if (catalog != null) {
+			if (catalog.isEmpty()) {
+				pw.println("AND database_name IS NULL");
+			}
+			else {
+				pw.println("AND database_name = ?");
+			}
+		}
+		// schema param
+		if (schema != null) {
+			if (schema.isEmpty()) {
+				pw.println("AND schema_name IS NULL");
+			}
+			else {
+				pw.println("AND schema_name = ?");
+			}
+		}
+		// table name param
+		pw.println("AND table_name = ?");
+		
+		pw.println(")");
+		pw.println("SELECT \"TABLE_CAT\"");
+		pw.println(", \"TABLE_SCHEM\"");
+		pw.println(", \"TABLE_NAME\"");
+		pw.println(", \"COLUMN_NAME\"");
+		pw.println(", CAST(ROW_NUMBER() OVER ");
+		pw.println("(PARTITION BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\") AS INT) AS \"KEY_SEQ\"");
+		pw.println(", \"PK_NAME\"");
+		pw.println("FROM constraint_columns");
+		pw.println("ORDER BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\", \"KEY_SEQ\"");
+		
+		int paramIndex = 1;
+		PreparedStatement ps = conn.prepareStatement(sw.toString());
+		
+		if (catalog != null && !catalog.isEmpty()) {
+			ps.setString(paramIndex++, catalog);
+		}
+		if (schema != null && !schema.isEmpty()) {
+			ps.setString(paramIndex++, schema);
+		}
+		ps.setString(paramIndex++, table);
+		return ps.executeQuery();
 	}
 
 	@Override

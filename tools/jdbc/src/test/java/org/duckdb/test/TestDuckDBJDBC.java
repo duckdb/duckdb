@@ -1,5 +1,7 @@
 package org.duckdb.test;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -2762,6 +2764,132 @@ public class TestDuckDBJDBC {
 			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertFalse(functions.next());
+		}
+	}
+
+	public static void test_get_primary_keys() throws Exception {
+		try (
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+		) {
+			Object[][] testData = new Object[12][6];
+			int testDataIndex = 0;
+
+			Object[][] params = new Object[6][5];
+			int paramIndex = 0;
+			
+			String catalog = conn.getCatalog();
+
+			for (int schemaNumber = 1; schemaNumber <= 2; schemaNumber++) {
+				String schemaName = "schema" + schemaNumber;
+				stmt.executeUpdate("CREATE SCHEMA " + schemaName);
+				stmt.executeUpdate("SET SCHEMA = '" + schemaName + "'");
+				for (int tableNumber = 1; tableNumber <= 3; tableNumber++) {
+					String tableName = "table" + tableNumber;
+					params[paramIndex] = new Object[] {catalog, schemaName, tableName, testDataIndex, -1};
+					String columns = null;
+					String pk = null;
+					for (int columnNumber = 1; columnNumber <= tableNumber; columnNumber++) {
+						String columnName = "column" + columnNumber;
+						String columnDef = columnName + " int not null";
+						columns = columns == null ? columnDef : columns + "," + columnDef;
+						pk = pk == null ? columnName : pk + "," + columnName;
+						testData[testDataIndex++] = new Object[] { catalog, schemaName, tableName, columnName, columnNumber, null };
+					}
+					stmt.executeUpdate("CREATE TABLE " + tableName + "(" + columns + ",PRIMARY KEY(" + pk + ") )");
+					params[paramIndex][4] = testDataIndex;
+					paramIndex += 1;
+				}
+			}
+
+			DatabaseMetaData databaseMetaData = conn.getMetaData();
+			for (paramIndex = 0; paramIndex < 6; paramIndex++) {
+				Object[] paramSet = params[paramIndex];
+				ResultSet resultSet = databaseMetaData.getPrimaryKeys(
+					(String)paramSet[0], 
+					(String)paramSet[1], 
+					(String)paramSet[2]
+				);
+				for(testDataIndex = (int)paramSet[3]; testDataIndex < (int)paramSet[4]; testDataIndex++) {
+					assertTrue(resultSet.next(), "Expected a row at position " + testDataIndex);
+					Object[] testDataRow = testData[testDataIndex];
+					for (int columnIndex = 0; columnIndex < testDataRow.length; columnIndex++) {
+						Object value = testDataRow[columnIndex];
+						if (value == null || value instanceof String) {
+							String columnValue = resultSet.getString(columnIndex + 1);
+							assertTrue(
+								value == null ? columnValue == null : value.equals(columnValue),
+								"row value " + testDataIndex + ", " + columnIndex + " " + value + 
+								" should equal column value "+ columnValue
+							);
+						} else {
+							int testValue = ((Integer) value).intValue();
+							int columnValue = resultSet.getInt(columnIndex + 1);
+							assertTrue(
+								testValue == columnValue,
+								"row value " + testDataIndex + ", " + columnIndex + " " + testValue + 
+								" should equal column value " + columnValue
+							);
+						}
+					}
+				}
+				resultSet.close();
+			}
+
+			
+			/*
+			StringWriter sw = new StringWriter();
+			PrintWriter pw = new PrintWriter(sw);
+			pw.println("WITH constraint_columns as (");
+			pw.println("select");
+			pw.println("  database_name as \"TABLE_CAT\"");
+			pw.println(", schema_name as \"TABLE_SCHEM\"");
+			pw.println(", table_name as \"TABLE_NAME\"");
+			pw.println(", unnest(constraint_column_names) as \"COLUMN_NAME\"");
+			pw.println(", cast(null as varchar) as \"PK_NAME\"");
+			pw.println("from duckdb_constraints");
+			pw.println("where constraint_type = 'PRIMARY KEY'");
+			pw.println(")");
+			pw.println("SELECT \"TABLE_CAT\"");
+			pw.println(", \"TABLE_SCHEM\"");
+			pw.println(", \"TABLE_NAME\"");
+			pw.println(", \"COLUMN_NAME\"");
+			pw.println(", cast(row_number() over ");
+			pw.println("(partition by \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\") as int) as \"KEY_SEQ\"");
+			pw.println(", \"PK_NAME\"");
+			pw.println("FROM constraint_columns");
+			pw.println("ORDER BY TABLE_CAT, TABLE_SCHEM, TABLE_NAME, KEY_SEQ");
+
+			ResultSet resultSet = stmt.executeQuery(sw.toString());
+			ResultSet resultSet = databaseMetaData.getPrimaryKeys(null, null, catalog);
+			for (testDataIndex = 0; testDataIndex < testData.length; testDataIndex++) {
+				assertTrue(resultSet.next(), "Expected a row at position " + testDataIndex);
+				Object[] testDataRow = testData[testDataIndex];
+				for (int columnIndex = 0; columnIndex < testDataRow.length; columnIndex++) {
+					Object value = testDataRow[columnIndex];
+					if (value == null || value instanceof String) {
+						String columnValue = resultSet.getString(columnIndex + 1);
+						assertTrue(
+							value == null ? columnValue == null : value.equals(columnValue),
+							"row value " + testDataIndex + ", " + columnIndex + " " + value + 
+							" should equal column value "+ columnValue
+						);
+					} else {
+						int testValue = ((Integer) value).intValue();
+						int columnValue = resultSet.getInt(columnIndex + 1);
+						assertTrue(
+							testValue == columnValue,
+							"row value " + testDataIndex + ", " + columnIndex + " " + testValue + 
+							" should equal column value " + columnValue
+						);
+					}
+				}
+			}
+			*/
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+			throw e;
 		}
 	}
 
