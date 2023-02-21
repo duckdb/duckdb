@@ -141,20 +141,20 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromSubstrait(py::bytes &proto
 	return conn->FromSubstrait(proto);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::GetSubstrait(const string &query,
-                                                               shared_ptr<DuckDBPyConnection> conn) {
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn,
+                                                               bool enable_optimizer) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->GetSubstrait(query);
+	return conn->GetSubstrait(query, enable_optimizer);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::GetSubstraitJSON(const string &query,
-                                                                   shared_ptr<DuckDBPyConnection> conn) {
+unique_ptr<DuckDBPyRelation>
+PyConnectionWrapper::GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn, bool enable_optimizer) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->GetSubstraitJSON(query);
+	return conn->GetSubstraitJSON(query, enable_optimizer);
 }
 
 unordered_set<string> PyConnectionWrapper::GetTableNames(const string &query, shared_ptr<DuckDBPyConnection> conn) {
