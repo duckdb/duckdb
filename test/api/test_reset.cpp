@@ -30,6 +30,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"default_order", {"desc", "desc"}},
 	    {"default_null_order", {"nulls_last", "nulls_last"}},
 	    {"disabled_optimizers", {"extension", "extension"}},
+	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"enable_fsst_vectors", {true, true}},
 	    {"enable_object_cache", {true, true}},
 	    {"enable_profiling", {"json", "json"}},

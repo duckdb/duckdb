@@ -18,23 +18,32 @@ def test_exception(command, input, stdout, stderr, errmsg):
      print(stderr)
      raise Exception(errmsg)
 
-def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
+def test(cmd, out=None, err=None, extra_commands=None, input_file=None, output_file=None):
      command = [sys.argv[1], '--batch', '-init', '/dev/null']
      if extra_commands:
           command += extra_commands
+
      if input_file:
           command += [cmd]
-          res = subprocess.run(command, input=open(input_file, 'rb').read(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          input_data = open(input_file, 'rb').read()
      else:
-          res = subprocess.run(command, input=bytearray(cmd, 'utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-     stdout = res.stdout.decode('utf8').strip()
+          input_data = bytearray(cmd, 'utf8')
+     output_pipe = subprocess.PIPE
+     if output_file:
+          output_pipe = open(output_file, 'w+')
+
+     res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE)
+     if output_file:
+          stdout = open(output_file, 'r').read()
+     else:
+          stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
      if out and out not in stdout:
           test_exception(command, cmd, stdout, stderr, 'out test failed')
 
      if err and err not in stderr:
-          test_exception(command, cmd, stdout, stderr, 'err test failed')
+          test_exception(command, cmd, stdout, stderr, f"err test failed, error does not contain: '{err}'")
 
      if not err and stderr != '':
           test_exception(command, cmd, stdout, stderr, 'got err test failed')
@@ -332,6 +341,11 @@ outstr = open(outfile,'rb').read()
 if b'42' not in outstr:
      raise Exception('.output test failed')
 
+# issue 6204
+test('''
+.output foo.txt
+select * from range(2049);
+''')
 
 outfile = tf()
 test('''
@@ -416,7 +430,7 @@ SELECT * FROM t1;
 duckdb_nonsense_db = 'duckdbtest_nonsensedb.db'
 with open(duckdb_nonsense_db, 'w+') as f:
      f.write('blablabla')
-test('', err='The file is not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
+test('', err='not a valid DuckDB database file', extra_commands=[duckdb_nonsense_db])
 os.remove(duckdb_nonsense_db)
 
 # enable_profiling doesn't result in any output
@@ -865,6 +879,17 @@ outstr = open(outfile,'rb').read().decode('utf8')
 if '50' not in outstr:
      raise Exception('.output test failed')
 
+# we always display all columns when outputting to a file
+columns = ', '.join([str(x) for x in range(100)])
+outfile = tf()
+test('''
+.output %s
+SELECT %s
+''' % (outfile, columns))
+outstr = open(outfile,'rb').read().decode('utf8')
+if '99' not in outstr:
+     raise Exception('.output test failed')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 
@@ -946,6 +971,45 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
           input_file='data/csv/tpcds_14.csv',
           out='''web,8006004,844.21,21''')
 
+     test('''create table mytable as select * from
+read_json_objects('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''json
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}''')
+
+     test('''create table mytable as select * from
+read_ndjson_objects('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''json
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}''')
+
+     test('''create table mytable as select * from
+read_json_auto('/dev/stdin');
+select * from mytable;
+          ''',
+          extra_commands=['-list', ':memory:'],
+          input_file='data/json/example_rn.ndjson',
+          out='''id|name
+1|O Brother, Where Art Thou?
+2|Home for the Holidays
+3|The Firm
+4|Broadcast News
+5|Raising Arizona''')
+
      test('''
      COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');
      ''',
@@ -973,3 +1037,5 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
      select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)
      ''',
      out='''thisisalongstring''')
+
+     test("copy (select * from range(10000) tbl(i)) to '/dev/stdout' (format csv)", out='9999', output_file=tf())

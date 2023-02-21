@@ -28,6 +28,7 @@ class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
+class DuckTransaction;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -59,7 +60,7 @@ struct ColumnScanState {
 	//! The version of the column data that we are scanning.
 	//! This is used to detect if the ColumnData has been changed out from under us during a scan
 	//! If this is the case, we re-initialize the scan
-	idx_t version;
+	idx_t version = 0;
 	//! We initialize one SegmentScanState per segment, however, if scanning a DataChunk requires us to scan over more
 	//! than one Segment, we need to keep the scan states of the previous segments around
 	vector<unique_ptr<SegmentScanState>> previous_states;
@@ -124,7 +125,7 @@ public:
 	const vector<column_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
-	bool Scan(Transaction &transaction, DataChunk &result);
+	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 
 private:

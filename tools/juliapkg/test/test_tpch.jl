@@ -1,7 +1,9 @@
 # test_tpch.jl
 
+# DuckDB needs to have been built with TPCH (BUILD_TPCH=1) to run this test!
+
 @testset "Test TPC-H" begin
-    sf = "0.01"
+    sf = "0.1"
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)

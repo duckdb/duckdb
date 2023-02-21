@@ -122,6 +122,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 				}
 				if (modifier_idx == 0) {
 					width = const_val.val.val.ival;
+					if (base_type == LogicalTypeId::BIT && const_val.location != -1) {
+						width = 0;
+					}
 				} else if (modifier_idx == 1) {
 					scale = const_val.val.val.ival;
 				} else {
@@ -162,6 +165,13 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		case LogicalTypeId::USER: {
 			string user_type_name {name};
 			result_type = LogicalType::USER(user_type_name);
+			break;
+		}
+		case LogicalTypeId::BIT: {
+			if (!width && type_name->typmods) {
+				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
+			}
+			result_type = LogicalType(base_type);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP:

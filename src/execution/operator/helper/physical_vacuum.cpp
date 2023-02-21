@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -71,7 +72,7 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 
 	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
-		table->storage->SetStatistics(info->column_id_map.at(col_idx), [&](BaseStatistics &stats) {
+		table->GetStorage().SetStatistics(info->column_id_map.at(col_idx), [&](BaseStatistics &stats) {
 			stats.distinct_stats = std::move(sink.column_distinct_stats[col_idx]);
 		});
 	}

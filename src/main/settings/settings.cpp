@@ -434,6 +434,22 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Custom Extension Repository
+//===--------------------------------------------------------------------===//
+
+void CustomExtensionRepository::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).custom_extension_repo = ClientConfig().custom_extension_repo;
+}
+
+void CustomExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).custom_extension_repo = StringUtil::Lower(input.ToString());
+}
+
+Value CustomExtensionRepository::GetSetting(ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).custom_extension_repo);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 
@@ -875,7 +891,8 @@ void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
-	return SearchPathSetting::GetSetting(context);
+	auto &client_data = ClientData::Get(context);
+	return client_data.catalog_search_path->GetDefault().schema;
 }
 
 //===--------------------------------------------------------------------===//

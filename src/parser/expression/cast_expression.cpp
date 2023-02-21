@@ -16,7 +16,7 @@ string CastExpression::ToString() const {
 	return ToString<CastExpression, ParsedExpression>(*this);
 }
 
-bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
+bool CastExpression::Equal(const CastExpression *a, const CastExpression *b) {
 	if (!a->child->Equals(b->child.get())) {
 		return false;
 	}

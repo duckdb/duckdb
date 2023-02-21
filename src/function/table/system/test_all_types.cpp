@@ -1,7 +1,9 @@
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/bit.hpp"
+#include "duckdb/function/table/system_functions.hpp"
+
 #include <cmath>
 #include <limits>
 
@@ -56,12 +58,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	max_interval.micros = 999999999;
 	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
 	                    Value::INTERVAL(max_interval));
-	// strings/blobs
+	// strings/blobs/bitstrings
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
 	                    Value(string("goo\x00se", 6)));
-	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
+	result.emplace_back(LogicalType::BIT, "bit", Value::BIT("0010001001011100010101011010111"), Value::BIT("10101"));
 
 	// enums
 	Vector small_enum(LogicalType::VARCHAR, 2);

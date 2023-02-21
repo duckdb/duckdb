@@ -281,6 +281,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = (LogicalFilter &)op;
+		if (!filter.projection_map.empty()) {
+			// if we have any entries in the filter projection map don't prune any columns
+			// FIXME: we can do something more clever here
+			everything_referenced = true;
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

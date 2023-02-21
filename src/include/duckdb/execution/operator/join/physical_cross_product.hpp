@@ -56,7 +56,7 @@ public:
 
 class CrossProductExecutor {
 public:
-	CrossProductExecutor(ColumnDataCollection &rhs);
+	explicit CrossProductExecutor(ColumnDataCollection &rhs);
 
 	OperatorResultType Execute(DataChunk &input, DataChunk &output);
 

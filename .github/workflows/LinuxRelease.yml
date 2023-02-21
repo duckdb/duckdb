@@ -1,15 +1,22 @@
 name: LinuxRelease
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/nodejs/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
 
@@ -19,10 +26,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
  linux-release-64:
@@ -49,6 +52,12 @@ jobs:
       with:
         fetch-depth: 0
     - uses: ./.github/actions/ubuntu_16_setup
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -114,7 +123,14 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+
      - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
      - name: Install Stuff
        shell: bash
@@ -234,7 +250,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -246,6 +262,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -276,6 +293,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ./.github/actions/ubuntu_16_setup
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -311,7 +334,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -325,6 +348,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -377,7 +401,7 @@ jobs:
         version: "14.0"
         directory: '/home/runner/work/llvm'
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -385,6 +409,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -408,7 +433,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -420,6 +445,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -462,6 +488,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -486,7 +513,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -494,6 +521,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Test
       shell: bash
@@ -520,6 +548,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build Library Module
       shell: bash
@@ -555,7 +584,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -563,6 +592,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -584,7 +614,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -596,6 +626,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -616,6 +647,12 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      AWS_DEFAULT_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: minio_duckdb_user
+      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
+      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
+      DUCKDB_S3_USE_SSL: false
+
       GEN: ninja
 
     steps:
@@ -623,7 +660,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -635,6 +672,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -666,7 +704,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -679,5 +717,4 @@ jobs:
       shell: bash
       run:  |
           python scripts/amalgamation.py --extended
-          python scripts/parquet_amalgamation.py
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0

@@ -166,6 +166,8 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	}
 
 	D_ASSERT(active_query.get());
+	active_query.reset();
+	query_progress = -1;
 	PreservedError error;
 	try {
 		if (transaction.HasActiveTransaction()) {
@@ -203,8 +205,6 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	} catch (...) { // LCOV_EXCL_START
 		error = PreservedError("Unhandled exception!");
 	} // LCOV_EXCL_STOP
-	active_query.reset();
-	query_progress = -1;
 	return error;
 }
 
@@ -665,6 +665,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+		case StatementType::COPY_STATEMENT:
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
@@ -684,6 +686,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(parser.statements[0]);
 			break;
 		}
+#endif
 		default:
 			statement = std::move(copied_statement);
 			break;
@@ -979,7 +982,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result = make_unique<TableDescription>();
 		result->schema = schema_name;
 		result->table = table_name;
-		for (auto &column : table->columns.Logical()) {
+		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Name(), column.Type());
 		}
 	});
@@ -991,15 +994,15 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		auto table_entry =
 		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
 		// verify that the table columns and types match up
-		if (description.columns.size() != table_entry->columns.PhysicalColumnCount()) {
+		if (description.columns.size() != table_entry->GetColumns().PhysicalColumnCount()) {
 			throw Exception("Failed to append: table entry has different number of columns!");
 		}
 		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].Type() != table_entry->columns.GetColumn(PhysicalIndex(i)).Type()) {
+			if (description.columns[i].Type() != table_entry->GetColumns().GetColumn(PhysicalIndex(i)).Type()) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry->storage->LocalAppend(*table_entry, *this, collection);
+		table_entry->GetStorage().LocalAppend(*table_entry, *this, collection);
 	});
 }
 
@@ -1040,9 +1043,10 @@ unordered_set<string> ClientContext::GetTableNames(const string &query) {
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
-	auto lock = LockContext();
-	InitialCleanup(*lock);
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
+                                                                   const shared_ptr<Relation> &relation,
+                                                                   bool allow_stream_result) {
+	InitialCleanup(lock);
 
 	string query;
 	if (config.query_verification_enabled) {
@@ -1053,14 +1057,32 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatementInternal(*lock, query, std::move(select), false);
+			RunStatementInternal(lock, query, std::move(select), false);
 		}
 	}
-	auto &expected_columns = relation->Columns();
+
 	auto relation_stmt = make_unique<RelationStatement>(relation);
+	PendingQueryParameters parameters;
+	parameters.allow_stream_result = allow_stream_result;
+	return PendingQueryInternal(lock, std::move(relation_stmt), parameters);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Relation> &relation,
+                                                           bool allow_stream_result) {
+	auto lock = LockContext();
+	return PendingQueryInternal(*lock, relation, allow_stream_result);
+}
+
+unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
+	auto lock = LockContext();
+	auto &expected_columns = relation->Columns();
+	auto pending = PendingQueryInternal(*lock, relation, false);
+	if (!pending->success) {
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
+	}
 
 	unique_ptr<QueryResult> result;
-	result = RunStatementInternal(*lock, query, std::move(relation_stmt), false);
+	result = ExecutePendingQueryInternal(*lock, *pending);
 	if (result->HasError()) {
 		return result;
 	}
@@ -1129,6 +1151,13 @@ ClientProperties ClientContext::GetClientProperties() const {
 	ClientProperties properties;
 	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
 	return properties;
+}
+
+bool ClientContext::ExecutionIsFinished() {
+	if (!active_query || !active_query->executor) {
+		return false;
+	}
+	return active_query->executor->ExecutionIsFinished();
 }
 
 } // namespace duckdb

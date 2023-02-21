@@ -211,8 +211,9 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
+		static_assert(std::is_integral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= frame_of_reference;
+			buffer[i] -= uint64_t(frame_of_reference);
 		}
 	}
 

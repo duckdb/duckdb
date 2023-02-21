@@ -1,6 +1,6 @@
 if(${EXIT_TIME_DESTRUCTORS_WARNING})
-    set(CMAKE_CXX_FLAGS_DEBUG
-            "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
 endif()
 
 add_library_unity(
@@ -9,7 +9,9 @@ add_library_unity(
   row_data_collection.cpp
   row_data_collection_scanner.cpp
   row_layout.cpp
-  tuple_data_collection.cpp)
+  tuple_data_allocator.cpp
+  tuple_data_collection.cpp
+  tuple_data_layout.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types_row>
     PARENT_SCOPE)

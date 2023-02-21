@@ -271,4 +271,12 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	}
 }
 
+void RowDataCollectionScanner::Reset(bool flush_p) {
+	flush = flush_p;
+	total_scanned = 0;
+
+	read_state.block_idx = 0;
+	read_state.entry_idx = 0;
+}
+
 } // namespace duckdb

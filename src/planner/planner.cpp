@@ -133,6 +133,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXECUTE_STATEMENT:
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 	case StatementType::ATTACH_STATEMENT:
+	case StatementType::DETACH_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -154,13 +155,11 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-	case LogicalOperatorType::LOGICAL_LOAD:
 	case LogicalOperatorType::LOGICAL_VACUUM:
 		// unsupported (for now)
 		return false;

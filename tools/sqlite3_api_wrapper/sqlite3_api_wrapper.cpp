@@ -32,7 +32,7 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -222,7 +222,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value) {
 	if (!pStmt) {
 		return nullptr;
 	}
@@ -262,6 +262,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_val
 	if (null_value) {
 		config.null_value = null_value;
 	}
+	config.max_width = max_width;
 	BoxRenderer renderer(config);
 	auto result_rendering =
 	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
@@ -1089,11 +1090,30 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
+const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return nullptr;
+	}
+
+	auto &&names = pStmt->prepared->GetNames();
+	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	return names[iCol].c_str();
+}
+
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
-		return NULL;
+		return nullptr;
 	}
-	auto column_type = pStmt->prepared->GetTypes()[iCol];
+
+	auto &&types = pStmt->prepared->GetTypes();
+	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	auto column_type = types[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";

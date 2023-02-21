@@ -22,7 +22,7 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	return std::move(copy);
 }
 
-bool ParameterExpression::Equals(const ParameterExpression *a, const ParameterExpression *b) {
+bool ParameterExpression::Equal(const ParameterExpression *a, const ParameterExpression *b) {
 	return a->parameter_nr == b->parameter_nr;
 }
 

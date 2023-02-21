@@ -27,7 +27,7 @@ public:
 private:
 	BoundSelectNode &node;
 	const case_insensitive_map_t<idx_t> &alias_map;
-	bool in_alias;
+	unordered_set<idx_t> visited_select_indexes;
 };
 
 } // namespace duckdb

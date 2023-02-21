@@ -1,0 +1,16 @@
+# name: test/sql/parser/unreserved_keyword_casing.test
+# description: Issue #6092 - Unreserved keywords used as column names don't retain their casing
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE people(Name VARCHAR, STATE VARCHAR, Country VARCHAR);
+
+query IIIIII
+DESCRIBE people
+----
+Name	VARCHAR	YES	NULL	NULL	NULL
+STATE	VARCHAR	YES	NULL	NULL	NULL
+Country	VARCHAR	YES	NULL	NULL	NULL

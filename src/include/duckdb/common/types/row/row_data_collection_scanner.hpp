@@ -80,6 +80,9 @@ public:
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
 
+	//! Resets to the start and updates the flush flag
+	void Reset(bool flush = true);
+
 private:
 	//! The row data being scanned
 	RowDataCollection &rows;
@@ -98,7 +101,7 @@ private:
 	//! Whether the blocks can be flushed to disk
 	const bool external;
 	//! Whether to flush the blocks after scanning
-	const bool flush;
+	bool flush;
 	//! Whether we are unswizzling the blocks
 	const bool unswizzling;
 

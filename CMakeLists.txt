@@ -307,6 +307,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
+option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
@@ -320,7 +321,6 @@ option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
-option(BUILD_ARROW_ABI_TEST "Enable the Arrow ABI Test." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
@@ -373,6 +373,11 @@ endif()
 
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
+endif()
+
+
+if(ALTERNATIVE_VERIFY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
 if(DEBUG_MOVE)
@@ -608,6 +613,17 @@ function(add_extension_definitions)
     include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
+
+  # Include paths for any registered out-of-tree extensions
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH)
+      include_directories("${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
+    else()
+      # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
+      include_directories("${PROJECT_SOURCE_DIR}/extension/${OOTE_NAME}_clone/src/include")
+    endif()
+  endforeach()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -658,6 +674,10 @@ function(add_extension_dependencies LIBRARY)
   if(${BUILD_INET_EXTENSION})
     add_dependencies(${LIBRARY} inet_extension)
   endif()
+
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+    add_dependencies(${LIBRARY} ${OOTE_NAME}_extension)
+  endforeach()
 
 endfunction()
 
@@ -715,6 +735,15 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_INET_EXTENSION})
     target_link_libraries(${LIBRARY} inet_extension)
   endif()
+
+  # Now link against any registered out-of-tree extensions
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      target_link_libraries(${LIBRARY} ${OOTE_NAME}_extension)
+    endif()
+  endforeach()
+
 endfunction()
 
 function(link_threads LIBRARY)
@@ -751,13 +780,13 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if(${IGNORE_WARNINGS} GREATER_EQUAL 0)
+  if(${IGNORE_WARNINGS} GREATER -1)
     disable_target_warnings(${TARGET_NAME})
   endif()
   # loadable extension binaries can be built two ways:
   # 1. EXTENSION_STATIC_BUILD=1
   #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
-  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the loadable
   #    extension binaries
   # 2. EXTENSION_STATIC_BUILD=0
   #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
@@ -768,7 +797,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_replacement_open_*")
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
       else()
         # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
@@ -784,7 +813,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     if (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
     elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-      set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+      if (APPLE)
+        set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+      endif()
     endif()
   endif()
 
@@ -797,6 +828,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     if (NOT EXTENSION_STATIC_BUILD)
       target_link_libraries(${TARGET_NAME} delayimp)
     endif()
+
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -840,7 +872,19 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
 endif()
 
+# Add In-tree extensions
 add_subdirectory(extension)
+
+# Add Out-of-tree extensions
+foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+  string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+  if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH)
+    add_subdirectory(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH} extension/${OOTE_NAME})
+  else()
+    # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
+    add_subdirectory("extension/${OOTE_NAME}_clone/src" extension/${OOTE_NAME})
+  endif()
+endforeach()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
@@ -892,6 +936,7 @@ endif()
 
 endif()
 
+# TODO: This is the old way of Loading OOTEs can be removed after all OOTES in extensions.csv play ball with the new way
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
   separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)

@@ -74,6 +74,7 @@ void SortedData::Unswizzle() {
 		state.heap_blocks.push_back(std::move(heap_block));
 		state.pinned_blocks.push_back(std::move(heap_handle_p));
 	}
+	swizzled = false;
 	heap_blocks.clear();
 }
 

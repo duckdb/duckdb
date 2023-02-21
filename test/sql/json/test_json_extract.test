@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_extract.test
-# description: Test JSON typed extract
+# description: Test JSON extract
 # group: [json]
 
 require json
@@ -252,8 +252,8 @@ SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false
 
-# can't deal with force reload / force storage (#5132)
 
+# can't deal with force reload / force storage (#5132)
 require skip_reload
 
 # test issue #5063

@@ -84,6 +84,9 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
                                                                               TableFunctionInitInput &input) {
+	if (PyGILState_Check()) {
+		throw InvalidInputException("PandasScan called but GIL was already held!");
+	}
 	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 

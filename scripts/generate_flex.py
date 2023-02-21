@@ -29,6 +29,9 @@ if proc.returncode != None or len(stderr) > 0:
 with open_utf8(target_file, 'r') as f:
 	text = f.read()
 
+# convert this from 'int' to 'yy_size_t' to avoid triggering a warning
+text = text.replace('int yy_buf_size;\n', 'yy_size_t yy_buf_size;\n')
+
 # add the libpg_query namespace
 text = text.replace('''
 #ifndef FLEXINT_H

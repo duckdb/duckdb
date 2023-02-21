@@ -262,3 +262,12 @@ if res != 0:
 
 os.rename(result_source, target_source_loc)
 os.rename(result_header, target_header_loc)
+
+with open_utf8(target_source_loc, 'r') as f:
+    text = f.read()
+
+text = text.replace('#include "grammar_out.hpp"', '#include "include/parser/gram.hpp"')
+text = text.replace('yynerrs = 0;', 'yynerrs = 0; (void)yynerrs;')
+
+with open_utf8(target_source_loc, 'w+') as f:
+    f.write(text)

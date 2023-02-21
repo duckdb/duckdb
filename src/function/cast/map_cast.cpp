@@ -3,6 +3,18 @@
 
 namespace duckdb {
 
+unique_ptr<BoundCastData> MapBoundCastData::BindMapToMapCast(BindCastInput &input, const LogicalType &source,
+                                                             const LogicalType &target) {
+	vector<BoundCastInfo> child_cast_info;
+	auto source_key = MapType::KeyType(source);
+	auto target_key = MapType::KeyType(target);
+	auto source_val = MapType::ValueType(source);
+	auto target_val = MapType::ValueType(target);
+	auto key_cast = input.GetCastFunction(source_key, target_key);
+	auto value_cast = input.GetCastFunction(source_val, target_val);
+	return make_unique<MapBoundCastData>(std::move(key_cast), std::move(value_cast));
+}
+
 static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
@@ -67,7 +79,6 @@ BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalTyp
 	switch (target.id()) {
 	case LogicalTypeId::MAP:
 		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {
 		auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 		return BoundCastInfo(MapToVarcharCast, ListBoundCastData::BindListToListCast(input, source, varchar_type));

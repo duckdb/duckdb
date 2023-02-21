@@ -182,8 +182,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	auto strings = FlatVector::GetData<string_t>(result);
 
 	// find first non-inlined string
-	auto i = v_offset;
-	const auto end = v_offset + count;
+	uint32_t i = v_offset;
+	const uint32_t end = v_offset + count;
 	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;

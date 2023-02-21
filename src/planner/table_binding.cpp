@@ -8,7 +8,10 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -129,16 +132,51 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->columns.GetColumn(LogicalIndex(column_index)).Generated());
+	D_ASSERT(table_entry->GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	auto expression = table_entry->columns.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
+	auto expression = table_entry->GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, string> alias_map;
 	for (auto &entry : name_map) {
 		alias_map[entry.second] = entry.first;
 	}
-	ReplaceAliases(*expression, table_entry->columns, alias_map);
+	ReplaceAliases(*expression, table_entry->GetColumns(), alias_map);
 	BakeTableName(*expression, alias);
 	return (expression);
+}
+
+const vector<column_t> &TableBinding::GetBoundColumnIds() const {
+#ifdef DEBUG
+	unordered_set<column_t> column_ids;
+	for (auto &id : bound_column_ids) {
+		auto result = column_ids.insert(id);
+		// assert that all entries in the bound_column_ids are unique
+		D_ASSERT(result.second);
+		auto it = std::find_if(name_map.begin(), name_map.end(),
+		                       [&](const std::pair<const string, column_t> &it) { return it.second == id; });
+		// assert that every id appears in the name_map
+		D_ASSERT(it != name_map.end());
+		// the order that they appear in is not guaranteed to be sequential
+	}
+#endif
+	return bound_column_ids;
+}
+
+ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
+	auto &column_ids = bound_column_ids;
+	ColumnBinding binding;
+
+	// Locate the column_id that matches the 'column_index'
+	auto it = std::find_if(column_ids.begin(), column_ids.end(),
+	                       [&](const column_t &id) -> bool { return id == column_index; });
+	// Get the index of it
+	binding.column_index = std::distance(column_ids.begin(), it);
+	// If it wasn't found, add it
+	if (it == column_ids.end()) {
+		column_ids.push_back(column_index);
+	}
+
+	binding.table_index = index;
+	return binding;
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -154,7 +192,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 		// Either there is no table, or the columns category has to be standard
 		auto table_entry = (TableCatalogEntry *)entry;
-		auto &column_entry = table_entry->columns.GetColumn(LogicalIndex(column_index));
+		auto &column_entry = table_entry->GetColumn(LogicalIndex(column_index));
 		(void)table_entry;
 		(void)column_entry;
 		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
@@ -171,23 +209,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 			colref.alias = names[column_index];
 		}
 	}
-
-	auto &column_ids = bound_column_ids;
-	// check if the entry already exists in the column list for the table
-	ColumnBinding binding;
-
-	binding.column_index = column_ids.size();
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == column_index) {
-			binding.column_index = i;
-			break;
-		}
-	}
-	if (binding.column_index == column_ids.size()) {
-		// column binding not found: add it to the list of bindings
-		column_ids.push_back(column_index);
-	}
-	binding.table_index = index;
+	ColumnBinding binding = GetColumnBinding(column_index);
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
@@ -200,7 +222,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
-    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p), -1),
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, std::move(types_p), std::move(names_p),
+              DConstants::INVALID_INDEX),
       dummy_name(std::move(dummy_name_p)) {
 }
 
@@ -209,12 +232,20 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
 	}
-	ColumnBinding binding;
-	binding.table_index = index;
-	binding.column_index = column_index;
+	ColumnBinding binding(index, column_index);
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+}
+
+BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
+	}
+	ColumnBinding binding(index, column_index);
+	return BindResult(
+	    make_unique<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

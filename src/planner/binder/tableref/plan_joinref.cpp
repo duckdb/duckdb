@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
@@ -210,6 +211,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// lateral join
 		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                       std::move(ref.condition));
+	}
+	switch (ref.ref_type) {
+	case JoinRefType::CROSS:
+		return LogicalCrossProduct::Create(std::move(left), std::move(right));
+	case JoinRefType::POSITIONAL:
+		return LogicalPositionalJoin::Create(std::move(left), std::move(right));
+	default:
+		break;
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
