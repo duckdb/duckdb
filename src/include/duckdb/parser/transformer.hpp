@@ -41,13 +41,14 @@ class Transformer {
 
 	struct CreatePivotEntry {
 		string enum_name;
-		unique_ptr<TableRef> source;
+		unique_ptr<SelectNode> base;
 		string column_name;
 	};
 
 public:
 	explicit Transformer(idx_t max_expression_depth_p);
 	explicit Transformer(Transformer *parent);
+	~Transformer();
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
@@ -68,6 +69,8 @@ private:
 	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
 	//! The set of pivot entries to create
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
+	//! Sets of stored CTEs, if any
+	vector<CommonTableExpressionMap *> stored_cte_map;
 
 	void Clear();
 
@@ -102,9 +105,11 @@ private:
 		return parent ? parent->HasNamedParameters() : !named_param_map.empty();
 	}
 
-	void AddPivotEntry(string enum_name, unique_ptr<TableRef> source, string column_name);
+	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, string column_name);
+	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
 	idx_t PivotEntryCount();
+	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -178,7 +183,7 @@ private:
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
-	unique_ptr<QueryNode> TransformPivotStatement(duckdb_libpgquery::PGPivotStmt *stmt);
+	unique_ptr<QueryNode> TransformPivotStatement(duckdb_libpgquery::PGSelectStmt *stmt);
 	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 	PivotColumn TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot);
 	vector<PivotColumn> TransformPivotList(duckdb_libpgquery::PGList *list);

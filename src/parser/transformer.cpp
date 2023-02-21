@@ -28,6 +28,9 @@ Transformer::Transformer(Transformer *parent)
     : parent(parent), max_expression_depth(parent->max_expression_depth), stack_depth(DConstants::INVALID_INDEX) {
 }
 
+Transformer::~Transformer() {
+}
+
 void Transformer::Clear() {
 	SetParamCount(0);
 	pivot_entries.clear();

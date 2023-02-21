@@ -17,6 +17,8 @@ class SelectStatement;
 struct CommonTableExpressionInfo {
 	vector<string> aliases;
 	unique_ptr<SelectStatement> query;
+
+	unique_ptr<CommonTableExpressionInfo> Copy();
 };
 
 } // namespace duckdb

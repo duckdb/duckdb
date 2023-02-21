@@ -15,14 +15,14 @@
 
 namespace duckdb {
 
-void Transformer::AddPivotEntry(string enum_name, unique_ptr<TableRef> source, string column_name) {
+void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, string column_name) {
 	if (parent) {
-		parent->AddPivotEntry(std::move(enum_name), std::move(source), std::move(column_name));
+		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column_name));
 		return;
 	}
 	auto result = make_unique<CreatePivotEntry>();
 	result->enum_name = std::move(enum_name);
-	result->source = std::move(source);
+	result->base = std::move(base);
 	result->column_name = std::move(column_name);
 
 	pivot_entries.push_back(std::move(result));
@@ -42,7 +42,7 @@ idx_t Transformer::PivotEntryCount() {
 	return pivot_entries.size();
 }
 
-unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<TableRef> source, string enum_name) {
+unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry) {
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
 
@@ -50,15 +50,14 @@ unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<T
 	info->internal = false;
 	info->catalog = INVALID_CATALOG;
 	info->schema = INVALID_SCHEMA;
-	info->name = std::move(enum_name);
+	info->name = std::move(entry->enum_name);
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
-	auto select_node = make_unique<SelectNode>();
-	auto columnref = make_unique<ColumnRefExpression>(std::move(column_name));
+	auto select_node = std::move(entry->base);
+	auto columnref = make_unique<ColumnRefExpression>(std::move(entry->column_name));
 	auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, columnref->Copy());
 	select_node->select_list.push_back(std::move(cast));
-	select_node->from_table = std::move(source);
 
 	// order by the column
 	auto modifier = make_unique<OrderModifier>();
@@ -87,8 +86,7 @@ unique_ptr<SQLStatement> GenerateCreateEnumStmt(string column_name, unique_ptr<T
 unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStatement> statement) {
 	auto result = make_unique<MultiStatement>();
 	for (auto &pivot : pivot_entries) {
-		result->statements.push_back(
-		    GenerateCreateEnumStmt(std::move(pivot->column_name), std::move(pivot->source), pivot->enum_name));
+		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
 	}
 	result->statements.push_back(std::move(statement));
 	// FIXME: drop the types again!?
@@ -98,9 +96,16 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 	return std::move(result);
 }
 
-unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGPivotStmt *pivot) {
+unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGSelectStmt *stmt) {
+	auto pivot = stmt->pivot;
 	auto source = TransformTableRefNode(pivot->source);
 	auto columns = TransformPivotList(pivot->columns);
+
+	auto select_node = make_unique<SelectNode>();
+	// handle the CTEs
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), select_node->cte_map);
+	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
 	auto pivot_idx = PivotEntryCount();
@@ -113,12 +118,15 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
 		}
 		auto enum_name = "__pivot_enum_" + std::to_string(pivot_idx) + "_" + std::to_string(c);
-		AddPivotEntry(enum_name, source->Copy(), col.names[0]);
+
+		auto new_select = make_unique<SelectNode>();
+		ExtractCTEsRecursive(new_select->cte_map);
+		new_select->from_table = source->Copy();
+		AddPivotEntry(enum_name, std::move(new_select), col.names[0]);
 		col.pivot_enum = enum_name;
 	}
 
 	// generate the actual query, including the pivot
-	auto select_node = make_unique<SelectNode>();
 	select_node->select_list.push_back(make_unique<StarExpression>());
 
 	auto pivot_ref = make_unique<PivotRef>();
