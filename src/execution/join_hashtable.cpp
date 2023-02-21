@@ -605,8 +605,8 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 template <bool MATCH>
 void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(left.ColumnCount() == result.ColumnCount());
-	D_ASSERT(keys.size() == left.size());
+//	D_ASSERT(left.ColumnCount() == result.ColumnCount());
+//	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;

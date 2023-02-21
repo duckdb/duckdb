@@ -2,6 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -10,6 +11,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -254,11 +256,9 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
-	MoveCorrelatedExpressions(left_binder);
-//	if (!(result->type == JoinType::ANTI || result->type == JoinType::SEMI)) {
 	bind_context.AddContext(std::move(right_binder.bind_context));
+	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
-//	}
 
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
@@ -272,6 +272,11 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}
+
+//	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI) {
+//		auto subquery = BoundSubqueryRef(result->left_binder, std::move(result));
+//	}
+
 	return std::move(result);
 }
 

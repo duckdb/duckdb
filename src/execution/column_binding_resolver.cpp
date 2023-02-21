@@ -39,6 +39,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
+		if (comp_join.join_type == JoinType::SEMI || comp_join.join_type == JoinType::ANTI) {
+			bindings.pop_back();
+		}
 		return;
 	} else if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
