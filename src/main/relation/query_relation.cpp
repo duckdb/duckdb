@@ -16,8 +16,6 @@ QueryRelation::QueryRelation(const std::shared_ptr<ClientContext> &context, uniq
 QueryRelation::~QueryRelation() {
 }
 
-QueryRelation::QueryRelation(const QueryRelation &other) = delete;
-
 QueryRelation::QueryRelation(QueryRelation &&other) = default;
 
 unique_ptr<SelectStatement> QueryRelation::ParseStatement(ClientContext &context, const string &query,

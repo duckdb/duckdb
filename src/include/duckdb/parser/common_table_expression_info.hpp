@@ -15,7 +15,7 @@ class SelectStatement;
 struct CommonTableExpressionInfo {
 	CommonTableExpressionInfo();
 	~CommonTableExpressionInfo();
-	CommonTableExpressionInfo(const CommonTableExpressionInfo &);
+	CommonTableExpressionInfo(const CommonTableExpressionInfo &) = delete;
 	CommonTableExpressionInfo(CommonTableExpressionInfo &&);
 
 public:

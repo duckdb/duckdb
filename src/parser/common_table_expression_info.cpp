@@ -8,8 +8,6 @@ CommonTableExpressionInfo::CommonTableExpressionInfo() {
 CommonTableExpressionInfo::~CommonTableExpressionInfo() {
 }
 
-CommonTableExpressionInfo::CommonTableExpressionInfo(const CommonTableExpressionInfo &) = delete;
-
 CommonTableExpressionInfo::CommonTableExpressionInfo(CommonTableExpressionInfo &&) = default;
 
 bool CommonTableExpressionInfo::Equals(const CommonTableExpressionInfo &other) const {
