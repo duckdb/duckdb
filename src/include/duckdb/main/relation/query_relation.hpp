@@ -12,12 +12,15 @@
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
+
 class SelectStatement;
 
 class QueryRelation : public Relation {
 public:
 	QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt, string alias);
 	~QueryRelation();
+	QueryRelation(const QueryRelation &other);
+	QueryRelation(QueryRelation &&other);
 
 	unique_ptr<SelectStatement> select_stmt;
 	string alias;

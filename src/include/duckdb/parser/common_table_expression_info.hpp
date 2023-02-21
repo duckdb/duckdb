@@ -15,6 +15,8 @@ class SelectStatement;
 struct CommonTableExpressionInfo {
 	CommonTableExpressionInfo();
 	~CommonTableExpressionInfo();
+	CommonTableExpressionInfo(const CommonTableExpressionInfo &);
+	CommonTableExpressionInfo(CommonTableExpressionInfo &&);
 
 public:
 	vector<string> aliases;
