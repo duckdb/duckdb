@@ -40,6 +40,7 @@ private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
 	std::string DecodeFlags(uint8_t flags);
+	bool Exists(const string &filename, const char *func_name) const;
 
 public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)
@@ -78,6 +79,14 @@ public:
 	void MoveFile(const string &source, const string &dest) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	void FileSync(FileHandle &handle) override;
+	bool DirectoryExists(const string &directory) override;
+	void CreateDirectory(const string &directory) override;
+	void RemoveDirectory(const string &directory) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override;
+	void Truncate(FileHandle &handle, int64_t new_size) override;
+	bool IsPipe(const string &filename) override;
+	idx_t SeekPosition(FileHandle &handle) override;
 };
 
 } // namespace duckdb
