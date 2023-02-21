@@ -21,8 +21,7 @@ class QueryNode;
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
 public:
-	DUCKDB_API SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
-	}
+	DUCKDB_API SelectStatement();
 
 	//! The main query node
 	unique_ptr<QueryNode> node;

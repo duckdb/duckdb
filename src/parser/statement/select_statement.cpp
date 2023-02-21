@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+SelectStatement::SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
+}
+
 SelectStatement::SelectStatement(const SelectStatement &other) : SQLStatement(other), node(other.node->Copy()) {
 }
 
