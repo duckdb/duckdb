@@ -279,7 +279,7 @@ jobs:
 
   jdbc-compliance:
     name: JDBC Compliance
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: java-linux-amd64
     env:
       CC: gcc-10

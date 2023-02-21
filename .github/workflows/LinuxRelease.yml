@@ -378,7 +378,7 @@ jobs:
 
  linux-clang:
     name: Clang 14
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: linux-release-64
 
     env:
@@ -421,7 +421,7 @@ jobs:
 
  old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: linux-release-64
 
     env:
