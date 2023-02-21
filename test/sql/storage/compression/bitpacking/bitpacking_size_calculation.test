@@ -1,0 +1,20 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_size_calculation.test
+# description: Test for a bug found in the size calculation
+# group: [bitpacking]
+
+require parquet
+
+require httpfs
+
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+pragma force_compression='bitpacking'
+
+statement ok
+CREATE OR REPLACE TABLE toy_table AS
+  SELECT *
+  FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/bp_bug.parquet' ;
+
+statement ok
+CHECKPOINT;
