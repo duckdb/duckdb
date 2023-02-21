@@ -188,6 +188,8 @@ public:
 
 	py::dict FetchPyTorch();
 
+	py::dict FetchTF();
+
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
