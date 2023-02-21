@@ -104,6 +104,17 @@ SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) ORDER BY i
 2
 3
 
+mode unskip
+
+query I
+SELECT * FROM integers i1 SEMI JOIN integers i2 ON (i1.i = i2.i) where i1.i != 1 ORDER BY i1.i
+----
+2
+3
+
+
+mode skip
+
 # transform into ANTI join
 query I
 SELECT * FROM integers WHERE i NOT IN ((SELECT * FROM integers WHERE i=1)) ORDER BY i

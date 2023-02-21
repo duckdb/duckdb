@@ -43,7 +43,6 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EnumComparisonRule>(rewriter));
 
-
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
 		// root not defined in rule
