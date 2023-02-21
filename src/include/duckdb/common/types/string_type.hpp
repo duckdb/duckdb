@@ -156,21 +156,26 @@ public:
 			const uint32_t right_length = right.GetSize();
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
-			if (min_length == 0u)
-				return (left_length > 0u);
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			uint32_t A = Load<uint32_t>((const_data_ptr_t)left.GetPrefix());
+			uint32_t B = Load<uint32_t>((const_data_ptr_t)right.GetPrefix());
 
-#ifdef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A = Load<uint32_t>(left.value.pointer.prefix);
-			uint32_t B = Load<uint32_t>(right.value.pointer.prefix);
+			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
+			auto bswap = [](uint32_t v) -> uint32_t {
+				uint32_t t1 = (v >> 16u) | (v << 16u);
+				uint32_t t2 = t1 & 0x00ff00ff;
+				uint32_t t3 = t1 & 0xff00ff00;
+				return (t2 << 8u) | (t3 >> 8u);
+			};
 
 			// Check on prefix -----
 			// We dont' need to mask since:
-			//	if the prefix is greater, it will stay greater regardless of the extra bytes
-			// 	if the prefix is smaller, it will stay smaller regardless of the extra bytes
+			//	if the prefix is greater(after bswap), it will stay greater regardless of the extra bytes
+			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
 			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
 
 			if (A != B)
-				return A > B;
+				return bswap(A) > bswap(B);
 #endif
 			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
