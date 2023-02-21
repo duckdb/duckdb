@@ -28,10 +28,10 @@ void Bit::SetEmptyBitString(string_t &target, string_t &input) {
 }
 
 void Bit::SetEmptyBitString(string_t &target, idx_t len) {
-    char *res_buf = target.GetDataWriteable();
-    memset(res_buf, 0, target.GetSize());
-    char padding = (8 - (len % 8)) % 8;
-    res_buf[0] = padding;
+	char *res_buf = target.GetDataWriteable();
+	memset(res_buf, 0, target.GetSize());
+	char padding = (8 - (len % 8)) % 8;
+	res_buf[0] = padding;
 }
 
 idx_t Bit::BitLength(string_t bits) {
