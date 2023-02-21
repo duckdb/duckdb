@@ -422,16 +422,14 @@ jobs:
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-20.04
-    needs: linux-release-64
-
-    env:
-      CC: gcc-4.8
-      CXX: g++-4.8
+    container: ubuntu:16.04
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - uses: actions/setup-python@v4
       with:
@@ -439,7 +437,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
+      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -450,10 +448,17 @@ jobs:
     - name: Build
       shell: bash
       run: make release
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
+
 
     - name: Test
       shell: bash
       run: make allunit
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
 
  release-assert:
     name: Release Assertions
