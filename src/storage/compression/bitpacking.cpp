@@ -465,7 +465,8 @@ public:
 		auto required_data_bytes = AlignValue<idx_t>((data_ptr + data_bytes) - data_ptr);
 		auto required_meta_bytes = Storage::BLOCK_SIZE - (metadata_ptr - data_ptr) + meta_bytes;
 
-		return required_data_bytes + required_meta_bytes <= Storage::BLOCK_SIZE - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		return required_data_bytes + required_meta_bytes <=
+		       Storage::BLOCK_SIZE - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -509,7 +510,7 @@ public:
 		idx_t total_segment_size = metadata_offset + metadata_size;
 
 		// Asserting things are still sane here
-		if (!CanStore(0,0)) {
+		if (!CanStore(0, 0)) {
 			throw InternalException("Error in bitpacking size calculation");
 		}
 
