@@ -44,14 +44,6 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 	return flags_s;
 }
 
-unique_ptr<FileHandle> PythonFilesystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
-	PythonGILWrapper gil;
-
-	const auto &newHandle = filesystem.attr("open")(handle->path, py::arg("compression") = "auto");
-
-	return make_unique<PythonFileHandle>(*this, handle->path, newHandle);
-}
-
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                   FileCompressionType compression, FileOpener *opener) {
 	PythonGILWrapper gil;
