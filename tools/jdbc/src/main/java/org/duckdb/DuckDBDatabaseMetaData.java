@@ -83,13 +83,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getDatabaseProductVersion() throws SQLException {
-		Statement s = conn.createStatement();
-		ResultSet rs = s.executeQuery("PRAGMA version");
-		rs.next();
-		String result = rs.getString(1);
-		rs.close();
-		s.close();
-		return result;
+		try (Statement s = conn.createStatement();
+			ResultSet rs = s.executeQuery("PRAGMA version")) {
+			rs.next();
+			String result = rs.getString(1);
+			return result;
+		}
 	}
 
 	@Override
@@ -814,17 +813,16 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 		// need to figure out the java types for the sql types :/
 		String values_str = "VALUES(NULL::STRING, NULL::INTEGER)";
-		Statement gunky_statement = conn.createStatement();
-		// TODO this could get slow with many many columns and we really only need the
-		// types :/
-		ResultSet rs = gunky_statement
-				.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type");
-		while (rs.next()) {
-			values_str += ", ('" + rs.getString(1) + "', " + Integer.toString(
-					DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))) + ")";
+		try (Statement gunky_statement = conn.createStatement();
+			// TODO this could get slow with many many columns and we really only need the
+			// types :/
+			ResultSet rs = gunky_statement
+					.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type")) {
+			while (rs.next()) {
+				values_str += ", ('" + rs.getString(1) + "', " + Integer.toString(
+						DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))) + ")";
+			}
 		}
-		rs.close();
-		gunky_statement.close();
 
 		PreparedStatement ps = conn.prepareStatement(
 				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema.columns c JOIN ("
