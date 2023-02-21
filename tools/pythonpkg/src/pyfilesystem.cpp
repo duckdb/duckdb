@@ -176,12 +176,14 @@ void PythonFilesystem::CreateDirectory(const string &directory) {
 }
 bool PythonFilesystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                  FileOpener *opener) {
+	static py::str DIRECTORY("directory");
+
 	PythonGILWrapper gil;
 	bool nonempty = false;
 
-	for (auto item : filesystem.attr("ls")(py::str(directory), py::arg("detail") = false)) {
-		bool is_dir = py::bool_(filesystem.attr("isdir")(item));
-		callback(py::str(item), is_dir);
+	for (auto item : filesystem.attr("ls")(py::str(directory))) {
+		bool is_dir = DIRECTORY.equal(item["type"]);
+		callback(py::str(item["name"]), is_dir);
 		nonempty = true;
 	}
 
