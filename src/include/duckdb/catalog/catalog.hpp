@@ -251,6 +251,8 @@ public:
 
 	virtual void Verify();
 
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
+
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;
