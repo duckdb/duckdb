@@ -380,12 +380,20 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	size_t idx, max;
 	yyjson_val *key, *val;
 	for (idx_t i = 0; i < count; i++) {
-		if (objects[i]) {
+		if (objects[i] && !unsafe_yyjson_is_null(objects[i])) {
+			if (!unsafe_yyjson_is_obj(objects[i]) && options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(objects[i]),
+				                       JSONCommon::ValToString(objects[i], 50));
+				options.object_index = i;
+				success = false;
+				break;
+			}
 			found_key_count = 0;
 			memset(found_keys, false, column_count);
 			yyjson_obj_foreach(objects[i], idx, max, key, val) {
-				auto key_ptr = yyjson_get_str(key);
-				auto key_len = yyjson_get_len(key);
+				auto key_ptr = unsafe_yyjson_get_str(key);
+				auto key_len = unsafe_yyjson_get_len(key);
 				auto it = key_map.find({key_ptr, key_len});
 				if (it != key_map.end()) {
 					const auto &col_idx = it->second;
@@ -476,13 +484,24 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	auto &list_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (!arrays[i] || yyjson_is_null(arrays[i])) {
+		if (!arrays[i] || unsafe_yyjson_is_null(arrays[i])) {
 			list_validity.SetInvalid(i);
+		} else if (!unsafe_yyjson_is_arr(arrays[i])) {
+			if (options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arrays[i]),
+				                       JSONCommon::ValToString(arrays[i], 50));
+				options.object_index = i;
+				return false;
+			} else {
+				list_validity.SetInvalid(i);
+			}
+		} else {
+			auto &entry = list_entries[i];
+			entry.offset = offset;
+			entry.length = unsafe_yyjson_get_len(arrays[i]);
+			offset += entry.length;
 		}
-		auto &entry = list_entries[i];
-		entry.offset = offset;
-		entry.length = yyjson_arr_size(arrays[i]);
-		offset += entry.length;
 	}
 	ListVector::SetListSize(result, offset);
 	ListVector::Reserve(result, offset);

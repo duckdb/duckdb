@@ -7,9 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#include <utility>
-
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
@@ -179,5 +176,11 @@ private:
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };
+
+template <class T>
+static bool ModuleIsLoaded() {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
+}
 
 } // namespace duckdb

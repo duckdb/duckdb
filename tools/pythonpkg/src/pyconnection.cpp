@@ -1,15 +1,21 @@
 #include "duckdb_python/pyconnection.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -40,12 +46,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
-
-template <class T>
-static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
-}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -397,8 +397,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	auto res = ExecuteInternal(query, std::move(params), many);
 	if (res) {
-		auto py_result = make_unique<DuckDBPyResult>();
-		py_result->result = std::move(res);
+		auto py_result = make_unique<DuckDBPyResult>(std::move(res));
 		result = make_unique<DuckDBPyRelation>(std::move(py_result));
 	}
 	return shared_from_this();
@@ -828,10 +827,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
-	auto rel = make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
+	rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
-	return rel;
+	return make_unique<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
@@ -907,15 +906,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
-	auto rel = make_unique<DuckDBPyRelation>(
-	    connection
-	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                       Value::POINTER((uintptr_t)stream_factory_produce),
-	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
-	        ->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection
+	               ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                              Value::POINTER((uintptr_t)stream_factory_produce),
+	                                              Value::POINTER((uintptr_t)stream_factory_get_schema)})
+	               ->Alias(name);
+	rel->extra_dependencies =
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	return rel;
+	return make_unique<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
@@ -1128,7 +1126,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
 		auto select = make_unique<SelectStatement>();
-		select->node = pyrel->rel->GetQueryNode();
+		select->node = pyrel->GetRel().GetQueryNode();
 
 		auto subquery = make_unique<SubqueryRef>(std::move(select));
 		return std::move(subquery);
@@ -1301,22 +1299,6 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
 	import_cache.reset();
-}
-
-bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
-}
-
-bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {

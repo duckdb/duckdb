@@ -648,14 +648,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
 		auto copied_statement = statement->Copy();
-		auto original_statement = move(statement);
+		auto original_statement = std::move(statement);
 		bool from_string = false;
 		switch (original_statement->type) {
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
 			PreservedError error;
 			try {
-				error = VerifyQuery(lock, query, move(original_statement));
+				error = VerifyQuery(lock, query, std::move(original_statement));
 			} catch (const Exception &ex) {
 				error = PreservedError(ex);
 			} catch (std::exception &ex) {
@@ -668,6 +668,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 		case StatementType::COPY_STATEMENT:
 		case StatementType::INSERT_STATEMENT:
 		case StatementType::DELETE_STATEMENT:
@@ -689,6 +690,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			from_string = true;
 			break;
 		}
+#endif
 		default:
 			statement = std::move(copied_statement);
 			break;

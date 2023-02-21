@@ -15,8 +15,8 @@ DeleteStatement::DeleteStatement(const DeleteStatement &other) : SQLStatement(ot
 		using_clauses.push_back(using_clause->Copy());
 	}
 	returning_list.reserve(other.returning_list.size());
-	for (const auto &item : other.returning_list) {
-		returning_list.push_back(item->Copy());
+	for (auto &expr : other.returning_list) {
+		returning_list.emplace_back(expr->Copy());
 	}
 	cte_map = other.cte_map.Copy();
 }

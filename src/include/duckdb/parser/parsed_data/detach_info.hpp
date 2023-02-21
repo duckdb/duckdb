@@ -28,5 +28,14 @@ public:
 		result->if_exists = if_exists;
 		return result;
 	}
+	bool Equals(const DetachInfo &other) const {
+		if (name != other.name) {
+			return false;
+		}
+		if (if_exists != other.if_exists) {
+			return false;
+		}
+		return true;
+	}
 };
 } // namespace duckdb

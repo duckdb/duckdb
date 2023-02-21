@@ -13,6 +13,9 @@ OnConflictInfo::OnConflictInfo(const OnConflictInfo &other)
 	if (other.set_info) {
 		set_info = other.set_info->Copy();
 	}
+	if (other.condition) {
+		condition = other.condition->Copy();
+	}
 }
 
 unique_ptr<OnConflictInfo> OnConflictInfo::Copy() const {
@@ -28,6 +31,9 @@ InsertStatement::InsertStatement(const InsertStatement &other)
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog) {
 	cte_map = other.cte_map.Copy();
+	for (auto &expr : other.returning_list) {
+		returning_list.emplace_back(expr->Copy());
+	}
 	if (other.table_ref) {
 		table_ref = other.table_ref->Copy();
 	}

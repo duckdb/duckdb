@@ -23,7 +23,8 @@ protected:
 	DetachStatement(const DetachStatement &other);
 
 public:
-	unique_ptr<SQLStatement> Copy() const override;
+	DUCKDB_API bool Equals(const SQLStatement *other) const override;
+	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

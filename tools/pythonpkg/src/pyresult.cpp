@@ -17,6 +17,33 @@
 
 namespace duckdb {
 
+DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::move(result_p)) {
+	if (!result) {
+		throw InternalException("PyResult created without a result object");
+	}
+}
+
+const vector<string> &DuckDBPyResult::GetNames() {
+	if (!result) {
+		throw InternalException("Calling GetNames without a result object");
+	}
+	return result->names;
+}
+
+const vector<LogicalType> &DuckDBPyResult::GetTypes() {
+	if (!result) {
+		throw InternalException("Calling GetTypes without a result object");
+	}
+	return result->types;
+}
+
+unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
+	if (!result) {
+		throw InternalException("FetchChunk called without a result object");
+	}
+	return FetchNext(*result);
+}
+
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
 		result_closed = true;
@@ -267,7 +294,7 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
 	}
-	return std::move(batches);
+	return batches;
 }
 
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
@@ -373,10 +400,6 @@ py::list DuckDBPyResult::GetDescription(const vector<string> &names, const vecto
 		desc.append(py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none()));
 	}
 	return desc;
-}
-
-py::list DuckDBPyResult::Description() {
-	return GetDescription(result->names, result->types);
 }
 
 void DuckDBPyResult::Close() {
