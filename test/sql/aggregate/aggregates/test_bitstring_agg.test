@@ -2,7 +2,7 @@
 # description: Test BITSTRING_AGG operator
 # group: [aggregates]
 
-# require skip_reload
+require skip_reload
 
 # test tinyints
 statement ok
