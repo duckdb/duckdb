@@ -360,6 +360,24 @@ describe('prepare', function() {
                 .finalize(done);
         });
 
+        it('should fail in prepare, when executing the first statement', function(done) {
+            let prepared = db.prepare("SELECT * FROM non_existent_table; SELECT 42", function(err: null | Error) {
+				if (err) {
+					done();
+					return;
+				}
+			});
+        });
+
+        it('should fail in prepare, when preparing the first statement', function(done) {
+            let prepared = db.prepare("SELCET * FROM foo; SELECT 42", function(err: null | Error) {
+				if (err) {
+					done();
+					return;
+				}
+			});
+        });
+
         after(function(done) { db.close(done); });
     });
 

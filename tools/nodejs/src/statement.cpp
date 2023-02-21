@@ -57,10 +57,18 @@ struct PrepareTask : public Task {
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto pending_query = connection->PendingQuery(std::move(statements[i]));
-			auto res = pending_query->Execute();
-
-			if (res->HasError()) {
-				res->ThrowError();
+			try {
+				auto res = pending_query->Execute();
+				if (res->HasError()) {
+					statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(res->GetErrorObject());
+					return;
+				}
+			} catch (const duckdb::Exception &ex) {
+				statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+				return;
+			} catch (std::exception &ex) {
+				statement.statement = duckdb::make_unique<duckdb::PreparedStatement>(duckdb::PreservedError(ex));
+				return;
 			}
 		}
 
