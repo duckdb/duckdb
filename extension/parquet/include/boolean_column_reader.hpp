@@ -31,6 +31,10 @@ public:
 		TemplatedColumnReader<bool, BooleanParquetValueConversion>::InitializeRead(row_group_idx_p, columns,
 		                                                                           protocol_p);
 	}
+
+	void ResetPage() override {
+		byte_pos = 0;
+	}
 };
 
 struct BooleanParquetValueConversion {

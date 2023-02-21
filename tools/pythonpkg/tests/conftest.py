@@ -1,4 +1,3 @@
-import numpy
 import os
 import pytest
 import shutil
@@ -46,7 +45,7 @@ def require():
                 conn = duckdb.connect(db_name, config={'allow_unsigned_extensions' : 'true'})
                 conn.execute(f"LOAD '{path}'")
                 return conn
-        return None
+        pytest.skip(f'could not load {extension_name}')
 
     return _require
 

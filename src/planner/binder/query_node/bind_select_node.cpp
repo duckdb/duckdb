@@ -269,7 +269,7 @@ bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
 		auto current_star = (StarExpression *)&expr;
 		if (*star) {
 			// we can have multiple
-			if (!StarExpression::Equals(*star, current_star)) {
+			if (!StarExpression::Equal(*star, current_star)) {
 				throw BinderException(
 				    FormatError(expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
 			}
@@ -445,6 +445,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
+		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
@@ -453,6 +454,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			}
 			if (is_window) {
 				throw BinderException("Cannot group on a window clause");
+			}
+			if (result->unnests.size() > unnest_count) {
+				throw BinderException("Cannot group on an UNNEST or UNLIST clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group

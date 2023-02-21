@@ -28,7 +28,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equals(const CastExpression *a, const CastExpression *b);
+	static bool Equal(const CastExpression *a, const CastExpression *b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

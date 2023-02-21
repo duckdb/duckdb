@@ -2,6 +2,9 @@
 # description: Test external join with many duplicates in build side
 # group: [external]
 
+# runs out of memory occassionally on 32-bit machines
+require 64bit
+
 statement ok
 pragma verify_external
 

@@ -84,7 +84,11 @@ idx_t CBufferManager::GetUsedMemory() const {
 	return config.used_memory_func(config.data);
 }
 
-void CBufferManager::AdjustUsedMemory(int64_t amount) {
+void CBufferManager::IncreaseUsedMemory(idx_t amount) {
+	// no op
+}
+
+void CBufferManager::DecreaseUsedMemory(idx_t amount) {
 	// no op
 }
 

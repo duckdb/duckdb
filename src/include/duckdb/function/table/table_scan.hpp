@@ -13,14 +13,15 @@
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
+class DuckTableEntry;
 class TableCatalogEntry;
 
 struct TableScanBindData : public TableFunctionData {
-	explicit TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false), is_create_index(false) {
+	explicit TableScanBindData(DuckTableEntry *table) : table(table), is_index_scan(false), is_create_index(false) {
 	}
 
 	//! The table to scan
-	TableCatalogEntry *table;
+	DuckTableEntry *table;
 
 	//! Whether or not the table scan is an index scan
 	bool is_index_scan;

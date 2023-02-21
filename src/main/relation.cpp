@@ -16,6 +16,7 @@
 #include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/relation/write_csv_relation.hpp"
+#include "duckdb/main/relation/write_parquet_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -210,12 +211,16 @@ BoundStatement Relation::Bind(Binder &binder) {
 	return binder.Bind((SQLStatement &)stmt);
 }
 
+shared_ptr<Relation> Relation::InsertRel(const string &schema_name, const string &table_name) {
+	return make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
+}
+
 void Relation::Insert(const string &table_name) {
-	Insert(DEFAULT_SCHEMA, table_name);
+	Insert(INVALID_SCHEMA, table_name);
 }
 
 void Relation::Insert(const string &schema_name, const string &table_name) {
-	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
+	auto insert = InsertRel(schema_name, table_name);
 	auto res = insert->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to insert into table '" + table_name + "': ";
@@ -229,12 +234,16 @@ void Relation::Insert(const vector<vector<Value>> &values) {
 	rel->Insert(GetAlias());
 }
 
+shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name) {
+	return make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
+}
+
 void Relation::Create(const string &table_name) {
-	Create(DEFAULT_SCHEMA, table_name);
+	Create(INVALID_SCHEMA, table_name);
 }
 
 void Relation::Create(const string &schema_name, const string &table_name) {
-	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
+	auto create = CreateRel(schema_name, table_name);
 	auto res = create->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to create table '" + table_name + "': ";
@@ -242,8 +251,12 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 	}
 }
 
-void Relation::WriteCSV(const string &csv_file) {
-	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
+shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
+	return std::make_shared<duckdb::WriteCSVRelation>(shared_from_this(), csv_file, std::move(options));
+}
+
+void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
+	auto write_csv = WriteCSVRel(csv_file, std::move(options));
 	auto res = write_csv->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to write '" + csv_file + "': ";
@@ -251,14 +264,24 @@ void Relation::WriteCSV(const string &csv_file) {
 	}
 }
 
-shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool temporary) {
-	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace, temporary);
-	auto res = view->Execute();
+shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file,
+                                               case_insensitive_map_t<vector<Value>> options) {
+	auto write_parquet =
+	    std::make_shared<duckdb::WriteParquetRelation>(shared_from_this(), parquet_file, std::move(options));
+	return std::move(write_parquet);
+}
+
+void Relation::WriteParquet(const string &parquet_file, case_insensitive_map_t<vector<Value>> options) {
+	auto write_parquet = WriteParquetRel(parquet_file, std::move(options));
+	auto res = write_parquet->Execute();
 	if (res->HasError()) {
-		const string prepended_message = "Failed to create view '" + name + "': ";
+		const string prepended_message = "Failed to write '" + parquet_file + "': ";
 		res->ThrowError(prepended_message);
 	}
-	return shared_from_this();
+}
+
+shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool temporary) {
+	return CreateView(INVALID_SCHEMA, name, replace, temporary);
 }
 
 shared_ptr<Relation> Relation::CreateView(const string &schema_name, const string &name, bool replace, bool temporary) {

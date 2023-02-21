@@ -22,7 +22,11 @@ enum class ValueRenderAlignment { LEFT, MIDDLE, RIGHT };
 struct BoxRendererConfig {
 	// a max_width of 0 means we default to the terminal width
 	idx_t max_width = 0;
+	// the maximum amount of rows to render
 	idx_t max_rows = 20;
+	// the limit that is applied prior to rendering
+	// if we are rendering exactly "limit" rows then a question mark is rendered instead
+	idx_t limit = 0;
 	// the max col width determines the maximum size of a single column
 	// note that the max col width is only used if the result does not fit on the screen
 	idx_t max_col_width = 20;

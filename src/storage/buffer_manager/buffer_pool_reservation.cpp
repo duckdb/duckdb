@@ -26,7 +26,7 @@ BufferPoolReservation::~BufferPoolReservation() {
 
 void BufferPoolReservation::Resize(idx_t new_size) {
 	int64_t delta = (int64_t)new_size - size;
-	manager.AdjustUsedMemory(delta);
+	manager.IncreaseUsedMemory(delta);
 	size = new_size;
 }
 

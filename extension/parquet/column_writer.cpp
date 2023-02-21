@@ -1775,8 +1775,9 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	state.parent_index += vcount;
 
 	auto &list_child = ListVector::GetEntry(vector);
-	auto list_count = ListVector::GetListSize(vector);
-	child_writer->Prepare(*state.child_state, &state_p, list_child, list_count);
+	Vector child_list(list_child);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
@@ -1788,8 +1789,9 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	auto &state = (ListColumnWriterState &)state_p;
 
 	auto &list_child = ListVector::GetEntry(vector);
-	auto list_count = ListVector::GetListSize(vector);
-	child_writer->Write(*state.child_state, list_child, list_count);
+	Vector child_list(list_child);
+	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
@@ -1992,8 +1994,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			                                             max_define, can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
 		return make_unique<StringColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                       can_have_nulls);
 	case LogicalTypeId::UUID:

@@ -2911,4 +2911,11 @@ function duckdb_add_custom_buffer_manager(
         max_memory_func,
         used_memory_func
     )
+"""
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+"""
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end

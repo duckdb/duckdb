@@ -29,6 +29,7 @@ struct DataTableInfo;
 class ExpressionExecutor;
 class RowGroupWriter;
 class UpdateSegment;
+class TableStorageInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
@@ -149,7 +150,7 @@ public:
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result);
+	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
 
 	void Verify();
 

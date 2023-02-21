@@ -9,16 +9,16 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCas
 	D_ASSERT(root);
 
 	auto case_node = make_unique<CaseExpression>();
+	auto root_arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseCheck case_check;
 
 		auto w = reinterpret_cast<duckdb_libpgquery::PGCaseWhen *>(cell->data.ptr_value);
 		auto test_raw = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(w->expr));
 		unique_ptr<ParsedExpression> test;
-		auto arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
-		if (arg) {
+		if (root_arg) {
 			case_check.when_expr =
-			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(arg), std::move(test_raw));
+			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, root_arg->Copy(), std::move(test_raw));
 		} else {
 			case_check.when_expr = std::move(test_raw);
 		}

@@ -1,8 +1,16 @@
 name: CIFuzz
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -85,7 +93,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
@@ -101,6 +109,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build JDBC Driver
         shell: bash

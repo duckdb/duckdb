@@ -22,7 +22,8 @@ test_files = [
     "test_decimals.jl",
     "test_threading.jl",
     "test_tpch.jl",
-    "test_buffer_manager.jl"
+    "test_buffer_manager.jl",
+    "test_tpch_multithread.jl"
 ]
 
 if size(ARGS)[1] > 0

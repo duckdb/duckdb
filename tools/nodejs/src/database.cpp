@@ -44,13 +44,8 @@ struct OpenTask : public Task {
 			for (duckdb::idx_t config_idx = 0; config_idx < config_names.Length(); config_idx++) {
 				std::string key = config_names.Get(config_idx).As<Napi::String>();
 				std::string val = config_.Get(key).As<Napi::String>();
-				auto config_property = duckdb::DBConfig::GetOptionByName(key);
-				if (!config_property) {
-					Napi::TypeError::New(env, "Unrecognized configuration property" + key).ThrowAsJavaScriptException();
-					return;
-				}
 				try {
-					duckdb_config.SetOption(*config_property, duckdb::Value(val));
+					duckdb_config.SetOptionByName(key, duckdb::Value(val));
 				} catch (std::exception &e) {
 					Napi::TypeError::New(env, "Failed to set configuration option " + key + ": " + e.what())
 					    .ThrowAsJavaScriptException();
@@ -315,7 +310,7 @@ void DuckDBNodeRSLauncher(Napi::Env env, Napi::Function jsrs, std::nullptr_t *, 
 	jsargs->done = true;
 }
 
-static duckdb::unique_ptr<duckdb::TableFunctionRef>
+static duckdb::unique_ptr<duckdb::TableRef>
 ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, duckdb::ReplacementScanData *data) {
 	JSRSArgs jsargs;
 	jsargs.table = table_name;
@@ -334,7 +329,7 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 		}
 		table_function->function =
 		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
-		return table_function;
+		return std::move(table_function);
 	}
 	return nullptr;
 }
@@ -368,8 +363,9 @@ Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 		return env.Null();
 	}
 	Napi::Function rs_callback = info[0].As<Napi::Function>();
-	auto rs = duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs_" + (replacement_scan_count++), 0, 1,
-	                                         nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
+	auto rs =
+	    duckdb_node_rs_function_t::New(env, rs_callback, "duckdb_node_rs_" + std::to_string(replacement_scan_count++),
+	                                   0, 1, nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
 	rs.Unref(env);
 
 	Schedule(info.Env(), duckdb::make_unique<RegisterRsTask>(*this, rs, deferred));

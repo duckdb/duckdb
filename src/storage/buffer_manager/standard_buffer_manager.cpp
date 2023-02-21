@@ -94,7 +94,7 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
-    : BufferManager(), db(db), temp_directory(move(tmp)), queue(make_unique<EvictionQueue>()),
+    : BufferManager(), db(db), temp_directory(std::move(tmp)), queue(make_unique<EvictionQueue>()),
       temporary_id(MAXIMUM_BLOCK), queue_insertions(0),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_unique<BufferAllocatorData>(*this)),
@@ -112,9 +112,16 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return maximum_memory;
 }
 
-void StandardBufferManager::AdjustUsedMemory(int64_t amount) {
-	D_ASSERT(amount > 0 || (int64_t)current_memory >= -amount);
-	current_memory += amount;
+void StandardBufferManager::IncreaseUsedMemory(idx_t size) {
+	if (current_memory + size > maximum_memory) {
+		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
+	}
+	current_memory += size;
+}
+
+void StandardBufferManager::DecreaseUsedMemory(idx_t size) {
+	D_ASSERT(current_memory >= size);
+	current_memory -= size;
 }
 
 template <typename... ARGS>

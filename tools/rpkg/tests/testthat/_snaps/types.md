@@ -2,7 +2,7 @@
 
     Code
       as.list(dbGetQuery(con,
-        "SELECT * EXCLUDE (timestamp_tz, time_tz, map) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types()"))
+        "SELECT * EXCLUDE (timestamp_tz, time_tz, map, bit) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types()"))
     Output
       $bool
       [1] FALSE  TRUE    NA
@@ -85,9 +85,6 @@
       [1]          0 2675722599         NA
       
       $varchar
-      [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
-      
-      $json
       [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA            
       
       $blob

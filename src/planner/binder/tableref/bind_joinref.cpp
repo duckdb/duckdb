@@ -117,7 +117,7 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
-	auto result = make_unique<BoundJoinRef>();
+	auto result = make_unique<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
@@ -128,6 +128,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
+
 		result->lateral = binder.HasCorrelatedColumns();
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
@@ -135,12 +137,12 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
 	vector<string> extra_using_columns;
-	if (ref.is_natural) {
+	switch (ref.ref_type) {
+	case JoinRefType::NATURAL: {
 		// natural join, figure out which column names are present in both sides of the join
 		// first bind the left hand side and get a list of all the tables and column names
 		case_insensitive_set_t lhs_columns;
@@ -191,10 +193,18 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			error_msg += "\n   Right candidates: " + right_candidates;
 			throw BinderException(FormatError(ref, error_msg));
 		}
-	} else if (!ref.using_columns.empty()) {
-		// USING columns
-		D_ASSERT(!result->condition);
-		extra_using_columns = ref.using_columns;
+		break;
+	}
+	case JoinRefType::REGULAR:
+		if (!ref.using_columns.empty()) {
+			// USING columns
+			D_ASSERT(!result->condition);
+			extra_using_columns = ref.using_columns;
+		}
+		break;
+	case JoinRefType::CROSS:
+	case JoinRefType::POSITIONAL:
+		break;
 	}
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
 
@@ -259,7 +269,6 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}
-	D_ASSERT(result->condition);
 	return std::move(result);
 }
 

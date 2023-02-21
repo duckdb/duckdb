@@ -72,8 +72,8 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
-rapi_rel_inner_join <- function(left, right, conds) {
-  .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
+rapi_rel_join <- function(left, right, conds, join) {
+  .Call(`_duckdb_rapi_rel_join`, left, right, conds, join)
 }
 
 rapi_rel_union_all <- function(rel_a, rel_b) {
@@ -114,6 +114,18 @@ rapi_rel_sql <- function(rel, sql) {
 
 rapi_rel_names <- function(rel) {
   .Call(`_duckdb_rapi_rel_names`, rel)
+}
+
+rapi_rel_set_intersect <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_intersect`, rel_a, rel_b)
+}
+
+rapi_rel_set_diff <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_diff`, rel_a, rel_b)
+}
+
+rapi_rel_set_symdiff <- function(rel_a, rel_b) {
+  .Call(`_duckdb_rapi_rel_set_symdiff`, rel_a, rel_b)
 }
 
 rapi_rel_to_altrep <- function(rel) {

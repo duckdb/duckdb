@@ -52,7 +52,8 @@ public:
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final override;
 	void Unpin(shared_ptr<BlockHandle> &handle) final override;
 	idx_t GetUsedMemory() const final override;
-	void AdjustUsedMemory(int64_t amount) final override;
+	void IncreaseUsedMemory(idx_t amount) final override;
+	void DecreaseUsedMemory(idx_t amount) final override;
 	idx_t GetMaxMemory() const final override;
 	Allocator &GetBufferAllocator() final override;
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;

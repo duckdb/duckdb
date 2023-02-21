@@ -1,9 +1,10 @@
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/common/radix.hpp"
+
 #include <algorithm>
 #include <numeric>
 
@@ -270,10 +271,12 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 	auto new_block_handle = buffer_manager->Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
 	// Copy the data of the blocks into a single block
-	for (auto &block : row_data.blocks) {
+	for (idx_t i = 0; i < row_data.blocks.size(); i++) {
+		auto &block = row_data.blocks[i];
 		auto block_handle = buffer_manager->Pin(block->block);
 		memcpy(new_block_ptr, block_handle.Ptr(), block->count * entry_size);
 		new_block_ptr += block->count * entry_size;
+		block.reset();
 	}
 	row_data.blocks.clear();
 	row_data.count = 0;
@@ -302,7 +305,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
-	ordered_data_block->block->SetSwizzling(sd.layout.AllConstant() ? nullptr : "LocalSortState::ReOrder.ordered_data");
+	ordered_data_block->block->SetSwizzling(sd.swizzled ? "LocalSortState::ReOrder.ordered_data" : nullptr);
 	// Replace the unordered data block with the re-ordered data block
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(std::move(ordered_data_block));

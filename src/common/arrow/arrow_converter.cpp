@@ -1,5 +1,5 @@
 #include "duckdb/common/types/data_chunk.hpp"
-
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/exception.hpp"
@@ -116,7 +116,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;
@@ -170,7 +169,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "n";
 		break;
 	}
-	case LogicalTypeId::BLOB: {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT: {
 		child.format = "z";
 		break;
 	}

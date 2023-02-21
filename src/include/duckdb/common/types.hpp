@@ -257,7 +257,7 @@ enum class LogicalTypeId : uint8_t {
 	UBIGINT = 31,
 	TIMESTAMP_TZ = 32,
 	TIME_TZ = 34,
-	JSON = 35,
+	BIT = 36,
 
 	HUGEINT = 50,
 	POINTER = 51,
@@ -390,7 +390,8 @@ public:
 	static constexpr const LogicalTypeId VARCHAR = LogicalTypeId::VARCHAR;
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
-	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
+    static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
+    static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
 	static constexpr const LogicalTypeId UUID = LogicalTypeId::UUID;
 	static constexpr const LogicalTypeId HASH = LogicalTypeId::UBIGINT;
@@ -398,7 +399,6 @@ public:
 	static constexpr const LogicalTypeId TABLE = LogicalTypeId::TABLE;
 	static constexpr const LogicalTypeId LAMBDA = LogicalTypeId::LAMBDA;
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
-	static constexpr const LogicalTypeId JSON = LogicalTypeId::JSON;
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
@@ -480,6 +480,8 @@ DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
 DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
+
+DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientContext &context);
 
 //! The PhysicalType used by the row identifiers column
 extern const PhysicalType ROW_TYPE;
