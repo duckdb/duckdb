@@ -312,7 +312,7 @@ public:
 			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
-		double percentage = double(file_index) / total_files;
+		double percentage = double(file_index - 1) / total_files;
 		percentage += (double(1) / double(total_files)) * progress;
 		return percentage * 100;
 	}
@@ -584,6 +584,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		{
 			lock_guard<mutex> l(csv_lock);
 			if (initial_reader) {
+				total_size = initial_reader->file_handle ? initial_reader->file_handle->FileSize() : 0;
 				return std::move(initial_reader);
 			}
 			if (next_file >= total_files) {
