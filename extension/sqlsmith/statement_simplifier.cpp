@@ -47,7 +47,7 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 template <class T>
 void StatementSimplifier::SimplifyListReplaceNull(vector<T> &list) {
 	for (idx_t i = 0; i < list.size(); i++) {
-		duckdb::unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+		duckdb::unique_ptr<ParsedExpression> constant = make_uniq<ConstantExpression>(Value());
 		SimplifyReplace(list[i], constant);
 	}
 }
@@ -165,7 +165,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 	default:
 		break;
 	}
-	duckdb::unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+	duckdb::unique_ptr<ParsedExpression> constant = make_uniq<ConstantExpression>(Value());
 	SimplifyReplace(expr, constant);
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {

@@ -29,7 +29,7 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
       type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
 	if (other.updates) {
-		updates = make_unique<UpdateSegment>(*other.updates, *this);
+		updates = make_uniq<UpdateSegment>(*other.updates, *this);
 	}
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
@@ -321,7 +321,7 @@ void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector 
                         idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
-		updates = make_unique<UpdateSegment>(*this);
+		updates = make_uniq<UpdateSegment>(*this);
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
@@ -371,7 +371,7 @@ void ColumnData::CommitDropColumn() {
 
 unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                     PartialBlockManager &partial_block_manager) {
-	return make_unique<ColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,

@@ -207,7 +207,7 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
 	// list extract returns the child type of the list as return type
 	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -221,7 +221,7 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	}
 	auto child_copy = list_stats.child_stats->Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
-	child_copy->validity_stats = make_unique<ValidityStatistics>(true);
+	child_copy->validity_stats = make_uniq<ValidityStatistics>(true);
 	return child_copy;
 }
 

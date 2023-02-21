@@ -184,7 +184,7 @@ struct ValidityAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<ValidityAnalyzeState>();
+	return make_uniq<ValidityAnalyzeState>();
 }
 
 bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -207,7 +207,7 @@ struct ValidityScanState : public SegmentScanState {
 };
 
 unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
-	auto result = make_unique<ValidityScanState>();
+	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	result->block_id = segment.block->BlockId();
@@ -395,7 +395,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	return make_unique<CompressionAppendState>(std::move(handle));
+	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {

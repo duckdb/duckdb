@@ -143,7 +143,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
 
 		if (root->agg_filter) {
@@ -228,7 +228,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		filter_expr = TransformExpression(root->agg_filter);
 	}
 
-	auto order_bys = make_unique<OrderModifier>();
+	auto order_bys = make_uniq<OrderModifier>();
 	TransformOrderBy(root->agg_order, order_bys->orders);
 
 	// Ordered aggregates can be either WITHIN GROUP or after the function arguments
@@ -268,7 +268,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		if (children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
 		}
-		auto expr = make_unique<CaseExpression>();
+		auto expr = make_uniq<CaseExpression>();
 		CaseCheck check;
 		check.when_expr = std::move(children[0]);
 		check.then_expr = std::move(children[1]);
@@ -276,7 +276,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
 	} else if (lowercase_name == "construct_array") {
-		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
 		return std::move(construct_array);
 	} else if (lowercase_name == "ifnull") {
@@ -285,15 +285,15 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 
 		//  Two-argument COALESCE
-		auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
-	                                                std::move(children), std::move(filter_expr), std::move(order_bys),
-	                                                root->agg_distinct, false, root->export_state);
+	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
+	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
+	                                              root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
 
 	return std::move(function);
@@ -340,7 +340,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpg
 	D_ASSERT(node);
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(fname, std::move(children));
+	return make_uniq<FunctionExpression>(fname, std::move(children));
 }
 
 } // namespace duckdb

@@ -246,7 +246,7 @@ bool Executor::NextExecutor() {
 		return false;
 	}
 	root_pipelines[root_pipeline_idx]->Reset();
-	root_executor = make_unique<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
+	root_executor = make_uniq<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
 	root_pipeline_idx++;
 	return true;
 }
@@ -528,7 +528,7 @@ unique_ptr<QueryResult> Executor::GetResult() {
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);
 
-	auto chunk = make_unique<DataChunk>();
+	auto chunk = make_uniq<DataChunk>();
 	root_executor->InitializeChunk(*chunk);
 	while (true) {
 		root_executor->ExecutePull(*chunk);

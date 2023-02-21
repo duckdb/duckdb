@@ -57,7 +57,7 @@ struct OpenTask : public Task {
 
 	void DoWork() override {
 		try {
-			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &duckdb_config);
+			Get<Database>().database = duckdb::make_uniq<duckdb::DuckDB>(filename, &duckdb_config);
 			success = true;
 
 		} catch (const duckdb::Exception &ex) {
@@ -120,7 +120,7 @@ Database::Database(const Napi::CallbackInfo &info)
 		callback = info[pos++].As<Napi::Function>();
 	}
 
-	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, access_mode, config, callback));
+	Schedule(env, duckdb::make_uniq<OpenTask>(*this, filename, access_mode, config, callback));
 }
 
 Database::~Database() {
@@ -216,7 +216,7 @@ struct WaitTask : public Task {
 };
 
 Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
-	Schedule(info.Env(), duckdb::make_unique<WaitTask>(*this, info[0].As<Napi::Function>()));
+	Schedule(info.Env(), duckdb::make_uniq<WaitTask>(*this, info[0].As<Napi::Function>()));
 	return info.This();
 }
 
@@ -256,7 +256,7 @@ Napi::Value Database::Close(const Napi::CallbackInfo &info) {
 		callback = info[0].As<Napi::Function>();
 	}
 
-	Schedule(info.Env(), duckdb::make_unique<CloseTask>(*this, callback));
+	Schedule(info.Env(), duckdb::make_uniq<CloseTask>(*this, callback));
 
 	return info.This();
 }
@@ -322,13 +322,12 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 		jsargs.error.Throw();
 	}
 	if (jsargs.function != "") {
-		auto table_function = duckdb::make_unique<duckdb::TableFunctionRef>();
+		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		std::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 		for (auto &param : jsargs.parameters) {
-			children.push_back(duckdb::make_unique<duckdb::ConstantExpression>(std::move(param)));
+			children.push_back(duckdb::make_uniq<duckdb::ConstantExpression>(std::move(param)));
 		}
-		table_function->function =
-		    duckdb::make_unique<duckdb::FunctionExpression>(jsargs.function, std::move(children));
+		table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>(jsargs.function, std::move(children));
 		return std::move(table_function);
 	}
 	return nullptr;
@@ -343,7 +342,7 @@ struct RegisterRsTask : public Task {
 		auto &database = Get<Database>();
 		if (database.database) {
 			database.database->instance->config.replacement_scans.emplace_back(
-			    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(rs));
+			    ScanReplacement, duckdb::make_uniq<NodeReplacementScanData>(rs));
 		}
 	}
 
@@ -368,7 +367,7 @@ Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 	                                   0, 1, nullptr, [](Napi::Env, void *, std::nullptr_t *ctx) {});
 	rs.Unref(env);
 
-	Schedule(info.Env(), duckdb::make_unique<RegisterRsTask>(*this, rs, deferred));
+	Schedule(info.Env(), duckdb::make_uniq<RegisterRsTask>(*this, rs, deferred));
 
 	return deferred.Promise();
 }

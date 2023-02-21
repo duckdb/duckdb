@@ -54,7 +54,7 @@ TEST_CASE("Test transactional integrity when facing process aborts", "[persisten
 		for (size_t i = 0; i < 1000; i++) {
 			usleep(10000);
 			try {
-				db = make_unique<DuckDB>(db_folder);
+				db = make_uniq<DuckDB>(db_folder);
 			} catch (...) {
 			}
 			if (db) {

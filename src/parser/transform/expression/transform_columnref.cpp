@@ -7,7 +7,7 @@ namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgquery::PGNode *node) {
 	auto star = (duckdb_libpgquery::PGAStar *)node;
-	auto result = make_unique<StarExpression>(star->relation ? star->relation : string());
+	auto result = make_uniq<StarExpression>(star->relation ? star->relation : string());
 	if (star->except_list) {
 		for (auto head = star->except_list->head; head; head = head->next) {
 			auto value = (duckdb_libpgquery::PGValue *)head->data.ptr_value;
@@ -58,7 +58,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 		for (auto node = fields->head; node; node = node->next) {
 			column_names.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 		}
-		auto colref = make_unique<ColumnRefExpression>(std::move(column_names));
+		auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
 		colref->query_location = root->location;
 		return std::move(colref);
 	}

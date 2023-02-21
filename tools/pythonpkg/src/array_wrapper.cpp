@@ -621,8 +621,8 @@ void RawArrayWrapper::Resize(idx_t new_capacity) {
 }
 
 ArrayWrapper::ArrayWrapper(const LogicalType &type) : requires_mask(false) {
-	data = make_unique<RawArrayWrapper>(type);
-	mask = make_unique<RawArrayWrapper>(LogicalType::BOOLEAN);
+	data = make_uniq<RawArrayWrapper>(type);
+	mask = make_uniq<RawArrayWrapper>(LogicalType::BOOLEAN);
 }
 
 void ArrayWrapper::Initialize(idx_t capacity) {

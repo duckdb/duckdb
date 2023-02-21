@@ -154,7 +154,7 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 }
 
 unique_ptr<QueryNode> SelectNode::Copy() const {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 	for (auto &child : select_list) {
 		result->select_list.push_back(child->Copy());
 	}
@@ -193,7 +193,7 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->from_table = reader.ReadOptional<TableRef>(nullptr);
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);

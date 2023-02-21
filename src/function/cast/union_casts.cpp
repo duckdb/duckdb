@@ -26,7 +26,7 @@ struct ToUnionBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<ToUnionBoundCastData>(tag, name, type, cost, member_cast_info.Copy());
+		return make_uniq<ToUnionBoundCastData>(tag, name, type, cost, member_cast_info.Copy());
 	}
 
 	static bool SortByCostAscending(const ToUnionBoundCastData &left, const ToUnionBoundCastData &right) {
@@ -95,7 +95,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 	}
 
 	// otherwise, return the selected cast
-	return make_unique<ToUnionBoundCastData>(std::move(selected_cast));
+	return make_uniq<ToUnionBoundCastData>(std::move(selected_cast));
 }
 
 static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -154,7 +154,7 @@ public:
 		for (auto &member_cast : member_casts) {
 			member_casts_copy.push_back(member_cast.Copy());
 		}
-		return make_unique<UnionToUnionBoundCastData>(tag_map, std::move(member_casts_copy), target_type);
+		return make_uniq<UnionToUnionBoundCastData>(tag_map, std::move(member_casts_copy), target_type);
 	}
 };
 
@@ -194,7 +194,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 		}
 	}
 
-	return make_unique<UnionToUnionBoundCastData>(tag_map, std::move(member_casts), target);
+	return make_uniq<UnionToUnionBoundCastData>(tag_map, std::move(member_casts), target);
 }
 
 static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

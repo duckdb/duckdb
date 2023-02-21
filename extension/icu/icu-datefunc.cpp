@@ -42,12 +42,12 @@ bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
-	return make_unique<BindData>(*this);
+	return make_uniq<BindData>(*this);
 }
 
 unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<duckdb::unique_ptr<Expression>> &arguments) {
-	return make_unique<BindData>(context);
+	return make_uniq<BindData>(context);
 }
 
 void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {

@@ -26,7 +26,7 @@ void SampleOptions::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
-	auto result = make_unique<SampleOptions>();
+	auto result = make_uniq<SampleOptions>();
 
 	FieldReader reader(source);
 	result->sample_size = reader.ReadRequiredSerializable<Value, Value>();
@@ -39,7 +39,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
 }
 
 unique_ptr<SampleOptions> SampleOptions::Copy() {
-	auto result = make_unique<SampleOptions>();
+	auto result = make_uniq<SampleOptions>();
 	result->sample_size = sample_size;
 	result->is_percentage = is_percentage;
 	result->method = method;

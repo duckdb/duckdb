@@ -16,7 +16,7 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFu
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Globbing is disabled through configuration");
 	}
-	auto result = make_unique<GlobFunctionBindData>();
+	auto result = make_uniq<GlobFunctionBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(StringValue::Get(input.inputs[0]), context);
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -32,7 +32,7 @@ struct GlobFunctionState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<GlobFunctionState>();
+	return make_uniq<GlobFunctionState>();
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

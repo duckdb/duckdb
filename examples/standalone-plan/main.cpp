@@ -99,10 +99,10 @@ void RunExampleDuckDBCatalog() {
 void CreateMyScanFunction(Connection &con);
 
 unique_ptr<TableRef> MyReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<duckdb::unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("my_scan", std::move(children));
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("my_scan", std::move(children));
 	return std::move(table_function);
 }
 
@@ -216,7 +216,7 @@ static duckdb::unique_ptr<FunctionData> MyScanBind(ClientContext &context, Table
 	} else {
 		throw std::runtime_error("Unknown table " + table_name);
 	}
-	auto result = make_unique<MyBindData>(table_name);
+	auto result = make_uniq<MyBindData>(table_name);
 	return std::move(result);
 }
 
@@ -226,14 +226,14 @@ static duckdb::unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &contex
 	if (bind_data.table_name == "mytable") {
 		if (column_id == 0) {
 			// i: 1, 2, 3, 4, 5
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5));
+			return make_uniq<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5));
 		} else if (column_id == 1) {
 			// j: 2, 3, 4, 5, 6
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6));
+			return make_uniq<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6));
 		}
 	} else if (bind_data.table_name == "myothertable") {
 		// k: 1, 10, 20
-		return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20));
+		return make_uniq<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20));
 	}
 	return nullptr;
 }
@@ -242,9 +242,9 @@ unique_ptr<NodeStatistics> MyScanCardinality(ClientContext &context, const Funct
 	auto &bind_data = (MyBindData &)*bind_data_p;
 	if (bind_data.table_name == "mytable") {
 		// 5 tuples
-		return make_unique<NodeStatistics>(5, 5);
+		return make_uniq<NodeStatistics>(5, 5);
 	} else if (bind_data.table_name == "myothertable") {
-		return make_unique<NodeStatistics>(3, 3);
+		return make_uniq<NodeStatistics>(3, 3);
 	}
 	return nullptr;
 }
@@ -479,14 +479,14 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// projection
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyProjectionNode>(std::move(op.expressions));
+		auto node = make_uniq<MyProjectionNode>(std::move(op.expressions));
 		node->child = std::move(child);
 		return std::move(node);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		// filter
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyFilterNode>(std::move(op.expressions[0]));
+		auto node = make_uniq<MyFilterNode>(std::move(op.expressions[0]));
 		node->child = std::move(child);
 		return std::move(node);
 	}
@@ -496,7 +496,7 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 			throw std::runtime_error("Grouped aggregate not supported");
 		}
 		auto child = TransformPlan(*op.children[0]);
-		auto node = make_unique<MyAggregateNode>(std::move(op.expressions));
+		auto node = make_uniq<MyAggregateNode>(std::move(op.expressions));
 		node->child = std::move(child);
 		return std::move(node);
 	}
@@ -516,11 +516,11 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 				// note: filter pushdown will only be triggered if optimizers are enabled
 				throw std::runtime_error("Filter pushdown unsupported");
 			}
-			return make_unique<MyScanNode>(table.table->name, get.column_ids);
+			return make_uniq<MyScanNode>(table.table->name, get.column_ids);
 		} else if (get.function.name == "my_scan") {
 			// our own scan
 			auto &my_bind_data = (MyBindData &)*get.bind_data;
-			return make_unique<MyScanNode>(my_bind_data.table_name, get.column_ids);
+			return make_uniq<MyScanNode>(my_bind_data.table_name, get.column_ids);
 		} else {
 			throw std::runtime_error("Unsupported table function");
 		}

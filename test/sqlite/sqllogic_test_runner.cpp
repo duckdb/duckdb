@@ -42,7 +42,7 @@ void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 }
 
 void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
-	auto loop = make_unique<LoopCommand>(*this, std::move(definition));
+	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
 		// already in a loop: add it to the currently active loop
@@ -80,8 +80,8 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_unique<DuckDB>(dbpath, config.get());
-	con = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(dbpath, config.get());
+	con = make_uniq<Connection>(*db);
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -252,7 +252,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
 			}
-			auto command = make_unique<Statement>(*this);
+			auto command = make_uniq<Statement>(*this);
 
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
@@ -288,7 +288,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
 			}
-			auto command = make_unique<Query>(*this);
+			auto command = make_uniq<Query>(*this);
 
 			// parse the expected column count
 			command->expected_column_count = 0;
@@ -576,7 +576,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// restart the current database
 			// first clear all connections
-			auto command = make_unique<RestartCommand>(*this);
+			auto command = make_uniq<RestartCommand>(*this);
 			ExecuteCommand(std::move(command));
 		}
 	}

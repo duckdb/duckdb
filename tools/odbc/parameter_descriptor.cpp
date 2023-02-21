@@ -10,8 +10,8 @@ using duckdb::Value;
 ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
     : stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
 
-	apd = make_unique<OdbcHandleDesc>(stmt->dbc);
-	ipd = make_unique<OdbcHandleDesc>(stmt->dbc);
+	apd = make_uniq<OdbcHandleDesc>(stmt->dbc);
+	ipd = make_uniq<OdbcHandleDesc>(stmt->dbc);
 
 	cur_apd = apd.get();
 }

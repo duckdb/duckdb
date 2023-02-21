@@ -59,7 +59,7 @@ bool SetOperationNode::Equals(const QueryNode *other_p) const {
 }
 
 unique_ptr<QueryNode> SetOperationNode::Copy() const {
-	auto result = make_unique<SetOperationNode>();
+	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = setop_type;
 	result->left = left->Copy();
 	result->right = right->Copy();
@@ -74,7 +74,7 @@ void SetOperationNode::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
-	auto result = make_unique<SetOperationNode>();
+	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = reader.ReadRequired<SetOperationType>();
 	result->left = reader.ReadRequiredSerializable<QueryNode>();
 	result->right = reader.ReadRequiredSerializable<QueryNode>();

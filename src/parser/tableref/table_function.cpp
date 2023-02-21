@@ -26,7 +26,7 @@ void TableFunctionRef::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<TableFunctionRef>();
+	auto result = make_uniq<TableFunctionRef>();
 	result->function = reader.ReadRequiredSerializable<ParsedExpression>();
 	result->alias = reader.ReadRequired<string>();
 	result->column_name_alias = reader.ReadRequiredList<string>();
@@ -34,7 +34,7 @@ unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {
 }
 
 unique_ptr<TableRef> TableFunctionRef::Copy() {
-	auto copy = make_unique<TableFunctionRef>();
+	auto copy = make_uniq<TableFunctionRef>();
 
 	copy->function = function->Copy();
 	copy->column_name_alias = column_name_alias;

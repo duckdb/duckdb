@@ -40,7 +40,7 @@ void SchemaCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateSchemaInfo>();
+	auto info = make_uniq<CreateSchemaInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();

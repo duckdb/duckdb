@@ -38,7 +38,7 @@ FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_t
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() const {
-	auto result = make_unique<StructStatistics>(type);
+	auto result = make_uniq<StructStatistics>(type);
 	result->CopyBase(*this);
 
 	for (idx_t i = 0; i < child_stats.size(); i++) {
@@ -60,7 +60,7 @@ void StructStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto result = make_unique<StructStatistics>(std::move(type));
+	auto result = make_uniq<StructStatistics>(std::move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
 
 	auto child_type_count = reader.ReadRequired<uint32_t>();

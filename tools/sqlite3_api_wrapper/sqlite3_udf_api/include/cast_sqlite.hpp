@@ -88,7 +88,7 @@ struct CastToVectorSQLiteValue {
 
 	template <class INPUT_TYPE, class OPCAST>
 	static inline unique_ptr<vector<sqlite3_value>> Operation(UnifiedVectorFormat &vec_data, idx_t count) {
-		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 
 		auto input_data = (INPUT_TYPE *)vec_data.data;
@@ -112,7 +112,7 @@ struct CastToVectorSQLiteValue {
 	}
 
 	static inline unique_ptr<vector<sqlite3_value>> FromNull(idx_t count) {
-		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 		for (idx_t i = 0; i < count; ++i) {
 			res_data[i] = CastToSQLiteValue::OperationNull();

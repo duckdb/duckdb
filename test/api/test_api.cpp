@@ -20,8 +20,8 @@ TEST_CASE("Test comment in CPP API", "[api]") {
 }
 
 TEST_CASE("Test using connection after database is gone", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 	// check that the connection works
 	auto result = conn->Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -32,8 +32,8 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 
 	// now try it with an open transaction
-	db = make_unique<DuckDB>(nullptr);
-	conn = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(nullptr);
+	conn = make_uniq<Connection>(*db);
 
 	REQUIRE_NO_FAIL(conn->Query("BEGIN TRANSACTION"));
 	result = conn->Query("SELECT 42");
@@ -45,14 +45,14 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 }
 
 TEST_CASE("Test destroying connections with open transactions", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
+	auto db = make_uniq<DuckDB>(nullptr);
 	{
 		Connection con(*db);
 		con.Query("BEGIN TRANSACTION");
 		con.Query("CREATE TABLE test(i INTEGER);");
 	}
 
-	auto conn = make_unique<Connection>(*db);
+	auto conn = make_uniq<Connection>(*db);
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE test(i INTEGER)"));
 }
 
@@ -66,8 +66,8 @@ static void long_running_query(Connection *conn, bool *correct) {
 }
 
 TEST_CASE("Test closing database during long running query", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 	// create the database
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
@@ -88,8 +88,8 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 }
 
 TEST_CASE("Test closing result after database is gone", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 	// check that the connection works
 	auto result = conn->Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -99,8 +99,8 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	result.reset();
 
 	// now the streaming result
-	db = make_unique<DuckDB>(nullptr);
-	conn = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(nullptr);
+	conn = make_uniq<Connection>(*db);
 	// check that the connection works
 	auto streaming_result = conn->SendQuery("SELECT 42");
 	// destroy the database
@@ -111,8 +111,8 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 }
 
 TEST_CASE("Test closing database with open prepared statements", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	auto p1 = conn->Prepare("CREATE TABLE a (i INTEGER)");
 	REQUIRE_NO_FAIL(p1->Execute());
@@ -140,8 +140,8 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 }
 
 TEST_CASE("Test parallel usage of single client", "[api][.]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
@@ -160,7 +160,7 @@ TEST_CASE("Test parallel usage of single client", "[api][.]") {
 static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
-		auto conn = make_unique<Connection>(*db);
+		auto conn = make_uniq<Connection>(*db);
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
 		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
 			correct[threadnr] = false;
@@ -169,8 +169,8 @@ static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t
 }
 
 TEST_CASE("Test making and dropping connections in parallel to a single database", "[api][.]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
@@ -310,8 +310,8 @@ TEST_CASE("Test fetch API", "[api]") {
 }
 
 TEST_CASE("Test fetch API robustness", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	// remove connection with active stream result
 	auto result = conn->SendQuery("SELECT 42");
@@ -322,7 +322,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	REQUIRE(chunk);
 
 	// now close the entire database
-	conn = make_unique<Connection>(*db);
+	conn = make_uniq<Connection>(*db);
 	result = conn->SendQuery("SELECT 42");
 
 	db.reset();
@@ -333,8 +333,8 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	REQUIRE_NO_FAIL(conn->SendQuery("SELECT 42"));
 
 	// override fetch result
-	db = make_unique<DuckDB>(nullptr);
-	conn = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(nullptr);
+	conn = make_uniq<Connection>(*db);
 	auto result1 = conn->SendQuery("SELECT 42");
 	auto result2 = conn->SendQuery("SELECT 84");
 	REQUIRE_NO_FAIL(*result1);
@@ -425,9 +425,9 @@ TEST_CASE("Test streaming query during stack unwinding", "[api]") {
 TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	auto con = make_unique<Connection>(db);
-	auto con2 = make_unique<Connection>(db);
-	auto con3 = make_unique<Connection>(db);
+	auto con = make_uniq<Connection>(db);
+	auto con2 = make_uniq<Connection>(db);
+	auto con3 = make_uniq<Connection>(db);
 
 	// simple prepare: begin transaction before the second client calls PREPARE
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
@@ -440,7 +440,7 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	// now commit the transaction in the second client
 	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
 
-	con = make_unique<Connection>(db);
+	con = make_uniq<Connection>(db);
 	// three transactions
 	// open a transaction in con2, this forces the prepared statement to be kept around until this transaction is closed
 	REQUIRE_NO_FAIL(con2->Query("BEGIN TRANSACTION"));
@@ -497,14 +497,14 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 	duckdb::unique_ptr<DuckDB> db;
 	bool success = false;
 	try {
-		db = make_unique<DuckDB>("data/parquet-testing/blob.parquet");
+		db = make_uniq<DuckDB>("data/parquet-testing/blob.parquet");
 		success = true;
 	} catch (std::exception &ex) {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
 	}
 	REQUIRE(!success);
 	try {
-		db = make_unique<DuckDB>("data/parquet-testing/h2oai/h2oai_group_small.parquet");
+		db = make_uniq<DuckDB>("data/parquet-testing/h2oai/h2oai_group_small.parquet");
 		success = true;
 	} catch (std::exception &ex) {
 		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
@@ -513,8 +513,8 @@ TEST_CASE("Test opening an invalid database file", "[api]") {
 }
 
 TEST_CASE("Test large number of connections to a single database", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto context = make_unique<ClientContext>((*db).instance);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto context = make_uniq<ClientContext>((*db).instance);
 	auto &connection_manager = ConnectionManager::Get(*context);
 
 	vector<duckdb::unique_ptr<Connection>> connections;
@@ -523,7 +523,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	size_t toRemove = createdConnections - remainingConnections;
 
 	for (size_t i = 0; i < createdConnections; i++) {
-		auto conn = make_unique<Connection>(*db);
+		auto conn = make_uniq<Connection>(*db);
 		connections.push_back(std::move(conn));
 	}
 

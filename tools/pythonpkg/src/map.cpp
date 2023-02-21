@@ -47,7 +47,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
 
-	auto data_uptr = make_unique<MapFunctionData>();
+	auto data_uptr = make_uniq<MapFunctionData>();
 	auto &data = *data_uptr;
 	data.function = (PyObject *)input.inputs[0].GetPointer();
 	data.in_names = input.input_table_names;

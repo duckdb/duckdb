@@ -64,7 +64,7 @@ struct DuckDBPreparedState : public DuckDBBenchmarkState {
 
 #define APPEND_BENCHMARK_PREPARED(CREATE_STATEMENT)                                                                    \
 	duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() override {                                         \
-		auto result = make_unique<DuckDBPreparedState>(GetDatabasePath());                                             \
+		auto result = make_uniq<DuckDBPreparedState>(GetDatabasePath());                                               \
 		return std::move(result);                                                                                      \
 	}                                                                                                                  \
 	void Load(DuckDBBenchmarkState *state_p) override {                                                                \

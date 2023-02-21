@@ -36,7 +36,7 @@ static duckdb::unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, 
 
 static duckdb::unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context,
                                                                     TableFunctionInitInput &input) {
-	return make_unique<ICUTimeZoneData>();
+	return make_uniq<ICUTimeZoneData>();
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -138,7 +138,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastFromNaive, std::move(cast_data));
 	}
@@ -201,7 +201,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastToNaive, std::move(cast_data));
 	}
@@ -234,7 +234,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		}
 
 		duckdb::unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindDataNow>(*this);
+			return make_uniq<BindDataNow>(*this);
 		}
 
 		timestamp_t now;
@@ -242,7 +242,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 	static duckdb::unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
 	                                                vector<duckdb::unique_ptr<Expression>> &arguments) {
-		return make_unique<BindDataNow>(context);
+		return make_uniq<BindDataNow>(context);
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {

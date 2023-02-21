@@ -29,7 +29,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 
 static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<DSDGenFunctionData>();
+	auto result = make_uniq<DSDGenFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
@@ -66,7 +66,7 @@ struct TPCDSData : public GlobalTableFunctionState {
 };
 
 unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TPCDSData>();
+	auto result = make_uniq<TPCDSData>();
 	return std::move(result);
 }
 

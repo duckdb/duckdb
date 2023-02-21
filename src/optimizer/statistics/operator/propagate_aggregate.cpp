@@ -20,7 +20,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		if (aggr.grouping_sets.size() > 1) {
 			// aggregates with multiple grouping sets can introduce NULL values to certain groups
 			// FIXME: actually figure out WHICH groups can have null values introduced
-			stats->validity_stats = make_unique<ValidityStatistics>(true, true);
+			stats->validity_stats = make_uniq<ValidityStatistics>(true, true);
 			continue;
 		}
 		ColumnBinding group_binding(aggr.group_index, group_idx);

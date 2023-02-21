@@ -43,7 +43,7 @@ public:
 		} else {
 			value = reader.ReadField<int32_t>(-1);
 		}
-		return make_unique_base<LogicalOperator, NewOperator>(value);
+		return make_uniq_base<LogicalOperator, NewOperator>(value);
 	}
 
 private:
@@ -66,7 +66,7 @@ public:
 	static duckdb::unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
 	                                                       FieldReader &reader) {
 		int32_t value = reader.ReadField(0);
-		return make_unique_base<LogicalOperator, OldOperator>(value);
+		return make_uniq_base<LogicalOperator, OldOperator>(value);
 	}
 
 private:

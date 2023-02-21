@@ -55,13 +55,13 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 
 	// this is more for completeness reasons
 	bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
+	auto struct_stats = make_uniq<StructStatistics>(expr.return_type);
 	D_ASSERT(child_stats.size() == struct_stats->child_stats.size());
 	for (idx_t i = 0; i < struct_stats->child_stats.size(); i++) {
 		struct_stats->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;

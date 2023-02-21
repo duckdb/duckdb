@@ -38,7 +38,7 @@ public:
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
-		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
 
 		partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
@@ -180,8 +180,7 @@ void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		const auto hash_col_idx = payload_types.size();
-		auto new_grouping_data =
-		    make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
+		auto new_grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
 
 		// We have to append to a shared copy for some reason
 		if (grouping_data) {
@@ -217,7 +216,7 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = grouping_data->CreateShared();
-	auto new_append = make_unique<PartitionedColumnDataAppendState>();
+	auto new_append = make_uniq<PartitionedColumnDataAppendState>();
 	new_partition->InitializeAppendState(*new_append);
 
 	local_partition->FlushAppendState(*local_append);
@@ -237,7 +236,7 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 	new_partition->FlushAppendState(*new_append);
 
 	local_partition = std::move(new_partition);
-	local_append = make_unique<PartitionedColumnDataAppendState>();
+	local_append = make_uniq<PartitionedColumnDataAppendState>();
 	local_partition->InitializeAppendState(*local_append);
 }
 
@@ -247,7 +246,7 @@ void WindowGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_partit
 
 	if (!local_partition) {
 		local_partition = grouping_data->CreateShared();
-		local_append = make_unique<PartitionedColumnDataAppendState>();
+		local_append = make_uniq<PartitionedColumnDataAppendState>();
 		local_partition->InitializeAppendState(*local_append);
 		return;
 	}
@@ -410,8 +409,8 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
 			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
-			rows = make_unique<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings = make_unique<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
@@ -620,7 +619,7 @@ struct WindowInputColumn {
 	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p)
 	    : input_expr(expr_p, context), count(0), capacity(capacity_p) {
 		if (input_expr.expr) {
-			target = make_unique<Vector>(input_expr.chunk.data[0].GetType(), capacity);
+			target = make_uniq<Vector>(input_expr.chunk.data[0].GetType(), capacity);
 		}
 	}
 
@@ -1166,8 +1165,8 @@ void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 
 	if (wexpr->aggregate) {
-		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, filter_mask, mode);
+		segment_tree = make_uniq<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
+		                                            &payload_collection, filter_mask, mode);
 	}
 }
 
@@ -1371,11 +1370,11 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<WindowLocalSinkState>(context.client, *this);
+	return make_uniq<WindowLocalSinkState>(context.client, *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<WindowGlobalSinkState>(*this, context);
+	return make_uniq<WindowGlobalSinkState>(*this, context);
 }
 
 enum class WindowSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
@@ -1411,8 +1410,8 @@ public:
 	      tasks_assigned(0), tasks_completed(0) {
 
 		const auto group_idx = sink.hash_groups.size();
-		auto new_group = make_unique<WindowGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-		                                                    sink.payload_types, sink.external);
+		auto new_group = make_uniq<WindowGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
+		                                                  sink.payload_types, sink.external);
 		sink.hash_groups.emplace_back(std::move(new_group));
 
 		hash_group = sink.hash_groups[group_idx].get();
@@ -1543,7 +1542,7 @@ public:
 		for (auto &group_data : sink.grouping_data->GetPartitions()) {
 			// Prepare for merge sort phase
 			if (group_data->Count()) {
-				auto state = make_unique<WindowGlobalMergeState>(sink, std::move(group_data));
+				auto state = make_uniq<WindowGlobalMergeState>(sink, std::move(group_data));
 				states.emplace_back(std::move(state));
 			}
 		}
@@ -1642,7 +1641,7 @@ public:
 
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, merge_states));
+			merge_tasks.push_back(make_uniq<WindowMergeTask>(shared_from_this(), context, merge_states));
 		}
 		SetTasks(std::move(merge_tasks));
 	}
@@ -1781,7 +1780,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Data blocks are required
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
-	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+	rows = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 	rows->blocks = std::move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
@@ -1789,11 +1788,11 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Heap blocks are optional, but we want both for iteration.
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
-		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+		heap = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 		heap->blocks = std::move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
-		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
@@ -1825,7 +1824,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, context, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
@@ -1861,7 +1860,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 
 	//	First pass over the input without flushing
 	//	TODO: Factor out the constructor data as global state
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
 	idx_t input_idx = 0;
 	while (true) {
 		input_chunk.Reset();
@@ -1921,11 +1920,11 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate_p) const {
 	auto &gstate = (WindowGlobalSourceState &)gstate_p;
-	return make_unique<WindowLocalSourceState>(*this, context, gstate);
+	return make_uniq<WindowLocalSourceState>(*this, context, gstate);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<WindowGlobalSourceState>(*this);
+	return make_uniq<WindowGlobalSourceState>(*this);
 }
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

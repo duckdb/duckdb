@@ -190,7 +190,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		data_ptrs.push_back(coldata_ptr);
 	}
 	auto row_count = Rf_length(VECTOR_ELT(df, 0));
-	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
+	return make_uniq<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
 }
 
 static idx_t DataFrameScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
@@ -204,7 +204,7 @@ static idx_t DataFrameScanMaxThreads(ClientContext &context, const FunctionData 
 
 static duckdb::unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContext &context,
                                                                             TableFunctionInitInput &input) {
-	auto result = make_unique<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data));
+	auto result = make_uniq<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data));
 	result->position = 0;
 	return std::move(result);
 }
@@ -234,7 +234,7 @@ static duckdb::unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(Execut
                                                                           TableFunctionInitInput &input,
                                                                           GlobalTableFunctionState *global_state) {
 	auto &gstate = (DataFrameGlobalState &)*global_state;
-	auto result = make_unique<DataFrameLocalState>();
+	auto result = make_uniq<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
 	DataFrameScanParallelStateNext(context.client, input.bind_data, *result, gstate);
@@ -412,7 +412,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 static duckdb::unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context,
                                                                    const FunctionData *bind_data_p) {
 	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
-	return make_unique<NodeStatistics>(bind_data.row_count, bind_data.row_count);
+	return make_uniq<NodeStatistics>(bind_data.row_count, bind_data.row_count);
 }
 
 static string DataFrameScanToString(const FunctionData *bind_data_p) {

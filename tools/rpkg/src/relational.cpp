@@ -113,7 +113,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 		for (expr_extptr_t expr : exprs) {
 			filters.push_back(expr->Copy());
 		}
-		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+		filter_expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
 	}
 	auto res = std::make_shared<FilterRelation>(rel->rel, std::move(filter_expr));
 	return make_external<RelationWrapper>("duckdb_relation", res);
@@ -188,7 +188,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 		for (expr_extptr_t expr : conds) {
 			cond_args.push_back(expr->Copy());
 		}
-		cond = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
+		cond = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
 	auto join_type = JoinType::INNER;

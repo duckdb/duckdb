@@ -13,7 +13,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 		// overflow in cast: bailout
 		return nullptr;
 	}
-	auto stats = make_unique<NumericStatistics>(target, std::move(min), std::move(max), input.stats_type);
+	auto stats = make_uniq<NumericStatistics>(target, std::move(min), std::move(max), input.stats_type);
 	stats->CopyBase(*input_p);
 	return std::move(stats);
 }
@@ -54,7 +54,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 		return nullptr;
 	}
 	if (cast.try_cast && result_stats) {
-		result_stats->validity_stats = make_unique<ValidityStatistics>(true, true);
+		result_stats->validity_stats = make_uniq<ValidityStatistics>(true, true);
 	}
 	return result_stats;
 }

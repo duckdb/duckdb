@@ -35,7 +35,7 @@ public:
 	}
 
 	duckdb::unique_ptr<PythonGILWrapper> GetLock() {
-		return make_unique<PythonGILWrapper>();
+		return make_uniq<PythonGILWrapper>();
 	}
 
 	template <class NEW_PY_TYPE>

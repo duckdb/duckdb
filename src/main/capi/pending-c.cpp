@@ -3,7 +3,7 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 
-using duckdb::make_unique;
+using duckdb::make_uniq;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
@@ -18,9 +18,9 @@ duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statemen
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, false);
 	} catch (const duckdb::Exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
 	duckdb_state return_value = !result->statement->HasError() ? DuckDBSuccess : DuckDBError;
 	*out_result = (duckdb_pending_result)result;

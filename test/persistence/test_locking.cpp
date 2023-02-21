@@ -45,7 +45,7 @@ TEST_CASE("Test write lock with multiple processes", "[persistence][.]") {
 			usleep(100);
 		}
 		// try to open db for writing, this should fail
-		REQUIRE_THROWS(db = make_unique<DuckDB>(dbdir));
+		REQUIRE_THROWS(db = make_uniq<DuckDB>(dbdir));
 		// kill the child
 		if (kill(pid, SIGKILL) != 0) {
 			FAIL();
@@ -93,9 +93,9 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 			usleep(100);
 		}
 		// try to open db for writing, this should fail
-		REQUIRE_THROWS(db = make_unique<DuckDB>(dbdir));
+		REQUIRE_THROWS(db = make_uniq<DuckDB>(dbdir));
 		// but opening db for reading should work
-		REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, &config));
+		REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir, &config));
 		// we can query the database
 		Connection con(*db);
 		REQUIRE_NO_FAIL(con.Query("SELECT * FROM a"));

@@ -128,12 +128,12 @@ public:
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
-		return make_unique<QuackBindData>(BigIntValue::Get(input.inputs[0]));
+		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));
 	}
 
 	static duckdb::unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context,
 	                                                              TableFunctionInitInput &input) {
-		return make_unique<QuackGlobalData>();
+		return make_uniq<QuackGlobalData>();
 	}
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -165,7 +165,7 @@ struct QuackExtensionData : public ParserExtensionParseData {
 	idx_t number_of_quacks;
 
 	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
-		return make_unique<QuackExtensionData>(number_of_quacks);
+		return make_uniq<QuackExtensionData>(number_of_quacks);
 	}
 };
 
@@ -196,7 +196,7 @@ public:
 			}
 		}
 		// QUACK
-		return ParserExtensionParseResult(make_unique<QuackExtensionData>(splits.size() + 1));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size() + 1));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
@@ -235,7 +235,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(make_pair("x", LogicalType::INTEGER));
 	child_types.push_back(make_pair("y", LogicalType::INTEGER));
-	auto alias_info = make_unique<CreateTypeInfo>();
+	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
 	alias_info->name = alias_name;
 	LogicalType target_type = LogicalType::STRUCT(child_types);

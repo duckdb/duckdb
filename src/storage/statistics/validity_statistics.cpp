@@ -23,7 +23,7 @@ unique_ptr<BaseStatistics> ValidityStatistics::Combine(const unique_ptr<BaseStat
 	} else {
 		auto &l = (ValidityStatistics &)*lstats;
 		auto &r = (ValidityStatistics &)*rstats;
-		return make_unique<ValidityStatistics>(l.has_null || r.has_null, l.has_no_null || r.has_no_null);
+		return make_uniq<ValidityStatistics>(l.has_null || r.has_null, l.has_no_null || r.has_no_null);
 	}
 }
 
@@ -44,7 +44,7 @@ void ValidityStatistics::Merge(const BaseStatistics &other_p) {
 }
 
 unique_ptr<BaseStatistics> ValidityStatistics::Copy() const {
-	return make_unique<ValidityStatistics>(has_null, has_no_null);
+	return make_uniq<ValidityStatistics>(has_null, has_no_null);
 }
 
 void ValidityStatistics::Serialize(FieldWriter &writer) const {
@@ -55,7 +55,7 @@ void ValidityStatistics::Serialize(FieldWriter &writer) const {
 unique_ptr<ValidityStatistics> ValidityStatistics::Deserialize(FieldReader &reader) {
 	bool has_null = reader.ReadRequired<bool>();
 	bool has_no_null = reader.ReadRequired<bool>();
-	return make_unique<ValidityStatistics>(has_null, has_no_null);
+	return make_uniq<ValidityStatistics>(has_null, has_no_null);
 }
 
 void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

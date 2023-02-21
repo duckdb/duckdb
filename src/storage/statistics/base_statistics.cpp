@@ -19,9 +19,9 @@ BaseStatistics::~BaseStatistics() {
 }
 
 void BaseStatistics::InitializeBase() {
-	validity_stats = make_unique<ValidityStatistics>(false);
+	validity_stats = make_uniq<ValidityStatistics>(false);
 	if (stats_type == GLOBAL_STATS) {
-		distinct_stats = make_unique<DistinctStatistics>();
+		distinct_stats = make_uniq<DistinctStatistics>();
 	}
 }
 
@@ -81,7 +81,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, Statist
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		return make_unique<ValidityStatistics>(false, false);
+		return make_uniq<ValidityStatistics>(false, false);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -94,27 +94,27 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, Statist
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = make_unique<NumericStatistics>(std::move(type), stats_type);
+		result = make_uniq<NumericStatistics>(std::move(type), stats_type);
 		break;
 	case PhysicalType::VARCHAR:
-		result = make_unique<StringStatistics>(std::move(type), stats_type);
+		result = make_uniq<StringStatistics>(std::move(type), stats_type);
 		break;
 	case PhysicalType::STRUCT:
-		result = make_unique<StructStatistics>(std::move(type));
+		result = make_uniq<StructStatistics>(std::move(type));
 		break;
 	case PhysicalType::LIST:
-		result = make_unique<ListStatistics>(std::move(type));
+		result = make_uniq<ListStatistics>(std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
 	default:
-		result = make_unique<BaseStatistics>(std::move(type), stats_type);
+		result = make_uniq<BaseStatistics>(std::move(type), stats_type);
 	}
 	result->InitializeBase();
 	return result;
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
-	auto result = make_unique<BaseStatistics>(type, stats_type);
+	auto result = make_uniq<BaseStatistics>(type, stats_type);
 	result->CopyBase(*this);
 	return result;
 }
@@ -176,7 +176,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = ListStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
+		result = make_uniq<BaseStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");

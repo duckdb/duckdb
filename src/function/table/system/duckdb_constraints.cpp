@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBConstraintsData>();
+	auto result = make_uniq<DuckDBConstraintsData>();
 
 	// scan all the schemas for tables and collect them
 	auto schemas = Catalog::GetAllSchemas(context);

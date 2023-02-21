@@ -29,7 +29,7 @@ struct DBGenFunctionData : public TableFunctionData {
 
 static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<DBGenFunctionData>();
+	auto result = make_uniq<DBGenFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
@@ -64,7 +64,7 @@ struct TPCHData : public GlobalTableFunctionState {
 };
 
 unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TPCHData>();
+	auto result = make_uniq<TPCHData>();
 	return std::move(result);
 }
 

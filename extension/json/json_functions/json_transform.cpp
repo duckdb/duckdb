@@ -99,7 +99,7 @@ static duckdb::unique_ptr<FunctionData> JSONTransformBind(ClientContext &context
 		}
 		bound_function.return_type = StructureStringToType(doc->root, context);
 	}
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static inline string_t GetString(yyjson_val *val) {

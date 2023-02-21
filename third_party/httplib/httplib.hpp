@@ -283,7 +283,7 @@ namespace CPPHTTPLIB_NAMESPACE {
 namespace detail {
 
 /*
- * Backport std::make_unique from C++14.
+ * Backport std::make_uniq from C++14.
  *
  * NOTE: This code came up with the following stackoverflow post:
  * https://stackoverflow.com/questions/10149840/c-arrays-and-make-unique
@@ -292,13 +292,13 @@ namespace detail {
 
 template <class T, class... Args>
 typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
-make_unique(Args &&...args) {
+make_uniq(Args &&...args) {
 	return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
 typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
-make_unique(std::size_t n) {
+make_uniq(std::size_t n) {
 	typedef typename std::remove_extent<T>::type RT;
 	return duckdb::unique_ptr<T>(new RT[n]);
 }
@@ -3392,14 +3392,14 @@ bool prepare_content_receiver(T &x, int &status,
 
 		if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-			decompressor = detail::make_unique<gzip_decompressor>();
+			decompressor = detail::make_uniq<gzip_decompressor>();
 #else
 			status = 415;
 			return false;
 #endif
 		} else if (encoding.find("br") != std::string::npos) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-			decompressor = detail::make_unique<brotli_decompressor>();
+			decompressor = detail::make_uniq<brotli_decompressor>();
 #else
 			status = 415;
 			return false;
@@ -5128,14 +5128,14 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
 			duckdb::unique_ptr<detail::compressor> compressor;
 			if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-				compressor = detail::make_unique<detail::gzip_compressor>();
+				compressor = detail::make_uniq<detail::gzip_compressor>();
 #endif
 			} else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-				compressor = detail::make_unique<detail::brotli_compressor>();
+				compressor = detail::make_uniq<detail::brotli_compressor>();
 #endif
 			} else {
-				compressor = detail::make_unique<detail::nocompressor>();
+				compressor = detail::make_uniq<detail::nocompressor>();
 			}
 			assert(compressor != nullptr);
 
@@ -5569,12 +5569,12 @@ inline void Server::apply_ranges(const Request &req, Response &res,
 
 			if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-				compressor = detail::make_unique<detail::gzip_compressor>();
+				compressor = detail::make_uniq<detail::gzip_compressor>();
 				content_encoding = "gzip";
 #endif
 			} else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-				compressor = detail::make_unique<detail::brotli_compressor>();
+				compressor = detail::make_uniq<detail::brotli_compressor>();
 				content_encoding = "br";
 #endif
 			}
@@ -6006,7 +6006,7 @@ inline Result ClientImpl::send(const Request &req) {
 }
 
 inline Result ClientImpl::send_(Request &&req) {
-	auto res = detail::make_unique<Response>();
+	auto res = detail::make_uniq<Response>();
 	auto error = Error::Success;
 	auto ret = send(req, *res, error);
 	return Result{ret ? std::move(res) : nullptr, error, std::move(req.headers)};
@@ -6137,11 +6137,11 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 		duckdb::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
 		if (compress_) {
-			compressor = detail::make_unique<detail::gzip_compressor>();
+			compressor = detail::make_uniq<detail::gzip_compressor>();
 		} else
 #endif
 		{
-			compressor = detail::make_unique<detail::nocompressor>();
+			compressor = detail::make_uniq<detail::nocompressor>();
 		}
 
 		return detail::write_content_chunked(strm, req.content_provider_,
@@ -6346,7 +6346,7 @@ inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
 		}
 	}
 
-	auto res = detail::make_unique<Response>();
+	auto res = detail::make_uniq<Response>();
 	return send(req, *res, error) ? std::move(res) : nullptr;
 }
 
@@ -7789,27 +7789,27 @@ inline Client::Client(const std::string &scheme_host_port,
 
 		if (is_ssl) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-			cli_ = detail::make_unique<SSLClient>(host.c_str(), port,
+			cli_ = detail::make_uniq<SSLClient>(host.c_str(), port,
 			                                      client_cert_path, client_key_path);
 			is_ssl_ = is_ssl;
 #endif
 		} else {
-			cli_ = detail::make_unique<ClientImpl>(host.c_str(), port,
+			cli_ = detail::make_uniq<ClientImpl>(host.c_str(), port,
 			                                       client_cert_path, client_key_path);
 		}
 	} else {
-		cli_ = detail::make_unique<ClientImpl>(scheme_host_port, 80,
+		cli_ = detail::make_uniq<ClientImpl>(scheme_host_port, 80,
 		                                       client_cert_path, client_key_path);
 	}
 }
 
 inline Client::Client(const std::string &host, int port)
-    : cli_(detail::make_unique<ClientImpl>(host, port)) {}
+    : cli_(detail::make_uniq<ClientImpl>(host, port)) {}
 
 inline Client::Client(const std::string &host, int port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path)
-    : cli_(detail::make_unique<ClientImpl>(host, port, client_cert_path,
+    : cli_(detail::make_uniq<ClientImpl>(host, port, client_cert_path,
                                            client_key_path)) {}
 
 inline Client::~Client() {}

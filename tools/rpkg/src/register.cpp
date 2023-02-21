@@ -53,7 +53,7 @@ public:
 
 	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 		RProtector r;
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		auto stream_ptr_sexp =
 		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
@@ -81,7 +81,7 @@ public:
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 
 		RProtector r;
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		auto schema_ptr_sexp =
 		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema))));
@@ -216,14 +216,14 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {
-			auto table_function = make_unique<TableFunctionRef>();
+			auto table_function = make_uniq<TableFunctionRef>();
 			vector<duckdb::unique_ptr<ParsedExpression>> children;
-			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
+			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
+			table_function->function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 			return std::move(table_function);
 		}
 	}

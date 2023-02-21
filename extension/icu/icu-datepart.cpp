@@ -224,7 +224,7 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 
 		duckdb::unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindAdapterData>(*this);
+			return make_uniq<BindAdapterData>(*this);
 		}
 	};
 
@@ -359,7 +359,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static duckdb::unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
 	                                                    vector<duckdb::unique_ptr<Expression>> &arguments,
 	                                                    typename BIND_TYPE::adapter_t adapter) {
-		return make_unique<BIND_TYPE>(context, adapter);
+		return make_uniq<BIND_TYPE>(context, adapter);
 	}
 
 	static duckdb::unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
@@ -412,7 +412,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
-		return make_unique<data_t>(context, adapters);
+		return make_uniq<data_t>(context, adapters);
 	}
 
 	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,

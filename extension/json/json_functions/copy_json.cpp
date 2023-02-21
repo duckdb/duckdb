@@ -33,21 +33,21 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 		auto name = col->GetName();
 		if (bound_original.types[i] == LogicalTypeId::DATE && date_it != info.options.end()) {
 			strftime_children.emplace_back(std::move(col));
-			strftime_children.emplace_back(make_unique<ConstantExpression>(date_it->second.back()));
-			col = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(date_it->second.back()));
+			col = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		} else if (bound_original.types[i] == LogicalTypeId::TIMESTAMP && timestamp_it != info.options.end()) {
 			strftime_children.emplace_back(std::move(col));
-			strftime_children.emplace_back(make_unique<ConstantExpression>(timestamp_it->second.back()));
-			col = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_it->second.back()));
+			col = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		}
 		col->alias = name;
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
 	vector<duckdb::unique_ptr<ParsedExpression>> struct_pack_child;
-	struct_pack_child.emplace_back(make_unique<FunctionExpression>("struct_pack", std::move(select_stmt.select_list)));
+	struct_pack_child.emplace_back(make_uniq<FunctionExpression>("struct_pack", std::move(select_stmt.select_list)));
 	select_stmt.select_list.clear();
-	select_stmt.select_list.emplace_back(make_unique<FunctionExpression>("to_json", std::move(struct_pack_child)));
+	select_stmt.select_list.emplace_back(make_uniq<FunctionExpression>("to_json", std::move(struct_pack_child)));
 
 	// Now we can just use the CSV writer
 	info.format = "csv";
@@ -62,7 +62,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info,
                                                          vector<string> &expected_names,
                                                          vector<LogicalType> &expected_types) {
-	auto bind_data = make_unique<JSONScanData>();
+	auto bind_data = make_uniq<JSONScanData>();
 
 	bind_data->file_paths.emplace_back(info.file_path);
 	bind_data->names = expected_names;

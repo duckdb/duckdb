@@ -88,7 +88,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<RLEAnalyzeState<T>>();
+	return make_uniq<RLEAnalyzeState<T>>();
 }
 
 template <class T>
@@ -224,7 +224,7 @@ struct RLECompressState : public CompressionState {
 
 template <class T>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_unique<RLECompressState<T>>(checkpointer);
+	return make_uniq<RLECompressState<T>>(checkpointer);
 }
 
 template <class T>
@@ -281,7 +281,7 @@ struct RLEScanState : public SegmentScanState {
 
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
-	auto result = make_unique<RLEScanState<T>>(segment);
+	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
 

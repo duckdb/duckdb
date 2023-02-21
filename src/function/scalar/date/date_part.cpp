@@ -164,11 +164,11 @@ template <int64_t MIN, int64_t MAX>
 static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX),
-	                                             StatisticsType::LOCAL_STATS);
+	auto result = make_uniq<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX),
+	                                           StatisticsType::LOCAL_STATS);
 	if (!child_stats[0]) {
 		// if there are no child stats, we don't know
-		result->validity_stats = make_unique<ValidityStatistics>(true);
+		result->validity_stats = make_uniq<ValidityStatistics>(true);
 	} else if (child_stats[0]->validity_stats) {
 		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
@@ -198,8 +198,8 @@ struct DatePart {
 		}
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
-		auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
-		                                             Value::BIGINT(max_part), StatisticsType::LOCAL_STATS);
+		auto result = make_uniq<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
+		                                           Value::BIGINT(max_part), StatisticsType::LOCAL_STATS);
 		if (child_stats[0]->validity_stats) {
 			result->validity_stats = child_stats[0]->validity_stats->Copy();
 		}
@@ -1298,7 +1298,7 @@ struct StructDatePart {
 		}
 
 		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindData>(stype, part_codes);
+			return make_uniq<BindData>(stype, part_codes);
 		}
 	};
 
@@ -1341,7 +1341,7 @@ struct StructDatePart {
 
 		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
-		return make_unique<BindData>(bound_function.return_type, part_codes);
+		return make_uniq<BindData>(bound_function.return_type, part_codes);
 	}
 
 	template <typename INPUT_TYPE>
@@ -1464,7 +1464,7 @@ struct StructDatePart {
 	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
-		return make_unique<BindData>(std::move(stype), std::move(part_codes));
+		return make_uniq<BindData>(std::move(stype), std::move(part_codes));
 	}
 
 	template <typename INPUT_TYPE>

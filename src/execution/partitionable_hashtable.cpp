@@ -73,8 +73,8 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
-		list.push_back(make_unique<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
-		                                                      HtEntryType::HT_WIDTH_32));
+		list.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
+		                                                    HtEntryType::HT_WIDTH_32));
 	}
 	return list.back()->AddChunk(groups, group_hashes, payload, filter);
 }
@@ -140,7 +140,7 @@ void PartitionableHashTable::Partition() {
 	vector<GroupedAggregateHashTable *> partition_hts(partition_info.n_partitions);
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
-			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
+			radix_partitioned_hts[r].push_back(make_uniq<GroupedAggregateHashTable>(
 			    context, allocator, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}

@@ -66,11 +66,11 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
                                                                     GlobalSourceState &gstate) const {
-	return make_unique<TableScanLocalSourceState>(context, (TableScanGlobalSourceState &)gstate, *this);
+	return make_uniq<TableScanLocalSourceState>(context, (TableScanGlobalSourceState &)gstate, *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<TableScanGlobalSourceState>(context, *this);
+	return make_uniq<TableScanGlobalSourceState>(context, *this);
 }
 
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

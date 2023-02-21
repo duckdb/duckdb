@@ -31,7 +31,7 @@ FilterPropagateResult ListStatistics::CheckZonemap(ExpressionType comparison_typ
 // LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> ListStatistics::Copy() const {
-	auto result = make_unique<ListStatistics>(type);
+	auto result = make_uniq<ListStatistics>(type);
 	result->CopyBase(*this);
 
 	result->child_stats = child_stats ? child_stats->Copy() : nullptr;
@@ -44,7 +44,7 @@ void ListStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> ListStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto result = make_unique<ListStatistics>(std::move(type));
+	auto result = make_uniq<ListStatistics>(std::move(type));
 	auto &child_type = ListType::GetChildType(result->type);
 	result->child_stats = reader.ReadRequiredSerializable<BaseStatistics>(child_type);
 	return std::move(result);

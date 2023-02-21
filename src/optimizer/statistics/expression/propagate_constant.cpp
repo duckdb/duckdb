@@ -28,14 +28,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto result = make_unique<NumericStatistics>(input.type(), input, input, StatisticsType::GLOBAL_STATS);
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto result = make_uniq<NumericStatistics>(input.type(), input, input, StatisticsType::GLOBAL_STATS);
+		result->validity_stats = make_uniq<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		UpdateDistinctStats(*result->distinct_stats, input);
 		return std::move(result);
 	}
 	case PhysicalType::VARCHAR: {
-		auto result = make_unique<StringStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto result = make_uniq<StringStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
+		result->validity_stats = make_uniq<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		UpdateDistinctStats(*result->distinct_stats, input);
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
@@ -44,8 +44,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		return std::move(result);
 	}
 	case PhysicalType::STRUCT: {
-		auto result = make_unique<StructStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto result = make_uniq<StructStatistics>(input.type());
+		result->validity_stats = make_uniq<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		if (input.IsNull()) {
 			for (auto &child_stat : result->child_stats) {
 				child_stat.reset();
@@ -60,8 +60,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		return std::move(result);
 	}
 	case PhysicalType::LIST: {
-		auto result = make_unique<ListStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto result = make_uniq<ListStatistics>(input.type());
+		result->validity_stats = make_uniq<ValidityStatistics>(input.IsNull(), !input.IsNull());
 		if (input.IsNull()) {
 			result->child_stats.reset();
 		} else {

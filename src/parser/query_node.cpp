@@ -14,7 +14,7 @@ CommonTableExpressionMap::CommonTableExpressionMap() {
 CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	CommonTableExpressionMap res;
 	for (auto &kv : this->map) {
-		auto kv_info = make_unique<CommonTableExpressionInfo>();
+		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
@@ -141,7 +141,7 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		other.modifiers.push_back(modifier->Copy());
 	}
 	for (auto &kv : cte_map.map) {
-		auto kv_info = make_unique<CommonTableExpressionInfo>();
+		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
@@ -177,7 +177,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> new_map;
 	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
-		auto info = make_unique<CommonTableExpressionInfo>();
+		auto info = make_uniq<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
 		info->query = SelectStatement::Deserialize(source);
 		new_map[name] = std::move(info);
@@ -219,7 +219,7 @@ void QueryNode::AddDistinct() {
 			break;
 		}
 	}
-	modifiers.push_back(make_unique<DistinctModifier>());
+	modifiers.push_back(make_uniq<DistinctModifier>());
 }
 
 } // namespace duckdb

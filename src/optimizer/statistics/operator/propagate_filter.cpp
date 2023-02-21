@@ -35,14 +35,14 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 	if (entry == statistics_map.end()) {
 		return;
 	}
-	entry->second->validity_stats = make_unique<ValidityStatistics>(false);
+	entry->second->validity_stats = make_uniq<ValidityStatistics>(false);
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
                                                   const Value &constant) {
 	// regular comparisons removes all null values
 	if (!IsCompareDistinct(comparison_type)) {
-		stats.validity_stats = make_unique<ValidityStatistics>(false);
+		stats.validity_stats = make_uniq<ValidityStatistics>(false);
 	}
 	if (!stats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
@@ -81,8 +81,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
                                                   ExpressionType comparison_type) {
 	// regular comparisons removes all null values
 	if (!IsCompareDistinct(comparison_type)) {
-		lstats.validity_stats = make_unique<ValidityStatistics>(false);
-		rstats.validity_stats = make_unique<ValidityStatistics>(false);
+		lstats.validity_stats = make_uniq<ValidityStatistics>(false);
+		rstats.validity_stats = make_uniq<ValidityStatistics>(false);
 	}
 	D_ASSERT(lstats.type == rstats.type);
 	if (!lstats.type.IsNumeric()) {
@@ -222,7 +222,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	node_stats = PropagateStatistics(filter.children[0]);
 	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		ReplaceWithEmptyResult(*node_ptr);
-		return make_unique<NodeStatistics>(0, 0);
+		return make_uniq<NodeStatistics>(0, 0);
 	}
 
 	// then propagate to each of the expressions
@@ -244,7 +244,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return make_unique<NodeStatistics>(0, 0);
+			return make_uniq<NodeStatistics>(0, 0);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);

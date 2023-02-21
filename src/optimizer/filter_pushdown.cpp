@@ -98,7 +98,7 @@ void FilterPushdown::GenerateFilters() {
 		return;
 	}
 	combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		auto f = make_unique<Filter>();
+		auto f = make_uniq<Filter>();
 		f->filter = std::move(filter);
 		f->ExtractBindings();
 		filters.push_back(std::move(f));
@@ -116,7 +116,7 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 		// no filters to push
 		return op;
 	}
-	auto filter = make_unique<LogicalFilter>();
+	auto filter = make_uniq<LogicalFilter>();
 	for (auto &f : filters) {
 		filter->expressions.push_back(std::move(f->filter));
 	}

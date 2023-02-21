@@ -6,7 +6,7 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *root) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	switch (root->jointype) {
 	case duckdb_libpgquery::PG_JOIN_INNER: {
 		result->type = JoinType::INNER;

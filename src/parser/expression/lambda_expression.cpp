@@ -25,7 +25,7 @@ hash_t LambdaExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
-	auto copy = make_unique<LambdaExpression>(lhs->Copy(), expr->Copy());
+	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -38,7 +38,7 @@ void LambdaExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return make_unique<LambdaExpression>(std::move(lhs), std::move(expr));
+	return make_uniq<LambdaExpression>(std::move(lhs), std::move(expr));
 }
 
 } // namespace duckdb

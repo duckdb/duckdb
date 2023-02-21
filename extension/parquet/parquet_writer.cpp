@@ -229,7 +229,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
                              vector<string> names_p, CompressionCodec::type codec)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
 	// initialize the file writer
-	writer = make_unique<BufferedFileWriter>(
+	writer = make_uniq<BufferedFileWriter>(
 	    fs, file_name.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, file_opener_p);
 	// parquet files start with the string "PAR1"
 	writer->WriteData((const_data_ptr_t) "PAR1", 4);

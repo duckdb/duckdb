@@ -102,7 +102,7 @@ public:
 		WriteChecked(sockfd, &len, sizeof(idx_t));
 		WriteChecked(sockfd, data.data.get(), len);
 
-		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
+		auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
 		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
@@ -121,7 +121,7 @@ public:
 		}
 
 		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
+		plan = make_uniq<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
 
 		len = 0;
 		(void)len;

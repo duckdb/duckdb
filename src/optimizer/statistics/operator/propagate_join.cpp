@@ -41,7 +41,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				case JoinType::ANTI: {
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
-					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 					limit->AddChild(std::move(join.children[1]));
 					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 					*node_ptr = std::move(cross_product);
@@ -77,7 +77,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					case JoinType::SEMI: {
 						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
-						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 						*node_ptr = std::move(cross_product);
@@ -214,7 +214,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+				stats->second->validity_stats = make_uniq<ValidityStatistics>(true);
 			}
 		}
 	}
@@ -223,7 +223,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+				stats->second->validity_stats = make_uniq<ValidityStatistics>(true);
 			}
 		}
 	}
@@ -269,7 +269,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	for (auto &binding : left_bindings) {
 		auto stats = statistics_map.find(binding);
 		if (stats != statistics_map.end()) {
-			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+			stats->second->validity_stats = make_uniq<ValidityStatistics>(true);
 		}
 	}
 
@@ -278,7 +278,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	for (auto &binding : right_bindings) {
 		auto stats = statistics_map.find(binding);
 		if (stats != statistics_map.end()) {
-			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+			stats->second->validity_stats = make_uniq<ValidityStatistics>(true);
 		}
 	}
 

@@ -11,8 +11,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 	S3FileSystem::Verify(); // run some tests to see if all the hashes work out
 	auto &fs = instance.GetFileSystem();
 
-	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
-	fs.RegisterSubSystem(make_unique<S3FileSystem>(BufferManager::GetBufferManager(instance)));
+	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
+	fs.RegisterSubSystem(make_uniq<S3FileSystem>(BufferManager::GetBufferManager(instance)));
 
 	auto &config = DBConfig::GetConfig(instance);
 
@@ -50,7 +50,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit (default 50)",
 	                          LogicalType::UBIGINT, Value(50));
 
-	auto provider = make_unique<AWSEnvironmentCredentialsProvider>(config);
+	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();
 }
 

@@ -50,7 +50,7 @@ void PipeFileSystem::FileSync(FileHandle &handle) {
 
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {
 	auto path = handle->path;
-	return make_unique<PipeFile>(std::move(handle), path);
+	return make_uniq<PipeFile>(std::move(handle), path);
 }
 
 } // namespace duckdb

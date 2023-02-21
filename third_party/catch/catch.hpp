@@ -3937,7 +3937,7 @@ namespace Generators {
     // !TBD move this into its own location?
     namespace pf{
         template<typename T, typename... Args>
-        std::unique_ptr<T> make_unique( Args&&... args ) {
+        std::unique_ptr<T> make_uniq( Args&&... args ) {
             return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
         }
     }
@@ -4004,11 +4004,11 @@ namespace Generators {
 
     template <typename T>
     GeneratorWrapper<T> value(T&& value) {
-        return GeneratorWrapper<T>(pf::make_unique<SingleValueGenerator<T>>(std::forward<T>(value)));
+        return GeneratorWrapper<T>(pf::make_uniq<SingleValueGenerator<T>>(std::forward<T>(value)));
     }
     template <typename T>
     GeneratorWrapper<T> values(std::initializer_list<T> values) {
-        return GeneratorWrapper<T>(pf::make_unique<FixedValuesGenerator<T>>(values));
+        return GeneratorWrapper<T>(pf::make_uniq<FixedValuesGenerator<T>>(values));
     }
 
     template<typename T>
@@ -4092,7 +4092,7 @@ namespace Generators {
 
         IGeneratorTracker& tracker = acquireGeneratorTracker( generatorName, lineInfo );
         if (!tracker.hasGenerator()) {
-            tracker.setGenerator(pf::make_unique<Generators<UnderlyingType>>(generatorExpression()));
+            tracker.setGenerator(pf::make_uniq<Generators<UnderlyingType>>(generatorExpression()));
         }
 
         auto const& generator = static_cast<IGenerator<UnderlyingType> const&>( *tracker.getGenerator() );
@@ -4154,7 +4154,7 @@ namespace Generators {
 
     template <typename T>
     GeneratorWrapper<T> take(size_t target, GeneratorWrapper<T>&& generator) {
-        return GeneratorWrapper<T>(pf::make_unique<TakeGenerator<T>>(target, std::move(generator)));
+        return GeneratorWrapper<T>(pf::make_uniq<TakeGenerator<T>>(target, std::move(generator)));
     }
 
     template <typename T, typename Predicate>
@@ -4193,7 +4193,7 @@ namespace Generators {
 
     template <typename T, typename Predicate>
     GeneratorWrapper<T> filter(Predicate&& pred, GeneratorWrapper<T>&& generator) {
-        return GeneratorWrapper<T>(std::unique_ptr<IGenerator<T>>(pf::make_unique<FilterGenerator<T, Predicate>>(std::forward<Predicate>(pred), std::move(generator))));
+        return GeneratorWrapper<T>(std::unique_ptr<IGenerator<T>>(pf::make_uniq<FilterGenerator<T, Predicate>>(std::forward<Predicate>(pred), std::move(generator))));
     }
 
     template <typename T>
@@ -4249,7 +4249,7 @@ namespace Generators {
 
     template <typename T>
     GeneratorWrapper<T> repeat(size_t repeats, GeneratorWrapper<T>&& generator) {
-        return GeneratorWrapper<T>(pf::make_unique<RepeatGenerator<T>>(repeats, std::move(generator)));
+        return GeneratorWrapper<T>(pf::make_uniq<RepeatGenerator<T>>(repeats, std::move(generator)));
     }
 
     template <typename T, typename U, typename Func>
@@ -4282,14 +4282,14 @@ namespace Generators {
     template <typename Func, typename U, typename T = FunctionReturnType<Func, U>>
     GeneratorWrapper<T> map(Func&& function, GeneratorWrapper<U>&& generator) {
         return GeneratorWrapper<T>(
-            pf::make_unique<MapGenerator<T, U, Func>>(std::forward<Func>(function), std::move(generator))
+            pf::make_uniq<MapGenerator<T, U, Func>>(std::forward<Func>(function), std::move(generator))
         );
     }
 
     template <typename T, typename U, typename Func>
     GeneratorWrapper<T> map(Func&& function, GeneratorWrapper<U>&& generator) {
         return GeneratorWrapper<T>(
-            pf::make_unique<MapGenerator<T, U, Func>>(std::forward<Func>(function), std::move(generator))
+            pf::make_uniq<MapGenerator<T, U, Func>>(std::forward<Func>(function), std::move(generator))
         );
     }
 
@@ -4332,7 +4332,7 @@ namespace Generators {
     template <typename T>
     GeneratorWrapper<std::vector<T>> chunk(size_t size, GeneratorWrapper<T>&& generator) {
         return GeneratorWrapper<std::vector<T>>(
-            pf::make_unique<ChunkGenerator<T>>(size, std::move(generator))
+            pf::make_uniq<ChunkGenerator<T>>(size, std::move(generator))
         );
     }
 
@@ -4655,7 +4655,7 @@ typename std::enable_if<std::is_integral<T>::value && !std::is_same<T, bool>::va
 GeneratorWrapper<T>>::type
 random(T a, T b) {
     return GeneratorWrapper<T>(
-        pf::make_unique<RandomIntegerGenerator<T>>(a, b)
+        pf::make_uniq<RandomIntegerGenerator<T>>(a, b)
     );
 }
 
@@ -4664,7 +4664,7 @@ typename std::enable_if<std::is_floating_point<T>::value,
 GeneratorWrapper<T>>::type
 random(T a, T b) {
     return GeneratorWrapper<T>(
-        pf::make_unique<RandomFloatingGenerator<T>>(a, b)
+        pf::make_uniq<RandomFloatingGenerator<T>>(a, b)
     );
 }
 
@@ -4704,13 +4704,13 @@ public:
 template <typename T>
 GeneratorWrapper<T> range(T const& start, T const& end, T const& step) {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value, "Type must be numeric");
-    return GeneratorWrapper<T>(pf::make_unique<RangeGenerator<T>>(start, end, step));
+    return GeneratorWrapper<T>(pf::make_uniq<RangeGenerator<T>>(start, end, step));
 }
 
 template <typename T>
 GeneratorWrapper<T> range(T const& start, T const& end) {
     static_assert(std::is_integral<T>::value && !std::is_same<T, bool>::value, "Type must be an integer");
-    return GeneratorWrapper<T>(pf::make_unique<RangeGenerator<T>>(start, end));
+    return GeneratorWrapper<T>(pf::make_uniq<RangeGenerator<T>>(start, end));
 }
 
 template <typename T>
@@ -4743,13 +4743,13 @@ template <typename InputIterator,
           typename InputSentinel,
           typename ResultType = typename std::iterator_traits<InputIterator>::value_type>
 GeneratorWrapper<ResultType> from_range(InputIterator from, InputSentinel to) {
-    return GeneratorWrapper<ResultType>(pf::make_unique<IteratorGenerator<ResultType>>(from, to));
+    return GeneratorWrapper<ResultType>(pf::make_uniq<IteratorGenerator<ResultType>>(from, to));
 }
 
 template <typename Container,
           typename ResultType = typename Container::value_type>
 GeneratorWrapper<ResultType> from_range(Container const& cnt) {
-    return GeneratorWrapper<ResultType>(pf::make_unique<IteratorGenerator<ResultType>>(cnt.begin(), cnt.end()));
+    return GeneratorWrapper<ResultType>(pf::make_uniq<IteratorGenerator<ResultType>>(cnt.begin(), cnt.end()));
 }
 
 } // namespace Generators
@@ -5037,17 +5037,17 @@ namespace Catch {
 } // namespace Catch
 
 ///////////////////////////////////////////////////////////////////////////////
-#define OC_MAKE_UNIQUE_NAME( root, uniqueSuffix ) root##uniqueSuffix
+#define OC_make_uniq_NAME( root, uniqueSuffix ) root##uniqueSuffix
 #define OC_TEST_CASE2( name, desc, uniqueSuffix ) \
-+(NSString*) OC_MAKE_UNIQUE_NAME( Catch_Name_test_, uniqueSuffix ) \
++(NSString*) OC_make_uniq_NAME( Catch_Name_test_, uniqueSuffix ) \
 { \
 return @ name; \
 } \
-+(NSString*) OC_MAKE_UNIQUE_NAME( Catch_Description_test_, uniqueSuffix ) \
++(NSString*) OC_make_uniq_NAME( Catch_Description_test_, uniqueSuffix ) \
 { \
 return @ desc; \
 } \
--(void) OC_MAKE_UNIQUE_NAME( Catch_TestCase_test_, uniqueSuffix )
+-(void) OC_make_uniq_NAME( Catch_TestCase_test_, uniqueSuffix )
 
 #define OC_TEST_CASE( name, desc ) OC_TEST_CASE2( name, desc, __LINE__ )
 

@@ -40,7 +40,7 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_unique<PartialBlockManager>(block_manager);
+		partial_manager = make_uniq<PartialBlockManager>(block_manager);
 	}
 	return true;
 }
@@ -126,8 +126,8 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
-			                                  art.constraint_type, art.db, false));
+			indexes.AddIndex(make_uniq<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
+			                                art.constraint_type, art.db, false));
 		}
 		return false;
 	});
@@ -281,7 +281,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 }
 
 OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
-	auto writer = make_unique<OptimisticDataWriter>(table);
+	auto writer = make_uniq<OptimisticDataWriter>(table);
 	optimistic_writers.push_back(std::move(writer));
 	return optimistic_writers.back().get();
 }

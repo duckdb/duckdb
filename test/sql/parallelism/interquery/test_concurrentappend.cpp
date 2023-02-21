@@ -27,7 +27,7 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
 	for (size_t i = 0; i < CONCURRENT_APPEND_THREAD_COUNT; i++) {
-		connections.push_back(make_unique<Connection>(db));
+		connections.push_back(make_uniq<Connection>(db));
 		connections[i]->Query("BEGIN TRANSACTION;");
 	}
 

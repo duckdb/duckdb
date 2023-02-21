@@ -41,14 +41,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 		if (entry != group_by_references.end()) {
 			auto group_index = entry->second;
 			// entry is found: can directly refer to a group
-			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_index));
+			projections.push_back(make_uniq<BoundReferenceExpression>(logical_type, group_index));
 			if (group_index != i) {
 				// we require a projection only if this group element is out of order
 				requires_projection = true;
 			}
 		} else {
 			// entry is not one of the groups: need to push a FIRST aggregate
-			auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
+			auto bound = make_uniq<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;
 			first_children.push_back(std::move(bound));
 
@@ -56,7 +56,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			auto first_aggregate = function_binder.BindAggregateFunction(
 			    FirstFun::GetFunction(logical_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 			// add the projection
-			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
+			projections.push_back(make_uniq<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates
 			aggregate_types.push_back(logical_type);
 			aggregates.push_back(std::move(first_aggregate));
@@ -67,16 +67,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	child = ExtractAggregateExpressions(std::move(child), aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates),
-	                                                  std::move(groups), child->estimated_cardinality);
+	auto groupby = make_uniq<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
+	                                                child->estimated_cardinality);
 	groupby->children.push_back(std::move(child));
 	if (!requires_projection) {
 		return std::move(groupby);
 	}
 
 	// we add a physical projection on top of the aggregation to project all members in the select list
-	auto aggr_projection =
-	    make_unique<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
+	auto aggr_projection = make_uniq<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
 	aggr_projection->children.push_back(std::move(groupby));
 	return std::move(aggr_projection);
 }

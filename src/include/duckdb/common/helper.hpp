@@ -110,6 +110,11 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 }
 #endif
 
+template <class T, class... _Args>
+static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
+}
+
 template <typename T>
 T MaxValue(T a, T b) {
 	return a > b ? a : b;

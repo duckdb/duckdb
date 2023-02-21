@@ -255,7 +255,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> 
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
 	// Allocate as unique_ptr first to cleanup properly on error
-	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
+	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
 	// Allocate the children
 	root_holder->children.resize(column_count);

@@ -43,13 +43,13 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
 	bound_function.return_type = LogicalType::LIST(std::move(child_type));
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto list_stats = make_unique<ListStatistics>(expr.return_type);
+	auto list_stats = make_uniq<ListStatistics>(expr.return_type);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		if (child_stats[i]) {
 			list_stats->child_stats->Merge(*child_stats[i]);

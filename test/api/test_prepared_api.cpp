@@ -95,7 +95,7 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 TEST_CASE("Dropping connection with prepared statement resets dependencies", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	auto con = make_unique<Connection>(db);
+	auto con = make_uniq<Connection>(db);
 	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
@@ -116,7 +116,7 @@ TEST_CASE("Dropping connection with prepared statement resets dependencies", "[a
 TEST_CASE("Alter table and prepared statements", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	auto con = make_unique<Connection>(db);
+	auto con = make_uniq<Connection>(db);
 	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
@@ -146,8 +146,8 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 
 	// test destruction of connection
-	db = make_unique<DuckDB>(nullptr);
-	con = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(nullptr);
+	con = make_uniq<Connection>(*db);
 	// create a prepared statement
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
 	// we can execute it
@@ -162,7 +162,7 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 
 	// test destruction of db
 	// create a connection and prepared statement again
-	con = make_unique<Connection>(*db);
+	con = make_uniq<Connection>(*db);
 	prepare = con->Prepare("SELECT $1::INTEGER+$2::INTEGER");
 	// we can execute it
 	result = prepare->Execute(3, 5);

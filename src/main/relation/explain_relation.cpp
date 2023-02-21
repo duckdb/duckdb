@@ -13,7 +13,7 @@ ExplainRelation::ExplainRelation(shared_ptr<Relation> child_p)
 }
 
 BoundStatement ExplainRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 	ExplainStatement explain(std::move(select));
 	return binder.Bind((SQLStatement &)explain);

@@ -70,12 +70,12 @@ void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto struct_buffer = make_uniq<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		auto &value_children = StructValue::GetChildren(value);
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto vector = make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : value_children[i]);
+			auto vector = make_uniq<Vector>(value.IsNull() ? Value(child_types[i].second) : value_children[i]);
 			child_vectors.push_back(std::move(vector));
 		}
 		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
@@ -83,7 +83,7 @@ void Vector::Reference(const Value &value) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(value.type());
+		auto list_buffer = make_uniq<VectorListBuffer>(value.type());
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		data = buffer->GetData();
 		SetValue(0, value);
@@ -215,10 +215,10 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>(type, capacity);
+		auto struct_buffer = make_uniq<VectorStructBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(type, capacity);
+		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 	}
 	auto type_size = GetTypeIdSize(internal_type);
@@ -784,14 +784,14 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			auto normalified_buffer = make_unique<VectorStructBuffer>();
+			auto normalified_buffer = make_uniq<VectorStructBuffer>();
 
 			auto &new_children = normalified_buffer->GetChildren();
 
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				auto vector = make_unique<Vector>(*child);
+				auto vector = make_uniq<Vector>(*child);
 				vector->Flatten(count);
 				new_children.push_back(std::move(vector));
 			}

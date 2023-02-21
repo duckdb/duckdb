@@ -36,7 +36,7 @@ struct ICUDateFunc {
 		}
 
 		duckdb::unique_ptr<BoundCastData> Copy() const override {
-			return make_unique<CastData>(info->Copy());
+			return make_uniq<CastData>(info->Copy());
 		}
 
 		duckdb::unique_ptr<FunctionData> info;

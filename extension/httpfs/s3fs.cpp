@@ -88,7 +88,7 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 }
 
 static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
-	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
+	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
@@ -674,8 +674,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, const 
 	ReadQueryParams(query_param, s3authparams);
 	string full_path = query_param.empty() ? path : path + "?" + query_param;
 
-	return duckdb::make_unique<S3FileHandle>(*this, full_path, path, flags, HTTPParams::ReadFrom(opener), s3authparams,
-	                                         S3ConfigParams::ReadFrom(opener));
+	return duckdb::make_uniq<S3FileHandle>(*this, full_path, path, flags, HTTPParams::ReadFrom(opener), s3authparams,
+	                                       S3ConfigParams::ReadFrom(opener));
 }
 
 // this computes the signature from https://czak.pl/2015/09/15/s3-rest-api-with-curl.html

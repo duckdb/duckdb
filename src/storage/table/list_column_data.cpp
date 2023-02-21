@@ -278,7 +278,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// note that we need a scan state for the child vector
 	// this is because we will (potentially) fetch more than one tuple from the list child
 	if (state.child_states.empty()) {
-		auto child_state = make_unique<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the list_entry_t and the validity mask for that list
@@ -303,7 +303,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now we need to read from the child all the elements between [offset...length]
 	auto child_scan_count = list_entry.length;
 	if (child_scan_count > 0) {
-		auto child_state = make_unique<ColumnScanState>();
+		auto child_state = make_uniq<ColumnScanState>();
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
@@ -324,7 +324,7 @@ void ListColumnData::CommitDropColumn() {
 struct ListColumnCheckpointState : public ColumnCheckpointState {
 	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = make_unique<ListStatistics>(column_data.type);
+		global_stats = make_uniq<ListStatistics>(column_data.type);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -353,7 +353,7 @@ public:
 
 unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                         PartialBlockManager &partial_block_manager) {
-	return make_unique<ListColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<ListColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,

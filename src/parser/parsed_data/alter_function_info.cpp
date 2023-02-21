@@ -49,7 +49,7 @@ AddFunctionOverloadInfo::~AddFunctionOverloadInfo() {
 }
 
 unique_ptr<AlterInfo> AddFunctionOverloadInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
+	return make_uniq_base<AlterInfo, AddFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
 }
 
 } // namespace duckdb

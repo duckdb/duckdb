@@ -274,7 +274,7 @@ in_comment:
 		}
 	}
 	// no suggestions inside comments
-	return make_unique<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+	return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
 in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {
@@ -350,7 +350,7 @@ standard_suggestion:
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
 	}
-	return make_unique<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
@@ -365,7 +365,7 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 }
 
 unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<SQLAutoCompleteData>();
+	return make_uniq<SQLAutoCompleteData>();
 }
 
 void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

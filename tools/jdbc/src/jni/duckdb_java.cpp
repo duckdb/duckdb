@@ -447,7 +447,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		env->ThrowNew(J_SQLException, "Invalid statement");
 		return nullptr;
 	}
-	auto res_ref = make_unique<ResultHolder>();
+	auto res_ref = make_uniq<ResultHolder>();
 	vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
@@ -642,7 +642,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 	res_ref->chunk = res_ref->res->Fetch();
 	if (!res_ref->chunk) {
-		res_ref->chunk = make_unique<DataChunk>();
+		res_ref->chunk = make_uniq<DataChunk>();
 	}
 	auto row_count = res_ref->chunk->size();
 	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(), J_DuckVector, nullptr);
@@ -989,7 +989,7 @@ public:
 		if (!factory->stream_ptr->release) {
 			throw InvalidInputException("This stream has been released");
 		}
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		res->arrow_array_stream = *factory->stream_ptr;
 		factory->stream_ptr->release = nullptr;
 		return res;

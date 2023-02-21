@@ -22,7 +22,7 @@
 namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
-	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str());
+	auto initial_reader = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;

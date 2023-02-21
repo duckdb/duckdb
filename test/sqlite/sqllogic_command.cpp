@@ -23,7 +23,7 @@ static Connection *GetConnection(DuckDB &db,
 	auto entry = named_connection_map.find(con_name);
 	if (entry == named_connection_map.end()) {
 		// not found: create a new connection
-		auto con = make_unique<Connection>(db);
+		auto con = make_uniq<Connection>(db);
 		auto res = con.get();
 		named_connection_map[con_name] = std::move(con);
 		return res;
@@ -73,7 +73,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	}
 	if (!query_fail && !is_any_transaction_active && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
-		auto command = make_unique<RestartCommand>(runner);
+		auto command = make_uniq<RestartCommand>(runner);
 		runner.ExecuteCommand(std::move(command));
 		connection = CommandConnection(context);
 	}
@@ -269,8 +269,8 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
 		runner.con->context->client_data->log_query_writer =
-		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
-		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
+		                                  1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
 	}
 	runner.con->context->client_data->prepared_statements = std::move(prepared_statements);
 }

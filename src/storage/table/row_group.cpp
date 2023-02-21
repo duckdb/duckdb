@@ -172,7 +172,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
@@ -216,7 +216,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	row_group->stats = stats;
@@ -233,7 +233,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(db, block_manager, table_info, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	row_group->stats = stats;
@@ -559,7 +559,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
-			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
+			auto constant_info = make_uniq<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			version_info->info[vector_idx] = std::move(constant_info);
@@ -568,7 +568,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			ChunkVectorInfo *info;
 			if (!version_info->info[vector_idx]) {
 				// first time appending to this vector: create new info
-				auto insert_info = make_unique<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
+				auto insert_info = make_uniq<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 				info = insert_info.get();
 				version_info->info[vector_idx] = std::move(insert_info);
 			} else {
@@ -914,11 +914,11 @@ void VersionDeleteState::Delete(row_t row_id) {
 		if (!info.version_info->info[vector_idx]) {
 			// no info yet: create it
 			info.version_info->info[vector_idx] =
-			    make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
+			    make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 		} else if (info.version_info->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
 			auto &constant = (ChunkConstantInfo &)*info.version_info->info[vector_idx];
 			// info exists but it's a constant info: convert to a vector info
-			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
+			auto new_info = make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 			new_info->insert_id = constant.insert_id.load();
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 				new_info->inserted[i] = constant.insert_id.load();

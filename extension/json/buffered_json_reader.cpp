@@ -148,7 +148,7 @@ void BufferedJSONReader::OpenJSONFile() {
 	auto file_opener = FileOpener::Get(context);
 	auto regular_file_handle = file_system.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ,
 	                                                FileLockType::NO_LOCK, options.compression, file_opener);
-	file_handle = make_unique<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+	file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
 }
 
 void BufferedJSONReader::CloseJSONFile() {

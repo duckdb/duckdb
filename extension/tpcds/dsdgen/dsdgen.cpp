@@ -19,7 +19,7 @@ namespace tpcds {
 
 template <class T>
 static void CreateTPCDSTable(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -32,7 +32,7 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
 			pk_columns.push_back(T::PrimaryKeyColumns[i]);
 		}
-		info->constraints.push_back(make_unique<UniqueConstraint>(std::move(pk_columns), true));
+		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 	catalog.CreateTable(context, std::move(info));
@@ -86,7 +86,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 		assert(table_def.name);
 		auto table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
-		auto append = make_unique<tpcds_append_information>(context, table_entry);
+		auto append = make_uniq<tpcds_append_information>(context, table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = std::move(append);
 	}

@@ -41,16 +41,16 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
 	vector<unique_ptr<Expression>> children;
-	children.push_back(make_unique<BoundConstantExpression>(value));
+	children.push_back(make_uniq<BoundConstantExpression>(value));
 	children.push_back(std::move(child));
 	return ConstantOrNull(std::move(children), std::move(value));
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
-	children.insert(children.begin(), make_unique<BoundConstantExpression>(value));
-	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
-	                                            ConstantOrNull::Bind(std::move(value)));
+	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
+	return make_uniq<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
+	                                          ConstantOrNull::Bind(std::move(value)));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {

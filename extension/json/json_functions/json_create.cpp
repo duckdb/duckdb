@@ -14,9 +14,9 @@ public:
 		unordered_map<string, duckdb::unique_ptr<Vector>> map_copy;
 		for (const auto &kv : const_struct_names) {
 			// The vectors are const vectors of the key value
-			map_copy[kv.first] = make_unique<Vector>(Value(kv.first));
+			map_copy[kv.first] = make_uniq<Vector>(Value(kv.first));
 		}
-		return make_unique<JSONCreateFunctionData>(std::move(map_copy));
+		return make_uniq<JSONCreateFunctionData>(std::move(map_copy));
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -61,7 +61,7 @@ static LogicalType GetJSONType(unordered_map<string, duckdb::unique_ptr<Vector>>
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			const_struct_names[child_type.first] = make_unique<Vector>(Value(child_type.first));
+			const_struct_names[child_type.first] = make_uniq<Vector>(Value(child_type.first));
 			child_types.emplace_back(child_type.first, GetJSONType(const_struct_names, child_type.second));
 		}
 		return LogicalType::STRUCT(child_types);
@@ -75,7 +75,7 @@ static LogicalType GetJSONType(unordered_map<string, duckdb::unique_ptr<Vector>>
 			auto &member_name = UnionType::GetMemberName(type, member_idx);
 			auto &member_type = UnionType::GetMemberType(type, member_idx);
 
-			const_struct_names[member_name] = make_unique<Vector>(Value(member_name));
+			const_struct_names[member_name] = make_uniq<Vector>(Value(member_name));
 			member_types.emplace_back(member_name, GetJSONType(const_struct_names, member_type));
 		}
 		return LogicalType::UNION(member_types);
@@ -104,7 +104,7 @@ JSONCreateBindParams(ScalarFunction &bound_function, vector<duckdb::unique_ptr<E
 			bound_function.arguments.push_back(GetJSONType(const_struct_names, type));
 		}
 	}
-	return make_unique<JSONCreateFunctionData>(std::move(const_struct_names));
+	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
 }
 
 static duckdb::unique_ptr<FunctionData> JSONObjectBind(ClientContext &context, ScalarFunction &bound_function,

@@ -115,7 +115,7 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Copy() const {
-	auto result = make_unique<NumericStatistics>(type, min, max, stats_type);
+	auto result = make_uniq<NumericStatistics>(type, min, max, stats_type);
 	result->CopyBase(*this);
 	return std::move(result);
 }
@@ -229,8 +229,8 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	auto min = DeserializeNumericStatsValue(type, reader);
 	auto max = DeserializeNumericStatsValue(type, reader);
-	return make_unique_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max),
-	                                                           StatisticsType::LOCAL_STATS);
+	return make_uniq_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max),
+	                                                         StatisticsType::LOCAL_STATS);
 }
 
 string NumericStatistics::ToString() const {

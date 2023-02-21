@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBDependenciesData>();
+	auto result = make_uniq<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);

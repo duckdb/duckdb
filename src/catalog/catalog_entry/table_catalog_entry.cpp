@@ -63,7 +63,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();

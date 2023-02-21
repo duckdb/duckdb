@@ -41,11 +41,11 @@ vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
 unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<OperatorState>();
+	return make_uniq<OperatorState>();
 }
 
 unique_ptr<GlobalOperatorState> PhysicalOperator::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<GlobalOperatorState>();
+	return make_uniq<GlobalOperatorState>();
 }
 
 OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -64,11 +64,11 @@ OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &cont
 //===--------------------------------------------------------------------===//
 unique_ptr<LocalSourceState> PhysicalOperator::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_unique<LocalSourceState>();
+	return make_uniq<LocalSourceState>();
 }
 
 unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<GlobalSourceState>();
+	return make_uniq<GlobalSourceState>();
 }
 
 // LCOV_EXCL_START
@@ -106,11 +106,11 @@ SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, Cl
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<LocalSinkState>();
+	return make_uniq<LocalSinkState>();
 }
 
 unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<GlobalSinkState>();
+	return make_uniq<GlobalSinkState>();
 }
 
 idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
@@ -272,7 +272,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		// add this chunk to the cache and continue
 
 		if (!state.cached_chunk) {
-			state.cached_chunk = make_unique<DataChunk>();
+			state.cached_chunk = make_uniq<DataChunk>();
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 		}
 

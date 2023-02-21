@@ -32,7 +32,7 @@ struct ICUStrptime : public ICUDateFunc {
 			return format.format_specifier == other.format.format_specifier;
 		}
 		duckdb::unique_ptr<FunctionData> Copy() const override {
-			return make_unique<ICUStrptimeBindData>(*this);
+			return make_uniq<ICUStrptimeBindData>(*this);
 		}
 
 		static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
@@ -131,7 +131,7 @@ struct ICUStrptime : public ICUDateFunc {
 			if (format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME)) {
 				bound_function.function = ICUStrptimeFunction;
 				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
-				return make_unique<ICUStrptimeBindData>(context, format);
+				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
 		}
 
@@ -220,7 +220,7 @@ struct ICUStrptime : public ICUDateFunc {
 			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
@@ -405,7 +405,7 @@ struct ICUStrftime : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMPTZ to VARCHAR cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}

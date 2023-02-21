@@ -93,7 +93,7 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {
-	return make_unique<TableStatisticsLock>(stats_lock);
+	return make_uniq<TableStatisticsLock>(stats_lock);
 }
 
 bool TableStatistics::Empty() {

@@ -94,9 +94,9 @@ public:
 			throw InternalException("Stream already consumed!");
 		}
 
-		auto stream_wrapper = make_unique<ArrowArrayStreamWrapper>();
+		auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
 		stream_wrapper->number_of_rows = -1;
-		auto private_data = make_unique<ArrowArrayStreamData>(factory);
+		auto private_data = make_uniq<ArrowArrayStreamData>(factory);
 		stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 		stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
 		stream_wrapper->arrow_array_stream.get_last_error = ArrowArrayStreamGetLastError;

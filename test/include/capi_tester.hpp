@@ -73,7 +73,7 @@ public:
 		if (!chunk) {
 			return nullptr;
 		}
-		return make_unique<CAPIDataChunk>(chunk);
+		return make_uniq<CAPIDataChunk>(chunk);
 	}
 
 	template <class T>
@@ -201,7 +201,7 @@ public:
 
 	duckdb::unique_ptr<CAPIResult> Query(string query) {
 		D_ASSERT(connection);
-		auto result = make_unique<CAPIResult>();
+		auto result = make_uniq<CAPIResult>();
 		result->Query(connection, query);
 		return result;
 	}

@@ -29,7 +29,7 @@ struct SQLSmithFunctionData : public TableFunctionData {
 
 static duckdb::unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<SQLSmithFunctionData>();
+	auto result = make_uniq<SQLSmithFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "seed") {
 			result->seed = IntegerValue::Get(kv.second);
@@ -87,7 +87,7 @@ static duckdb::unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, Ta
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("sql");
 
-	auto result = make_unique<ReduceSQLFunctionData>();
+	auto result = make_uniq<ReduceSQLFunctionData>();
 	auto sql = input.inputs[0].ToString();
 	Parser parser;
 	parser.ParseQuery(sql);

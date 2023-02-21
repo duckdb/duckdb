@@ -35,7 +35,7 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<SortedAggregateBindData>(*this);
+		return make_uniq<SortedAggregateBindData>(*this);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -87,11 +87,11 @@ struct SortedAggregateState {
 			return;
 		}
 
-		ordering = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
+		ordering = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
 		InitializeBuffer(sort_buffer, order_bind.sort_types);
 		ordering->Append(sort_buffer);
 
-		arguments = make_unique<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
+		arguments = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
 		InitializeBuffer(arg_buffer, order_bind.arg_types);
 		arguments->Append(arg_buffer);
 	}
@@ -299,7 +299,7 @@ struct SortedAggregateFunction {
 			auto state = sdata[i];
 
 			// Apply the sort before delegating the chunks
-			auto global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+			auto global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 			LocalSortState local_sort;
 			local_sort.Initialize(*global_sort, global_sort->buffer_manager);
 			state->Finalize(local_sort);
@@ -358,7 +358,7 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
                                                              unique_ptr<BoundOrderModifier> order_bys) {
 
 	auto sorted_bind =
-	    make_unique<SortedAggregateBindData>(context, bound_function, children, std::move(bind_info), *order_bys);
+	    make_uniq<SortedAggregateBindData>(context, bound_function, children, std::move(bind_info), *order_bys);
 
 	// The arguments are the children plus the sort columns.
 	for (auto &order : order_bys->orders) {

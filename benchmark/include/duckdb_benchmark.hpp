@@ -86,7 +86,7 @@ public:
 	}
 
 	virtual duckdb::unique_ptr<DuckDBBenchmarkState> CreateBenchmarkState() {
-		return make_unique<DuckDBBenchmarkState>(GetDatabasePath());
+		return make_uniq<DuckDBBenchmarkState>(GetDatabasePath());
 	}
 
 	duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override {

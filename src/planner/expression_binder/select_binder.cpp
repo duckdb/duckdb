@@ -132,14 +132,14 @@ BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t dept
 	}
 	auto col_idx = node.grouping_functions.size();
 	node.grouping_functions.push_back(std::move(group_indexes));
-	return BindResult(make_unique<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
-	                                                        ColumnBinding(node.groupings_index, col_idx), depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
+	                                                      ColumnBinding(node.groupings_index, col_idx), depth));
 }
 
 BindResult SelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
 	auto &group = node.groups.group_expressions[group_index];
-	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                        ColumnBinding(node.group_index, group_index), depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+	                                                      ColumnBinding(node.group_index, group_index), depth));
 }
 
 } // namespace duckdb

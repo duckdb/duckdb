@@ -35,7 +35,7 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(this->row_start == 0);
 	auto l = row_groups->Lock();
 	for (auto &row_group_pointer : data.row_groups) {
-		auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, types, std::move(row_group_pointer));
+		auto new_row_group = make_uniq<RowGroup>(info->db, block_manager, *info, types, std::move(row_group_pointer));
 		auto row_group_count = new_row_group->start + new_row_group->count;
 		if (row_group_count > this->total_rows) {
 			this->total_rows = row_group_count;
@@ -51,7 +51,7 @@ void RowGroupCollection::InitializeEmpty() {
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
-	auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, start_row, 0);
+	auto new_row_group = make_uniq<RowGroup>(info->db, block_manager, *info, start_row, 0);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(l, std::move(new_row_group));
 }
@@ -389,7 +389,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	auto index = row_start + total_rows.load();
 	for (auto segment = data.row_groups->GetRootSegment(); segment; segment = segment->Next()) {
 		auto &row_group = (RowGroup &)*segment;
-		auto new_group = make_unique<RowGroup>(row_group, index);
+		auto new_group = make_uniq<RowGroup>(row_group, index);
 		index += new_group->count;
 		row_groups->AppendSegment(std::move(new_group));
 	}
@@ -585,7 +585,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto &new_column_stats = result->stats.GetStats(new_column_idx);
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
-	auto new_stats = make_unique<SegmentStatistics>(new_column.GetType());
+	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AddColumn(new_column, executor, default_value, default_vector);

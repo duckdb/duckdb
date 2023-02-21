@@ -72,7 +72,7 @@ TEST_CASE("Sequential delete", "[interquery][.]") {
 	}
 
 	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
-		connections.push_back(make_unique<Connection>(db));
+		connections.push_back(make_uniq<Connection>(db));
 		connections[i]->Query("BEGIN TRANSACTION;");
 	}
 

@@ -16,7 +16,7 @@ class VacuumLocalSinkState : public LocalSinkState {
 public:
 	explicit VacuumLocalSinkState(VacuumInfo &info) {
 		for (idx_t col_idx = 0; col_idx < info.columns.size(); col_idx++) {
-			column_distinct_stats.push_back(make_unique<DistinctStatistics>());
+			column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 		}
 	};
 
@@ -24,14 +24,14 @@ public:
 };
 
 unique_ptr<LocalSinkState> PhysicalVacuum::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<VacuumLocalSinkState>(*info);
+	return make_uniq<VacuumLocalSinkState>(*info);
 }
 
 class VacuumGlobalSinkState : public GlobalSinkState {
 public:
 	explicit VacuumGlobalSinkState(VacuumInfo &info) {
 		for (idx_t col_idx = 0; col_idx < info.columns.size(); col_idx++) {
-			column_distinct_stats.push_back(make_unique<DistinctStatistics>());
+			column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 		}
 	};
 
@@ -40,7 +40,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<VacuumGlobalSinkState>(*info);
+	return make_uniq<VacuumGlobalSinkState>(*info);
 }
 
 SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,

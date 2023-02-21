@@ -11,10 +11,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPositional
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 	if (left->type == PhysicalOperatorType::TABLE_SCAN && right->type == PhysicalOperatorType::TABLE_SCAN) {
-		return make_unique<PhysicalPositionalScan>(op.types, std::move(left), std::move(right));
+		return make_uniq<PhysicalPositionalScan>(op.types, std::move(left), std::move(right));
 	} else {
-		return make_unique<PhysicalPositionalJoin>(op.types, std::move(left), std::move(right),
-		                                           op.estimated_cardinality);
+		return make_uniq<PhysicalPositionalJoin>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 }
 

@@ -131,8 +131,8 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		new_max = Value::Numeric(expr.return_type, max_val);
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
-	                                            StatisticsType::LOCAL_STATS);
+	auto stats = make_uniq<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
+	                                          StatisticsType::LOCAL_STATS);
 	stats->validity_stats = lstats.validity_stats->Copy();
 	return std::move(stats);
 }
@@ -510,7 +510,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	int32_t target_scale;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -625,7 +625,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_unique<RoundPrecisionFunctionData>(round_value);
+	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {

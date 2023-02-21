@@ -48,7 +48,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	}
 
 	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig() {
-		auto result = make_unique<DBConfig>();
+		auto result = make_uniq<DBConfig>();
 		result->options.load_extensions = false;
 		return result;
 	}
@@ -313,12 +313,12 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	duckdb::unique_ptr<InterpretedBenchmarkState> state;
 	auto full_db_path = GetDatabasePath();
 	try {
-		state = make_unique<InterpretedBenchmarkState>(full_db_path);
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
 	} catch (Exception(e)) {
 		// if the connection throws an error, chances are it's a storage format error.
 		// In this case delete the file and connect again.
 		DeleteDatabase(full_db_path);
-		state = make_unique<InterpretedBenchmarkState>(full_db_path);
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
 	}
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {

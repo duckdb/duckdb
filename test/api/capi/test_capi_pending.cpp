@@ -45,7 +45,7 @@ struct CAPIPending {
 	duckdb::unique_ptr<CAPIResult> Execute() {
 		duckdb_result result;
 		auto success = duckdb_execute_pending(pending, &result) == DuckDBSuccess;
-		return make_unique<CAPIResult>(result, success);
+		return make_uniq<CAPIResult>(result, success);
 	}
 
 	duckdb_pending_result pending = nullptr;

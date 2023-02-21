@@ -41,12 +41,12 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source,
 	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
 	// list.
 
-	auto create_index_info = make_unique<CreateIndexInfo>();
+	auto create_index_info = make_uniq<CreateIndexInfo>();
 
 	FieldReader reader(source);
 
 	create_index_info->schema = reader.ReadRequired<string>();
-	create_index_info->table = make_unique<BaseTableRef>();
+	create_index_info->table = make_uniq<BaseTableRef>();
 	create_index_info->table->schema_name = create_index_info->schema;
 	create_index_info->table->table_name = reader.ReadRequired<string>();
 	create_index_info->index_name = reader.ReadRequired<string>();

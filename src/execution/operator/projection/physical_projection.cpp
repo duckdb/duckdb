@@ -32,7 +32,7 @@ OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataCh
 }
 
 unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<ProjectionState>(context, select_list);
+	return make_uniq<ProjectionState>(context, select_list);
 }
 
 string PhysicalProjection::ParamsToString() const {

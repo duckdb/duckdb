@@ -36,7 +36,7 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 		return;
 	}
 
-	pLoaderFactory = make_unique<DuckDBLoaderFactory>(con, schema, suffix);
+	pLoaderFactory = make_uniq<DuckDBLoaderFactory>(con, schema, suffix);
 
 	// Create log formatter and logger instance
 	CLogFormatTab fmt;

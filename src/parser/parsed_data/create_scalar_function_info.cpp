@@ -21,13 +21,13 @@ CreateScalarFunctionInfo::CreateScalarFunctionInfo(ScalarFunctionSet set)
 unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 	ScalarFunctionSet set(name);
 	set.functions = functions.functions;
-	auto result = make_unique<CreateScalarFunctionInfo>(std::move(set));
+	auto result = make_uniq<CreateScalarFunctionInfo>(std::move(set));
 	CopyProperties(*result);
 	return std::move(result);
 }
 
 unique_ptr<AlterInfo> CreateScalarFunctionInfo::GetAlterInfo() const {
-	return make_unique_base<AlterInfo, AddFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true), functions);
+	return make_uniq_base<AlterInfo, AddFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true), functions);
 }
 
 } // namespace duckdb

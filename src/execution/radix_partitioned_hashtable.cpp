@@ -100,11 +100,11 @@ void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &state) {
 }
 
 unique_ptr<GlobalSinkState> RadixPartitionedHashTable::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<RadixHTGlobalState>(context);
+	return make_uniq<RadixHTGlobalState>(context);
 }
 
 unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<RadixHTLocalState>(*this);
+	return make_uniq<RadixHTLocalState>(*this);
 }
 
 void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const {
@@ -155,8 +155,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 
 	if (!llstate.ht) {
 		llstate.ht =
-		    make_unique<PartitionableHashTable>(context.client, Allocator::Get(context.client), gstate.partition_info,
-		                                        group_types, op.payload_types, op.bindings);
+		    make_uniq<PartitionableHashTable>(context.client, Allocator::Get(context.client), gstate.partition_info,
+		                                      group_types, op.payload_types, op.bindings);
 	}
 
 	gstate.total_groups +=
@@ -303,7 +303,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 	for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 		D_ASSERT(gstate.finalized_hts[r]);
-		tasks.push_back(make_unique<RadixAggregateFinalizeTask>(executor, event, gstate, r));
+		tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r));
 	}
 }
 
@@ -349,11 +349,11 @@ public:
 };
 
 unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<RadixHTGlobalSourceState>(Allocator::Get(context), *this);
+	return make_uniq<RadixHTGlobalSourceState>(Allocator::Get(context), *this);
 }
 
 unique_ptr<LocalSourceState> RadixPartitionedHashTable::GetLocalSourceState(ExecutionContext &context) const {
-	return make_unique<RadixHTLocalSourceState>(context, *this);
+	return make_uniq<RadixHTLocalSourceState>(context, *this);
 }
 
 idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {

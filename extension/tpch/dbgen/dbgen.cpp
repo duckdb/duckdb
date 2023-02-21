@@ -414,14 +414,14 @@ const LogicalType LineitemInfo::Types[] = {
 
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
-		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
+		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 	catalog.CreateTable(context, std::move(info));
@@ -506,7 +506,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		if (!tname.empty()) {
 			string full_tname = string(tname) + string(suffix);
 			auto tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_unique<InternalAppender>(context, *tbl_catalog);
+			append_info[i].appender = make_uniq<InternalAppender>(context, *tbl_catalog);
 		}
 	}
 

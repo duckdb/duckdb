@@ -47,7 +47,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 		throw ParameterNotResolvedException();
 	}
 
-	auto result = make_unique<BoundUnnestExpression>(return_type);
+	auto result = make_uniq<BoundUnnestExpression>(return_type);
 	result->child = std::move(child.expr);
 
 	auto unnest_index = node.unnests.size();
@@ -56,7 +56,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// TODO what if we have multiple unnests in the same projection list? ignore for now
 
 	// now create a column reference referring to the unnest
-	auto colref = make_unique<BoundColumnRefExpression>(
+	auto colref = make_uniq<BoundColumnRefExpression>(
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
 	    ColumnBinding(node.unnest_index, unnest_index), depth);
 

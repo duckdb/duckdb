@@ -16,7 +16,7 @@ string ParameterExpression::ToString() const {
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
-	auto copy = make_unique<ParameterExpression>();
+	auto copy = make_uniq<ParameterExpression>();
 	copy->parameter_nr = parameter_nr;
 	copy->CopyProperties(*this);
 	return std::move(copy);
@@ -36,7 +36,7 @@ void ParameterExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto expression = make_unique<ParameterExpression>();
+	auto expression = make_uniq<ParameterExpression>();
 	expression->parameter_nr = reader.ReadRequired<idx_t>();
 	return std::move(expression);
 }

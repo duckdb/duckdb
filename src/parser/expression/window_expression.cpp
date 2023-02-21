@@ -86,7 +86,7 @@ bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_unique<WindowExpression>(type, catalog, schema, function_name);
+	auto new_window = make_uniq<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -142,7 +142,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 

@@ -18,7 +18,7 @@ using duckdb_parquet::format::Type;
 static duckdb::unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
                                                              const duckdb_parquet::format::SchemaElement &schema_ele,
                                                              const duckdb_parquet::format::Statistics &parquet_stats) {
-	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
+	auto stats = make_uniq<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.
@@ -228,7 +228,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = make_unique<StringStatistics>(type, StatisticsType::LOCAL_STATS);
+		auto string_stats = make_uniq<StringStatistics>(type, StatisticsType::LOCAL_STATS);
 		if (parquet_stats.__isset.min) {
 			string_stats->Update(parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
@@ -258,11 +258,11 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		if (column_chunk.meta_data.type == duckdb_parquet::format::Type::FLOAT ||
 		    column_chunk.meta_data.type == duckdb_parquet::format::Type::DOUBLE) {
 			// floats/doubles can have infinity, which can become NULL
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
+			row_group_stats->validity_stats = make_uniq<ValidityStatistics>(true);
 		} else if (parquet_stats.__isset.null_count) {
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(parquet_stats.null_count != 0);
+			row_group_stats->validity_stats = make_uniq<ValidityStatistics>(parquet_stats.null_count != 0);
 		} else {
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
+			row_group_stats->validity_stats = make_uniq<ValidityStatistics>(true);
 		}
 	} else {
 		// if stats are missing from any row group we know squat

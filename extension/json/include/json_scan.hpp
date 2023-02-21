@@ -299,7 +299,7 @@ public:
 
 	static duckdb::unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
 	                                                            TableFunction &function) {
-		auto result = make_unique<JSONScanData>();
+		auto result = make_uniq<JSONScanData>();
 		result->Deserialize(reader);
 		return std::move(result);
 	}

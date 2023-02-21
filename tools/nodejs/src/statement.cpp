@@ -77,7 +77,7 @@ Statement::Statement(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Statemen
 	// TODO we can have parameters here as well. Forward if that is the case.
 	Value().As<Napi::Object>().DefineProperty(
 	    Napi::PropertyDescriptor::Value("sql", info[1].As<Napi::String>(), napi_default));
-	connection_ref->database_ref->Schedule(env, duckdb::make_unique<PrepareTask>(*this, callback));
+	connection_ref->database_ref->Schedule(env, duckdb::make_uniq<PrepareTask>(*this, callback));
 }
 
 Statement::~Statement() {
@@ -412,7 +412,7 @@ struct RunQueryTask : public Task {
 
 duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
 	size_t start_idx = ignore_first_param ? 1 : 0;
-	auto params = duckdb::make_unique<StatementParam>();
+	auto params = duckdb::make_uniq<StatementParam>();
 
 	for (auto i = start_idx; i < info.Length(); i++) {
 		auto &p = info[i];
@@ -434,32 +434,32 @@ duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInf
 
 Napi::Value Statement::All(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(info.Env(),
-	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ALL));
+	                                       duckdb::make_uniq<RunPreparedTask>(*this, HandleArgs(info), RunType::ALL));
 	return info.This();
 }
 
 Napi::Value Statement::ArrowIPCAll(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
+	    info.Env(), duckdb::make_uniq<RunPreparedTask>(*this, HandleArgs(info), RunType::ARROW_ALL));
 	return info.This();
 }
 
 Napi::Value Statement::Run(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(info.Env(),
-	                                       duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::RUN));
+	                                       duckdb::make_uniq<RunPreparedTask>(*this, HandleArgs(info), RunType::RUN));
 	return info.This();
 }
 
 Napi::Value Statement::Each(const Napi::CallbackInfo &info) {
-	connection_ref->database_ref->Schedule(
-	    info.Env(), duckdb::make_unique<RunPreparedTask>(*this, HandleArgs(info), RunType::EACH));
+	connection_ref->database_ref->Schedule(info.Env(),
+	                                       duckdb::make_uniq<RunPreparedTask>(*this, HandleArgs(info), RunType::EACH));
 	return info.This();
 }
 
 Napi::Value Statement::Stream(const Napi::CallbackInfo &info) {
 	auto deferred = Napi::Promise::Deferred::New(info.Env());
 	connection_ref->database_ref->Schedule(info.Env(),
-	                                       duckdb::make_unique<RunQueryTask>(*this, HandleArgs(info), deferred));
+	                                       duckdb::make_uniq<RunQueryTask>(*this, HandleArgs(info), deferred));
 	return deferred.Promise();
 }
 
@@ -483,7 +483,7 @@ Napi::Value Statement::Finish(const Napi::CallbackInfo &info) {
 		callback = info[0].As<Napi::Function>();
 	}
 
-	connection_ref->database_ref->Schedule(env, duckdb::make_unique<FinishTask>(*this, callback));
+	connection_ref->database_ref->Schedule(env, duckdb::make_uniq<FinishTask>(*this, callback));
 	return env.Null();
 }
 
@@ -589,7 +589,7 @@ struct GetNextArrowIpcTask : public Task {
 Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(env);
-	database_ref->Schedule(env, duckdb::make_unique<GetChunkTask>(*this, deferred));
+	database_ref->Schedule(env, duckdb::make_uniq<GetChunkTask>(*this, deferred));
 
 	return deferred.Promise();
 }
@@ -598,7 +598,7 @@ Napi::Value QueryResult::NextChunk(const Napi::CallbackInfo &info) {
 Napi::Value QueryResult::NextIpcBuffer(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(env);
-	database_ref->Schedule(env, duckdb::make_unique<GetNextArrowIpcTask>(*this, deferred));
+	database_ref->Schedule(env, duckdb::make_uniq<GetNextArrowIpcTask>(*this, deferred));
 	return deferred.Promise();
 }
 

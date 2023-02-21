@@ -52,7 +52,7 @@ using duckdb_parquet::format::Type;
 static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
-	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
@@ -85,7 +85,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
-	auto metadata = make_unique<FileMetaData>();
+	auto metadata = make_uniq<FileMetaData>();
 	metadata->read(proto.get());
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
@@ -314,15 +314,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			result_type = LogicalType::MAP(std::move(child_types[0].second), std::move(child_types[1].second));
 
 			auto struct_reader =
-			    make_unique<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
-			                                    max_define - 1, max_repeat - 1, std::move(child_readers));
-			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(struct_reader));
+			    make_uniq<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
+			                                  max_define - 1, max_repeat - 1, std::move(child_readers));
+			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(struct_reader));
 		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(std::move(child_types));
-			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                         std::move(child_readers));
+			result = make_uniq<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                       std::move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up
 			result_type = child_types[0].second;
@@ -330,8 +330,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		}
 		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(result));
+			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(result));
 		}
 		return result;
 	} else { // leaf node
@@ -342,8 +342,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			auto element_reader =
 			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
 
-			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(element_reader));
+			return make_uniq<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(element_reader));
 		}
 
 		// if this is a hive partition col, we should not read it at all but instead do a constant reader.
@@ -351,8 +351,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			auto lookup = hive_map->find(s_ele.name);
 			if (lookup != hive_map->end()) {
 				Value val = Value(lookup->second);
-				return make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(),
-				                                                  next_file_idx++, max_define, max_repeat, val);
+				return make_uniq<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(),
+				                                                next_file_idx++, max_define, max_repeat, val);
 				;
 			}
 		}
@@ -385,25 +385,25 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		auto column_idx = entry.first;
 		auto &expected_type = entry.second;
 		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
-		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), expected_type);
+		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), expected_type);
 		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
 	}
 
 	if (parquet_options.filename) {
 		Value val = Value(file_name);
-		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
+		root_struct_reader.child_readers.push_back(make_uniq<GeneratedConstantColumnReader>(
 		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 	}
 
 	if (parquet_options.file_row_number) {
 		root_struct_reader.child_readers.push_back(
-		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+		    make_uniq<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
 	}
 
 	if (parquet_options.hive_partitioning) {
 		for (auto &partition : *hive_map) {
 			Value val = Value(partition.second);
-			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
+			root_struct_reader.child_readers.push_back(make_uniq<GeneratedConstantColumnReader>(
 			    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 		}
 	}
@@ -567,7 +567,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 	}
 
 	if (parquet_options.hive_partitioning) {
-		hive_map = make_unique<std::map<string, string>>(HivePartitioning::Parse(file_name));
+		hive_map = make_uniq<std::map<string, string>>(HivePartitioning::Parse(file_name));
 	}
 
 	InitializeSchema(expected_names, expected_types_p, column_ids, initial_filename_p);
@@ -751,7 +751,7 @@ void ParquetReader::RearrangeChildReaders(duckdb::unique_ptr<duckdb::ColumnReade
 
 	for (idx_t col = 0; col < union_idx_map.size(); ++col) {
 		auto child_reader = std::move(root_struct_reader.child_readers[col]);
-		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), union_col_types[union_idx_map[col]]);
+		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), union_col_types[union_idx_map[col]]);
 		root_struct_reader.child_readers[col] = std::move(cast_reader);
 		reverse_union_idx[union_idx_map[col]] = col;
 	}

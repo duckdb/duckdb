@@ -55,7 +55,7 @@ struct IcuBindData : public FunctionData {
 	}
 
 	duckdb::unique_ptr<FunctionData> Copy() const override {
-		return make_unique<IcuBindData>(language, country);
+		return make_uniq<IcuBindData>(language, country);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -112,9 +112,9 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, S
                                                        vector<duckdb::unique_ptr<Expression>> &arguments) {
 	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
-		return make_unique<IcuBindData>(splits[0], "");
+		return make_uniq<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
-		return make_unique<IcuBindData>(splits[0], splits[1]);
+		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
 		throw InternalException("Expected one or two splits");
 	}
@@ -131,9 +131,9 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	}
 	auto splits = StringUtil::Split(StringValue::Get(val), "_");
 	if (splits.size() == 1) {
-		return make_unique<IcuBindData>(splits[0], "");
+		return make_uniq<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
-		return make_unique<IcuBindData>(splits[0], splits[1]);
+		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
 		throw InternalException("Expected one or two splits");
 	}
@@ -184,7 +184,7 @@ static duckdb::unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, 
 
 static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContext &context,
                                                                     TableFunctionInitInput &input) {
-	return make_unique<ICUCalendarData>();
+	return make_uniq<ICUCalendarData>();
 }
 
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

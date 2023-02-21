@@ -86,7 +86,7 @@ struct ListBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<ListBoundCastData>(child_cast_info.Copy());
+		return make_uniq<ListBoundCastData>(child_cast_info.Copy());
 	}
 };
 
@@ -111,7 +111,7 @@ public:
 		for (auto &info : child_cast_info) {
 			copy_info.push_back(info.Copy());
 		}
-		return make_unique<StructBoundCastData>(std::move(copy_info), target);
+		return make_uniq<StructBoundCastData>(std::move(copy_info), target);
 	}
 };
 
@@ -128,7 +128,7 @@ struct MapBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
+		return make_uniq<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
 	}
 };
 

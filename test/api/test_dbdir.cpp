@@ -17,8 +17,8 @@ static void test_in_memory_initialization(string dbdir) {
 	fs->RemoveDirectory(in_memory_tmp);
 
 	// cannot create an in-memory database using ":memory:" argument
-	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir));
-	REQUIRE_NOTHROW(con = make_unique<Connection>(*db));
+	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir));
+	REQUIRE_NOTHROW(con = make_uniq<Connection>(*db));
 
 	// force the in-memory directory to be created by creating a table bigger than the memory limit
 	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='2MB'"));

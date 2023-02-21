@@ -113,9 +113,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
-		pDb->db = make_unique<DuckDB>(filename, &config);
+		pDb->db = make_uniq<DuckDB>(filename, &config);
 		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
-		pDb->con = make_unique<Connection>(*pDb->db);
+		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
 			pDb->last_error = PreservedError(ex);
@@ -196,7 +196,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		}
 
 		// create the statement entry
-		duckdb::unique_ptr<sqlite3_stmt> stmt = make_unique<sqlite3_stmt>();
+		duckdb::unique_ptr<sqlite3_stmt> stmt = make_uniq<sqlite3_stmt>();
 		stmt->db = db;
 		stmt->query_string = query;
 		stmt->prepared = std::move(prepared);

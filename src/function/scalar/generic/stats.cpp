@@ -11,7 +11,7 @@ struct StatsBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StatsBindData>(stats);
+		return make_uniq<StatsBindData>(stats);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -32,7 +32,7 @@ static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound_function,
                                    vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<StatsBindData>();
+	return make_uniq<StatsBindData>();
 }
 
 static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {

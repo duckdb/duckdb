@@ -62,7 +62,7 @@ void BaseCSVData::Finalize() {
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                              vector<LogicalType> &sql_types) {
-	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
+	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
@@ -83,7 +83,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                             vector<LogicalType> &expected_types) {
-	auto bind_data = make_unique<ReadCSVData>();
+	auto bind_data = make_uniq<ReadCSVData>();
 	bind_data->sql_types = expected_types;
 
 	string file_pattern = info.file_path;
@@ -107,7 +107,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->FinalizeRead(context);
 	if (!bind_data->single_threaded && options.auto_detect) {
 		options.file_path = bind_data->files[0];
-		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
+		auto initial_reader = make_uniq<BufferedCSVReader>(context, options);
 		options = initial_reader->options;
 	}
 	return std::move(bind_data);
@@ -266,7 +266,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
-	auto local_data = make_unique<LocalReadCSVData>();
+	auto local_data = make_uniq<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
@@ -280,8 +280,8 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
                                                                const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
-	                                                   FileSystem::GetFileOpener(context), options.compression);
+	auto global_data = make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
+	                                                 FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
 		BufferedSerializer serializer;

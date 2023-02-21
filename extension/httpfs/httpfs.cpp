@@ -21,7 +21,7 @@
 namespace duckdb {
 
 static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
-	auto headers = make_unique<duckdb_httplib_openssl::Headers>();
+	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
@@ -99,7 +99,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			case 504: // Server has error
 				break;
 			default:
-				return make_unique<ResponseWrapper>(response);
+				return make_uniq<ResponseWrapper>(response);
 			}
 		}
 
@@ -175,7 +175,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPParams &http_params,
                                                                      const char *proto_host_port) {
-	auto client = make_unique<duckdb_httplib_openssl::Client>(proto_host_port);
+	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
 	client->set_keep_alive(true);
 	client->enable_server_certificate_verification(false);
@@ -286,8 +286,8 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, cons
                                                         FileLockType lock, FileCompressionType compression,
                                                         FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, query_param.empty() ? path : path + "?" + query_param, flags,
-	                                           HTTPParams::ReadFrom(opener));
+	return duckdb::make_uniq<HTTPFileHandle>(*this, query_param.empty() ? path : path + "?" + query_param, flags,
+	                                         HTTPParams::ReadFrom(opener));
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
@@ -442,7 +442,7 @@ static HTTPMetadataCache *TryGetMetadataCache(FileOpener *opener, HTTPFileSystem
 
 	if (use_shared_cache) {
 		if (!httpfs.global_metadata_cache) {
-			httpfs.global_metadata_cache = make_unique<HTTPMetadataCache>(false, true);
+			httpfs.global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
 		}
 		return httpfs.global_metadata_cache.get();
 	} else {

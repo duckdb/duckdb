@@ -20,7 +20,7 @@ struct ThrottlingSum {
 
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             vector<LogicalType> &return_types, vector<string> &names) {
-		auto result = make_unique<ThrottlingSum::CustomFunctionData>();
+		auto result = make_uniq<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
 		return std::move(result);

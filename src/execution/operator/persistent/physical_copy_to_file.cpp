@@ -162,20 +162,20 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	if (partition_output) {
-		auto state = make_unique<CopyToFunctionLocalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
 		{
 			auto &g = (CopyToFunctionGlobalState &)*sink_state;
 			lock_guard<mutex> glock(g.lock);
 			state->writer_offset = g.last_file_offset++;
 
-			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types,
-			                                                            partition_columns, g.partition_state);
-			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
+			state->part_buffer = make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns,
+			                                                          g.partition_state);
+			state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
 			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
 		}
 		return std::move(state);
 	}
-	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
 		idx_t this_file_offset;
 		{
@@ -214,7 +214,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			}
 		}
 
-		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
 
 		if (partition_output) {
 			state->partition_state = make_shared<GlobalHivePartitionState>();
@@ -223,7 +223,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,7 +238,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CopyToFileState>();
+	return make_uniq<CopyToFileState>();
 }
 
 void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

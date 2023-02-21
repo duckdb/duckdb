@@ -20,7 +20,7 @@ StringStatistics::StringStatistics(LogicalType type_p, StatisticsType stats_type
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() const {
-	auto result = make_unique<StringStatistics>(type, stats_type);
+	auto result = make_uniq<StringStatistics>(type, stats_type);
 	result->CopyBase(*this);
 
 	memcpy(result->min, min, MAX_STRING_MINMAX_SIZE);
@@ -39,7 +39,7 @@ void StringStatistics::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
+	auto stats = make_uniq<StringStatistics>(std::move(type), StatisticsType::LOCAL_STATS);
 	reader.ReadBlob(stats->min, MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = reader.ReadRequired<bool>();
