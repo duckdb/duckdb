@@ -22,7 +22,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *opener, const string &extension) {
+bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension, ExtensionInitResult &result, string &error) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
@@ -47,7 +47,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		if (exact_match) {
 			message += "\nInstall it first using \"INSTALL " + extension + "\".";
 		}
-		throw IOException("Extension \"%s\" not found.\n%s", filename, message);
+		error = StringUtil::Format("Extension \"%s\" not found.\n%s", filename, message);
+		return false;
 	}
 	if (!config.options.allow_unsigned_extensions) {
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
@@ -114,11 +115,19 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		                            extension_version, engine_version);
 	}
 
-	ExtensionInitResult res;
-	res.basename = basename;
-	res.filename = filename;
-	res.lib_hdl = lib_hdl;
-	return res;
+	result.basename = basename;
+	result.filename = filename;
+	result.lib_hdl = lib_hdl;
+	return true;
+}
+
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *opener, const string &extension) {
+	string error;
+	ExtensionInitResult result;
+	if (!TryInitialLoad(config, opener, extension, result, error)) {
+		throw IOException(error);
+	}
+	return result;
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
@@ -149,7 +158,18 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 
 void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
 	extension = ExtensionHelper::ApplyExtensionAlias(extension);
-	auto res = InitialLoad(config, nullptr, extension); // TODO opener
+	ExtensionInitResult res;
+	string error;
+	if (!TryInitialLoad(config, nullptr, extension, res, error)) {
+		if (!ExtensionHelper::AllowAutoInstall(extension)) {
+			throw IOException(error);
+		}
+		// FIXME: install extension
+		// try loading again
+		if (!TryInitialLoad(config, nullptr, extension, res, error)) {
+			throw IOException(error);
+		}
+	}
 	auto storage_fun_name = res.basename + "_storage_init";
 
 	ext_storage_init_t storage_init_fun;

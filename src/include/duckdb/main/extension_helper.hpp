@@ -64,7 +64,9 @@ public:
 
 private:
 	static const vector<string> PathComponents();
-	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);
+	static bool AllowAutoInstall(const string &extension);
+	static ExtensionInitResult InitialLoad(DBConfig &config, FileOpener *opener, const string &extension);
+	static bool TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension, ExtensionInitResult &result, string &error);
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
