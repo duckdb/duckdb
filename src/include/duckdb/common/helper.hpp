@@ -59,7 +59,7 @@ struct __unique_if<_Tp[_Np]>
 template<class _Tp, class... _Args>
 inline 
 typename __unique_if<_Tp>::__unique_single
-make_unique(_Args&&... __args)
+make_uniq(_Args&&... __args)
 {
     return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
 }
@@ -67,7 +67,7 @@ make_unique(_Args&&... __args)
 template<class _Tp>
 inline 
 typename __unique_if<_Tp>::__unique_array_unknown_bound
-make_unique(size_t __n)
+make_uniq(size_t __n)
 {
     typedef typename remove_extent<_Tp>::type _Up;
     return unique_ptr<_Tp>(new _Up[__n]());
@@ -75,10 +75,11 @@ make_unique(size_t __n)
 
 template<class _Tp, class... _Args>
     typename __unique_if<_Tp>::__unique_array_known_bound
-    make_unique(_Args&&...) = delete;
+    make_uniq(_Args&&...) = delete;
+
 
 template <typename S, typename T, typename... Args>
-unique_ptr<S> make_unique_base(Args &&... args) {
+unique_ptr<S> make_uniq_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 
@@ -97,7 +98,7 @@ struct SharedConstructor {
 struct UniqueConstructor {
 	template <class T, typename... ARGS>
 	static unique_ptr<T> Create(ARGS &&...args) {
-		return make_unique<T>(std::forward<ARGS>(args)...);
+		return make_uniq<T>(std::forward<ARGS>(args)...);
 	}
 };
 
