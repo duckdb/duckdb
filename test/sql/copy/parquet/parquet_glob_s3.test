@@ -36,7 +36,7 @@ statement ok
 CREATE TABLE vals (i INTEGER, j BLOB)
 
 statement ok
-COPY vals FROM 's3://test-bucket/parquet_glob_s3/glob/t?.parquet' (FORMAT PARQUET);
+COPY vals FROM 's3://test-bucket/parquet_glob_s3/glob/t[0-9].parquet' (FORMAT PARQUET);
 
 query II
 SELECT * FROM vals ORDER BY 1, 2
@@ -58,11 +58,6 @@ statement ok
 SET s3_url_style='${urlstyle}'
 
 # Begin tests
-query I
-select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
-----
-2
-
 query I
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t[0-9].parquet')
 ----
@@ -102,11 +97,6 @@ statement ok
 PRAGMA threads=4
 
 query I
-select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
-----
-2
-
-query I
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/*')
 ----
 2
@@ -125,6 +115,33 @@ query I
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parquet')
 ----
 2
+
+# Question mark is not supported for S3 due to our use of query parameters
+statement error
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
+----
+Unable to connect to URL
+
+statement error
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/?lob/t?.parquet')
+----
+Unable to connect to URL
+
+# Finally, enabling url compatibility mode will disable globs allowing a user to query files with special chars
+statement ok
+SET s3_url_compatibility_mode=true;
+
+# Note that this is actually a file called '?.*[1-0]parquet??' which S3 should theoretically accept;
+statement ok
+COPY vals TO 's3://test-bucket/the_horror/?.*[1-0]parquetta??' (FORMAT parquet);
+
+query I
+select count(*) from parquet_scan('s3://test-bucket/the_horror/?.*[1-0]parquetta??');
+----
+2
+
+statement ok
+SET s3_url_compatibility_mode=false;
 
 endloop
 
