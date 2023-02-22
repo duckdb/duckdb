@@ -1482,6 +1482,7 @@ public class TestDuckDBJDBC {
 
 		Connection conn_rw = DriverManager.getConnection(jdbc_url);
 		assertFalse(conn_rw.isReadOnly());
+		assertFalse(conn_rw.getMetaData().isReadOnly());
 		Statement stmt = conn_rw.createStatement();
 		stmt.execute("CREATE TABLE test (i INTEGER)");
 		stmt.execute("INSERT INTO test VALUES (42)");
@@ -1529,7 +1530,9 @@ public class TestDuckDBJDBC {
 			Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop)) {
 
 			assertTrue(conn_ro1.isReadOnly());
+			assertTrue(conn_ro1.getMetaData().isReadOnly());
 			assertTrue(conn_ro2.isReadOnly());
+			assertTrue(conn_ro2.getMetaData().isReadOnly());
 
 			try (Statement stmt1 = conn_ro1.createStatement();
 				ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {

@@ -53,7 +53,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean isReadOnly() throws SQLException {
-		return false;
+		return conn.isReadOnly();
 	}
 
 	@Override
