@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/delta_byte_array_length_mismatch.test
+# description: Test reading a delta
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/delta_byte_array_length_mismatch.parquet')
+----
+length mismatch
