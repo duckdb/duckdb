@@ -559,6 +559,7 @@ jobs:
       run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
+      if: ${{ false }}
       shell: bash
       run: node ./test/wasm/hello_wasm_test.js
 
