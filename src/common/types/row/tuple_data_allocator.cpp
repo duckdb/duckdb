@@ -1,21 +1,13 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/types/row/tuple_data_segment.hpp"
+#include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
-	std::swap(row_block_index, other.row_block_index);
-	std::swap(heap_block_index, other.heap_block_index);
-	std::swap(count, other.count);
-}
-
-TupleDataSegment &TupleDataSegment::operator=(TupleDataSegment &&other) noexcept {
-	std::swap(row_block_index, other.row_block_index);
-	std::swap(heap_block_index, other.heap_block_index);
-	std::swap(count, other.count);
-	return *this;
+TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p) {
+	buffer_manager.Allocate(capacity, false, &handle);
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept {
@@ -35,16 +27,17 @@ TupleDataAllocator::TupleDataAllocator(ClientContext &context, const TupleDataLa
     : buffer_manager(BufferManager::GetBufferManager(context)), layout(layout) {
 }
 
-void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, vector<TupleDataSegment> &segments) {
+void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment) {
+	auto &chunks = segment.chunks;
 	idx_t offset = 0;
 	while (offset != count) {
 		// Build the next segment
-		segments.emplace_back(BuildSegment(append_state, offset, count));
-		const auto &segment = segments.back();
-		const auto next = segment.count;
+		chunks.emplace_back(BuildChunk(append_state, offset, count));
+		const auto &chunk = chunks.back();
+		const auto next = chunk.count;
 
 		// Now set the pointers where the row data will be written
-		const auto base_row_ptr = GetRowPointer(append_state.management_state, segment);
+		const auto base_row_ptr = GetRowPointer(append_state.management_state, chunk);
 		auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.row_locations);
 		for (idx_t i = 0; i < next; i++) {
 			row_locations[offset + i] = base_row_ptr + i * layout.GetRowWidth();
@@ -54,7 +47,7 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 			// Also set the pointers where the heap data will be written (if needed)
 			const auto heap_row_sizes = FlatVector::GetData<idx_t>(append_state.heap_locations);
 			auto heap_locations = FlatVector::GetData<data_ptr_t>(append_state.heap_locations);
-			heap_locations[offset] = GetHeapPointer(append_state.management_state, segment);
+			heap_locations[offset] = GetHeapPointer(append_state.management_state, chunk);
 			for (idx_t i = offset + 1; i < offset + next; i++) {
 				heap_locations[i] = heap_locations[i - 1] + heap_row_sizes[i - 1];
 			}
@@ -69,22 +62,21 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	}
 }
 
-data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &state, const TupleDataSegment &segment) {
+data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &state, const TupleDataChunk &segment) {
 	PinRowBlock(state, segment.row_block_index);
 	return state.row_handles[segment.row_block_index].Ptr() + segment.row_block_offset;
 }
 
-data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, const TupleDataSegment &segment) {
+data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, const TupleDataChunk &segment) {
 	PinHeapBlock(state, segment.heap_block_index);
 	return state.heap_handles[segment.heap_block_index].Ptr() + segment.heap_block_offset;
 }
 
-TupleDataSegment TupleDataAllocator::BuildSegment(TupleDataAppendState &append_state, idx_t offset, idx_t count) {
+TupleDataChunk TupleDataAllocator::BuildChunk(TupleDataAppendState &append_state, idx_t offset, idx_t count) {
 	lock_guard<mutex> guard(lock);
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
-		row_blocks.emplace_back(Storage::BLOCK_SIZE);
-		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &row_blocks.back().handle);
+		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
 	}
 	auto next = MinValue<idx_t>(row_blocks.back().RemainingCapacity(layout.GetRowWidth()), count - offset);
 
@@ -96,8 +88,7 @@ TupleDataSegment TupleDataAllocator::BuildSegment(TupleDataAppendState &append_s
 		// Allocate heap block (if needed)
 		if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_row_sizes[offset]) {
 			const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_row_sizes[offset]);
-			heap_blocks.emplace_back(size);
-			buffer_manager.Allocate(size, false, &heap_blocks.back().handle);
+			heap_blocks.emplace_back(buffer_manager, size);
 		}
 		heap_block_offset = heap_blocks.back().size;
 		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
@@ -124,8 +115,8 @@ TupleDataSegment TupleDataAllocator::BuildSegment(TupleDataAppendState &append_s
 	row_blocks.back().size += next * layout.GetRowWidth();
 
 	D_ASSERT(next != 0);
-	return TupleDataSegment(row_blocks.size(), row_blocks.back().size, heap_blocks.size(), heap_block_offset,
-	                        last_heap_row_size, next);
+	return TupleDataChunk(row_blocks.size(), row_blocks.back().size, heap_blocks.size(), heap_block_offset,
+	                      last_heap_row_size, next);
 }
 
 void TupleDataAllocator::PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index) {

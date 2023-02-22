@@ -11,7 +11,8 @@ add_library_unity(
   row_layout.cpp
   tuple_data_allocator.cpp
   tuple_data_collection.cpp
-  tuple_data_layout.cpp)
+  tuple_data_layout.cpp
+  tuple_data_segment.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types_row>
     PARENT_SCOPE)

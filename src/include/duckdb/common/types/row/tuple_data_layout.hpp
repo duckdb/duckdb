@@ -47,7 +47,7 @@ public:
 		return aggregates;
 	}
 	//! Returns a map from column id to the struct RowLayouts
-	inline unordered_map<idx_t, TupleDataLayout> GetStructLayouts() {
+	inline unordered_map<idx_t, TupleDataLayout> GetStructLayouts() const {
 		return struct_layouts;
 	}
 	//! Returns the total width required for each row, including padding

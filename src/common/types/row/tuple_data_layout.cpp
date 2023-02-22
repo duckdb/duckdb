@@ -16,8 +16,22 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	row_width = flag_width;
 
 	// Whether all columns are constant size.
-	for (const auto &type : types) {
-		all_constant = all_constant && TypeIsConstantSize(type.InternalType());
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+		const auto &type = types[col_idx];
+		if (type.InternalType() == PhysicalType::STRUCT) {
+			// structs are recursively stored as a TupleDataLayout again
+			const auto &child_types = StructType::GetChildTypes(type);
+			vector<LogicalType> child_type_vector;
+			child_type_vector.reserve(child_types.size());
+			for (auto &ct : child_types) {
+				child_type_vector.emplace_back(ct.second);
+			}
+			auto struct_entry = struct_layouts.emplace(col_idx, TupleDataLayout());
+			struct_entry.first->second.Initialize(std::move(child_type_vector), false);
+			all_constant = all_constant && struct_entry.first->second.AllConstant();
+		} else {
+			all_constant = all_constant && TypeIsConstantSize(type.InternalType());
+		}
 	}
 
 	// This enables pointer swizzling for out-of-core computation.
@@ -38,15 +52,9 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 		if (TypeIsConstantSize(internal_type) || internal_type == PhysicalType::VARCHAR) {
 			row_width += GetTypeIdSize(type.InternalType());
 		} else if (internal_type == PhysicalType::STRUCT) {
-			// structs are recursively stored as a TupleDataLayout again
-			const auto &child_types = StructType::GetChildTypes(type);
-			vector<LogicalType> child_type_vector;
-			child_type_vector.reserve(child_types.size());
-			for (auto &ct : child_types) {
-				child_type_vector.emplace_back(ct.second);
-			}
-			auto struct_entry = struct_layouts.emplace(col_idx, TupleDataLayout());
-			struct_entry.first->second.Initialize(std::move(child_type_vector), false);
+			D_ASSERT(struct_layouts.find(col_idx) != struct_layouts.end());
+			// Just get the size of the TupleDataLayout of the struct
+			row_width += struct_layouts[col_idx].GetRowWidth();
 		} else {
 			// Variable size types use pointers to the actual data (can be swizzled).
 			// Again, we would use sizeof(data_ptr_t), but this is not guaranteed to be equal to sizeof(idx_t).

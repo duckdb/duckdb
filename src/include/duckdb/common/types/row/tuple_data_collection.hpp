@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
 namespace duckdb {
 
+class TupleDataAllocator;
+struct TupleDataChunk;
 struct TupleDataAppendState;
 struct TupleDataManagementState;
 struct TupleDataScatterFunction;
@@ -44,12 +45,15 @@ public:
 	void InitializeAppend(TupleDataAppendState &append_state);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
 	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	//! TODO: combine / scan
 
 private:
 	//! TODO:
 	void Initialize(ClientContext &context, vector<LogicalType> types, vector<AggregateObject> aggregates, bool align);
 	//! TODO:
-	TupleDataScatterFunction GetScatterFunction(const LogicalType &type);
+	static TupleDataScatterFunction GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx);
+	//! TODO:
+	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! TODO:
 	void ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &chunk);
 
