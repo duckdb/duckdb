@@ -24,7 +24,7 @@ struct BitstringAggBindData : public FunctionData {
 	BitstringAggBindData() {
 	}
 
-	BitstringAggBindData(Value min, Value max) : min(min), max(max) {
+	BitstringAggBindData(Value min, Value max) : min(std::move(min)), max(std::move(max)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
