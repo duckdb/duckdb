@@ -296,6 +296,17 @@ public:
 		return lstate.GetBatchIndex();
 	}
 
+	static unique_ptr<NodeStatistics> JSONScanCardinality(ClientContext &context, const FunctionData *bind_data) {
+		auto &data = (JSONScanData &)*bind_data;
+		idx_t per_file_cardinality;
+		if (data.stored_readers.empty()) {
+			per_file_cardinality = 42;
+		} else {
+			per_file_cardinality = data.stored_readers[0]->GetFileHandle().FileSize() / 420;
+		}
+		return make_unique<NodeStatistics>(per_file_cardinality * data.file_paths.size());
+	}
+
 	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 		auto &bind_data = (JSONScanData &)*bind_data_p;
 		bind_data.Serialize(writer);
@@ -316,6 +327,7 @@ public:
 
 		table_function.table_scan_progress = JSONScanProgress;
 		table_function.get_batch_index = JSONScanGetBatchIndex;
+		table_function.cardinality = JSONScanCardinality;
 
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;
