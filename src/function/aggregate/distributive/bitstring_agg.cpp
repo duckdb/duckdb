@@ -21,6 +21,12 @@ struct BitstringAggBindData : public FunctionData {
 	Value min;
 	Value max;
 
+	BitstringAggBindData() {
+	}
+
+	BitstringAggBindData(Value min, Value max) : min(min), max(max) {
+	}
+
 	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<BitstringAggBindData>(*this);
 	}
@@ -179,12 +185,11 @@ unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunct
                                           vector<unique_ptr<Expression>> &arguments) {
 
 	if (arguments.size() == 3) {
-		auto bind_data = make_unique<BitstringAggBindData>();
-		bind_data->min = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		bind_data->max = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
+		auto min = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		auto max = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 		Function::EraseArgument(function, arguments, 2);
 		Function::EraseArgument(function, arguments, 1);
-		return bind_data;
+		return make_unique<BitstringAggBindData>(min, max);
 	}
 	return make_unique<BitstringAggBindData>();
 }
