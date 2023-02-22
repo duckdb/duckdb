@@ -1,5 +1,6 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
@@ -8,7 +9,7 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-typedef void (*tuple_data_scatter_function_t)(const Vector &source, const UnifiedVectorFormat &source_data,
+typedef void (*tuple_data_scatter_function_t)(Vector &source, const UnifiedVectorFormat &source_data,
                                               const idx_t source_offset, const idx_t count,
                                               const TupleDataLayout &layout, Vector &row_locations,
                                               Vector &heap_row_locations, const idx_t col_idx,
@@ -122,12 +123,10 @@ inline void TupleDataValueScatter(const string_t &source, const data_ptr_t &row_
 	heap_location += source.GetSize();
 }
 
-// TODO: nested types value scatter
-
 template <class T>
-static void TemplatedTupleDataScatter(const Vector &source, const UnifiedVectorFormat &source_data,
-                                      const idx_t source_offset, const idx_t count, const TupleDataLayout &layout,
-                                      Vector &row_locations, Vector &heap_row_locations, const idx_t col_idx,
+static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
+                                      const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
+                                      Vector &heap_row_locations, const idx_t col_idx,
                                       const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	const auto sel = *source_data.sel;
@@ -157,9 +156,9 @@ static void TemplatedTupleDataScatter(const Vector &source, const UnifiedVectorF
 	}
 }
 
-static void StructTupleDataScatter(const Vector &source, const UnifiedVectorFormat &source_data,
-                                   const idx_t source_offset, const idx_t count, const TupleDataLayout &layout,
-                                   Vector &row_locations, Vector &heap_row_locations, const idx_t col_idx,
+static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
+                                   const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
+                                   Vector &heap_row_locations, const idx_t col_idx,
                                    const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	const auto sel = *source_data.sel;
@@ -199,6 +198,19 @@ static void StructTupleDataScatter(const Vector &source, const UnifiedVectorForm
 		                                 struct_layout, struct_row_locations, heap_row_locations, struct_col_idx,
 		                                 struct_scatter_function.child_functions);
 	}
+}
+
+static void ListTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
+                                 const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
+                                 Vector &heap_row_locations, const idx_t col_idx,
+                                 const vector<TupleDataScatterFunction> &child_functions) {
+	// Target
+	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+
+	// TODO: re-write the list scatter at some point
+	// TODO: also the parameters passed here are probably wrong
+	RowOperations::HeapScatter(source, count, *FlatVector::IncrementalSelectionVector(), count, col_idx,
+	                           target_locations, target_locations, source_offset);
 }
 
 TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx) {
@@ -258,20 +270,15 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleData
 		}
 		break;
 	}
-		//	case PhysicalType::LIST: {
-		//		function = TemplatedTupleDataCopy<list_entry_t>;
-		//		auto child_function = GetCopyFunction(ListType::GetChildType(type));
-		//		result.child_functions.push_back(child_function);
-		//		break;
-		//	}
+	case PhysicalType::LIST:
+		function = ListTupleDataScatter;
+		break;
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
 	}
 	result.function = function;
 	return result;
 }
-
-// TODO: nested types value gather
 
 template <class T>
 static void TemplatedTupleDataGather(Vector &row_locations, Vector &heap_row_locations, const TupleDataLayout &layout,
@@ -298,6 +305,62 @@ static void TemplatedTupleDataGather(Vector &row_locations, Vector &heap_row_loc
 			target_validity.SetInvalid(i);
 		}
 	}
+}
+
+static void StructTupleDataGather(Vector &row_locations, Vector &heap_row_locations, const TupleDataLayout &layout,
+                                  const idx_t col_idx, const idx_t count, Vector &target,
+                                  const vector<TupleDataGatherFunction> &child_functions) {
+	// Source
+	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+
+	// Target
+	auto &target_validity = FlatVector::Validity(target);
+
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+	// Get validity of the struct
+	for (idx_t i = 0; i < count; i++) {
+		ValidityBytes row_mask(source_locations[i]);
+		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+			target_validity.SetInvalid(i);
+		}
+	}
+
+	// Create a Vector of pointers pointing to the start of the TupleDataLayout of the STRUCT
+	Vector struct_row_locations(LogicalType::POINTER, count);
+	auto struct_source_locations = FlatVector::GetData<data_ptr_t>(struct_row_locations);
+	const auto offset_in_row = layout.GetOffsets()[col_idx];
+	for (idx_t i = 0; i < count; i++) {
+		struct_source_locations[i] = source_locations[i] + offset_in_row;
+	}
+
+	D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
+	const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+	auto &struct_targets = StructVector::GetEntries(target);
+	D_ASSERT(struct_layout.ColumnCount() == struct_targets.size());
+
+	// Recurse through the struct children
+	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
+		const auto &struct_target = struct_targets[struct_col_idx];
+		const auto &struct_gather_function = child_functions[col_idx];
+		struct_gather_function.function(struct_row_locations, heap_row_locations, struct_layout, struct_col_idx, count,
+		                                *struct_target, struct_gather_function.child_functions);
+	}
+}
+
+static void ListTupleDataGather(Vector &row_locations, Vector &heap_row_locations, const TupleDataLayout &layout,
+                                const idx_t col_idx, const idx_t count, Vector &target,
+                                const vector<TupleDataGatherFunction> &child_functions) {
+	// Source
+	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+
+	// TODO: re-write the list gather at some point
+	// TODO: also the parameters passed here are probably wrong
+	RowOperations::HeapGather(target, count, *FlatVector::IncrementalSelectionVector(), col_idx, source_locations,
+	                          source_locations);
 }
 
 TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx) {
@@ -348,20 +411,18 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const TupleDataLa
 	case PhysicalType::VARCHAR:
 		function = TemplatedTupleDataGather<string_t>;
 		break;
-		//	case PhysicalType::STRUCT: {
-		//		function = TemplatedTupleDataCopyStruct;
-		//		auto &child_types = StructType::GetChildTypes(type);
-		//		for (auto &kv : child_types) {
-		//			result.child_functions.push_back(GetCopyFunction(kv.second));
-		//		}
-		//		break;
-		//	}
-		//	case PhysicalType::LIST: {
-		//		function = TemplatedTupleDataCopy<list_entry_t>;
-		//		auto child_function = GetCopyFunction(ListType::GetChildType(type));
-		//		result.child_functions.push_back(child_function);
-		//		break;
-		//	}
+	case PhysicalType::STRUCT: {
+		function = StructTupleDataGather;
+		D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
+		const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+		for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
+			result.child_functions.push_back(GetGatherFunction(struct_layout, struct_col_idx));
+		}
+		break;
+	}
+	case PhysicalType::LIST:
+		function = ListTupleDataGather;
+		break;
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
 	}
