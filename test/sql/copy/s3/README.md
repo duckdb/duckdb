@@ -39,7 +39,7 @@ export DUCKDB_S3_ENDPOINT=duckdb-minio.com:9000
 export DUCKDB_S3_USE_SSL=false
 ```
 
-Or using the `set_s3_test_server_variables.sh` script:
+Or using the `set_s3_test_server_variables.sh` script:  
 `source scripts/set_s3_test_server_variables.sh`  
 (This has to be run with `source` so the environment variables are exported to your current environment, not a temporary one)
 
