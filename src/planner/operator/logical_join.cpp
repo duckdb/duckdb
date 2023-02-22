@@ -12,10 +12,10 @@ LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
 
 vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	auto left_bindings = MapBindings(children[0]->GetColumnBindings(), left_projection_map);
-//	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-//		// for SEMI and ANTI join we only project the left hand side
-//		return left_bindings;
-//	}
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		// for SEMI and ANTI join we only project the left hand side
+		return left_bindings;
+	}
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side plus the MARK column
 		left_bindings.emplace_back(mark_index, 0);
@@ -29,10 +29,10 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 
 void LogicalJoin::ResolveTypes() {
 	types = MapTypes(children[0]->types, left_projection_map);
-//	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-//		// for SEMI and ANTI join we only project the left hand side
-//		return;
-//	}
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		// for SEMI and ANTI join we only project the left hand side
+		return;
+	}
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side, plus a BOOLEAN column indicating the MARK
 		types.emplace_back(LogicalType::BOOLEAN);

@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE TABLE integers(i INTEGER, r INTEGER)
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL)
+INSERT INTO integers VALUES (1, 2), (2, 3), (3, 4);
 
 statement ok
 CREATE TABLE jintegers(j INTEGER)
@@ -112,11 +112,38 @@ SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) ORDER BY i
 
 mode unskip
 
-query I
+query II
 SELECT * FROM integers SEMI JOIN jintegers ON (i = j);
+----
+1	2
+2	3
+3	4
+
+
+query I
+SELECT i FROM integers SEMI JOIN jintegers ON (i = j);
+----
+1
+2
+3
+
+query I
+SELECT r FROM integers SEMI JOIN jintegers ON (i = j);
 ----
 2
 3
+4
+
+query I
+SELECT r FROM integers ANTI JOIN jintegers ON (i = j);
+----
+
+
+# cannot select from right table with semi and anti joins
+statement error
+SELECT j FROM integers SEMI JOIN jintegers ON (i = j);
+----
+Binder Error
 
 
 mode skip

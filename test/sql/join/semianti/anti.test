@@ -6,23 +6,51 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE one (a INTEGER);
+CREATE TABLE one (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok
-INSERT INTO one VALUES(42), (43);
+INSERT INTO one VALUES(42, 1, 1), (43, 1, 1);
 
 statement ok
-CREATE TABLE two (a INTEGER);
+CREATE TABLE two (a INTEGER, b INTEGER);
 
 statement ok
-INSERT INTO two VALUES(42);
+INSERT INTO two VALUES(42, 1);
 
-query I
+statement ok
+CREATE TABLE three (tc INTEGER);
+
+statement ok
+INSERT INTO three VALUES (1), (2), (3), (4), (5);
+
+
+# * expression expands all of the left table
+query III
 SELECT * FROM one ANTI JOIN two ON one.a = two.a;
 ----
-43
+43	1	1
 
-# Works with filters
-query I
+# can filter on columns in left table
+query III
+SELECT * FROM one ANTI JOIN two ON one.a = two.a WHERE a > 5;
+----
+43	1	1
+
+# can have list type expressions in the condition
+query III
+SELECT * FROM one ANTI JOIN two ON ([one.a, one.b] = [two.a, two.b]);
+----
+43	1	1
+
+# right table can be a subquery
+
+query III
+SELECT * FROM one ANTI JOIN (SELECT a as foo from two where b = 1) buzz ON one.a = buzz.foo
+----
+43	1	1
+
+# Should throw error when filtering on column in right table
+statement error
 SELECT * FROM one ANTI JOIN two ON one.a = two.a WHERE two.a < 43;
 ----
+Binder Error
