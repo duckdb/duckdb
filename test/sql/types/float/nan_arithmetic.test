@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-
-
 foreach type FLOAT DOUBLE
 
 foreach val nan
@@ -71,7 +69,6 @@ nan
 endloop
 
 endloop
-
 
 foreach type FLOAT DOUBLE
 # any arithmetic on a nan value will result in a nan value
@@ -176,7 +173,3 @@ SELECT -('-inf'::${type})
 inf
 
 endloop
-
-
-
-

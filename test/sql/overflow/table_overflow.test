@@ -200,5 +200,3 @@ statement error
 SELECT i + j from smallints LEFT JOIN smallints2  ON (i = j);
 ----
 Out of Range Error: Overflow
-
-
