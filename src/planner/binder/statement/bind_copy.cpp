@@ -1,24 +1,24 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/bind_helpers.hpp"
-#include "duckdb/parser/statement/copy_statement.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/planner/operator/logical_copy_to_file.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
-
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -71,12 +71,17 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	// bind the select statement
-	auto select_node = Bind(*stmt.select_statement);
-
 	// lookup the format in the catalog
 	auto copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
+	if (copy_function->function.plan) {
+		// plan rewrite COPY TO
+		return copy_function->function.plan(*this, stmt);
+	}
+
+	// bind the select statement
+	auto select_node = Bind(*stmt.select_statement);
+
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
@@ -92,17 +97,20 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			use_tmp_file =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			user_set_use_tmp_file = true;
 			continue;
 		}
 		if (loption == "allow_overwrite") {
-			allow_overwrite = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			allow_overwrite =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
 
 		if (loption == "per_thread_output") {
-			per_thread_output = option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			per_thread_output =
+			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
 		if (loption == "partition_by") {

@@ -6,17 +6,18 @@
 
 namespace duckdb {
 
-void PhysicalSet::SetExtensionVariable(ExecutionContext &context, DBConfig &config,
-                                       ExtensionOption &extension_option) const {
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+                                       SetScope scope, const Value &value) {
+	auto &config = DBConfig::GetConfig(context);
 	auto &target_type = extension_option.type;
-	Value target_value = value.CastAs(context.client, target_type);
+	Value target_value = value.CastAs(context, target_type);
 	if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, target_value);
+		extension_option.set_function(context, scope, target_value);
 	}
 	if (scope == SetScope::GLOBAL) {
 		config.SetOption(name, std::move(target_value));
 	} else {
-		auto &client_config = ClientConfig::GetConfig(context.client);
+		auto &client_config = ClientConfig::GetConfig(context);
 		client_config.set_variables[name] = std::move(target_value);
 	}
 }
@@ -29,17 +30,9 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		auto &config = DBConfig::GetConfig(context.client);
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			// it is not!
-			// get a list of all options
-			vector<string> potential_names = DBConfig::GetOptionNames();
-			for (auto &entry : config.extension_parameters) {
-				potential_names.push_back(entry.first);
-			}
-
-			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+			throw Catalog::UnrecognizedConfigurationError(context.client, name);
 		}
-		SetExtensionVariable(context, config, entry->second);
+		SetExtensionVariable(context.client, entry->second, name, scope, value);
 		return;
 	}
 	SetScope variable_scope = scope;

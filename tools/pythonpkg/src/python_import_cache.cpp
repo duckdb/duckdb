@@ -11,6 +11,10 @@ py::handle PythonImportCacheItem::operator()(void) const {
 	return object;
 }
 
+bool PythonImportCacheItem::LoadAttempted() const {
+	return load_attempted;
+}
+
 bool PythonImportCacheItem::IsLoaded() const {
 	auto type = (*this)();
 	return type.ptr() != nullptr;
@@ -30,6 +34,7 @@ PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object o
 }
 
 void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &cache) {
+	load_attempted = true;
 	try {
 		object = AddCache(cache, std::move(py::module::import(name.c_str())));
 	} catch (py::error_already_set &e) {

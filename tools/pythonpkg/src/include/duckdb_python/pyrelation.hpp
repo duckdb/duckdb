@@ -43,8 +43,6 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
-	shared_ptr<Relation> rel;
-
 public:
 	static void Initialize(py::handle &m);
 
@@ -73,11 +71,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
+	                                                 bool enable_optimizer = true);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
-	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation>
+	GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr, bool enable_optimizer = true);
 	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
 	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -155,6 +153,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
+	string ToSQL();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	idx_t Length();
@@ -178,11 +178,11 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	py::object FetchOne();
+	Optional<py::tuple> FetchOne();
 
-	py::object FetchAll();
+	py::list FetchAll();
 
-	py::object FetchMany(idx_t size);
+	py::list FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
 
@@ -191,6 +191,8 @@ public:
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
+
+	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
@@ -235,11 +237,14 @@ public:
 	py::list Columns();
 	py::list ColumnTypes();
 
-	string Print();
+	string ToString();
+	void Print();
 
 	string Explain();
 
 	static bool IsRelation(const py::object &object);
+
+	Relation &GetRel();
 
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
@@ -250,10 +255,14 @@ private:
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;
 	void AssertResultOpen() const;
+	void AssertRelation() const;
 	void ExecuteOrThrow();
 	unique_ptr<QueryResult> ExecuteInternal();
 
 private:
+	shared_ptr<Relation> rel;
+	vector<LogicalType> types;
+	vector<string> names;
 	unique_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
 };

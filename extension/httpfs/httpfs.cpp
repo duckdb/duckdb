@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <thread>
+#include <string>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -508,7 +509,18 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
-	length = atoll(res->headers["Content-Length"].c_str());
+	if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {
+		// There was no content-length header, we can not do range requests here
+		throw IOException("Server did not send Content-Length header, can not read from this file.");
+	}
+
+	try {
+		length = std::stoll(res->headers["Content-Length"]);
+	} catch (std::invalid_argument &e) {
+		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+	} catch (std::out_of_range &e) {
+		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+	}
 
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);

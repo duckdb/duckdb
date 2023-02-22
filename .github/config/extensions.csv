@@ -8,7 +8,7 @@ parquet,,,
 tpcds,,,
 tpch,,,
 visualizer,,,
-sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,c517f547396228cc1f326a3b4b2e3a57f9a77291,
-postgres_scanner,https://github.com/duckdblabs/postgres_scanner,70a6eb867207599e6cb9225d22f09c55d973dd00,
-substrait,https://github.com/duckdblabs/substrait,900faee65f4a955bac764da326bede00b6576f31,no-windows
+sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,ae11e27cc21bea26d4f71a796ab5e6f45bc3f36a,
+postgres_scanner,https://github.com/duckdblabs/postgres_scanner,6745dd5f9e6f80cce68babdaf21ce719d3279c1d,
+substrait,https://github.com/duckdblabs/substrait,334b68b6f467a66c2da41c698679d49648a64b6f,no-windows
 arrow,https://github.com/duckdblabs/arrow,c3538b95b9d4fb1ca41c579303fd4970c9182199,no-windows

@@ -137,7 +137,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	}
 	if (!success && options.strict_cast) {
 		options.error_message =
-		    StringUtil::Format("Failed to cast value to numerical: %s", JSONCommon::ValToString(val));
+		    StringUtil::Format("Failed to cast value to numerical: %s", JSONCommon::ValToString(val, 50));
 	}
 	return success;
 }
@@ -173,7 +173,8 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		throw InternalException("Unknown yyjson tag in GetValueString");
 	}
 	if (!success && options.strict_cast) {
-		options.error_message = StringUtil::Format("Failed to cast value to decimal: %s", JSONCommon::ValToString(val));
+		options.error_message =
+		    StringUtil::Format("Failed to cast value to decimal: %s", JSONCommon::ValToString(val, 50));
 	}
 	return success;
 }
@@ -252,6 +253,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
                                     Vector &string_vector, JSONTransformOptions &options) {
 	auto data = (string_t *)FlatVector::GetData(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
+	validity.SetAllValid(count);
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
@@ -259,7 +261,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 			validity.SetInvalid(i);
 		} else if (options.strict_cast && !unsafe_yyjson_is_str(val)) {
 			options.error_message = StringUtil::Format("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()),
-			                                           JSONCommon::ValToString(val));
+			                                           JSONCommon::ValToString(val, 50));
 			options.object_index = i;
 			return false;
 		} else {
@@ -275,7 +277,7 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 		return false;
 	}
 
-	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message, options.strict_cast) &&
+	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
 	    options.strict_cast) {
 		options.object_index = 0; // Can't get line number information here
 		options.error_message += " (line/object number information is approximate)";
@@ -378,19 +380,27 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	size_t idx, max;
 	yyjson_val *key, *val;
 	for (idx_t i = 0; i < count; i++) {
-		if (objects[i]) {
+		if (objects[i] && !unsafe_yyjson_is_null(objects[i])) {
+			if (!unsafe_yyjson_is_obj(objects[i]) && options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(objects[i]),
+				                       JSONCommon::ValToString(objects[i], 50));
+				options.object_index = i;
+				success = false;
+				break;
+			}
 			found_key_count = 0;
 			memset(found_keys, false, column_count);
 			yyjson_obj_foreach(objects[i], idx, max, key, val) {
-				auto key_ptr = yyjson_get_str(key);
-				auto key_len = yyjson_get_len(key);
+				auto key_ptr = unsafe_yyjson_get_str(key);
+				auto key_len = unsafe_yyjson_get_len(key);
 				auto it = key_map.find({key_ptr, key_len});
 				if (it != key_map.end()) {
 					const auto &col_idx = it->second;
 					if (options.error_duplicate_key && found_keys[col_idx]) {
 						options.error_message =
 						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
-						                       JSONCommon::ValToString(objects[i]));
+						                       JSONCommon::ValToString(objects[i], 50));
 						options.object_index = i;
 						success = false;
 						break;
@@ -401,7 +411,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				} else if (options.error_unknown_key) {
 					options.error_message =
 					    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-					                       JSONCommon::ValToString(objects[i]));
+					                       JSONCommon::ValToString(objects[i], 50));
 					options.object_index = i;
 					success = false;
 				}
@@ -414,7 +424,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 						if (options.error_missing_key) {
 							options.error_message =
 							    StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-							                       JSONCommon::ValToString(objects[i]));
+							                       JSONCommon::ValToString(objects[i], 50));
 							options.object_index = i;
 							success = false;
 						} else {
@@ -474,13 +484,24 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	auto &list_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (!arrays[i] || yyjson_is_null(arrays[i])) {
+		if (!arrays[i] || unsafe_yyjson_is_null(arrays[i])) {
 			list_validity.SetInvalid(i);
+		} else if (!unsafe_yyjson_is_arr(arrays[i])) {
+			if (options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arrays[i]),
+				                       JSONCommon::ValToString(arrays[i], 50));
+				options.object_index = i;
+				return false;
+			} else {
+				list_validity.SetInvalid(i);
+			}
+		} else {
+			auto &entry = list_entries[i];
+			entry.offset = offset;
+			entry.length = unsafe_yyjson_get_len(arrays[i]);
+			offset += entry.length;
 		}
-		auto &entry = list_entries[i];
-		entry.offset = offset;
-		entry.length = yyjson_arr_size(arrays[i]);
-		offset += entry.length;
 	}
 	ListVector::SetListSize(result, offset);
 	ListVector::Reserve(result, offset);
@@ -521,12 +542,31 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	return success;
 }
 
+bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
+	auto data = (string_t *)FlatVector::GetData(result);
+	auto &validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &val = vals[i];
+		if (!val) {
+			validity.SetInvalid(i);
+		} else {
+			data[i] = JSONCommon::WriteVal(val, alc);
+		}
+	}
+	// Can always transform to JSON
+	return true;
+}
+
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
 		// Auto-detected date/timestamp format during sampling
 		return TransformFromStringWithFormat(vals, result, count, options);
+	}
+
+	if (JSONCommon::LogicalTypeIsJSON(result_type)) {
+		return TransformToJSON(vals, alc, result, count);
 	}
 
 	switch (result_type.id()) {

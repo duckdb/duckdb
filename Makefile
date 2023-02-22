@@ -1,9 +1,8 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite imdb
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
 
 all: release
 opt: release
 unit: unittest
-imdb: third_party/imdb/data
 
 GENERATOR=
 FORCE_COLOR=
@@ -159,6 +158,9 @@ endif
 ifeq (${DESTROY_UNPINNED_BLOCKS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDESTROY_UNPINNED_BLOCKS=1
 endif
+ifeq (${ALTERNATIVE_VERIFY}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DALTERNATIVE_VERIFY=1
+endif
 ifeq (${DEBUG_MOVE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDEBUG_MOVE=1
 endif
@@ -243,7 +245,7 @@ amaldebug:
 tidy-check:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_ODBC_DRIVER=TRUE -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
 
 tidy-fix:
@@ -276,9 +278,6 @@ format-master:
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
-
-third_party/imdb/data:
-	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull

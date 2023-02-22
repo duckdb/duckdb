@@ -409,7 +409,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable *table, 
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
-		auto row_group = (RowGroup *)row_groups->GetSegment(ids[pos]);
+		auto row_group = (RowGroup *)row_groups->GetSegment(ids[start]);
 		for (pos++; pos < count; pos++) {
 			D_ASSERT(ids[pos] >= 0);
 			// check if this id still belongs to this row group

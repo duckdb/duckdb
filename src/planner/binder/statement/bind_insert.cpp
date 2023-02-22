@@ -301,7 +301,28 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		insert.on_conflict_condition = std::move(condition);
 	}
 
-	auto projection_index = insert.children[0]->GetTableIndex()[0];
+	auto bindings = insert.children[0]->GetColumnBindings();
+	idx_t projection_index = DConstants::INVALID_INDEX;
+	std::vector<unique_ptr<LogicalOperator>> *insert_child_operators;
+	insert_child_operators = &insert.children;
+	while (projection_index == DConstants::INVALID_INDEX) {
+		if (insert_child_operators->empty()) {
+			// No further children to visit
+			break;
+		}
+		D_ASSERT(insert_child_operators->size() >= 1);
+		auto &current_child = (*insert_child_operators)[0];
+		auto table_indices = current_child->GetTableIndex();
+		if (table_indices.empty()) {
+			// This operator does not have a table index to refer to, we have to visit its children
+			insert_child_operators = &current_child->children;
+			continue;
+		}
+		projection_index = table_indices[0];
+	}
+	if (projection_index == DConstants::INVALID_INDEX) {
+		throw InternalException("Could not locate a table_index from the children of the insert");
+	}
 
 	string unused;
 	auto original_binding = bind_context.GetBinding(table_alias, unused);

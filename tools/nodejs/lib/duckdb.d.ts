@@ -3,9 +3,13 @@
  * See https://duckdb.org/docs/api/nodejs/overview for details
  * on Node.JS API
  */
-export class DuckDbError extends Error {
-  errno: number;
-  code: string;
+
+/**
+ * Standard error shape for DuckDB errors
+ */
+export interface DuckDbError extends Error {
+  errno: -1; // value of ERROR
+  code: 'DUCKDB_NODEJS_ERROR';
 }
 
 type Callback<T> = (err: DuckDbError | null, res: T) => void;

@@ -14,6 +14,9 @@ namespace duckdb {
 
 struct UUIDCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "uuid";
+
+public:
 	~UUIDCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {

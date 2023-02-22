@@ -1,14 +1,22 @@
 name: Regression
 on:
+  workflow_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
 
@@ -38,7 +46,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -111,7 +119,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -152,7 +160,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -221,7 +229,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 

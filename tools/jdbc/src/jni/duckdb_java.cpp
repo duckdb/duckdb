@@ -36,6 +36,7 @@ static jclass J_Float;
 static jclass J_Double;
 static jclass J_String;
 static jclass J_Timestamp;
+static jclass J_TimestampTZ;
 static jclass J_Decimal;
 
 static jmethodID J_Bool_booleanValue;
@@ -46,6 +47,7 @@ static jmethodID J_Long_longValue;
 static jmethodID J_Float_floatValue;
 static jmethodID J_Double_doubleValue;
 static jmethodID J_Timestamp_getMicrosEpoch;
+static jmethodID J_TimestampTZ_getMicrosEpoch;
 static jmethodID J_Decimal_precision;
 static jmethodID J_Decimal_scale;
 static jmethodID J_Decimal_scaleByPowTen;
@@ -124,6 +126,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBTimestamp");
 	J_Timestamp = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
+	tmpLocalRef = env->FindClass("org/duckdb/DuckDBTimestampTZ");
+	J_TimestampTZ = (jclass)env->NewGlobalRef(tmpLocalRef);
+	env->DeleteLocalRef(tmpLocalRef);
 	tmpLocalRef = env->FindClass("java/math/BigDecimal");
 	J_Decimal = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
@@ -154,6 +159,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_Float_floatValue = env->GetMethodID(J_Float, "floatValue", "()F");
 	J_Double_doubleValue = env->GetMethodID(J_Double, "doubleValue", "()D");
 	J_Timestamp_getMicrosEpoch = env->GetMethodID(J_Timestamp, "getMicrosEpoch", "()J");
+	J_TimestampTZ_getMicrosEpoch = env->GetMethodID(J_TimestampTZ, "getMicrosEpoch", "()J");
 	J_Decimal_precision = env->GetMethodID(J_Decimal, "precision", "()I");
 	J_Decimal_scale = env->GetMethodID(J_Decimal, "scale", "()I");
 	J_Decimal_scaleByPowTen = env->GetMethodID(J_Decimal, "scaleByPowerOfTen", "(I)Ljava/math/BigDecimal;");
@@ -203,6 +209,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	env->DeleteGlobalRef(J_Double);
 	env->DeleteGlobalRef(J_String);
 	env->DeleteGlobalRef(J_Timestamp);
+	env->DeleteGlobalRef(J_TimestampTZ);
 	env->DeleteGlobalRef(J_Decimal);
 	env->DeleteGlobalRef(J_DuckResultSetMeta);
 	env->DeleteGlobalRef(J_DuckVector);
@@ -445,6 +452,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
+		return nullptr;
 	}
 	auto res_ref = make_unique<ResultHolder>();
 	vector<Value> duckdb_params;
@@ -476,6 +484,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else if (env->IsInstanceOf(param, J_Long)) {
 				duckdb_params.push_back(Value::BIGINT(env->CallLongMethod(param, J_Long_longValue)));
 				continue;
+			} else if (env->IsInstanceOf(param, J_TimestampTZ)) { // Check for subclass before superclass!
+				duckdb_params.push_back(
+				    Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
+				continue;
 			} else if (env->IsInstanceOf(param, J_Timestamp)) {
 				duckdb_params.push_back(
 				    Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
@@ -489,6 +501,18 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else if (env->IsInstanceOf(param, J_Decimal)) {
 				jint precision = env->CallIntMethod(param, J_Decimal_precision);
 				jint scale = env->CallIntMethod(param, J_Decimal_scale);
+
+				// Java BigDecimal type can have scale that exceeds the precision
+				// Which our DECIMAL type does not support (assert(width >= scale))
+				if (scale > precision) {
+					precision = scale;
+				}
+
+				// DECIMAL scale is unsigned, so negative values are not supported
+				if (scale < 0) {
+					env->ThrowNew(J_SQLException, "Converting from a BigDecimal with negative scale is not supported");
+					return nullptr;
+				}
 
 				if (precision <= 18) { // normal sizes -> avoid string processing
 					jobject no_point_dec = env->CallObjectMethod(param, J_Decimal_scaleByPowTen, scale);
@@ -756,6 +780,9 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetDataUnsafe(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
+			break;
+		case LogicalTypeId::UUID:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
 		default:
 			env->ThrowNew(J_SQLException, ("Unsupported result column type " + vec.GetType().ToString()).c_str());

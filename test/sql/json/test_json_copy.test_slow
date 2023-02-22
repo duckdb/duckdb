@@ -1,0 +1,268 @@
+# name: test/sql/json/test_json_copy.test_slow
+# description: Test JSON COPY using TPC-H
+# group: [json]
+
+require json
+
+# test issue #6305
+statement ok
+copy (
+    select * from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
+
+# struct star expression should work too
+statement ok
+copy (
+    select v.* from values
+    ({order_id: uuid(), revenue: 10}),
+    ({order_id: uuid(), revenue: 10}),
+    ({order_id: uuid(), revenue: 15}),
+    ({order_id: uuid(), revenue: 5}),
+    t (v)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
+
+# exclude
+statement ok
+copy (
+    select order_id, * exclude (order_id) from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	10
+UUID	10
+UUID	15
+UUID	5
+
+# and finally, replace
+statement ok
+copy (
+    select * replace (revenue + 1 as revenue) from values
+    (uuid(), 10),
+    (uuid(), 10),
+    (uuid(), 15),
+    (uuid(), 5)
+    v (order_id, revenue)
+) to '__TEST_DIR__/query.json' (format json)
+
+query II
+select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+----
+UUID	11
+UUID	11
+UUID	16
+UUID	6
+
+statement ok
+copy (select 42 as a, a + 1) to '__TEST_DIR__/out.json' (format json);
+
+query II
+select * from '__TEST_DIR__/out.json'
+----
+42	43
+
+require tpch
+
+statement ok
+start transaction
+
+statement ok
+call dbgen(sf=1)
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_json_test' (FORMAT JSON)
+
+statement ok
+rollback
+
+statement ok
+start transaction
+
+# test the import
+statement ok
+import database '__TEST_DIR__/export_json_test'
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+# we can also run straight on JSON by creating views
+# this also tests projection pushdown well
+statement ok
+rollback
+
+statement ok
+CREATE VIEW lineitem AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/lineitem.json',
+	columns={
+		l_orderkey: 'INTEGER',
+		l_partkey: 'INTEGER',
+		l_suppkey: 'INTEGER',
+		l_linenumber: 'INTEGER',
+		l_quantity: 'INTEGER',
+		l_extendedprice: 'DECIMAL(15,2)',
+		l_discount: 'DECIMAL(15,2)',
+		l_tax: 'DECIMAL(15,2)',
+		l_returnflag: 'VARCHAR',
+		l_linestatus: 'VARCHAR',
+		l_shipdate: 'DATE',
+		l_commitdate: 'DATE',
+		l_receiptdate: 'DATE',
+		l_shipinstruct: 'VARCHAR',
+		l_shipmode: 'VARCHAR',
+		l_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW orders AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/orders.json',
+	columns={
+	    o_orderkey: 'INTEGER',
+		o_custkey: 'INTEGER',
+		o_orderstatus: 'VARCHAR',
+		o_totalprice: 'DECIMAL(15,2)',
+		o_orderdate: 'DATE',
+		o_orderpriority: 'VARCHAR',
+		o_clerk: 'VARCHAR',
+		o_shippriority: 'INTEGER',
+		o_comment: 'VARCHAR'
+    }
+);
+
+statement ok
+CREATE VIEW partsupp AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/partsupp.json',
+	columns={
+		ps_partkey: 'INTEGER',
+		ps_suppkey: 'INTEGER',
+		ps_availqty: 'INTEGER',
+		ps_supplycost: 'DECIMAL(15,2)',
+		ps_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW part AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/part.json',
+	columns={
+		p_partkey: 'INTEGER',
+		p_name: 'VARCHAR',
+		p_mfgr: 'VARCHAR',
+		p_brand: 'VARCHAR',
+		p_type: 'VARCHAR',
+		p_size: 'INTEGER',
+		p_container: 'VARCHAR',
+		p_retailprice: 'DECIMAL(15,2)',
+		p_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW customer AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/customer.json',
+	columns={
+		c_custkey: 'INTEGER',
+		c_name: 'VARCHAR',
+		c_address: 'VARCHAR',
+		c_nationkey: 'INTEGER',
+		c_phone: 'VARCHAR',
+		c_acctbal: 'DECIMAL(15,2)',
+		c_mktsegment: 'VARCHAR',
+		c_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW supplier AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/supplier.json',
+	columns={
+		s_suppkey: 'INTEGER',
+		s_name: 'VARCHAR',
+		s_address: 'VARCHAR',
+		s_nationkey: 'INTEGER',
+		s_phone: 'VARCHAR',
+		s_acctbal: 'DECIMAL(15,2)',
+		s_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW nation AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/nation.json',
+	columns={
+		n_nationkey: 'INTEGER',
+		n_name: 'VARCHAR',
+		n_regionkey: 'INTEGER',
+		n_comment: 'VARCHAR'
+	}
+);
+
+statement ok
+CREATE VIEW region AS SELECT * FROM read_json(
+	'__TEST_DIR__/export_json_test/region.json',
+	columns={
+		r_regionkey: 'INTEGER',
+		r_name: 'VARCHAR',
+		r_comment: 'VARCHAR'
+	}
+);
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

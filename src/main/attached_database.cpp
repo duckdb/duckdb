@@ -37,11 +37,12 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
     : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, std::move(name_p)), db(db),
       type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
-	catalog = storage_extension.attach(*this, name, info, access_mode);
+	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
-	transaction_manager = storage_extension.create_transaction_manager(*this, *catalog);
+	transaction_manager =
+	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
 	if (!transaction_manager) {
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");

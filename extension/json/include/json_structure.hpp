@@ -21,6 +21,13 @@ public:
 	JSONStructureNode();
 	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p);
 
+	//! Disable copy constructors
+	JSONStructureNode(const JSONStructureNode &other) = delete;
+	JSONStructureNode &operator=(const JSONStructureNode &) = delete;
+	//! Enable move constructors
+	JSONStructureNode(JSONStructureNode &&other) noexcept;
+	JSONStructureNode &operator=(JSONStructureNode &&) noexcept;
+
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
 
 	bool ContainsVarchar() const;
@@ -40,13 +47,20 @@ private:
 	                               vector<StrpTimeFormat> &formats);
 
 public:
-	string key;
+	unique_ptr<string> key;
+	bool initialized = false;
 	vector<JSONStructureDescription> descriptions;
 };
 
 struct JSONStructureDescription {
 public:
 	explicit JSONStructureDescription(LogicalTypeId type_p);
+	//! Disable copy constructors
+	JSONStructureDescription(const JSONStructureDescription &other) = delete;
+	JSONStructureDescription &operator=(const JSONStructureDescription &) = delete;
+	//! Enable move constructors
+	JSONStructureDescription(JSONStructureDescription &&other) noexcept;
+	JSONStructureDescription &operator=(JSONStructureDescription &&) noexcept;
 
 	JSONStructureNode &GetOrCreateChild();
 	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val);

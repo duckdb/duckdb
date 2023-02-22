@@ -62,3 +62,11 @@ SELECT alias(a), alias(b), alias(a * 2) AS c, alias(b * (a * 2)) AS d FROM test 
 a	b	c	d
 a	b	c	d
 
+
+# test nested alias in where clause
+query IIII
+select i as b, b as c, c as d, d as e from integers where e = 3;
+----
+3	3	3	3
+
+

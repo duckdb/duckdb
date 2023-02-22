@@ -23,25 +23,16 @@
 
 namespace duckdb {
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
-                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(fs_p, allocator, opener_p, std::move(options_p), requested_types), buffer_size(0), position(0),
-      start(0) {
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+                                     const vector<LogicalType> &requested_types)
+    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                        std::move(options_p), requested_types) {
-}
-
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
-                    std::move(options_p), requested_types),
-      buffer_size(0), position(0), start(0) {
+    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	options.file_path = std::move(filename);
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
@@ -730,6 +721,9 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 			names.push_back(column_name);
 		}
 	}
+	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), options.name_list.size()); i++) {
+		names[i] = options.name_list[i];
+	}
 }
 
 vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
@@ -898,6 +892,12 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	DataChunk best_header_row;
 	DetectCandidateTypes(type_candidates, format_template_candidates, info_candidates, original_options, best_num_cols,
 	                     best_sql_types_candidates, best_format_candidates, best_header_row);
+
+	if (best_format_candidates.empty() || best_header_row.size() == 0) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    original_options.file_path);
+	}
 
 	// #######
 	// ### header detection
