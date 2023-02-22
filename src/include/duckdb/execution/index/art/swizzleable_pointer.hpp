@@ -7,45 +7,39 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
-class ART;
-class Node;
-
-// SwizzleablePointer assumes that the 64-bit blockId always has 0s in the top
-// 33 bits. It thus uses 8 bytes of memory rather than 12.
+//! SwizzleablePointer uses the most significant bit as a flag. If the swizzle flag is set, the value in
+//! the SwizzablePointer is a memory address. Otherwise, the variable stores the block information
+//! of where the object is stored. In the latter case, we use the following 31 bits to store the block ID and
+//! the remaining 32 bits to store the offset
 class SwizzleablePointer {
 public:
-	~SwizzleablePointer();
-	explicit SwizzleablePointer(duckdb::MetaBlockReader &reader);
+	//! Constructs an empty SwizzleablePointer
 	SwizzleablePointer() : pointer(0) {};
+	//! Constructs a swizzled pointer from a block ID and an offset
+	SwizzleablePointer(MetaBlockReader &reader);
 
-	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
+	//! Checks if the pointer is swizzled
+	inline bool IsSwizzled() {
+		return (pointer >> (sizeof(pointer) * 8 - 1)) & 1;
+	}
+	//! Get the pointer
+	inline idx_t GetPointer() {
+		return pointer;
+	}
+	//! Get the block info from a swizzled pointer
+	BlockPointer GetBlockInfo();
 
-	//! Transforms from Node* to uint64_t
-	SwizzleablePointer &operator=(const Node *ptr);
-
-	//! Checks if pointer is swizzled
-	bool IsSwizzled();
-	//! Unswizzle the pointer (if possible)
-	Node *Unswizzle(ART &art);
-
+	//! Returns true, if the pointer is set, else false
 	operator bool() const {
 		return pointer;
 	}
 
-	//! Deletes the underlying object (if necessary) and set the pointer to nullptr
-	void Reset();
-
-private:
-	uint64_t pointer;
-
-	friend bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr);
-
-	//! Extracts the block info from swizzled pointer
-	BlockPointer GetSwizzledBlockInfo();
+protected:
+	idx_t pointer;
 };
 
 } // namespace duckdb

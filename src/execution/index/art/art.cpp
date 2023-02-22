@@ -58,6 +58,9 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 }
 
 ART::~ART() {
+
+	// TODO: free all the memory of the buffer managers
+
 	if (!tree) {
 		return;
 	}

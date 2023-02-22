@@ -7,16 +7,23 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
+
+// classes
 class ART;
+class Prefix;
+
+// structs
+struct PrefixSection {
+	uint8_t bytes[ARTNode::PREFIX_SECTION_SIZE];
+	ARTNode next;
+};
 
 class Prefix {
-	static constexpr idx_t PREFIX_INLINE_BYTES = 8;
-
 public:
 	//! Empty prefix
 	Prefix();
@@ -44,16 +51,21 @@ public:
 	//! Move operator
 	Prefix &operator=(Prefix &&other) noexcept;
 
+	//	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
+	//	//! Used when deleting a node
+	//	void Concatenate(ART &art, uint8_t key, Prefix &other);
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
 	//! Used when deleting a node
-	void Concatenate(ART &art, uint8_t key, Prefix &other);
+	static void Concatenate(ART &art, ARTNode &node, uint8_t key, ARTNode &other_node);
+	static Prefix *GetPrefix(ART &art, ARTNode &node);
+
 	//! Reduces the prefix in n bytes, and returns the new first byte
 	uint8_t Reduce(ART &art, uint32_t n);
 
 	//! Serializes the prefix
-	void Serialize(duckdb::MetaBlockWriter &writer);
+	void Serialize(MetaBlockWriter &writer);
 	//! Deserializes the prefix
-	void Deserialize(duckdb::MetaBlockReader &reader);
+	void Deserialize(MetaBlockReader &reader);
 
 	//! Compare the key with the prefix of the node, return the position where they mismatch
 	uint32_t KeyMismatchPosition(Key &key, uint32_t depth);
@@ -64,7 +76,7 @@ private:
 	uint32_t size;
 	union {
 		uint8_t *ptr;
-		uint8_t inlined[8];
+		uint8_t inlined[ARTNode::PREFIX_INLINE_BYTES];
 	} value;
 
 private:

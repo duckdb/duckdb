@@ -14,7 +14,8 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
@@ -37,6 +38,7 @@ struct ARTIndexScanState : public IndexScanState {
 	bool checked = false;
 	//! All scanned row IDs
 	vector<row_t> result_ids;
+	//! To iterate the leaves and scan their row IDs
 	Iterator iterator;
 };
 
@@ -48,7 +50,7 @@ enum class VerifyExistenceType : uint8_t {
 
 class ART : public Index {
 public:
-	//! Constructs an ART containing the bound expressions, which are resolved during index construction
+	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
 	    AttachedDatabase &db, bool track_memory, idx_t block_id = DConstants::INVALID_INDEX,
@@ -56,7 +58,15 @@ public:
 	~ART() override;
 
 	//! Root of the tree
-	Node *tree;
+	ARTNode *tree;
+
+	//! Fixed size node allocators
+	FixedSizeAllocator n4_nodes;
+	FixedSizeAllocator n16_nodes;
+	FixedSizeAllocator n48_nodes;
+	FixedSizeAllocator n256_nodes;
+	FixedSizeAllocator prefixes;
+	FixedSizeAllocator prefix_sections;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -91,7 +101,7 @@ public:
 	void SearchEqualJoinNoFetch(Key &key, idx_t &result_size);
 
 	//! Serializes the index and returns the pair of block_id offset positions
-	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
+	BlockPointer Serialize(MetaBlockWriter &writer) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
