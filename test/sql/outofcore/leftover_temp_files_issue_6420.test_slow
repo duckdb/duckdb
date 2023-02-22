@@ -64,6 +64,23 @@ SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
 ----
 false
 
+# performing a large window function
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false
+
 # performing a large hash join should not leave temp files
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)

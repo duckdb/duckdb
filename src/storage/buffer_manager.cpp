@@ -521,11 +521,8 @@ void BufferManager::PurgeQueue() {
 
 void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	if (block_id >= MAXIMUM_BLOCK) {
-		// in-memory buffer: destroy the buffer
-		if (!can_destroy) {
-			// buffer could have been offloaded to disk: remove the file
-			buffer_manager.DeleteTemporaryFile(block_id);
-		}
+		// in-memory buffer: buffer could have been offloaded to disk: remove the file
+		buffer_manager.DeleteTemporaryFile(block_id);
 	} else {
 		lock_guard<mutex> lock(blocks_lock);
 		// on-disk block: erase from list of blocks in manager
