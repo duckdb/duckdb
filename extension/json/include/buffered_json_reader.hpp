@@ -21,7 +21,7 @@ enum class JSONFormat : uint8_t {
 	AUTO_DETECT = 0,
 	//! One object after another, newlines can be anywhere
 	UNSTRUCTURED = 1,
-	//! Objects are separated by newlines, newlines do not occur within objects (NDJSON)
+	//! Objects are separated by newlines, newlines do not occur within values (NDJSON)
 	NEWLINE_DELIMITED = 2,
 };
 
@@ -75,6 +75,7 @@ public:
 
 private:
 	idx_t ReadFromCache(const char *&pointer, idx_t &size, idx_t &position);
+	idx_t ReadInternal(const char *pointer, const idx_t requested_size);
 
 private:
 	//! The JSON file handle

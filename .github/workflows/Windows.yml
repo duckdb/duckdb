@@ -1,5 +1,6 @@
 name: Windows
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,14 +10,15 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Windows.yml'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
 
@@ -36,7 +38,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -95,7 +97,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -180,7 +182,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -241,7 +243,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v2
+     - uses: actions/setup-python@v4
        with:
          python-version: '3.7'
 

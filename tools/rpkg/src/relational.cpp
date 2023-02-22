@@ -168,7 +168,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	vector<OrderByNode> res_orders;
 
 	for (expr_extptr_t expr : orders) {
-		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, expr->Copy());
+		res_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
 	}
 
 	auto res = std::make_shared<OrderRelation>(rel->rel, std::move(res_orders));

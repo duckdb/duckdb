@@ -72,6 +72,9 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		for (const auto &element_val : ListValue::GetChildren(value)) {
 			values.push_back(NegatePercentileValue(element_val, desc));
 		}
+		if (values.empty()) {
+			throw BinderException("Empty list in percentile not allowed");
+		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
 	} else {
 		bound.expr = make_unique<BoundConstantExpression>(NegatePercentileValue(value, desc));

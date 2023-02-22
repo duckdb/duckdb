@@ -1,5 +1,6 @@
 name: Python
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,16 +10,19 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
-      - 'tools/odbc/**'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
 
@@ -46,7 +50,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -141,7 +145,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -210,7 +214,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -275,7 +279,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -319,7 +323,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -425,7 +429,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 

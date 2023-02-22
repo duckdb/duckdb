@@ -144,7 +144,10 @@ class TestReadCSV(object):
 		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=1)
 		with pytest.raises(duckdb.InvalidInputException):
 			# The sniffer couldn't detect that this column contains non-integer values
-			res = rel.fetchone()
+			while True:
+				res = rel.fetchone()
+				if res is None:
+					break
 
 	def test_sample_size_correct(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)

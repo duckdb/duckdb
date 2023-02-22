@@ -1,5 +1,6 @@
 name: CodeQuality
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,6 +10,8 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     paths-ignore:
@@ -121,7 +124,7 @@ jobs:
           curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
