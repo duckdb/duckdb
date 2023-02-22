@@ -1,5 +1,6 @@
 name: R
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,6 +10,12 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/rpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/R.yml'
   pull_request:
     paths-ignore:
       - '**.md'

@@ -1,5 +1,6 @@
 name: OSX
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
   push:
@@ -9,6 +10,9 @@ on:
       - '!feature'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/OSX.yml'
   pull_request:
     branches-ignore:
       - '**'
