@@ -112,8 +112,8 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return maximum_memory;
 }
 
-void StandardBufferManager::IncreaseUsedMemory(idx_t size) {
-	if (current_memory + size > maximum_memory) {
+void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
+	if (!unsafe && current_memory + size > maximum_memory) {
 		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
 	}
 	current_memory += size;

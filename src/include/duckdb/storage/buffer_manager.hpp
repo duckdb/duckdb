@@ -55,7 +55,7 @@ public:
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Increases the currently allocated memory, but the actual allocation does not go through the buffer manager
-	virtual void IncreaseUsedMemory(idx_t size) = 0;
+	virtual void IncreaseUsedMemory(idx_t size, bool unsafe = false) = 0;
 	//! Decrease the currently allocated memory, but the actual deallocation does not go through the buffer manager
 	virtual void DecreaseUsedMemory(idx_t size) = 0;
 

@@ -26,7 +26,9 @@ BufferPoolReservation::~BufferPoolReservation() {
 
 void BufferPoolReservation::Resize(idx_t new_size) {
 	int64_t delta = (int64_t)new_size - size;
-	manager.IncreaseUsedMemory(delta);
+	// When increasing the memory through the reservation, we don't want to instantly throw
+	// this is done before starting the eviction loop
+	manager.IncreaseUsedMemory(delta, true);
 	size = new_size;
 }
 

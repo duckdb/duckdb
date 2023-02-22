@@ -84,7 +84,7 @@ idx_t CBufferManager::GetUsedMemory() const {
 	return config.used_memory_func(config.data);
 }
 
-void CBufferManager::IncreaseUsedMemory(idx_t amount) {
+void CBufferManager::IncreaseUsedMemory(idx_t amount, bool unsafe) {
 	// no op
 }
 
