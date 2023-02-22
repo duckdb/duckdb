@@ -1695,8 +1695,7 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject(10));
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "b");
