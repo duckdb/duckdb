@@ -164,9 +164,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Create a query object from protobuf plan",
 	      py::arg("proto"), py::arg("connection") = py::none())
 	    .def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
-	         py::arg("connection") = py::none())
+	         py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_substrait_json", &PyConnectionWrapper::GetSubstraitJSON,
-	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::arg("connection") = py::none())
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::arg("connection") = py::none(),
+	         py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_table_names", &PyConnectionWrapper::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
@@ -234,9 +235,9 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("from_substrait", &DuckDBPyRelation::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
-	      py::arg("connection") = py::none());
+	      py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true);
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
-	      py::arg("query"), py::arg("connection") = py::none());
+	      py::arg("query"), py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true);
 	m.def("from_substrait_json", &DuckDBPyRelation::FromSubstraitJSON, "Serialize a query object to protobuf",
 	      py::arg("json"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,

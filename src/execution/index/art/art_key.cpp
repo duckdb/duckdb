@@ -15,40 +15,52 @@ Key::Key(ArenaAllocator &allocator, idx_t len) : len(len) {
 }
 
 template <>
-Key Key::CreateKey(ArenaAllocator &allocator, string_t value) {
+Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, string_t value) {
 	idx_t len = value.GetSize() + 1;
 	auto data = allocator.Allocate(len);
 	memcpy(data, value.GetDataUnsafe(), len - 1);
 
-	if (len > 1 && data[len - 2] == '\0') {
-		// FIXME: rethink this
-		throw NotImplementedException("Indexes cannot have contain null-terminated decoded BLOBs.");
+	// FIXME: rethink this
+	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
+		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
+		for (idx_t i = 0; i < len - 1; i++) {
+			if (data[i] == '\0') {
+				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
+			}
+		}
 	}
+
 	data[len - 1] = '\0';
 	return Key(data, len);
 }
 
 template <>
-Key Key::CreateKey(ArenaAllocator &allocator, const char *value) {
-	return Key::CreateKey(allocator, string_t(value, strlen(value)));
+Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, const char *value) {
+	return Key::CreateKey(allocator, type, string_t(value, strlen(value)));
 }
 
 template <>
-void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value) {
+void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, string_t value) {
 	key.len = value.GetSize() + 1;
 	key.data = allocator.Allocate(key.len);
 	memcpy(key.data, value.GetDataUnsafe(), key.len - 1);
 
-	if (key.len > 1 && key.data[key.len - 2] == '\0') {
-		// FIXME: rethink this
-		throw NotImplementedException("Indexes cannot have contain null-terminated decoded BLOBs.");
+	// FIXME: rethink this
+	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
+		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
+		for (idx_t i = 0; i < key.len - 1; i++) {
+			if (key.data[i] == '\0') {
+				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
+			}
+		}
 	}
+
 	key.data[key.len - 1] = '\0';
 }
 
 template <>
-void Key::CreateKey(ArenaAllocator &allocator, Key &key, const char *value) {
-	Key::CreateKey(allocator, key, string_t(value, strlen(value)));
+void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, const char *value) {
+	Key::CreateKey(allocator, type, key, string_t(value, strlen(value)));
 }
 
 bool Key::operator>(const Key &k) const {

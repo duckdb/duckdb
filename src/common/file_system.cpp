@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -335,18 +336,31 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-IOException FileSystem::MissingFileException(const string &file_path, ClientContext &context) {
-	const string prefixes[] = {"http://", "https://", "s3://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(file_path, prefix)) {
-			if (!context.db->LoadedExtensions().count("httpfs")) {
-				return MissingExtensionException("No files found that match the pattern \"%s\", because the httpfs "
-				                                 "extension is not loaded. Try loading the extension: LOAD HTTPFS",
-				                                 file_path);
+vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context) {
+	auto result = Glob(pattern, context);
+	if (result.empty()) {
+		string required_extension;
+		const string prefixes[] = {"http://", "https://", "s3://"};
+		for (auto &prefix : prefixes) {
+			if (StringUtil::StartsWith(pattern, prefix)) {
+				required_extension = "httpfs";
+				break;
 			}
 		}
+		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
+			// an extension is required to read this file but it is not loaded - try to load it
+			ExtensionHelper::LoadExternalExtension(context, required_extension);
+			// success! glob again
+			// check the extension is loaded just in case to prevent an infinite loop here
+			if (!context.db->ExtensionIsLoaded(required_extension)) {
+				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
+				                        required_extension);
+			}
+			return GlobFiles(pattern, context);
+		}
+		throw IOException("No files found that match the pattern \"%s\"", pattern);
 	}
-	return IOException("No files found that match the pattern \"%s\"", file_path);
+	return result;
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {

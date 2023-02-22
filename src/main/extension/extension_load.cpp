@@ -31,7 +31,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	auto filename = fs.ConvertSeparators(extension);
 
 	// shorthand case
-	if (!StringUtil::Contains(extension, ".") && !StringUtil::Contains(extension, fs.PathSeparator())) {
+	if (!ExtensionHelper::IsFullPath(extension)) {
 		string local_path = fs.GetHomeDirectory(opener);
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
@@ -121,9 +121,28 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	return res;
 }
 
+bool ExtensionHelper::IsFullPath(const string &extension) {
+	return StringUtil::Contains(extension, ".") || StringUtil::Contains(extension, "/") ||
+	       StringUtil::Contains(extension, "\\");
+}
+
+string ExtensionHelper::GetExtensionName(const string &extension) {
+	if (!IsFullPath(extension)) {
+		return extension;
+	}
+	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
+	if (splits.empty()) {
+		return extension;
+	}
+	splits = StringUtil::Split(splits.back(), '.');
+	if (splits.empty()) {
+		return extension;
+	}
+	return StringUtil::Lower(splits.front());
+}
+
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
-	auto &loaded_extensions = db.LoadedExtensions();
-	if (loaded_extensions.find(extension) != loaded_extensions.end()) {
+	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 
