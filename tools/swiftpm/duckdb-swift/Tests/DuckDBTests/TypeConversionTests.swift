@@ -389,7 +389,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_hugeint() throws {
     let expected = [
-      IntHuge(lower: .min + 1, upper: .min),
+      IntHuge.min + 1,
       IntHuge.max,
       nil
     ]

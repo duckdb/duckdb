@@ -29,14 +29,24 @@ import XCTest
 
 final class DecimalUtilityTests: XCTestCase {
   
-  func test_decimal_huge_int_max() throws {
-    let maxInt128 = Decimal(string:  "170141183460469231731687303715884105727")!
+  func test_decimal_int_huge_min() throws {
+    let minInt128 = Decimal(string: "\(IntHuge.min)")!
+    XCTAssertEqual(Decimal(IntHuge.min), minInt128)
+  }
+  
+  func test_decimal_int_huge_max() throws {
+    let maxInt128 = Decimal(string: "\(IntHuge.max)")!
     XCTAssertEqual(Decimal(IntHuge.max), maxInt128)
   }
   
-  func test_decimal_huge_int_min() throws {
-    let minInt128 = Decimal(string: "-170141183460469231731687303715884105728")!
-    XCTAssertEqual(Decimal(IntHuge.min), minInt128)
+  func test_decimal_uint_huge_min() throws {
+    let minUInt128 = Decimal(string: "\(UIntHuge.min)")!
+    XCTAssertEqual(Decimal(UIntHuge.min), minUInt128)
+  }
+  
+  func test_decimal_uint_huge_max() throws {
+    let maxUInt128 = Decimal(string: "\(UIntHuge.max)")!
+    XCTAssertEqual(Decimal(UIntHuge.max), maxUInt128)
   }
 }
 

@@ -69,30 +69,36 @@ extension duckdb_string {
 
 extension duckdb_hugeint {
   
+  var asIntHuge: IntHuge { .init(high: upper, low: lower) }
+  
+  var asUIntHuge: UIntHuge {
+    let high = IntHuge(upper) + IntHuge(Int64.max) + 1
+    return UIntHuge(high) << 64 + UIntHuge(lower)
+  }
+  
   var asUUID: UUID {
-    let components = upper < 0
-      ? (lower: lower, upper: UInt64(upper + Int64.max + 1))
-      : (lower: lower, upper: UInt64(upper) + UInt64(Int64.max) + 1)
-    return UUID(
+    let value = asUIntHuge
+    let uuid = UUID(
       uuid: uuid_t(
-        UInt8(truncatingIfNeeded: components.upper >> 56),
-        UInt8(truncatingIfNeeded: components.upper >> 48),
-        UInt8(truncatingIfNeeded: components.upper >> 40),
-        UInt8(truncatingIfNeeded: components.upper >> 32),
-        UInt8(truncatingIfNeeded: components.upper >> 24),
-        UInt8(truncatingIfNeeded: components.upper >> 16),
-        UInt8(truncatingIfNeeded: components.upper >> 8),
-        UInt8(truncatingIfNeeded: components.upper >> 0),
-        UInt8(truncatingIfNeeded: components.lower >> 56),
-        UInt8(truncatingIfNeeded: components.lower >> 48),
-        UInt8(truncatingIfNeeded: components.lower >> 40),
-        UInt8(truncatingIfNeeded: components.lower >> 32),
-        UInt8(truncatingIfNeeded: components.lower >> 24),
-        UInt8(truncatingIfNeeded: components.lower >> 16),
-        UInt8(truncatingIfNeeded: components.lower >> 8),
-        UInt8(truncatingIfNeeded: components.lower >> 0)
+        UInt8(truncatingIfNeeded: value >> (8 * 15)),
+        UInt8(truncatingIfNeeded: value >> (8 * 14)),
+        UInt8(truncatingIfNeeded: value >> (8 * 13)),
+        UInt8(truncatingIfNeeded: value >> (8 * 12)),
+        UInt8(truncatingIfNeeded: value >> (8 * 11)),
+        UInt8(truncatingIfNeeded: value >> (8 * 10)),
+        UInt8(truncatingIfNeeded: value >> (8 * 9)),
+        UInt8(truncatingIfNeeded: value >> (8 * 8)),
+        UInt8(truncatingIfNeeded: value >> (8 * 7)),
+        UInt8(truncatingIfNeeded: value >> (8 * 6)),
+        UInt8(truncatingIfNeeded: value >> (8 * 5)),
+        UInt8(truncatingIfNeeded: value >> (8 * 4)),
+        UInt8(truncatingIfNeeded: value >> (8 * 3)),
+        UInt8(truncatingIfNeeded: value >> (8 * 2)),
+        UInt8(truncatingIfNeeded: value >> (8 * 1)),
+        UInt8(truncatingIfNeeded: value >> (8 * 0))
       )
     )
+    return uuid
   }
 }
 
@@ -187,10 +193,4 @@ extension duckdb_blob {
       return Data(bytes: blobPtr, count: Int(contentsSize))
     }
   }
-}
-
-// MARK: - HugeInt
-
-extension duckdb_hugeint {
-  var asIntHuge: IntHuge { .init(lower: lower, upper: upper) }
 }
