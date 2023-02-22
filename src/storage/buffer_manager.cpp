@@ -230,6 +230,7 @@ public:
 private:
 	DatabaseInstance &db;
 	string temp_directory;
+	bool created_directory = false;
 	unique_ptr<TemporaryFileManager> temp_file;
 };
 
@@ -868,7 +869,10 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
     : db(db), temp_directory(std::move(path_p)), temp_file(make_unique<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
-		fs.CreateDirectory(temp_directory);
+		if (!fs.DirectoryExists(temp_directory)) {
+			fs.CreateDirectory(temp_directory);
+			created_directory = true;
+		}
 	}
 }
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
@@ -877,7 +881,30 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// then delete the temporary file directory
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
-		fs.RemoveDirectory(temp_directory);
+		bool delete_directory = created_directory;
+		vector<string> files_to_delete;
+		if (!created_directory) {
+			bool deleted_everything = true;
+			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
+				if (isdir) {
+					deleted_everything = false;
+					return;
+				}
+				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
+					deleted_everything = false;
+					return;
+				}
+				files_to_delete.push_back(path);
+			});
+		}
+		if (delete_directory) {
+			// we want to remove all files in the directory
+			fs.RemoveDirectory(temp_directory);
+		} else {
+			for (auto &file : files_to_delete) {
+				fs.RemoveFile(fs.JoinPath(temp_directory, file));
+			}
+		}
 	}
 }
 
@@ -887,7 +914,7 @@ TemporaryFileManager &TemporaryDirectoryHandle::GetTempFile() {
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	return fs.JoinPath(temp_directory, to_string(id) + ".block");
+	return fs.JoinPath(temp_directory, "duckdb_temp_block-" + to_string(id) + ".block");
 }
 
 void BufferManager::RequireTemporaryDirectory() {
