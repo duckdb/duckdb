@@ -1,0 +1,21 @@
+# name: test/sql/copy/csv/test_csv_httpfs.test
+# description: This test triggers the http prefetch mechanism.
+# group: [csv]
+
+require httpfs
+
+#query I
+#SELECT count(*) from read_csv_auto('https://pdet.github.io/assets/data/weather.csv');
+#----
+#9
+
+
+#query I
+#SELECT count(*) from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+#----
+#9
+
+query I
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+----
+9

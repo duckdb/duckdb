@@ -223,6 +223,46 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	return RunRequestWithRetry(request, url, "HEAD", hfs.http_params, on_retry);
 }
 
+unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
+	auto &hfs = (HTTPFileHandle &)handle;
+	string path, proto_host_port;
+	ParseUrl(url, path, proto_host_port);
+	auto headers = initialize_http_headers(header_map);
+		std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+		if (hfs.stats) {
+			hfs.stats->get_count++;
+		}
+		return hfs.http_client->Get(
+		    path.c_str(), *headers,
+		    [&](const duckdb_httplib_openssl::Response &response) {
+			    if (response.status >= 400) {
+				    string error = "HTTP GET error on '" + url + "' (HTTP " + to_string(response.status) + ")";
+				    if (response.status == 416) {
+					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
+					             "if enabled, and confirm the server supports range requests.";
+				    }
+				    throw IOException(error);
+			    }
+			    return true;
+		    },
+		    [&](const char *data, size_t data_length) {
+			    if (hfs.stats) {
+				    hfs.stats->total_bytes_received += data_length;
+			    }
+			    hfs.data = data;
+			    hfs.data_length = data_length;
+			    hfs.length = data_length;
+			    return true;
+		    });
+	});
+
+	std::function<void(void)> on_retry(
+	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+
+	return RunRequestWithRetry(request, url, "GET", hfs.http_params, on_retry);
+}
+
+
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto &hfs = (HTTPFileHandle &)handle;
@@ -317,9 +357,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
-	if (location + nr_bytes > hfh.length) {
-		throw IOException("out of file");
-	}
+//	if (location + nr_bytes > hfh.length) {
+//		throw IOException("out of file");
+//	}
 
 	// Don't buffer when DirectIO is set.
 	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
@@ -341,7 +381,11 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		hfh.file_offset = location;
 	}
 
-	while (to_read > 0) {
+	if (!hfh.range_read){
+		GetRequest(hfh, hfh.path, {});
+		return;
+	} else{
+		while (to_read > 0) {
 		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
 		if (buffer_read_len > 0) {
 			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
@@ -375,13 +419,28 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 			}
 		}
 	}
+	}
 }
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t max_read = hfh.length - hfh.file_offset;
-	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
-	Read(handle, buffer, nr_bytes, hfh.file_offset);
+	if (hfh.range_read){
+		nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+		Read(handle, buffer, nr_bytes, hfh.file_offset);
+	} else{
+		if (!hfh.data){
+			Read(handle, buffer, nr_bytes, hfh.file_offset);
+		}
+		if (hfh.cur_pos < hfh.length){
+			nr_bytes = MinValue<idx_t>(hfh.length - hfh.cur_pos, nr_bytes);
+			memcpy(buffer, hfh.data + hfh.cur_pos, nr_bytes);
+			hfh.cur_pos += nr_bytes;
+			hfh.file_offset = hfh.cur_pos;
+		} else{
+			nr_bytes = 0;
+		}
+	}
 	return nr_bytes;
 }
 
@@ -510,17 +569,23 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {
-		// There was no content-length header, we can not do range requests here
-		throw IOException("Server did not send Content-Length header, can not read from this file.");
+		// There was no content-length header, we can not do range requests here, so we set the length to 0
+		length = 0;
+	} else{
+		try {
+		length = std::stoll(res->headers["Content-Length"]);
+		} catch (std::invalid_argument &e) {
+			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+		} catch (std::out_of_range &e) {
+			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
+		}
+	}
+	if (length == 0){
+		// Try to fully download the file first
+		range_read = false;
 	}
 
-	try {
-		length = std::stoll(res->headers["Content-Length"]);
-	} catch (std::invalid_argument &e) {
-		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
-	} catch (std::out_of_range &e) {
-		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
-	}
+
 
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
