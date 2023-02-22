@@ -23,6 +23,11 @@ class DatabaseInstance;
 class TemporaryDirectoryHandle;
 struct EvictionQueue;
 
+struct TemporaryFileInformation {
+	string path;
+	idx_t size;
+};
+
 //! The buffer manager is in charge of handling memory management for the database. It hands out memory buffers that can
 //! be used by the database internally.
 //
@@ -97,6 +102,9 @@ public:
 
 	DUCKDB_API void ReserveMemory(idx_t size);
 	DUCKDB_API void FreeReservedMemory(idx_t size);
+
+	//! Returns a list of all temporary files
+	vector<TemporaryFileInformation> GetTemporaryFiles();
 
 private:
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or

@@ -607,7 +607,11 @@ public:
 	//! Returns true if the max_index has been altered
 	bool RemoveIndex(idx_t index) {
 		// remove this block from the set of blocks
-		indexes_in_use.erase(index);
+		auto entry = indexes_in_use.find(index);
+		if (entry == indexes_in_use.end()) {
+			throw InternalException("RemoveIndex - index %llu not found in indexes_in_use", index);
+		}
+		indexes_in_use.erase(entry);
 		free_indexes.insert(index);
 		// check if we can truncate the file
 
@@ -616,7 +620,7 @@ public:
 		if (max_index_in_use < max_index) {
 			// max index in use is lower than the max_index
 			// reduce the max_index
-			max_index = max_index_in_use + 1;
+			max_index = indexes_in_use.empty() ? 0 : max_index_in_use + 1;
 			// we can remove any free_indexes that are larger than the current max_index
 			while (!free_indexes.empty()) {
 				auto max_entry = *free_indexes.rbegin();
@@ -692,16 +696,15 @@ public:
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
 	                                           unique_ptr<FileBuffer> reusable_buffer) {
-		auto buffer =
-		    ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index),
-		                                Storage::BLOCK_SIZE, id, std::move(reusable_buffer));
-		{
-			// remove the block (and potentially truncate the temp file)
-			TemporaryFileLock lock(file_lock);
-			D_ASSERT(handle);
-			RemoveTempBlockIndex(lock, block_index);
-		}
-		return buffer;
+		return ReadTemporaryBufferInternal(BufferManager::GetBufferManager(db), *handle, GetPositionInFile(block_index),
+		                                   Storage::BLOCK_SIZE, id, std::move(reusable_buffer));
+	}
+
+	void EraseBlockIndex(block_id_t block_index) {
+		// remove the block (and potentially truncate the temp file)
+		TemporaryFileLock lock(file_lock);
+		D_ASSERT(handle);
+		RemoveTempBlockIndex(lock, block_index);
 	}
 
 	bool DeleteIfEmpty() {
@@ -715,6 +718,14 @@ public:
 		auto &fs = FileSystem::GetFileSystem(db);
 		fs.RemoveFile(path);
 		return true;
+	}
+
+	TemporaryFileInformation GetTemporaryFile() {
+		TemporaryFileLock lock(file_lock);
+		TemporaryFileInformation info;
+		info.path = path;
+		info.size = GetPositionInFile(index_manager.GetMaxIndex());
+		return info;
 	}
 
 private:
@@ -817,7 +828,7 @@ public:
 		{
 			// remove the block (and potentially erase the temp file)
 			TemporaryManagerLock lock(manager_lock);
-			EraseUsedBlock(lock, id, handle, index.file_index);
+			EraseUsedBlock(lock, id, handle, index);
 		}
 		return buffer;
 	}
@@ -826,14 +837,29 @@ public:
 		TemporaryManagerLock lock(manager_lock);
 		auto index = GetTempBlockIndex(lock, id);
 		auto handle = GetFileHandle(lock, index.file_index);
-		EraseUsedBlock(lock, id, handle, index.file_index);
+		EraseUsedBlock(lock, id, handle, index);
+	}
+
+	vector<TemporaryFileInformation> GetTemporaryFiles() {
+		lock_guard<mutex> lock(manager_lock);
+		vector<TemporaryFileInformation> result;
+		for (auto &file : files) {
+			result.push_back(file.second->GetTemporaryFile());
+		}
+		return result;
 	}
 
 private:
-	void EraseUsedBlock(TemporaryManagerLock &lock, block_id_t id, TemporaryFileHandle *handle, idx_t file_index) {
-		used_blocks.erase(id);
+	void EraseUsedBlock(TemporaryManagerLock &lock, block_id_t id, TemporaryFileHandle *handle,
+	                    TemporaryFileIndex index) {
+		auto entry = used_blocks.find(id);
+		if (entry == used_blocks.end()) {
+			throw InternalException("EraseUsedBlock - Block %llu not found in used blocks", id);
+		}
+		used_blocks.erase(entry);
+		handle->EraseBlockIndex(index.block_index);
 		if (handle->DeleteIfEmpty()) {
-			EraseFileHandle(lock, file_index);
+			EraseFileHandle(lock, index.file_index);
 		}
 	}
 
@@ -963,6 +989,35 @@ void BufferManager::DeleteTemporaryFile(block_id_t id) {
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
 	}
+}
+
+vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles() {
+	vector<TemporaryFileInformation> result;
+	if (temp_directory.empty()) {
+		return result;
+	}
+	{
+		lock_guard<mutex> temp_handle_guard(temp_handle_lock);
+		if (temp_directory_handle) {
+			result = temp_directory_handle->GetTempFile().GetTemporaryFiles();
+		}
+	}
+	auto &fs = FileSystem::GetFileSystem(db);
+	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+		if (is_dir) {
+			return;
+		}
+		if (!StringUtil::EndsWith(name, ".block")) {
+			return;
+		}
+		TemporaryFileInformation info;
+		info.path = name;
+		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ);
+		info.size = fs.GetFileSize(*handle);
+		handle.reset();
+		result.push_back(info);
+	});
+	return result;
 }
 
 string BufferManager::InMemoryWarning() {
