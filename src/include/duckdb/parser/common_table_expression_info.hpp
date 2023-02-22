@@ -16,7 +16,7 @@ struct CommonTableExpressionInfo {
 	CommonTableExpressionInfo();
 	~CommonTableExpressionInfo();
 	CommonTableExpressionInfo(const CommonTableExpressionInfo &) = delete;
-	CommonTableExpressionInfo(CommonTableExpressionInfo &&);
+	CommonTableExpressionInfo(CommonTableExpressionInfo &&) noexcept;
 
 public:
 	vector<string> aliases;

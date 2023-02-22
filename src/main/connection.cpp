@@ -16,6 +16,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 

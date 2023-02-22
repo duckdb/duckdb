@@ -8,7 +8,7 @@ CommonTableExpressionInfo::CommonTableExpressionInfo() {
 CommonTableExpressionInfo::~CommonTableExpressionInfo() {
 }
 
-CommonTableExpressionInfo::CommonTableExpressionInfo(CommonTableExpressionInfo &&) = default;
+CommonTableExpressionInfo::CommonTableExpressionInfo(CommonTableExpressionInfo &&) noexcept = default;
 
 bool CommonTableExpressionInfo::Equals(const CommonTableExpressionInfo &other) const {
 	if (aliases != other.aliases) {

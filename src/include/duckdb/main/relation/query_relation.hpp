@@ -20,7 +20,7 @@ public:
 	QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt, string alias);
 	~QueryRelation();
 	QueryRelation(const QueryRelation &other) = delete;
-	QueryRelation(QueryRelation &&other);
+	QueryRelation(QueryRelation &&other) noexcept;
 
 	unique_ptr<SelectStatement> select_stmt;
 	string alias;

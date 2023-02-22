@@ -665,6 +665,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
 			}
+			original_statement = nullptr;
 			statement = std::move(copied_statement);
 			break;
 		}
