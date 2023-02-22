@@ -1047,16 +1047,24 @@ int sqlite3_complete(const char *zSql) {
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
 
-	if (iCol < 0 || pStmt->result->types.size() < iCol)
+	if (!pStmt || iCol < 0 || pStmt->result->types.size() <= static_cast<size_t>(iCol))
 		return 0;
 
+	// checks if the current column is initialized
 	if (!pStmt->current_text) {
-		if (!sqlite3_column_text(pStmt, iCol) || !sqlite3_column_blob(pStmt, iCol)) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
 			return 0;
 		}
 	}
+	sqlite3_string_buffer *col_text = &pStmt->current_text[iCol];
+	if (!col_text->data) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+			return 0;
+		}
+		col_text = &pStmt->current_text[iCol];
+	}
 
-	return pStmt->current_text[iCol].data_len;
+	return col_text->data_len;
 }
 
 sqlite3_value *sqlite3_column_value(sqlite3_stmt *, int iCol) {
