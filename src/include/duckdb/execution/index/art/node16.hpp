@@ -22,6 +22,9 @@ public:
 	ARTNode children[ARTNode::NODE_16_CAPACITY];
 
 public:
+	//! Initializes all the fields of the node
+	void Initialize();
+
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
@@ -53,10 +56,5 @@ public:
 	idx_t MemorySize();
 	//! Returns whether the child at pos is in-memory
 	bool ChildIsInMemory(const idx_t &pos);
-
-	//! Returns the capacity
-	static constexpr idx_t GetCapacity() {
-		return ARTNode::NODE_16_CAPACITY;
-	}
 };
 } // namespace duckdb

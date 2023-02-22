@@ -7,48 +7,52 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
 namespace duckdb {
 
-class Node256 : public Node {
+class Node256 {
 public:
-	//! Empty Node256
-	explicit Node256();
-	//! ART pointers to the child nodes
-	ARTPointer children[256];
+	//! Number of non-null children
+	uint16_t count;
+	//! Compressed path (prefix)
+	Prefix prefix;
+	//! ART node pointers to the child nodes
+	ARTNode children[ARTNode::NODE_256_CAPACITY];
 
 public:
-	static Node256 *New();
-	//! Returns the memory size of the Node256
-	idx_t MemorySize(ART &art, const bool &recurse) override;
-	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
-	idx_t GetChildPos(uint8_t k) override;
+	//! Initializes all the fields of the node
+	void Initialize();
+
+	//! Insert a child node at byte
+	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
+	//! Delete the child node at pos
+	static void DeleteChild(ART &art, ARTNode &node, idx_t pos);
+	//! Delete the ART node and all possible child nodes
+	static void Delete(ART &art, ARTNode &node);
+
+	//! Replace a child node at pos
+	void ReplaceChild(const idx_t &pos, ARTNode &child);
+
+	//! Get the child at the specified position in the node. pos must be between [0, count)
+	ARTNode GetChild(const idx_t &pos);
+	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
+	//! the child does not exist
+	idx_t GetChildPos(const uint8_t &byte);
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildGreaterEqual(uint8_t k, bool &equal) override;
-	//! Get the position of the minimum element in the node
-	idx_t GetMin() override;
-	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
-	idx_t GetNextPos(idx_t pos) override;
-	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
-	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte) override;
-	//! Get Node256 child
-	Node *GetChild(ART &art, idx_t pos) override;
-	//! Replace child pointer
-	void ReplaceChildPointer(idx_t pos, Node *node) override;
-	//! Returns whether the child at pos is in memory
-	bool ChildIsInMemory(idx_t pos) override;
+	idx_t GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive);
+	//! Get the position of the minimum child node in the node
+	idx_t GetMinPos();
+	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
+	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
+	idx_t GetNextPos(idx_t pos);
+	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
+	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
+	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte);
 
-	//! Insert a new child node at key_byte into the Node256
-	static void InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child);
-	//! Erase the child at pos and (if necessary) shrink to Node48
-	static void EraseChild(ART &art, Node *&node, idx_t pos);
-
-	//! Returns the size (maximum capacity) of the Node256
-	static constexpr idx_t GetSize() {
-		return 256;
-	}
+	//! Returns the in-memory size
+	idx_t MemorySize();
+	//! Returns whether the child at pos is in-memory
+	bool ChildIsInMemory(const idx_t &pos);
 };
 } // namespace duckdb

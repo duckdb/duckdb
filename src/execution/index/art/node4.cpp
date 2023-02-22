@@ -3,9 +3,17 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
+
+void Node4::Initialize() {
+	count = 0;
+	prefix = Prefix();
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		key[i] = 0;
+		children[i] = ARTNode();
+	}
+}
 
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
@@ -14,7 +22,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 	auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(node.GetPointer());
 
 	// insert new child node into node
-	if (n4->count < Node4::GetCapacity()) {
+	if (n4->count < ARTNode::NODE_4_CAPACITY) {
 		// still space, just insert the child
 		idx_t pos = 0;
 		while ((pos < n4->count) && (n4->key[pos] < byte)) {
@@ -34,7 +42,8 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 		// node is full, grow to Node16
 		ARTNode new_n16_node(art, ARTNodeType::N16);
 		auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(new_n16_node.GetPointer());
-		art.IncreaseMemorySize(new_n16->MemorySize(art, false));
+		new_n16->Initialize();
+		art.IncreaseMemorySize(new_n16->MemorySize());
 
 		new_n16->count = n4->count;
 		new_n16->prefix = std::move(n4->prefix);
@@ -44,7 +53,6 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 			new_n16->children[i] = n4->children[i];
 			n4->children[i] = ARTNode();
 		}
-		n4->count = 0;
 
 		art.DecreaseMemorySize(n4->MemorySize());
 		art.n4_nodes.FreePosition(node.GetPointer());
@@ -59,14 +67,16 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	D_ASSERT(!node.IsSwizzled());
 	auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(node.GetPointer());
 
+	D_ASSERT(pos < n4->count);
+	D_ASSERT(n4->count > 1);
+
+#ifdef DEBUG
 	// adjust the ART size
 	if (n4->ChildIsInMemory(pos)) {
 		auto child = n4->GetChild(pos);
 		art.DecreaseMemorySize(child.MemorySize(art, true));
 	}
-
-	D_ASSERT(pos < n4->count);
-	D_ASSERT(n4->count > 1);
+#endif
 
 	// erase the child and decrease the count
 	ARTNode::Delete(art, n4->children[pos]);
@@ -79,7 +89,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 		n4->children[pos] = n4->children[pos + 1];
 	}
 	// set any remaining nodes as nullptr
-	for (; pos < Node4::GetCapacity(); pos++) {
+	for (; pos < ARTNode::NODE_4_CAPACITY; pos++) {
 		n4->children[pos] = ARTNode();
 	}
 
@@ -111,7 +121,7 @@ void Node4::Delete(ART &art, ARTNode &node) {
 }
 
 void Node4::ReplaceChild(const idx_t &pos, ARTNode &child) {
-	D_ASSERT(pos < GetCapacity());
+	D_ASSERT(pos < ARTNode::NODE_4_CAPACITY);
 	children[pos] = child;
 }
 
