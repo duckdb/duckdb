@@ -299,16 +299,11 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	NodeType node_type((NodeType)(n));
 
 	Node *deserialized_node = nullptr;
-	auto old_memory_size = art.memory_size;
 	switch (node_type) {
 	case NodeType::NLeaf: {
 		auto leaf = Leaf::New();
 		leaf->Deserialize(art, reader);
-		art.memory_size += leaf->MemorySize(art, false);
-		D_ASSERT(art.memory_size >= old_memory_size);
-		if (art.track_memory) {
-			art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
-		}
+		art.IncreaseMemorySize(leaf->MemorySize(art, false));
 		return leaf;
 	}
 	case NodeType::N4: {
@@ -331,11 +326,7 @@ Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		throw InternalException("Unrecognized node type");
 	}
 	deserialized_node->DeserializeInternal(art, reader);
-	art.memory_size += deserialized_node->MemorySize(art, false);
-	D_ASSERT(art.memory_size >= old_memory_size);
-	if (art.track_memory) {
-		art.buffer_manager.IncreaseUsedMemory(art.memory_size - old_memory_size);
-	}
+	art.IncreaseMemorySize(deserialized_node->MemorySize(art, false));
 	return deserialized_node;
 }
 
@@ -356,12 +347,10 @@ void SwapNodes(MergeInfo &info, ParentsOfNodes &parents) {
 	auto l_node_memory_size = info.l_node->MemorySize(*info.l_art, true);
 	auto r_node_memory_size = info.r_node->MemorySize(*info.r_art, true);
 
-	D_ASSERT(info.root_l_art->memory_size >= l_node_memory_size);
-	D_ASSERT(info.root_r_art->memory_size >= r_node_memory_size);
-	info.root_l_art->memory_size -= l_node_memory_size;
-	info.root_r_art->memory_size -= r_node_memory_size;
-	info.root_l_art->memory_size += r_node_memory_size;
-	info.root_r_art->memory_size += l_node_memory_size;
+	info.root_l_art->DecreaseMemorySize(l_node_memory_size);
+	info.root_r_art->DecreaseMemorySize(r_node_memory_size);
+	info.root_l_art->IncreaseMemorySize(r_node_memory_size);
+	info.root_r_art->IncreaseMemorySize(l_node_memory_size);
 
 	// actual swap
 	swap(info.l_art, info.r_art);
@@ -409,9 +398,8 @@ bool Merge(MergeInfo &info, ParentsOfNodes &parents) {
 			auto r_memory_size = r_child->MemorySize(*info.r_art, true);
 			Node::InsertChild(*info.root_l_art, info.l_node, key_byte, r_child);
 
-			info.root_l_art->memory_size += r_memory_size;
-			D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
-			info.root_r_art->memory_size -= r_memory_size;
+			info.root_l_art->IncreaseMemorySize(r_memory_size);
+			info.root_r_art->DecreaseMemorySize(r_memory_size);
 			if (parents.l_parent) {
 				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
 			}
@@ -473,9 +461,8 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfNodes &parents) {
 			auto r_memory_size = r_node->MemorySize(*info.r_art, true);
 			Node::InsertChild(*info.root_l_art, l_node, mismatch_byte, r_node);
 
-			info.root_l_art->memory_size += r_memory_size;
-			D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
-			info.root_r_art->memory_size -= r_memory_size;
+			info.root_l_art->IncreaseMemorySize(r_memory_size);
+			info.root_r_art->DecreaseMemorySize(r_memory_size);
 			UpdateParentsOfNodes(l_node, null_parent, parents);
 			r_node = nullptr;
 			return true;
@@ -493,7 +480,7 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfNodes &parents) {
 	// create new node
 	Node *new_node = Node4::New();
 	new_node->prefix = Prefix(l_node->prefix, mismatch_pos);
-	info.root_l_art->memory_size += new_node->MemorySize(*info.l_art, false);
+	info.root_l_art->IncreaseMemorySize(new_node->MemorySize(*info.l_art, false));
 
 	// insert l_node, break up prefix of l_node
 	auto key_byte = l_node->prefix.Reduce(*info.root_l_art, mismatch_pos);
@@ -504,9 +491,8 @@ bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfNodes &parents) {
 	auto r_memory_size = r_node->MemorySize(*info.r_art, true);
 	Node4::InsertChild(*info.root_l_art, new_node, key_byte, r_node);
 
-	info.root_l_art->memory_size += r_memory_size;
-	D_ASSERT(info.root_r_art->memory_size >= r_memory_size);
-	info.root_r_art->memory_size -= r_memory_size;
+	info.root_l_art->IncreaseMemorySize(r_memory_size);
+	info.root_r_art->DecreaseMemorySize(r_memory_size);
 
 	l_node = new_node;
 	UpdateParentsOfNodes(l_node, null_parent, parents);
