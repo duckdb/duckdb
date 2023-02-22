@@ -6,12 +6,17 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA threads=10
+
+statement ok
 create table df as 
 	select d, i v1 
 	from 
 		range(date '2017-01-01', date '2020-12-31', interval '1' day) t(d), 
 		range(3000) i
 	;
+
+loop i 0 100
 
 query I
 select count(*) 
@@ -22,3 +27,4 @@ from (
 ----
 4380000
 
+endloop
