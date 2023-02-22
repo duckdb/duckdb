@@ -164,6 +164,41 @@ SELECT i::TINYINT+120::TINYINT FROM smallints WHERE i=1
 ----
 121
 
-
 # include multiple projections...
 # include joins (specifically left joins! they add nulls)
+
+# What about adding column types that end up overflowing?
+statement ok
+INSERT INTO smallints VALUES (30000);
+
+
+statement error
+SELECT integers1.i::SMALLINT + integers2.i::SMALLINT from smallints integers1, smallints integers2 where integers1.i = integers2.i;
+----
+Out of Range Error: Overflow
+
+statement ok
+CREATE TABLE smallints2 (j SMALLINT);
+
+statement ok
+INSERT INTO smallints2 VALUES (1), (10);
+
+# no overflow, just some null values
+query I
+SELECT i + j from smallints si_left LEFT JOIN smallints2 si_right ON (i = j);
+----
+2
+20
+NULL
+NULL
+
+# insert 30000 into smallints 2
+statement ok
+INSERT INTO smallints2 VALUES (30000);
+
+statement error
+SELECT i + j from smallints LEFT JOIN smallints2  ON (i = j);
+----
+Out of Range Error: Overflow
+
+

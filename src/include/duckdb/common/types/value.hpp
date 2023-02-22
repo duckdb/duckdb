@@ -73,12 +73,6 @@ public:
 		return is_null;
 	}
 
-	static Value nan();
-
-	static inline Value inf() {
-		return std::numeric_limits<Value>::infinity();
-	}
-
 	//! Create the lowest possible value of a given type (numeric only)
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)
@@ -255,8 +249,6 @@ public:
 	DUCKDB_API static bool DoubleIsFinite(double value);
 	template <class T>
 	static bool IsNan(T value) {
-		// only double and float can be nan. All other types are inherently a valid value.
-		return false;
 		throw InternalException("Unimplemented template type for Value::IsNan");
 	}
 	template <class T>
@@ -264,7 +256,6 @@ public:
 		return true;
 	}
 	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
-
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
 	}
