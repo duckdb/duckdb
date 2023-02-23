@@ -125,6 +125,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("chunk_size") = 1000000)
 	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
 	         "Fetch a result as dict of PyTorch Tensors following execute()")
+	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -1089,6 +1090,13 @@ py::dict DuckDBPyConnection::FetchPyTorch() {
 		throw InvalidInputException("No open result set");
 	}
 	return result->FetchPyTorch();
+}
+
+py::dict DuckDBPyConnection::FetchTF() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchTF();
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {

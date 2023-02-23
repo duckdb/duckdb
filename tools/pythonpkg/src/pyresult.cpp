@@ -274,6 +274,15 @@ py::dict DuckDBPyResult::FetchPyTorch() {
 	return result_dict;
 }
 
+py::dict DuckDBPyResult::FetchTF() {
+	auto result_dict = FetchNumpyInternal();
+	auto convert_to_tensor = py::module::import("tensorflow").attr("convert_to_tensor");
+	for (auto &item : result_dict) {
+		result_dict[item.first] = convert_to_tensor(item.second);
+	}
+	return result_dict;
+}
+
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");

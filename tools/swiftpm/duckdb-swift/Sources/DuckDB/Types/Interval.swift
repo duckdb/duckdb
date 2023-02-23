@@ -23,25 +23,31 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+public struct Interval: Hashable, Equatable {
+  public var months: Int32
+  public var days: Int32
+  public var microseconds: Int64
+}
+
+extension Interval {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
-  }
-  
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
-  }
-  
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  init(
+    years: Int32,
+    months: Int32,
+    days: Int32,
+    hours: Int32,
+    minutes: Int32,
+    seconds: Int32,
+    microseconds: Int64
+  ) {
+    let hours_ms = Int64(hours) * 60 * 60 * 1_000_000
+    let minutes_ms = Int64(minutes) * 60 * 1_000_000
+    let seconds_ms = Int64(seconds) * 1_000_000
+    self.init(
+      months: (years * 12) + months,
+      days: days,
+      microseconds: hours_ms + minutes_ms + seconds_ms + microseconds
+    )
   }
 }

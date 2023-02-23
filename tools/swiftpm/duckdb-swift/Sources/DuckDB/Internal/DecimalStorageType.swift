@@ -22,26 +22,27 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
-@_implementationOnly import Cduckdb
 import Foundation
 
-final class DataChunk {
-  
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
-  }
-  
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
-  }
-  
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
-  }
+protocol DecimalStorageType {
+  var asDecimal: Decimal { get }
+}
+
+extension Int8: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension Int16: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+extension Int32: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension Int64: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension IntHuge: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
 }

@@ -42,6 +42,13 @@ NL	Amsterdam	1005	1065	1158
 US	Seattle	564	608	738
 US	New York City	8015	8175	8772
 
+query IIIII
+PIVOT_WIDER Cities ON Year USING SUM(Population);
+----
+NL	Amsterdam	1005	1065	1158
+US	Seattle	564	608	738
+US	New York City	8015	8175	8772
+
 # sql syntax
 query IIIII
 FROM Cities PIVOT (SUM(Population) FOR Year IN (2000, 2010, 2020));
@@ -86,6 +93,9 @@ UNPIVOT PivotedCities ON COLUMNS('\d+');
 query IIII nosort unpivot
 UNPIVOT PivotedCities ON * EXCLUDE (Country, Name)
 ----
+
+query IIII nosort unpivot
+PIVOT_LONGER PivotedCities ON 2000, 2010, 2020;
 
 # use pivots in a set operation
 statement ok

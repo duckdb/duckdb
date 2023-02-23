@@ -24,77 +24,77 @@
 
 @_implementationOnly import Cduckdb
 
-struct DuckDBTypeID: RawRepresentable, Equatable {
+struct DBTypeID: RawRepresentable, Equatable {
   let rawValue: UInt32
   init(rawValue: UInt32) {
     self.rawValue = rawValue
   }
 }
 
-extension DuckDBTypeID {
+extension DBTypeID {
   // invalid data type
-  static let invalid = DuckDBTypeID(rawValue: DUCKDB_TYPE_INVALID.rawValue)
+  static let invalid = DBTypeID(rawValue: DUCKDB_TYPE_INVALID.rawValue)
   // bool
-  static let boolean = DuckDBTypeID(rawValue: DUCKDB_TYPE_BOOLEAN.rawValue)
+  static let boolean = DBTypeID(rawValue: DUCKDB_TYPE_BOOLEAN.rawValue)
   // int8_t
-  static let tinyint = DuckDBTypeID(rawValue: DUCKDB_TYPE_TINYINT.rawValue)
+  static let tinyint = DBTypeID(rawValue: DUCKDB_TYPE_TINYINT.rawValue)
   // int16_t
-  static let smallint = DuckDBTypeID(rawValue: DUCKDB_TYPE_SMALLINT.rawValue)
+  static let smallint = DBTypeID(rawValue: DUCKDB_TYPE_SMALLINT.rawValue)
   // int32_t
-  static let integer = DuckDBTypeID(rawValue: DUCKDB_TYPE_INTEGER.rawValue)
+  static let integer = DBTypeID(rawValue: DUCKDB_TYPE_INTEGER.rawValue)
   // int64_t
-  static let bigint = DuckDBTypeID(rawValue: DUCKDB_TYPE_BIGINT.rawValue)
+  static let bigint = DBTypeID(rawValue: DUCKDB_TYPE_BIGINT.rawValue)
   // uint8_t
-  static let utinyint = DuckDBTypeID(rawValue: DUCKDB_TYPE_UTINYINT.rawValue)
+  static let utinyint = DBTypeID(rawValue: DUCKDB_TYPE_UTINYINT.rawValue)
   // uint16_t
-  static let usmallint = DuckDBTypeID(rawValue: DUCKDB_TYPE_USMALLINT.rawValue)
+  static let usmallint = DBTypeID(rawValue: DUCKDB_TYPE_USMALLINT.rawValue)
   // uint32_t
-  static let uinteger = DuckDBTypeID(rawValue: DUCKDB_TYPE_UINTEGER.rawValue)
+  static let uinteger = DBTypeID(rawValue: DUCKDB_TYPE_UINTEGER.rawValue)
   // uint64_t
-  static let ubigint = DuckDBTypeID(rawValue: DUCKDB_TYPE_UBIGINT.rawValue)
+  static let ubigint = DBTypeID(rawValue: DUCKDB_TYPE_UBIGINT.rawValue)
   // float
-  static let float = DuckDBTypeID(rawValue: DUCKDB_TYPE_FLOAT.rawValue)
+  static let float = DBTypeID(rawValue: DUCKDB_TYPE_FLOAT.rawValue)
   // double
-  static let double = DuckDBTypeID(rawValue: DUCKDB_TYPE_DOUBLE.rawValue)
+  static let double = DBTypeID(rawValue: DUCKDB_TYPE_DOUBLE.rawValue)
   // duckdb_timestamp, in microseconds
-  static let timestamp = DuckDBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP.rawValue)
+  static let timestamp = DBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP.rawValue)
   // duckdb_date
-  static let date = DuckDBTypeID(rawValue: DUCKDB_TYPE_DATE.rawValue)
+  static let date = DBTypeID(rawValue: DUCKDB_TYPE_DATE.rawValue)
   // duckdb_time
-  static let time = DuckDBTypeID(rawValue: DUCKDB_TYPE_TIME.rawValue)
+  static let time = DBTypeID(rawValue: DUCKDB_TYPE_TIME.rawValue)
   // duckdb_interval
-  static let interval = DuckDBTypeID(rawValue: DUCKDB_TYPE_INTERVAL.rawValue)
+  static let interval = DBTypeID(rawValue: DUCKDB_TYPE_INTERVAL.rawValue)
   // duckdb_hugeint
-  static let hugeint = DuckDBTypeID(rawValue: DUCKDB_TYPE_HUGEINT.rawValue)
+  static let hugeint = DBTypeID(rawValue: DUCKDB_TYPE_HUGEINT.rawValue)
   // const char*
-  static let varchar = DuckDBTypeID(rawValue: DUCKDB_TYPE_VARCHAR.rawValue)
+  static let varchar = DBTypeID(rawValue: DUCKDB_TYPE_VARCHAR.rawValue)
   // duckdb_blob
-  static let blob = DuckDBTypeID(rawValue: DUCKDB_TYPE_BLOB.rawValue)
+  static let blob = DBTypeID(rawValue: DUCKDB_TYPE_BLOB.rawValue)
   // decimal
-  static let decimal = DuckDBTypeID(rawValue: DUCKDB_TYPE_DECIMAL.rawValue)
+  static let decimal = DBTypeID(rawValue: DUCKDB_TYPE_DECIMAL.rawValue)
   // duckdb_timestamp, in seconds
-  static let timestamp_s = DuckDBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_S.rawValue)
+  static let timestamp_s = DBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_S.rawValue)
   // duckdb_timestamp, in milliseconds
-  static let timestamp_ms = DuckDBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_MS.rawValue)
+  static let timestamp_ms = DBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_MS.rawValue)
   // duckdb_timestamp, in nanoseconds
-  static let timestamp_ns = DuckDBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_NS.rawValue)
+  static let timestamp_ns = DBTypeID(rawValue: DUCKDB_TYPE_TIMESTAMP_NS.rawValue)
   // enum type, only useful as logical type
-  static let `enum` = DuckDBTypeID(rawValue: DUCKDB_TYPE_ENUM.rawValue)
+  static let `enum` = DBTypeID(rawValue: DUCKDB_TYPE_ENUM.rawValue)
   // list type, only useful as logical type
-  static let list = DuckDBTypeID(rawValue: DUCKDB_TYPE_LIST.rawValue)
+  static let list = DBTypeID(rawValue: DUCKDB_TYPE_LIST.rawValue)
   // struct type, only useful as logical type
-  static let `struct` = DuckDBTypeID(rawValue: DUCKDB_TYPE_STRUCT.rawValue)
+  static let `struct` = DBTypeID(rawValue: DUCKDB_TYPE_STRUCT.rawValue)
   // map type, only useful as logical type
-  static let map = DuckDBTypeID(rawValue: DUCKDB_TYPE_MAP.rawValue)
+  static let map = DBTypeID(rawValue: DUCKDB_TYPE_MAP.rawValue)
   // union type, only useful as logical type
-  static let union = DuckDBTypeID(rawValue: DUCKDB_TYPE_UNION.rawValue)
+  static let union = DBTypeID(rawValue: DUCKDB_TYPE_UNION.rawValue)
   // duckdb_hugeint
-  static let uuid = DuckDBTypeID(rawValue: DUCKDB_TYPE_UUID.rawValue)
+  static let uuid = DBTypeID(rawValue: DUCKDB_TYPE_UUID.rawValue)
   // const char*
 //  static let json = DUCKDB_TYPE(DUCKDB_TYPE_JSON.rawValue)
 }
 
-extension DuckDBTypeID: CustomStringConvertible {
+extension DBTypeID: CustomStringConvertible {
   
   public var description: String {
     switch self {

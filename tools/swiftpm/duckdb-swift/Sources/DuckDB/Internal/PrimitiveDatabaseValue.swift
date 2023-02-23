@@ -23,49 +23,49 @@
 //  IN THE SOFTWARE.
 
 protocol PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { get }
+  static var representedDatabaseTypeID: DBTypeID { get }
 }
 
 extension Bool: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .boolean }
+  static var representedDatabaseTypeID: DBTypeID { .boolean }
 }
 
 extension Int8: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .tinyint }
+  static var representedDatabaseTypeID: DBTypeID { .tinyint }
 }
 
 extension Int16: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .smallint }
+  static var representedDatabaseTypeID: DBTypeID { .smallint }
 }
 
 extension Int32: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .integer }
+  static var representedDatabaseTypeID: DBTypeID { .integer }
 }
 
 extension Int64: PrimitiveDatabaseValue  {
-  static var representedDatabaseTypeID: DuckDBTypeID { .bigint }
+  static var representedDatabaseTypeID: DBTypeID { .bigint }
 }
 
 extension UInt8: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .utinyint }
+  static var representedDatabaseTypeID: DBTypeID { .utinyint }
 }
 
 extension UInt16: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .usmallint }
+  static var representedDatabaseTypeID: DBTypeID { .usmallint }
 }
 
 extension UInt32: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .uinteger }
+  static var representedDatabaseTypeID: DBTypeID { .uinteger }
 }
 
 extension UInt64: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .ubigint }
+  static var representedDatabaseTypeID: DBTypeID { .ubigint }
 }
 
 extension Float: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .float }
+  static var representedDatabaseTypeID: DBTypeID { .float }
 }
 
 extension Double: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DuckDBTypeID { .double }
+  static var representedDatabaseTypeID: DBTypeID { .double }
 }

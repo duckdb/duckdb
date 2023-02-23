@@ -23,25 +23,33 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+public struct Time: Hashable, Equatable {
+  var microseconds: Int64
+}
+
+public extension Time {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  struct Components: Hashable, Equatable {
+    public var hour: Int8
+    public var minute: Int8
+    public var second: Int8
+    public var microsecond: Int32
   }
   
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
+  init(components: Components) {
+    let ctimestruct = duckdb_to_time(duckdb_time_struct(components: components))
+    self = ctimestruct.asTime
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  var components: Components { Components(self) }
+}
+
+public extension Time.Components {
+  
+  init(_ time: Time) {
+    let ctime = duckdb_time(time: time)
+    let ctimestruct = duckdb_from_time(ctime)
+    self = ctimestruct.asTimeComponents
   }
 }

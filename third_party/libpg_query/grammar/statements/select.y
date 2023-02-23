@@ -268,7 +268,7 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
-			| PIVOT table_ref ON pivot_column_list USING func_application
+			| pivot_keyword table_ref ON pivot_column_list USING func_application
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -278,7 +278,7 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| PIVOT table_ref ON pivot_column_list USING func_application GROUP_P BY name_list_opt_comma_opt_bracket
+			| pivot_keyword table_ref ON pivot_column_list USING func_application GROUP_P BY name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -289,7 +289,7 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| UNPIVOT table_ref ON target_list_opt_comma INTO NAME_P name VALUE_P name
+			| unpivot_keyword table_ref ON target_list_opt_comma INTO NAME_P name VALUE_P name
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -303,7 +303,7 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| UNPIVOT table_ref ON target_list_opt_comma
+			| unpivot_keyword table_ref ON target_list_opt_comma
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
@@ -318,6 +318,14 @@ simple_select:
 					$$ = (PGNode *)res;
 				}
 		;
+
+pivot_keyword:
+		PIVOT | PIVOT_WIDER
+	;
+
+unpivot_keyword:
+		UNPIVOT | PIVOT_LONGER
+	;
 
 pivot_column_entry:
 			ColIdOrString
