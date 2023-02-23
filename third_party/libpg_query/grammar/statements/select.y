@@ -2358,10 +2358,10 @@ a_expr:		c_expr									{ $$ = $1; }
 
 					$$ = (PGNode *) star;
 				}
-			| COLUMNS '(' Sconst ')'
+			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
-					star->regex = $3;
+					star->expr = $3;
 					star->columns = true;
 
 					$$ = (PGNode *) star;

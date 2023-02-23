@@ -36,11 +36,11 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));
 		}
 	}
-	if (star->regex) {
+	if (star->expr) {
 		D_ASSERT(result->relation_name.empty());
 		D_ASSERT(result->exclude_list.empty());
 		D_ASSERT(result->replace_list.empty());
-		result->regex = star->regex;
+		result->expr = TransformExpression(star->expr);
 	}
 	result->columns = star->columns;
 	return std::move(result);
