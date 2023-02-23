@@ -16,8 +16,6 @@ create table df as
 		range(3000) i
 	;
 
-loop i 0 100
-
 query I
 select count(*) 
 from (
@@ -27,4 +25,3 @@ from (
 ----
 4380000
 
-endloop
