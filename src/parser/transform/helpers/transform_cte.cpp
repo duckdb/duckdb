@@ -6,9 +6,33 @@
 
 namespace duckdb {
 
+unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
+	auto result = make_unique<CommonTableExpressionInfo>();
+	result->aliases = aliases;
+	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	return result;
+}
+
+void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
+	for (auto &cte_entry : stored_cte_map) {
+		for (auto &entry : cte_entry->map) {
+			auto found_entry = cte_map.map.find(entry.first);
+			if (found_entry != cte_map.map.end()) {
+				// entry already present - use top-most entry
+				continue;
+			}
+			cte_map.map[entry.first] = entry.second->Copy();
+		}
+	}
+	if (parent) {
+		parent->ExtractCTEsRecursive(cte_map);
+	}
+}
+
 void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map) {
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause);
+	stored_cte_map.push_back(&cte_map);
 
 	D_ASSERT(de_with_clause->ctes);
 	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != nullptr; cte_ele = cte_ele->next) {

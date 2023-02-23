@@ -261,7 +261,6 @@ enum class LogicalTypeId : uint8_t {
 
 	HUGEINT = 50,
 	POINTER = 51,
-	// HASH = 52, // deprecated, uses UBIGINT instead
 	VALIDITY = 53,
 	UUID = 54,
 
