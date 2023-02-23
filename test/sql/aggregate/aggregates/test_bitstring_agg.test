@@ -145,6 +145,11 @@ SELECT BITSTRING_AGG(i, 2, 15) FROM tinyints
 ----
 Out of Range Error: Value 1 is outside of provided min and max range (2 <-> 15)
 
+query I
+SELECT BITSTRING_AGG(i, 2378080, 2378150) FROM bigints
+----
+00000000000000010100100011000000010000000000000000000000000000000000000
+
 
 # test on scalar values  -  scalar values do not provide column statistics
 statement error

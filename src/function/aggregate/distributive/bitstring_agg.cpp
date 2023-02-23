@@ -53,12 +53,14 @@ struct BitStringAggOperation {
 	static void Operation(STATE *state, AggregateInputData &data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		auto bind_agg_data = (BitstringAggBindData *)data.bind_data;
 		if (!state->is_set) {
-			state->min = bind_agg_data->min.GetValueUnsafe<INPUT_TYPE>();
-			state->max = bind_agg_data->max.GetValueUnsafe<INPUT_TYPE>();
-			idx_t bit_range = GetRange(bind_agg_data->min.GetValueUnsafe<INPUT_TYPE>(),
-			                           bind_agg_data->max.GetValueUnsafe<INPUT_TYPE>());
+			state->min = bind_agg_data->min.GetValue<INPUT_TYPE>();
+			state->max = bind_agg_data->max.GetValue<INPUT_TYPE>();
+			idx_t bit_range =
+			    GetRange(bind_agg_data->min.GetValue<INPUT_TYPE>(), bind_agg_data->max.GetValue<INPUT_TYPE>());
 			if (bit_range > 1000000000) { // for now capped at 1 billion bits
-				throw OutOfRangeException("The range between min and max value is too large for bitstring aggregation");
+				throw OutOfRangeException(
+				    "The range between min and max value (%s <-> %s) is too large for bitstring aggregation",
+				    NumericHelper::ToString(state->min), NumericHelper::ToString(state->max));
 			}
 			idx_t len = bit_range % 8 ? (bit_range / 8) + 1 : bit_range / 8;
 			len++;
@@ -70,7 +72,7 @@ struct BitStringAggOperation {
 			state->is_set = true;
 		}
 		if (input[idx] >= state->min && input[idx] <= state->max) {
-			Execute(state, input[idx], bind_agg_data->min.GetValueUnsafe<INPUT_TYPE>());
+			Execute(state, input[idx], bind_agg_data->min.GetValue<INPUT_TYPE>());
 		} else {
 			throw OutOfRangeException("Value %s is outside of provided min and max range (%s <-> %s)",
 			                          NumericHelper::ToString(input[idx]), NumericHelper::ToString(state->min),
@@ -200,7 +202,7 @@ static void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalType
 	    AggregateFunction::UnaryAggregateDestructor<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	        type, LogicalType::BIT);
 	function.bind = BindBitstringAgg;              // create new a 'BitstringAggBindData'
-	function.statistics = BitstringPropagateStats; // stores min and max from column stats in BistringAggBindData
+	function.statistics = BitstringPropagateStats; // stores min and max from column stats in BitstringAggBindData
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
 	function.arguments = {type, type, type};
 	function.statistics = nullptr; // min and max are provided as arguments
