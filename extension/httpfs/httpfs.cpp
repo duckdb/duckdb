@@ -32,6 +32,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout = DEFAULT_TIMEOUT;
 	uint64_t retries = DEFAULT_RETRIES;
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
+	uint64_t get_request_file_size = DEFAULT_GET_REQUEST_FILE_SIZE;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -46,7 +47,10 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
 		retry_backoff = value.GetValue<float>();
 	}
-	return {timeout, retries, retry_wait_ms, retry_backoff};
+	if (FileOpener::TryGetCurrentSetting(opener, "get_request_file_size", value)) {
+		get_request_file_size = value.GetValue<uint64_t>();
+	}
+	return {timeout, retries, retry_wait_ms, get_request_file_size, retry_backoff};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -228,7 +232,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
-		std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		if (hfs.stats) {
 			hfs.stats->get_count++;
 		}
@@ -253,7 +257,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 			    hfs.data_length = data_length;
 			    hfs.length = data_length;
 			    return true;
-		    });
+		    },
+		    hfs.http_params.get_request_file_size);
 	});
 
 	std::function<void(void)> on_retry(
@@ -261,7 +266,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 
 	return RunRequestWithRetry(request, url, "GET", hfs.http_params, on_retry);
 }
-
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
@@ -357,9 +361,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
-//	if (location + nr_bytes > hfh.length) {
-//		throw IOException("out of file");
-//	}
+	//	if (location + nr_bytes > hfh.length) {
+	//		throw IOException("out of file");
+	//	}
 
 	// Don't buffer when DirectIO is set.
 	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
@@ -381,63 +385,64 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		hfh.file_offset = location;
 	}
 
-	if (!hfh.range_read){
+	if (!hfh.range_read) {
 		GetRequest(hfh, hfh.path, {});
 		return;
-	} else{
+	} else {
 		while (to_read > 0) {
-		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
-		if (buffer_read_len > 0) {
-			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
-			memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
+			auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
+			if (buffer_read_len > 0) {
+				D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
+				memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
 
-			buffer_offset += buffer_read_len;
-			to_read -= buffer_read_len;
+				buffer_offset += buffer_read_len;
+				to_read -= buffer_read_len;
 
-			hfh.buffer_idx += buffer_read_len;
-			hfh.buffer_available -= buffer_read_len;
-			hfh.file_offset += buffer_read_len;
-		}
+				hfh.buffer_idx += buffer_read_len;
+				hfh.buffer_available -= buffer_read_len;
+				hfh.file_offset += buffer_read_len;
+			}
 
-		if (to_read > 0 && hfh.buffer_available == 0) {
-			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
+			if (to_read > 0 && hfh.buffer_available == 0) {
+				auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
 
-			// Bypass buffer if we read more than buffer size
-			if (to_read > new_buffer_available) {
-				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset, to_read);
-				hfh.buffer_available = 0;
-				hfh.buffer_idx = 0;
-				hfh.file_offset += to_read;
-				break;
-			} else {
-				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
-				                new_buffer_available);
-				hfh.buffer_available = new_buffer_available;
-				hfh.buffer_idx = 0;
-				hfh.buffer_start = hfh.file_offset;
-				hfh.buffer_end = hfh.buffer_start + new_buffer_available;
+				// Bypass buffer if we read more than buffer size
+				if (to_read > new_buffer_available) {
+					GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset,
+					                to_read);
+					hfh.buffer_available = 0;
+					hfh.buffer_idx = 0;
+					hfh.file_offset += to_read;
+					break;
+				} else {
+					GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
+					                new_buffer_available);
+					hfh.buffer_available = new_buffer_available;
+					hfh.buffer_idx = 0;
+					hfh.buffer_start = hfh.file_offset;
+					hfh.buffer_end = hfh.buffer_start + new_buffer_available;
+				}
 			}
 		}
-	}
 	}
 }
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t max_read = hfh.length - hfh.file_offset;
-	if (hfh.range_read){
+	if (hfh.range_read) {
 		nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 		Read(handle, buffer, nr_bytes, hfh.file_offset);
-	} else{
-		if (!hfh.data){
+	} else {
+		if (!hfh.data) {
 			Read(handle, buffer, nr_bytes, hfh.file_offset);
 		}
-		if (hfh.cur_pos < hfh.length){
+		if (hfh.cur_pos < hfh.length) {
 			nr_bytes = MinValue<idx_t>(hfh.length - hfh.cur_pos, nr_bytes);
 			memcpy(buffer, hfh.data + hfh.cur_pos, nr_bytes);
 			hfh.cur_pos += nr_bytes;
 			hfh.file_offset = hfh.cur_pos;
-		} else{
+		} else {
 			nr_bytes = 0;
 		}
 	}
@@ -571,21 +576,19 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	if (res->headers.find("Content-Length") == res->headers.end() || res->headers["Content-Length"].empty()) {
 		// There was no content-length header, we can not do range requests here, so we set the length to 0
 		length = 0;
-	} else{
+	} else {
 		try {
-		length = std::stoll(res->headers["Content-Length"]);
+			length = std::stoll(res->headers["Content-Length"]);
 		} catch (std::invalid_argument &e) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		} catch (std::out_of_range &e) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (length == 0){
+	if (length == 0) {
 		// Try to fully download the file first
 		range_read = false;
 	}
-
-
 
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
