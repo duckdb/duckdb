@@ -13,6 +13,7 @@ else
 fi
 
 FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
+
 EXTENSION_LIST=""
 for f in $FILES
 do
@@ -21,15 +22,22 @@ do
 done
 mkdir -p testext
 cd testext
-cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
+
+if [ "$2" = "oote" ]; then
+  CMAKE_ROOT="../duckdb"
+else
+  CMAKE_ROOT=".."
+fi
+
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} ${FORCE_32_BIT_FLAG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ${CMAKE_ROOT}
 cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 
 duckdb_path="testext/duckdb"
 unittest_path="testext/test/unittest"
 if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="testext/${CMAKE_CONFIG}/duckdb.exe"
-	unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
+  duckdb_path="testext/${CMAKE_CONFIG}/duckdb.exe"
+  unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
 fi
 
 for f in $FILES

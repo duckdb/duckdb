@@ -211,8 +211,9 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
+		static_assert(std::is_integral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= frame_of_reference;
+			buffer[i] -= uint64_t(frame_of_reference);
 		}
 	}
 
@@ -446,8 +447,8 @@ public:
 
 		static void ReserveSpace(BitpackingCompressState<T> *state, idx_t data_bytes) {
 			idx_t meta_bytes = sizeof(bitpacking_metadata_encoded_t);
-			state->FlushAndCreateSegmentIfFull(data_bytes + meta_bytes);
-			D_ASSERT(data_bytes + meta_bytes <= state->RemainingSize());
+			state->FlushAndCreateSegmentIfFull(data_bytes, meta_bytes);
+			D_ASSERT(state->CanStore(data_bytes, meta_bytes));
 		}
 
 		static void UpdateStats(BitpackingCompressState<T> *state, idx_t count) {
@@ -460,9 +461,12 @@ public:
 		}
 	};
 
-	// Space remaining between the metadata_ptr growing down and data ptr growing up
-	idx_t RemainingSize() {
-		return metadata_ptr - data_ptr;
+	bool CanStore(idx_t data_bytes, idx_t meta_bytes) {
+		auto required_data_bytes = AlignValue<idx_t>((data_ptr + data_bytes) - data_ptr);
+		auto required_meta_bytes = Storage::BLOCK_SIZE - (metadata_ptr - data_ptr) + meta_bytes;
+
+		return required_data_bytes + required_meta_bytes <=
+		       Storage::BLOCK_SIZE - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -488,8 +492,8 @@ public:
 		}
 	}
 
-	void FlushAndCreateSegmentIfFull(idx_t required_space) {
-		if (RemainingSize() < required_space) {
+	void FlushAndCreateSegmentIfFull(idx_t required_data_bytes, idx_t required_meta_bytes) {
+		if (!CanStore(required_data_bytes, required_meta_bytes)) {
 			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
@@ -504,6 +508,12 @@ public:
 		idx_t metadata_offset = AlignValue(data_ptr - base_ptr);
 		idx_t metadata_size = base_ptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
+
+		// Asserting things are still sane here
+		if (!CanStore(0, 0)) {
+			throw InternalException("Error in bitpacking size calculation");
+		}
+
 		memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
 
 		// Store the offset of the metadata of the first group (which is at the highest address).

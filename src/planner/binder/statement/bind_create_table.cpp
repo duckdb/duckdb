@@ -16,6 +16,8 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 #include <algorithm>
 
@@ -199,7 +201,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindDefaultValues(ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
 		if (column.DefaultValue()) {
@@ -282,7 +284,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), result->schema->catalog->GetName());
+		BindLogicalType(context, column.TypeMutable(), result->schema->catalog);
 		// We add a catalog dependency
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
@@ -298,6 +300,17 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = (CreateTableInfo &)*info;
 	auto schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
+}
+
+vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info) {
+	vector<unique_ptr<Expression>> expressions;
+
+	auto index_binder = IndexBinder(*this, this->context, table, info);
+	for (auto &expr : info->expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	return expressions;
 }
 
 } // namespace duckdb

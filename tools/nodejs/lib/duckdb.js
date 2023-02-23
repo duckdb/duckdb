@@ -334,7 +334,6 @@ Connection.prototype.register_udf = function (name, return_type, fun) {
                 desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
         } catch (error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
-            console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message

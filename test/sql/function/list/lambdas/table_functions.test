@@ -1,0 +1,68 @@
+# name: test/sql/function/list/lambdas/table_functions.test
+# description: Test list lambdas in table functions
+# group: [lambdas]
+
+require parquet
+
+statement ok
+CREATE TABLE tmp AS SELECT range AS id FROM range(10);
+
+# create a parquet file
+query I
+COPY tmp TO '__TEST_DIR__/my_file_cba.parquet' (FORMAT PARQUET);
+----
+10
+
+# now test different table functions
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_transform(['C', 'B', 'A'], s -> lower(s)), 'string_agg', '') || '.parquet');
+----
+10
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_transform(list_sort(['a', 'b', 'c'], 'DESC'), s -> lower(s)), 'string_agg', '') || '.parquet');
+----
+10
+
+# nested lambdas
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_transform(list_filter(['s', 'c', 'b', NULL, 'a'], x -> x IS NOT NULL AND x != 's'),
+s -> lower(s)), 'string_agg', '') || '.parquet');
+----
+10
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_transform(list_filter(
+list_filter(['s', 'c', 'b', NULL, 'a'], y -> y != 's'), x -> x IS NOT NULL),
+s -> lower(s)), 'string_agg', '') || '.parquet');
+----
+10
+
+# lambda parameters in rhs
+query I
+COPY tmp TO '__TEST_DIR__/my_file_ac.parquet' (FORMAT PARQUET);
+----
+10
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_transform(['a'], x -> list_transform(['a', 'c'], y -> x || y)[2]), 'string_agg', '') || '.parquet');
+----
+10
+
+# issue 5821 (without httpfs)
+query I
+COPY tmp TO '__TEST_DIR__/my_file_a=1,b=2,c=3.parquet' (FORMAT PARQUET);
+----
+10
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_string_agg([lower(s) for s in ['a=1', 'b=2', 'c=3']]) || '.parquet');
+----
+10
+

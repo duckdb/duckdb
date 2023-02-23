@@ -123,7 +123,7 @@ public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
-		Close();
+		UnixFileHandle::Close();
 	}
 
 	int fd;
@@ -407,7 +407,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -488,7 +489,7 @@ public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
 	    : FileHandle(file_system, path), position(0), fd(fd) {
 	}
-	virtual ~WindowsFileHandle() {
+	~WindowsFileHandle() override {
 		Close();
 	}
 
@@ -734,7 +735,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
@@ -831,8 +833,8 @@ static bool HasGlob(const string &str) {
 	return false;
 }
 
-static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                      vector<string> &result, bool join_path) {
+static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                              vector<string> &result, bool join_path) {
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
@@ -949,12 +951,12 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		} else {
 			if (previous_directories.empty()) {
 				// no previous directories: list in the current path
-				GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+				GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
 			} else {
 				// previous directories
 				// we iterate over each of the previous directories, and apply the glob of the current directory
 				for (auto &prev_directory : previous_directories) {
-					GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+					GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
 				}
 			}
 		}

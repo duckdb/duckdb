@@ -8,6 +8,13 @@ SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, d
 
 require json
 
+# we cannot check the error output for the specific byte, because on Windows the \n are replaced with \r\n
+# therefore, the byte count is different. So, we cut off the error message here
+statement error
+select * from read_json_objects('data/json/unterminated_quotes.ndjson')
+----
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson"
+
 # now it should work!
 query I
 SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
@@ -39,7 +46,7 @@ SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 
 # we can auto-detect that it's newline-delimited
 query I
-SELECT * FROM read_json_objects('data/json/example_n.ndjson', format='auto')
+SELECT * FROM read_json_objects('data/json/example_n.ndjson', lines='auto')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -59,7 +66,7 @@ SELECT * FROM read_json_objects('data/json/example_r.ndjson')
 
 # we can detect that it's not newline-delimited
 query I
-SELECT * FROM read_json_objects('data/json/example_r.ndjson', format='auto')
+SELECT * FROM read_json_objects('data/json/example_r.ndjson', lines='auto')
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -71,7 +78,7 @@ SELECT * FROM read_json_objects('data/json/example_r.ndjson', format='auto')
 statement error
 SELECT * FROM read_ndjson_objects('data/json/example_r.ndjson')
 ----
-Invalid Input Error: Malformed JSON at byte 45 of input
+Invalid Input Error: Malformed JSON in file "data/json/example_r.ndjson"
 
 # example_rn is with \r\n newlines
 query I
@@ -167,16 +174,16 @@ select * from read_ndjson_objects('data/json/empty.ndjson')
 statement error
 select * from read_json_objects('data/json/unterminated_quotes.ndjson')
 ----
-Invalid Input Error: Malformed JSON at byte 25 of input
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson"
 
 statement error
 select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson')
 ----
-Invalid Input Error: Malformed JSON at byte 25 of input
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson"
 
 # we can auto-detect and ignore the error (becomes NULL)
 query I
-select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson', format='auto', ignore_errors=true)
+select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson', lines='auto', ignore_errors=true)
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -184,7 +191,7 @@ NULL
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
-# multiple objects per line (works for read_json_objects)
+# multiple values per line (works for read_json_objects)
 query I
 select * from read_json_objects('data/json/multiple_objects_per_line.ndjson')
 ----
@@ -198,27 +205,26 @@ select * from read_json_objects('data/json/multiple_objects_per_line.ndjson')
 statement error
 select * from read_ndjson_objects('data/json/multiple_objects_per_line.ndjson')
 ----
-Invalid Input Error: Malformed JSON at byte 44 of input
+Invalid Input Error: Malformed JSON in file "data/json/multiple_objects_per_line.ndjson"
 
 # what if we try to read a CSV?
 statement error
 select * from read_json_objects('data/csv/tpcds_14.csv')
 ----
-Invalid Input Error: Malformed JSON at byte 0 of input
+Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv"
 
-# error occurs at different byte
 statement error
 select * from read_ndjson_objects('data/csv/tpcds_14.csv')
 ----
-Invalid Input Error: Malformed JSON at byte 0 of input
+Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv"
 
 # how about parquet?
 statement error
 select * from read_json_objects('data/parquet-testing/blob.parquet')
 ----
-Invalid Input Error: Malformed JSON at byte 0 of input
+Invalid Input Error: Malformed JSON in file "data/parquet-testing/blob.parquet"
 
 statement error
 select * from read_ndjson_objects('data/parquet-testing/blob.parquet')
 ----
-Invalid Input Error: Malformed JSON at byte 0 of input
+Invalid Input Error: Malformed JSON in file "data/parquet-testing/blob.parquet"

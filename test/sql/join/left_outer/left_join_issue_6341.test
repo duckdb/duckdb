@@ -1,0 +1,37 @@
+# name: test/sql/join/left_outer/left_join_issue_6341.test
+# description: Issue #6341: No rows returned in LEFT JOIN with < or > against table having no rows
+# group: [left_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE foo (ts TIMESTAMP);
+
+statement ok
+CREATE TABLE bar (ts TIMESTAMP);
+
+
+statement ok
+INSERT INTO foo VALUES ('2023-01-01 00:00:00');
+
+statement ok
+INSERT INTO foo VALUES ('2023-01-01 00:00:01');
+
+query II
+SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts = bar.ts;
+----
+2023-01-01 00:00:00	NULL
+2023-01-01 00:00:01	NULL
+
+query II
+SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts < bar.ts;
+----
+2023-01-01 00:00:00	NULL
+2023-01-01 00:00:01	NULL
+
+query II
+SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts > bar.ts;
+----
+2023-01-01 00:00:00	NULL
+2023-01-01 00:00:01	NULL

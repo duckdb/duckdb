@@ -26,18 +26,19 @@ public:
 public:
 	//! Create an IndexCatalogEntry and initialize storage for it
 	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
-	~IndexCatalogEntry() override;
 
 	Index *index;
-	shared_ptr<DataTableInfo> info;
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 public:
 	string ToSQL() override;
-	void Serialize(duckdb::MetaBlockWriter &serializer);
+	void Serialize(Serializer &serializer);
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
+
+	virtual string GetSchemaName() = 0;
+	virtual string GetTableName() = 0;
 };
 
 } // namespace duckdb

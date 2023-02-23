@@ -184,6 +184,10 @@ struct StringSplitFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct BarFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ASCII {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -40,18 +40,15 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &key = args.data[1];
 
 	UnifiedVectorFormat map_data;
-	UnifiedVectorFormat key_data;
 
 	auto &map_keys = MapVector::GetKeys(map);
 	auto &map_values = MapVector::GetValues(map);
 
 	map.ToUnifiedFormat(args.size(), map_data);
-	key.ToUnifiedFormat(args.size(), key_data);
 
 	for (idx_t row = 0; row < args.size(); row++) {
 		idx_t row_index = map_data.sel->get_index(row);
-		idx_t key_index = key_data.sel->get_index(row);
-		auto key_value = key.GetValue(key_index);
+		auto key_value = key.GetValue(row);
 
 		list_entry_t entry = ListVector::GetData(map)[row_index];
 		auto offsets = MapVector::Search(map_keys, args.size(), key_value, entry);

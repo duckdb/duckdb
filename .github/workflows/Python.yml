@@ -1,16 +1,28 @@
 name: Python
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
 
@@ -38,7 +50,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -50,6 +62,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build source dist
       shell: bash
@@ -72,48 +85,13 @@ jobs:
     needs: linux-python3-9
 
     steps:
-    - name: Install dependencies
-      shell: bash
-      run: |
-        yum install -y gcc gcc-c++ cmake make
-        yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
-        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-        yum install -y git
-        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker
-
-    - name: Install AWS CLI
-      shell: bash
-      run: |
-        python3 -m pip install awscli
-        aws --version
-
-      # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
-    - name: Download OpenSSL 1.1.1s
-      shell: bash
-      run: |
-        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1s.tar.gz
-        tar -xzvf OpenSSL_1_1_1s.tar.gz
-        mv openssl-OpenSSL_1_1_1s openssl-1.1.1s
-        cd openssl-1.1.1s
-        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
-
-    - name: Configure OpenSSL
-      shell: bash
-      run: |
-        cd openssl-1.1.1s
-        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
-
-    - name: Build OpenSSL
-      shell: bash
-      run: |
-        cd openssl-1.1.1s
-        make
-        make install
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/centos_7_setup
+      with:
+        openssl: 1
 
     - name: Version Check
       shell: bash
@@ -167,7 +145,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -190,6 +168,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -235,7 +214,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -247,6 +226,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.python_build }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
@@ -299,7 +279,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -311,6 +291,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.python_build }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
@@ -342,7 +323,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -355,6 +336,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
@@ -447,7 +429,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 

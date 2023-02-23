@@ -20,6 +20,7 @@ class AttachStatement;
 class CallStatement;
 class CopyStatement;
 class CreateStatement;
+class DetachStatement;
 class DeleteStatement;
 class DropStatement;
 class ExtensionStatement;

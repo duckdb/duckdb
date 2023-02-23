@@ -2,9 +2,9 @@
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -27,41 +27,20 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/main/extension_functions.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/catalog/similar_catalog_entry.hpp"
 #include <algorithm>
 
 namespace duckdb {
 
-Catalog::Catalog(AttachedDatabase &db)
-    : schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
-      dependency_manager(make_unique<DependencyManager>(*this)), db(db) {
+Catalog::Catalog(AttachedDatabase &db) : db(db) {
 }
+
 Catalog::~Catalog() {
-}
-
-void Catalog::Initialize(bool load_builtin) {
-	// first initialize the base system catalogs
-	// these are never written to the WAL
-	// we start these at 1 because deleted entries default to 0
-	CatalogTransaction data(GetDatabase(), 1, 1);
-
-	// create the default schema
-	CreateSchemaInfo info;
-	info.schema = DEFAULT_SCHEMA;
-	info.internal = true;
-	CreateSchema(data, &info);
-
-	if (load_builtin) {
-		// initialize default functions
-		BuiltinFunctions builtin(data, *this);
-		builtin.Initialize();
-	}
-
-	Verify();
 }
 
 DatabaseInstance &Catalog::GetDatabase() {
@@ -103,38 +82,12 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
-	D_ASSERT(!info->schema.empty());
-	DependencyList dependencies;
-	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
-	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info->schema, std::move(entry), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			throw CatalogException("Schema with name %s already exists!", info->schema);
-		} else {
-			D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
-		}
-		return nullptr;
-	}
-	return result;
-}
-
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
 	return CreateSchema(GetCatalogTransaction(context), info);
 }
 
 CatalogTransaction Catalog::GetCatalogTransaction(ClientContext &context) {
 	return CatalogTransaction(*this, context);
-}
-
-void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
-	D_ASSERT(!info->name.empty());
-	ModifyCatalog();
-	if (!schemas->DropEntry(GetCatalogTransaction(context), info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info->name);
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -300,6 +253,20 @@ CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCat
 }
 
 //===--------------------------------------------------------------------===//
+// Index
+//===--------------------------------------------------------------------===//
+CatalogEntry *Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info) {
+	auto &context = transaction.GetContext();
+	return CreateIndex(context, info);
+}
+
+CatalogEntry *Catalog::CreateIndex(ClientContext &context, CreateIndexInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	auto table = GetEntry<TableCatalogEntry>(context, schema->name, info->table->table_name);
+	return schema->CreateIndex(context, info, table);
+}
+
+//===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
 struct CatalogLookup {
@@ -320,41 +287,6 @@ struct CatalogEntryLookup {
 	}
 };
 
-//! Return value of SimilarEntryInSchemas
-struct SimilarCatalogEntry {
-	//! The entry name. Empty if absent
-	string name;
-	//! The distance to the given name.
-	idx_t distance;
-	//! The schema of the entry.
-	SchemaCatalogEntry *schema;
-
-	DUCKDB_API bool Found() const {
-		return !name.empty();
-	}
-
-	DUCKDB_API string GetQualifiedName(bool qualify_catalog, bool qualify_schema) const;
-};
-
-string SimilarCatalogEntry::GetQualifiedName(bool qualify_catalog, bool qualify_schema) const {
-	D_ASSERT(Found());
-	string result;
-	if (qualify_catalog) {
-		result += schema->catalog->GetName();
-	}
-	if (qualify_schema) {
-		if (!result.empty()) {
-			result += ".";
-		}
-		result += schema->name;
-	}
-	if (!result.empty()) {
-		result += ".";
-	}
-	result += name;
-	return result;
-}
-
 //===--------------------------------------------------------------------===//
 // Generic
 //===--------------------------------------------------------------------===//
@@ -374,24 +306,9 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	lookup.schema->DropEntry(context, info);
 }
 
-SchemaCatalogEntry *Catalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
-                                       QueryErrorContext error_context) {
-	D_ASSERT(!schema_name.empty());
-	auto entry = schemas->GetEntry(transaction, schema_name);
-	if (!entry && !if_exists) {
-		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
-	}
-	return (SchemaCatalogEntry *)entry;
-}
-
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,
                                        QueryErrorContext error_context) {
 	return GetSchema(GetCatalogTransaction(context), schema_name, if_exists, error_context);
-}
-
-void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
-	// create all default schemas first
-	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry *entry) { callback(entry); });
 }
 
 //===--------------------------------------------------------------------===//
@@ -399,33 +316,40 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 //===--------------------------------------------------------------------===//
 SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
                                                    const unordered_set<SchemaCatalogEntry *> &schemas) {
-
-	vector<CatalogSet *> sets;
-	std::transform(schemas.begin(), schemas.end(), std::back_inserter(sets),
-	               [type](SchemaCatalogEntry *s) -> CatalogSet * { return &s->GetCatalogSet(type); });
-	pair<string, idx_t> most_similar {"", (idx_t)-1};
-	SchemaCatalogEntry *schema_of_most_similar = nullptr;
+	SimilarCatalogEntry result;
 	for (auto schema : schemas) {
 		auto transaction = schema->catalog->GetCatalogTransaction(context);
-		auto entry = schema->GetCatalogSet(type).SimilarEntry(transaction, entry_name);
-		if (!entry.first.empty() && (most_similar.first.empty() || most_similar.second > entry.second)) {
-			most_similar = entry;
-			schema_of_most_similar = schema;
+		auto entry = schema->GetSimilarEntry(transaction, type, entry_name);
+		if (!entry.Found()) {
+			// no similar entry found
+			continue;
+		}
+		if (!result.Found() || result.distance > entry.distance) {
+			result = entry;
+			result.schema = schema;
 		}
 	}
-
-	return {most_similar.first, most_similar.second, schema_of_most_similar};
+	return result;
 }
 
-string FindExtension(const string &function_name) {
-	auto size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionFunction);
-	auto it = std::lower_bound(
-	    EXTENSION_FUNCTIONS, EXTENSION_FUNCTIONS + size, function_name,
-	    [](const ExtensionFunction &element, const string &value) { return element.function < value; });
-	if (it != EXTENSION_FUNCTIONS + size && it->function == function_name) {
+string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], idx_t size) {
+	auto lcase = StringUtil::Lower(name);
+	auto it = std::lower_bound(entries, entries + size, lcase,
+	                           [](const ExtensionEntry &element, const string &value) { return element.name < value; });
+	if (it != entries + size && it->name == lcase) {
 		return it->extension;
 	}
 	return "";
+}
+
+string FindExtensionForFunction(const string &name) {
+	idx_t size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionEntry);
+	return FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
+}
+
+string FindExtensionForSetting(const string &name) {
+	idx_t size = sizeof(EXTENSION_SETTINGS) / sizeof(ExtensionEntry);
+	return FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
@@ -492,6 +416,26 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
+	// check if the setting exists in any extensions
+	auto extension_name = FindExtensionForSetting(name);
+	if (!extension_name.empty()) {
+		return CatalogException(
+		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
+		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+		    name, extension_name, extension_name, extension_name);
+	}
+	// the setting is not in an extension
+	// get a list of all options
+	vector<string> potential_names = DBConfig::GetOptionNames();
+	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+		potential_names.push_back(entry.first);
+	}
+
+	throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
+	                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+}
+
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
                                                       CatalogType type,
                                                       const unordered_set<SchemaCatalogEntry *> &schemas,
@@ -508,13 +452,18 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			unseen_schemas.insert(current_schema);
 		}
 	}
-	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-	auto extension_name = FindExtension(entry_name);
-	if (!extension_name.empty()) {
-		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
-		                        "Install and Load the extension, run: INSTALL %s; LOAD %s;",
-		                        entry_name, extension_name, extension_name, extension_name);
+	// check if the entry exists in any extension
+	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+		auto extension_name = FindExtensionForFunction(entry_name);
+		if (!extension_name.empty()) {
+			return CatalogException(
+			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
+			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+			    entry_name, extension_name, extension_name, extension_name);
+		}
 	}
+	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
 	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -540,7 +489,7 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 	if (!schema_entry) {
 		return {nullptr, nullptr};
 	}
-	auto entry = schema_entry->GetCatalogSet(type).GetEntry(transaction, name);
+	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
 		return {schema_entry, nullptr};
 	}
@@ -652,23 +601,28 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &cat
 	return result;
 }
 
-LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
-                             const string &name) {
-	CatalogEntry *entry;
-	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, true);
-	if (!entry) {
-		// look in the system catalog
-		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, true);
-		if (!entry) {
-			// repeat the search to get the error
-			GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name);
-			throw InternalException("Catalog::GetType - second type lookup somehow succeeded!?");
-		}
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name, bool if_exists) {
+	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_exists);
+	if (!type_entry) {
+		return LogicalType::INVALID;
 	}
-	auto type_entry = (TypeCatalogEntry *)entry;
 	auto result_type = type_entry->user_type;
 	LogicalType::SetCatalog(result_type, type_entry);
 	return result_type;
+}
+
+LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
+                             const string &name) {
+	auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
+	auto result_type = type_entry->user_type;
+	LogicalType::SetCatalog(result_type, type_entry);
+	return result_type;
+}
+
+vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context) {
+	vector<SchemaCatalogEntry *> schemas;
+	ScanSchemas(context, [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	return schemas;
 }
 
 vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
@@ -689,7 +643,7 @@ vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const s
 	}
 	vector<SchemaCatalogEntry *> result;
 	for (auto catalog : catalogs) {
-		auto schemas = catalog->schemas->GetEntries<SchemaCatalogEntry>(catalog->GetCatalogTransaction(context));
+		auto schemas = catalog->GetSchemas(context);
 		result.insert(result.end(), schemas.begin(), schemas.end());
 	}
 	return result;
@@ -702,7 +656,7 @@ vector<SchemaCatalogEntry *> Catalog::GetAllSchemas(ClientContext &context) {
 	auto databases = db_manager.GetDatabases(context);
 	for (auto database : databases) {
 		auto &catalog = database->GetCatalog();
-		auto new_schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(catalog.GetCatalogTransaction(context));
+		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
 	}
 	sort(result.begin(), result.end(), [&](SchemaCatalogEntry *x, SchemaCatalogEntry *y) {
@@ -728,9 +682,6 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 void Catalog::Verify() {
-#ifdef DEBUG
-	schemas->Verify(*this);
-#endif
 }
 
 //===--------------------------------------------------------------------===//

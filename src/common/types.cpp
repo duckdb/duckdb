@@ -104,6 +104,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -179,6 +180,7 @@ constexpr const LogicalTypeId LogicalType::POINTER;
 constexpr const LogicalTypeId LogicalType::VARCHAR;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
+constexpr const LogicalTypeId LogicalType::BIT;
 constexpr const LogicalTypeId LogicalType::INTERVAL;
 constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
@@ -205,13 +207,13 @@ const vector<LogicalType> LogicalType::Integral() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,     LogicalType::INTEGER,
-	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP,    LogicalType::DOUBLE,
-	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,         LogicalType::INTERVAL,
-	    LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,     LogicalType::USMALLINT,
-	    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,         LogicalTypeId::LIST,
-	    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,
-	    LogicalTypeId::UNION,  LogicalType::UUID};
+	    LogicalType::BOOLEAN,   LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
+	    LogicalType::BIGINT,    LogicalType::DATE,     LogicalType::TIMESTAMP, LogicalType::DOUBLE,
+	    LogicalType::FLOAT,     LogicalType::VARCHAR,  LogicalType::BLOB,      LogicalType::BIT,
+	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
+	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
+	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
+	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID};
 	return types;
 }
 
@@ -403,6 +405,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "AGGREGATE_STATE";
 	case LogicalTypeId::USER:
 		return "USER";
+	case LogicalTypeId::BIT:
+		return "BIT";
 	}
 	return "UNDEFINED";
 }
@@ -500,11 +504,32 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	return Parser::ParseColumnList("dummy " + str).GetColumn(LogicalIndex(0)).Type();
 }
 
+LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
+	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
+		return Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, type.GetAlias());
+	}
+	// Look for LogicalTypeId::USER in nested types
+	if (type.id() == LogicalTypeId::STRUCT) {
+		child_list_t<LogicalType> children;
+		children.reserve(StructType::GetChildCount(type));
+		for (auto &child : StructType::GetChildTypes(type)) {
+			children.emplace_back(child.first, GetUserTypeRecursive(child.second, context));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	if (type.id() == LogicalTypeId::LIST) {
+		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
+	}
+	if (type.id() == LogicalTypeId::MAP) {
+		return LogicalType::MAP(GetUserTypeRecursive(MapType::KeyType(type), context),
+		                        GetUserTypeRecursive(MapType::ValueType(type), context));
+	}
+	// Not LogicalTypeId::USER or a nested type
+	return type;
+}
+
 LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	auto type = TransformStringToLogicalType(str);
-	return type.id() == LogicalTypeId::USER
-	           ? Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, str)
-	           : type;
+	return GetUserTypeRecursive(TransformStringToLogicalType(str), context);
 }
 
 bool LogicalType::IsIntegral() const {
@@ -884,18 +909,23 @@ void LogicalType::SetAlias(string alias) {
 }
 
 string LogicalType::GetAlias() const {
-	if (!type_info_) {
-		return string();
-	} else {
+	if (id() == LogicalTypeId::USER) {
+		return UserType::GetTypeName(*this);
+	}
+	if (type_info_) {
 		return type_info_->alias;
 	}
+	return string();
 }
 
 bool LogicalType::HasAlias() const {
-	if (!type_info_) {
-		return false;
+	if (id() == LogicalTypeId::USER) {
+		return !UserType::GetTypeName(*this).empty();
 	}
-	return !type_info_->alias.empty();
+	if (type_info_ && !type_info_->alias.empty()) {
+		return true;
+	}
+	return false;
 }
 
 void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {

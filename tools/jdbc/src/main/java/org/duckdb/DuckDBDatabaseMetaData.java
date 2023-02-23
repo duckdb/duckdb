@@ -2,6 +2,7 @@ package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -10,6 +11,8 @@ import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Statement;
+
+import static java.lang.System.lineSeparator;
 
 public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	DuckDBConnection conn;
@@ -50,7 +53,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean isReadOnly() throws SQLException {
-		return false;
+		return conn.isReadOnly();
 	}
 
 	@Override
@@ -80,13 +83,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getDatabaseProductVersion() throws SQLException {
-		Statement s = conn.createStatement();
-		ResultSet rs = s.executeQuery("PRAGMA version");
-		rs.next();
-		String result = rs.getString(1);
-		rs.close();
-		s.close();
-		return result;
+		try (Statement s = conn.createStatement();
+			ResultSet rs = s.executeQuery("PRAGMA version")) {
+			rs.next();
+			String result = rs.getString(1);
+			return result;
+		}
 	}
 
 	@Override
@@ -266,7 +268,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsLikeEscapeClause() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -386,7 +388,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsCatalogsInDataManipulation() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -396,12 +398,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsCatalogsInTableDefinitions() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean supportsCatalogsInIndexDefinitions() throws SQLException {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -639,52 +641,161 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
-		if (catalog != null && !catalog.isEmpty()) {
-			throw new SQLException("catalog argument is not supported");
+		StringBuilder sb = new StringBuilder(512);
+		sb.append("SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG'");
+		sb.append(lineSeparator());
+		sb.append("FROM information_schema.schemata");
+		sb.append(lineSeparator());
+		if (catalog != null || schemaPattern != null) {
+			sb.append("WHERE ");
 		}
-		PreparedStatement ps = conn.prepareStatement(
-				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata WHERE schema_name LIKE ? ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
-		ps.setString(1, schemaPattern);
+		
+		if (catalog != null) {
+			if (catalog.isEmpty()) {
+				sb.append("catalog_name IS NULL");
+			}
+			else {
+				sb.append("catalog_name = ?");
+			}
+			sb.append(lineSeparator());
+		}
+		if (schemaPattern != null) {
+			if (catalog != null) {
+				sb.append("AND ");
+			}
+			if (schemaPattern.isEmpty()) {
+				sb.append("schema_name IS NULL");
+			}
+			else {
+				sb.append("schema_name LIKE ?");
+			}
+			sb.append(lineSeparator());
+		}
+		sb.append("ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+		sb.append(lineSeparator());
+		
+		PreparedStatement ps = conn.prepareStatement(sb.toString());
+		int paramIndex = 0;
+		if (catalog != null && !catalog.isEmpty()) {
+			ps.setString(++paramIndex, catalog);
+		}
+		if (schemaPattern != null && !schemaPattern.isEmpty()) {
+			ps.setString(++paramIndex, schemaPattern);
+		}
 		return ps.executeQuery();
 	}
 
 	@Override
 	public ResultSet getTableTypes() throws SQLException {
-		return conn.createStatement().executeQuery(
-				"SELECT DISTINCT table_type AS 'TABLE_TYPE' FROM information_schema.tables ORDER BY \"TABLE_TYPE\"");
+		String[] tableTypesArray = new String[]{"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
+		StringBuilder stringBuilder = new StringBuilder(128);
+		boolean first = true;
+		for (String tableType : tableTypesArray) {
+			if (!first) {
+				stringBuilder.append("\nUNION ALL\n");
+			}
+			stringBuilder.append("SELECT '");
+			stringBuilder.append(tableType);
+			stringBuilder.append("'");
+			if (first) {
+				stringBuilder.append(" AS 'TABLE_TYPE'");
+				first = false;
+			}
+		}
+		stringBuilder.append("\nORDER BY TABLE_TYPE");
+		return conn.createStatement().executeQuery(stringBuilder.toString());
 	}
 
 	@Override
 	public ResultSet getTables(String catalog, String schemaPattern, String tableNamePattern, String[] types)
 			throws SQLException {
-		if (catalog != null && !catalog.isEmpty()) {
-			throw new SQLException("Actual catalog argument is not supported, got " + catalog);
-		}
-		String table_type_str = "";
-		if (types != null && types.length > 0) {
-			table_type_str = "table_type IN (";
-			for (int i = 0; i < types.length; i++) {
-				table_type_str += "'" + types[i] + "'";
-				if (i < types.length - 1) {
-					table_type_str += ',';
-				}
-			}
-			table_type_str += ") AND ";
-		}
-		if (schemaPattern == null) {
-			schemaPattern = "%";
-		}
+		StringBuilder str = new StringBuilder(512);
+
+		str.append("SELECT table_catalog AS 'TABLE_CAT'").append(lineSeparator());
+		str.append(", table_schema AS 'TABLE_SCHEM'").append(lineSeparator());
+		str.append(", table_name AS 'TABLE_NAME'").append(lineSeparator());
+		str.append(", table_type AS 'TABLE_TYPE'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'REMARKS'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'TYPE_CAT'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'TYPE_SCHEM'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'TYPE_NAME'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'SELF_REFERENCING_COL_NAME'").append(lineSeparator());
+		str.append(", NULL::VARCHAR AS 'REF_GENERATION'").append(lineSeparator());
+		str.append("FROM information_schema.tables").append(lineSeparator());
+
+		// tableNamePattern - a table name pattern; must match the table name as it is stored in the database
 		if (tableNamePattern == null) {
+			// non-standard behavior.
 			tableNamePattern = "%";
 		}
-		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema.tables WHERE "
-						+ table_type_str
-						+ " table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
-		ps.setString(1, schemaPattern);
-		ps.setString(2, tableNamePattern);
-		return ps.executeQuery();
+		str.append("WHERE table_name LIKE ?").append(lineSeparator());
 
+		// catalog - a catalog name; must match the catalog name as it is stored in the database;
+		// "" retrieves those without a catalog;
+		// null means that the catalog name should not be used to narrow the search
+		boolean hasCatalogParam = false;
+		if (catalog != null) {
+			str.append("AND table_catalog ");
+			if (catalog.isEmpty()) {
+				str.append("IS NULL").append(lineSeparator());
+			}
+			else {
+				str.append("= ?").append(lineSeparator());
+				hasCatalogParam = true;
+			}
+		}
+
+		// schemaPattern - a schema name pattern; must match the schema name as it is stored in the database;
+		// "" retrieves those without a schema;
+		// null means that the schema name should not be used to narrow the search
+		boolean hasSchemaParam = false;
+		if (schemaPattern != null) {
+			str.append("AND table_schema ");
+			if (schemaPattern.isEmpty()) {
+				str.append("IS NULL").append(lineSeparator());
+			}
+			else {
+				str.append("LIKE ?").append(lineSeparator());
+				hasSchemaParam = true;
+			}
+		}
+
+		if (types != null && types.length > 0) {
+			str.append("AND table_type IN (").append(lineSeparator());
+			for (int i = 0; i < types.length; i++) {
+				if (i > 0) {
+					str.append(',');
+				}
+				str.append('?');
+			}
+			str.append(')');
+		}
+
+		// ordered by TABLE_TYPE, TABLE_CAT, TABLE_SCHEM and TABLE_NAME.
+		str.append("ORDER BY table_type").append(lineSeparator());
+		str.append(", table_catalog").append(lineSeparator());
+		str.append(", table_schema").append(lineSeparator());
+		str.append(", table_name").append(lineSeparator());
+
+		PreparedStatement ps = conn.prepareStatement(str.toString());
+
+		int paramOffset = 1;
+		ps.setString(paramOffset++, tableNamePattern);
+
+		if (hasCatalogParam) {
+			ps.setString(paramOffset++, catalog);
+		}
+		if (hasSchemaParam) {
+			ps.setString(paramOffset++, schemaPattern);
+		}
+
+		if (types != null && types.length > 0) {
+			for (int i = 0; i < types.length; i++) {
+			  ps.setString(paramOffset + i, types[i]);
+			}
+		}
+
+		return ps.executeQuery();
 	}
 
 	@Override
@@ -704,18 +815,18 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		}
 
 		// need to figure out the java types for the sql types :/
-		String values_str = "VALUES(NULL::STRING, NULL::INTEGER)";
-		Statement gunky_statement = conn.createStatement();
-		// TODO this could get slow with many many columns and we really only need the
-		// types :/
-		ResultSet rs = gunky_statement
-				.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type");
-		while (rs.next()) {
-			values_str += ", ('" + rs.getString(1) + "', " + Integer.toString(
-					DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))) + ")";
+		StringBuilder values_str = new StringBuilder(256);
+		values_str.append("VALUES(NULL::STRING, NULL::INTEGER)");
+		try (Statement gunky_statement = conn.createStatement();
+			// TODO this could get slow with many many columns and we really only need the
+			// types :/
+			ResultSet rs = gunky_statement
+					.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type")) {
+			while (rs.next()) {
+			values_str.append(", ('").append(rs.getString(1)).append("', ").append(
+					DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))).append(")");
+			}
 		}
-		rs.close();
-		gunky_statement.close();
 
 		PreparedStatement ps = conn.prepareStatement(
 				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema.columns c JOIN ("
@@ -766,7 +877,59 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getPrimaryKeys(String catalog, String schema, String table) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getPrimaryKeys");
+		StringBuilder pw = new StringBuilder(512);
+		pw.append("WITH constraint_columns AS (").append(lineSeparator());
+		pw.append("SELECT").append(lineSeparator());
+		pw.append("  database_name AS \"TABLE_CAT\"").append(lineSeparator());
+		pw.append(", schema_name AS \"TABLE_SCHEM\"").append(lineSeparator());
+		pw.append(", table_name AS \"TABLE_NAME\"").append(lineSeparator());
+		pw.append(", unnest(constraint_column_names) AS \"COLUMN_NAME\"").append(lineSeparator());
+		pw.append(", CAST(NULL AS VARCHAR) AS \"PK_NAME\"").append(lineSeparator());
+		pw.append("FROM duckdb_constraints").append(lineSeparator());
+		pw.append("WHERE constraint_type = 'PRIMARY KEY'").append(lineSeparator());
+		// catalog param
+		if (catalog != null) {
+			if (catalog.isEmpty()) {
+				pw.append("AND database_name IS NULL").append(lineSeparator());
+			}
+			else {
+				pw.append("AND database_name = ?").append(lineSeparator());
+			}
+		}
+		// schema param
+		if (schema != null) {
+			if (schema.isEmpty()) {
+				pw.append("AND schema_name IS NULL").append(lineSeparator());
+			}
+			else {
+				pw.append("AND schema_name = ?").append(lineSeparator());
+			}
+		}
+		// table name param
+		pw.append("AND table_name = ?").append(lineSeparator());
+		
+		pw.append(")").append(lineSeparator());
+		pw.append("SELECT \"TABLE_CAT\"").append(lineSeparator());
+		pw.append(", \"TABLE_SCHEM\"").append(lineSeparator());
+		pw.append(", \"TABLE_NAME\"").append(lineSeparator());
+		pw.append(", \"COLUMN_NAME\"").append(lineSeparator());
+		pw.append(", CAST(ROW_NUMBER() OVER ").append(lineSeparator());
+		pw.append("(PARTITION BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\") AS INT) AS \"KEY_SEQ\"").append(lineSeparator());
+		pw.append(", \"PK_NAME\"").append(lineSeparator());
+		pw.append("FROM constraint_columns").append(lineSeparator());
+		pw.append("ORDER BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\", \"KEY_SEQ\"").append(lineSeparator());
+		
+		int paramIndex = 1;
+		PreparedStatement ps = conn.prepareStatement(pw.toString());
+		
+		if (catalog != null && !catalog.isEmpty()) {
+			ps.setString(paramIndex++, catalog);
+		}
+		if (schema != null && !schema.isEmpty()) {
+			ps.setString(paramIndex++, schema);
+		}
+		ps.setString(paramIndex++, table);
+		return ps.executeQuery();
 	}
 
 	@Override

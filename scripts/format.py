@@ -246,6 +246,7 @@ def format_file(f, full_path, directory, ext):
     old_lines = old_text.split('\n')
 
     new_text = get_formatted_text(f, full_path, directory, ext)
+    new_text = new_text.replace('ARGS &&...args', 'ARGS &&... args')
     if check_only:
         new_lines = new_text.split('\n')
         old_lines = [x for x in old_lines if '...' not in x]
