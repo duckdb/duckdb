@@ -23,7 +23,7 @@ default_duckdb_connection <- new.env(parent=emptyenv())
 #' @return A DuckDB connection object
 #' @export
 #' @examples
-#' conn <- default_duckdb_connection()
+#' conn <- default_connection()
 #' print(sql("SELECT 42", conn=conn))
 default_connection <- function() {
   if(!exists("con", default_duckdb_connection)) {
