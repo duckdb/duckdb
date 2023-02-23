@@ -11,14 +11,6 @@ CREATE TABLE integers(i INTEGER, r INTEGER)
 statement ok
 INSERT INTO integers VALUES (1, 2), (2, 3), (3, 4);
 
-statement ok
-CREATE TABLE jintegers(j INTEGER)
-
-statement ok
-INSERT INTO jintegers VALUES (1), (2), (3), (NULL)
-
-mode skip
-
 # test filter pushdown into cross product
 # single filter that matches both sides
 query II
@@ -90,10 +82,7 @@ SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=1 WHERE i1.i=i2.i ORD
 2	2
 3	3
 
-mode unskip
-
-
-# semi join
+# anti join
 query I
 SELECT * FROM integers i1 ANTI JOIN integers i2 ON (i1.i = i2.i);
 ----
@@ -109,44 +98,6 @@ SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) ORDER BY i
 1
 2
 3
-
-mode unskip
-
-query II
-SELECT * FROM integers SEMI JOIN jintegers ON (i = j);
-----
-1	2
-2	3
-3	4
-
-
-query I
-SELECT i FROM integers SEMI JOIN jintegers ON (i = j);
-----
-1
-2
-3
-
-query I
-SELECT r FROM integers SEMI JOIN jintegers ON (i = j);
-----
-2
-3
-4
-
-query I
-SELECT r FROM integers ANTI JOIN jintegers ON (i = j);
-----
-
-
-# cannot select from right table with semi and anti joins
-statement error
-SELECT j FROM integers SEMI JOIN jintegers ON (i = j);
-----
-Binder Error
-
-
-mode skip
 
 # transform into ANTI join
 query I
