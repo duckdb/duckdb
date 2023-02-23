@@ -1,7 +1,5 @@
 package org.duckdb.test;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -1476,76 +1474,78 @@ public class TestDuckDBJDBC {
 
 	public static void test_read_only() throws Exception {
 		Path database_file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb");
-		database_file.toFile().delete();
+		Files.deleteIfExists(database_file);
 
-		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		String jdbc_url = "jdbc:duckdb:" + database_file;
 		Properties ro_prop = new Properties();
 		ro_prop.setProperty("duckdb.read_only", "true");
 
 		Connection conn_rw = DriverManager.getConnection(jdbc_url);
 		assertFalse(conn_rw.isReadOnly());
+		assertFalse(conn_rw.getMetaData().isReadOnly());
 		Statement stmt = conn_rw.createStatement();
 		stmt.execute("CREATE TABLE test (i INTEGER)");
 		stmt.execute("INSERT INTO test VALUES (42)");
 		stmt.close();
-		// we cannot create other connections, be it read-write or read-only right now
-		try {
-			Connection conn2 = DriverManager.getConnection(jdbc_url);
-			fail();
-		} catch (Exception e) {
+
+		// Verify we can open additional write connections
+		// Using the Driver
+		try (Connection conn = DriverManager.getConnection(jdbc_url);
+				 Statement stmt1 = conn.createStatement();
+				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+			rs1.next();
+			assertEquals(rs1.getInt(1), 42);
+		}
+		// Using the direct API
+		try (Connection conn = ((DuckDBConnection) conn_rw).duplicate();
+				 Statement stmt1 = conn.createStatement();
+				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+			rs1.next();
+			assertEquals(rs1.getInt(1), 42);
 		}
 
-		try {
-			Connection conn2 = DriverManager.getConnection(jdbc_url, ro_prop);
-			fail();
-		} catch (Exception e) {
-		}
+		// At this time, mixing read and write connections on Windows doesn't work
+		// Read-only when we already have a read-write
+//		try (Connection conn = DriverManager.getConnection(jdbc_url, ro_prop);
+//				 Statement stmt1 = conn.createStatement();
+//				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+//			rs1.next();
+//			assertEquals(rs1.getInt(1), 42);
+//		}
 
-		// hard shutdown to not have to wait on gc
-		DuckDBDatabase db = ((DuckDBConnection) conn_rw).getDatabase();
 		conn_rw.close();
-		db.shutdown();
 
-		try {
-			Statement stmt2 = conn_rw.createStatement();
-			stmt2.executeQuery("SELECT 42");
-			stmt2.close();
-			fail();
+		try (Statement ignored = conn_rw.createStatement()) {
+			fail("Connection was already closed; shouldn't be able to create a statement");
 		} catch (SQLException e) {
 		}
 
-		try {
-			Connection conn_dup = ((DuckDBConnection) conn_rw).duplicate();
-			conn_dup.close();
-			fail();
+		try (Connection ignored = ((DuckDBConnection) conn_rw).duplicate()) {
+			fail("Connection was already closed; shouldn't be able to duplicate");
 		} catch (SQLException e) {
 		}
 
-		// FIXME: requires explicit database shutdown
 		// // we can create two parallel read only connections and query them, too
-		// Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
-		// Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop);
+		try (Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
+			Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop)) {
 
-		// assertTrue(conn_ro1.isReadOnly());
-		// assertTrue(conn_ro2.isReadOnly());
+			assertTrue(conn_ro1.isReadOnly());
+			assertTrue(conn_ro1.getMetaData().isReadOnly());
+			assertTrue(conn_ro2.isReadOnly());
+			assertTrue(conn_ro2.getMetaData().isReadOnly());
 
-		// Statement stmt1 = conn_ro1.createStatement();
-		// ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test");
-		// rs1.next();
-		// assertEquals(rs1.getInt(1), 42);
-		// rs1.close();
-		// stmt1.close();
+			try (Statement stmt1 = conn_ro1.createStatement();
+				ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+				rs1.next();
+				assertEquals(rs1.getInt(1), 42);
+			}
 
-		// Statement stmt2 = conn_ro2.createStatement();
-		// ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test");
-		// rs2.next();
-		// assertEquals(rs2.getInt(1), 42);
-		// rs2.close();
-		// stmt2.close();
-
-		// conn_ro1.close();
-		// conn_ro2.close();
-
+			try (Statement stmt2 = conn_ro2.createStatement();
+				ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test")) {
+				rs2.next();
+				assertEquals(rs2.getInt(1), 42);
+			}
+		}
 	}
 
 	public static void test_hugeint() throws Exception {
@@ -1695,8 +1695,7 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject(10));
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "b");

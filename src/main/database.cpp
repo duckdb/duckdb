@@ -356,7 +356,8 @@ idx_t DuckDB::NumberOfThreads() {
 }
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	return loaded_extensions.find(name) != loaded_extensions.end();
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	return loaded_extensions.find(extension_name) != loaded_extensions.end();
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -364,7 +365,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
-	loaded_extensions.insert(name);
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	loaded_extensions.insert(extension_name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

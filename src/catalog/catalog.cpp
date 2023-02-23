@@ -27,7 +27,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/main/extension_functions.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -332,15 +332,24 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return result;
 }
 
-string FindExtension(const string &function_name) {
-	auto size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionFunction);
-	auto it = std::lower_bound(
-	    EXTENSION_FUNCTIONS, EXTENSION_FUNCTIONS + size, function_name,
-	    [](const ExtensionFunction &element, const string &value) { return element.function < value; });
-	if (it != EXTENSION_FUNCTIONS + size && it->function == function_name) {
+string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], idx_t size) {
+	auto lcase = StringUtil::Lower(name);
+	auto it = std::lower_bound(entries, entries + size, lcase,
+	                           [](const ExtensionEntry &element, const string &value) { return element.name < value; });
+	if (it != entries + size && it->name == lcase) {
 		return it->extension;
 	}
 	return "";
+}
+
+string FindExtensionForFunction(const string &name) {
+	idx_t size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionEntry);
+	return FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
+}
+
+string FindExtensionForSetting(const string &name) {
+	idx_t size = sizeof(EXTENSION_SETTINGS) / sizeof(ExtensionEntry);
+	return FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
@@ -407,6 +416,26 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
+	// check if the setting exists in any extensions
+	auto extension_name = FindExtensionForSetting(name);
+	if (!extension_name.empty()) {
+		return CatalogException(
+		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
+		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+		    name, extension_name, extension_name, extension_name);
+	}
+	// the setting is not in an extension
+	// get a list of all options
+	vector<string> potential_names = DBConfig::GetOptionNames();
+	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+		potential_names.push_back(entry.first);
+	}
+
+	throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
+	                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+}
+
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
                                                       CatalogType type,
                                                       const unordered_set<SchemaCatalogEntry *> &schemas,
@@ -423,13 +452,18 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			unseen_schemas.insert(current_schema);
 		}
 	}
-	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
-	auto extension_name = FindExtension(entry_name);
-	if (!extension_name.empty()) {
-		return CatalogException("Function with name %s is not on the catalog, but it exists in the %s extension. To "
-		                        "Install and Load the extension, run: INSTALL %s; LOAD %s;",
-		                        entry_name, extension_name, extension_name, extension_name);
+	// check if the entry exists in any extension
+	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+		auto extension_name = FindExtensionForFunction(entry_name);
+		if (!extension_name.empty()) {
+			return CatalogException(
+			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
+			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+			    entry_name, extension_name, extension_name, extension_name);
+		}
 	}
+	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
 	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
 		// the closest matching entry requires qualification as it is not in the default search path
