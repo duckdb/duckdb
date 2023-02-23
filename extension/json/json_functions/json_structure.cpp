@@ -214,9 +214,6 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t cou
 		}
 	}
 
-	if (count > STANDARD_VECTOR_SIZE) {
-		string_vector.Initialize(false, count);
-	}
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
 		desc.children[child_idx].RefineCandidateTypes(child_vals[child_idx], count, string_vector, allocator,
 		                                              date_format_map);

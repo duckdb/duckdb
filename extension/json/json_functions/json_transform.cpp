@@ -251,7 +251,10 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 
 bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target,
                                     Vector &string_vector, JSONTransformOptions &options) {
-	auto data = (string_t *)FlatVector::GetData(string_vector);
+	if (count > STANDARD_VECTOR_SIZE) {
+		string_vector.Initialize(false, count);
+	}
+	auto data = FlatVector::GetData<string_t>(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
 	validity.SetAllValid(count);
 
