@@ -144,12 +144,12 @@ rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }
 
-rapi_get_substrait <- function(conn, query) {
-  .Call(`_duckdb_rapi_get_substrait`, conn, query)
+rapi_get_substrait <- function(conn, query, enable_optimizer = TRUE) {
+  .Call(`_duckdb_rapi_get_substrait`, conn, query, enable_optimizer)
 }
 
-rapi_get_substrait_json <- function(conn, query) {
-  .Call(`_duckdb_rapi_get_substrait_json`, conn, query)
+rapi_get_substrait_json <- function(conn, query, enable_optimizer = TRUE) {
+  .Call(`_duckdb_rapi_get_substrait_json`, conn, query, enable_optimizer)
 }
 
 rapi_prepare_substrait <- function(conn, query) {
