@@ -29,6 +29,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 		auto query_node = TransformSelect(stmt->query, true)->node->Copy();
 		macro_func = make_unique<TableMacroFunction>(std::move(query_node));
 	}
+	if (HasPivotEntries()) {
+		throw ParserException("Cannot use PIVOT statement syntax in a macro. Use the SQL standard PIVOT syntax in the "
+		                      "FROM clause instead.");
+	}
 
 	auto info =
 	    make_unique<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
