@@ -62,7 +62,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
 	memory_charge = std::move(reservation);
 }
 
-BlockHandle::~BlockHandle() {
+BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
 	auto &buffer_manager = block_manager.buffer_manager;
