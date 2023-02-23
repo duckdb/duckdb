@@ -64,7 +64,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				auto bound_drop_database_func = Bind(*drop_database_function_ref);
 				result.plan = CreatePlan(*bound_drop_database_func);
 				result.names = {"Success"};
-				result.types = {LogicalType::BOOLEAN};
+				result.types = {LogicalType::BIGINT};
 				properties.allow_stream_result = false;
 				properties.return_type = StatementReturnType::NOTHING;
 				return result;
