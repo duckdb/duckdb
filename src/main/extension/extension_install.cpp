@@ -42,11 +42,12 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto opener = FileSystem::GetFileOpener(context);
 	Value extension_directory_value;
-	D_ASSERT(context.TryGetCurrentSetting("extension_directory", extension_directory_value));
-	auto extension_directory = extension_directory_value.ToString();
-	printf("EXTENSION DIRECTORY 1 %s %d\n", extension_directory.c_str(), extension_directory.empty());
+	string extension_directory;
 
-	if (!extension_directory.empty()) { // create the extension directory if not present
+	if (context.TryGetCurrentSetting("extension_directory", extension_directory_value) &&
+	    !extension_directory_value.IsNull() &&
+	    !extension_directory_value.ToString().empty()) { // create the extension directory if not present
+		extension_directory = extension_directory_value.ToString();
 		// TODO this should probably live in the FileSystem
 		// convert random separators to platform-canonic
 		extension_directory = fs.ConvertSeparators(extension_directory);
@@ -78,7 +79,6 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 		extension_directory = home_directory;
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
-	printf("EXTENSION DIRECTORY 2 %s\n", extension_directory.c_str());
 
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
@@ -87,8 +87,6 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 			fs.CreateDirectory(extension_directory);
 		}
 	}
-	printf("EXTENSION DIRECTORY 3 %s\n", extension_directory.c_str());
-
 	return extension_directory;
 }
 
