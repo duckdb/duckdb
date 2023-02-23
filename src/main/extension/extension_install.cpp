@@ -44,6 +44,7 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	Value extension_directory_value;
 	D_ASSERT(context.TryGetCurrentSetting("extension_directory", extension_directory_value));
 	auto extension_directory = extension_directory_value.ToString();
+	printf("EXTENSION DIRECTORY 1 %s\n", extension_directory.c_str());
 
 	if (!extension_directory.empty()) { // create the extension directory if not present
 		// TODO this should probably live in the FileSystem
@@ -77,6 +78,7 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 		extension_directory = home_directory;
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
+	printf("EXTENSION DIRECTORY 2 %s\n", extension_directory.c_str());
 
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
