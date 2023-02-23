@@ -467,7 +467,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
-	properties.return_type = StatementReturnType::NOTHING;
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
@@ -675,6 +674,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw Exception("Unrecognized type!");
 	}
+	properties.return_type = StatementReturnType::NOTHING;
 	properties.allow_stream_result = false;
 	return result;
 }
