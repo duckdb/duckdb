@@ -428,6 +428,10 @@ static inline yyjson_mut_val *ConvertStructureArray(const JSONStructureNode &nod
 static inline yyjson_mut_val *ConvertStructureObject(const JSONStructureNode &node, yyjson_mut_doc *doc) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
+	if (desc.children.empty()) {
+		// Empty struct - let's do JSON instead
+		return yyjson_mut_str(doc, JSONCommon::JSON_TYPE_NAME);
+	}
 
 	auto obj = yyjson_mut_obj(doc);
 	for (auto &child : desc.children) {
@@ -492,6 +496,10 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
                                          idx_t depth) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
+	if (desc.children.empty()) {
+		// Empty struct - let's do JSON instead
+		return JSONCommon::JSONType();
+	}
 
 	child_list_t<LogicalType> child_types;
 	child_types.reserve(desc.children.size());

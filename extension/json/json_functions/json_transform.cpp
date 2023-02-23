@@ -58,6 +58,9 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 		child_types.emplace_back(key_str, StructureStringToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
+	if (child_types.empty()) {
+		throw InvalidInputException("Empty object in JSON structure");
+	}
 	return LogicalType::STRUCT(child_types);
 }
 
@@ -87,7 +90,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
-			throw InvalidInputException("cannot cast JSON structure to string");
+			throw InvalidInputException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
