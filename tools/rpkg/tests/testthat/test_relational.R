@@ -199,7 +199,7 @@ test_that("cross join works", {
    expect_equal(rel_df, expected_result)
 })
 
-test_that("anti join works", {
+test_that("semi join works", {
     left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
     right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
@@ -207,11 +207,22 @@ test_that("anti join works", {
     rel2 <- duckdb:::rel_join(left, right, cond, "semi")
     rel_df <- duckdb:::rel_to_altrep(rel2)
     dim(rel_df)
-    expected_result <- data.frame(left_b=c(5, 6))
+    expected_result <- data.frame(left_b=c(1))
     expect_equal(rel_df, expected_result)
 })
 
 
+test_that("anti join works", {
+    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
+    # select * from left anti join right on (left_b = right_a)
+    rel2 <- duckdb:::rel_join(left, right, cond, "anti")
+    rel_df <- duckdb:::rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_b=c(5, 6))
+    expect_equal(rel_df, expected_result)
+})
 
 test_that("Union all does not immediately materialize", {
     test_df_a <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))

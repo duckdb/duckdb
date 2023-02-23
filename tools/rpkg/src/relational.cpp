@@ -209,6 +209,10 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		join_type = JoinType::RIGHT;
 	} else if (join == "outer") {
 		join_type = JoinType::OUTER;
+	} else if (join == "semi") {
+		join_type = JoinType::SEMI;
+	} else if (join == "anti") {
+		join_type = JoinType::ANTI;
 	} else if (join == "cross") {
 		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
 		return make_external<RelationWrapper>("duckdb_relation", res);

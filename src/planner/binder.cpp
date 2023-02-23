@@ -162,15 +162,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		result = Bind((BaseTableRef &)ref);
 		break;
 	case TableReferenceType::JOIN: {
-		auto &my_join = (JoinRef &)ref;
-		if (my_join.type == JoinType::ANTI || my_join.type == JoinType::SEMI) {
-			auto transformed_anti_semi_join = TransformJoinFilter(my_join);
-//			return Binder::Bind(transformed_anti_semi_join);
-		}
 		result = Bind((JoinRef &)ref);
-		// can check for anti semi here, then transform if necessary.
-		// basically if the join type is anti semi, transform the query
-		// and call bind on the same node.
 		break;
 	}
 	case TableReferenceType::SUBQUERY:

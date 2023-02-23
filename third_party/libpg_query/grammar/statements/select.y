@@ -1188,9 +1188,7 @@ joined_table:
                     n->isNatural = false;
                     n->larg = $1;
                     n->rarg = $4;
-                    n->usingClause = NIL;
-                    n->quals = NULL;
-                    if ($5 != NULL && IsA($4, PGList))
+                    if ($5 != NULL && IsA($5, PGList))
                         n->usingClause = (PGList *) $5; /* USING clause */
                     else
                         n->quals = $5; /* ON clause */
@@ -1205,9 +1203,7 @@ joined_table:
                    n->isNatural = false;
                    n->larg = $1;
                    n->rarg = $4;
-                   n->usingClause = NIL;
-                   n->quals = NULL;
-                   if ($5 != NULL && IsA($4, PGList))
+                   if ($5 != NULL && IsA($5, PGList))
                        n->usingClause = (PGList *) $5; /* USING clause */
                    else
                        n->quals = $5; /* ON clause */
@@ -1280,6 +1276,8 @@ func_alias_clause:
 join_type:	FULL join_outer							{ $$ = PG_JOIN_FULL; }
 			| LEFT join_outer						{ $$ = PG_JOIN_LEFT; }
 			| RIGHT join_outer						{ $$ = PG_JOIN_RIGHT; }
+			| SEMI          						{ $$ = PG_JOIN_SEMI; }
+			| ANTI          						{ $$ = PG_JOIN_ANTI; }
 			| INNER_P								{ $$ = PG_JOIN_INNER; }
 		;
 

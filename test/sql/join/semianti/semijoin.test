@@ -1,0 +1,105 @@
+# name: test/sql/join/semianti/semijoin.test
+# description: Test semi joins
+# group: [semianti]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES(42, 1, 1), (43, 1, 1);
+
+statement ok
+CREATE TABLE right_table (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES(42, 1);
+
+# * expression expands all of the left table
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a;
+----
+42	1	1
+
+# can filter on columns in left table
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a WHERE a > 5;
+----
+42	1	1
+
+# can have list type expressions in the condition
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON ([left_table.a, left_table.b] = [right_table.a, right_table.b]);
+----
+42	1	1
+
+# right table can be a subquery
+
+query III
+SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table where b = 1) buzz ON left_table.a = buzz.foo
+----
+42	1	1
+
+# Should throw error when filtering on column in right table
+statement error
+SELECT * FROM left_table SEMI JOIN right_table ON left_table.a = right_table.a WHERE right_table.a < 43;
+----
+Binder Error
+
+# left results are not deduplicated
+statement ok
+INSERT INTO left_table VALUES (42, 1, 5), (42, 1, 5), (42, 1, 5), (42, 1, 5);
+
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a);
+----
+42	1	1
+42	1	5
+42	1	5
+42	1	5
+42	1	5
+
+# a table that is the result of a join can also be semi joined on
+query I
+CREATE TABLE other (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO other VALUES (42, 1), (43, 1);
+
+query III
+SELECT * FROM left_table
+SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table
+ON left_table.a = joined_right_table.a;
+----
+42	1	1
+42	1	5
+42	1	5
+42	1	5
+42	1	5
+
+# clean up
+statement ok
+DELETE FROM left_table where c=5;
+
+# USING COLUMNS also works
+
+query III
+SELECT * FROM left_table SEMI JOIN right_table USING (a);
+----
+42	1	1
+
+# natural semi join also works
+
+query III
+SELECT * FROM left_table NATURAL SEMI JOIN right_table;
+----
+42	1	1
+
+# also with subqueries
+query III
+SELECT * FROM left_table
+NATURAL SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table;
+----
+42	1	1
