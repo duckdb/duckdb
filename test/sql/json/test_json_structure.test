@@ -33,7 +33,7 @@ select json_structure('"duck"')
 ----
 "VARCHAR"
 
-# simple objects
+# simple values
 query T
 select json_structure('{"a": 42}')
 ----

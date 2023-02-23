@@ -1,15 +1,21 @@
 #include "duckdb_python/pyconnection.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -40,12 +46,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
-
-template <class T>
-static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
-}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -178,9 +178,11 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	      py::arg("proto"))
-	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
+	         py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
-	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::kw_only(),
+	         py::arg("enable_optimizer") = true)
 	    .def("from_substrait_json", &DuckDBPyConnection::FromSubstraitJSON,
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
@@ -926,22 +928,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait", params, named_parameters)->Alias(query));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait_json", params, named_parameters)->Alias(query));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
@@ -1299,22 +1305,6 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
 	import_cache.reset();
-}
-
-bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
-}
-
-bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {

@@ -188,6 +188,7 @@ public:
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext &context);
+	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -201,7 +202,6 @@ public:
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
-	DUCKDB_API static IOException MissingFileException(const string &file_path, ClientContext &context);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);

@@ -7,9 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#include <utility>
-
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
@@ -117,9 +114,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
-	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
+	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
 
-	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
+	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
 
 	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
 
@@ -179,5 +176,11 @@ private:
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };
+
+template <class T>
+static bool ModuleIsLoaded() {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
+}
 
 } // namespace duckdb
