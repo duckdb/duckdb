@@ -300,10 +300,14 @@ public:
 		auto &data = (JSONScanData &)*bind_data;
 		idx_t per_file_cardinality;
 		if (data.stored_readers.empty()) {
+			// The cardinality of an unknown JSON file is the almighty number 42 except when it's not
 			per_file_cardinality = 42;
 		} else {
+			// If we multiply the almighty number 42 by 10, we get the exact average size of a JSON
+			// Not really, but the average size of a lineitem row in JSON is around 360 bytes
 			per_file_cardinality = data.stored_readers[0]->GetFileHandle().FileSize() / 420;
 		}
+		// Obviously this can be improved but this is better than defaulting to 0
 		return make_unique<NodeStatistics>(per_file_cardinality * data.file_paths.size());
 	}
 
