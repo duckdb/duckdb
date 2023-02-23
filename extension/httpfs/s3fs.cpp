@@ -866,7 +866,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	// AWS matches on prefix, not glob pattern, so we take a substring until the first wildcard char for the aws calls
 	auto first_wildcard_pos = parsed_glob_url.find_first_of("*[\\");
 	if (first_wildcard_pos == string::npos) {
-		return {parsed_glob_url};
+		return {glob_pattern};
 	}
 
 	string shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
@@ -923,7 +923,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_s3_url.bucket + "/" + s3_key;
 			// if a ? char was present, we re-add it here as the url parsing will have trimmed it.
-			if (parsed_s3_url.query_param != "") {
+			if (!parsed_s3_url.query_param.empty()) {
 				result_full_url += '?' + parsed_s3_url.query_param;
 			}
 			result.push_back(result_full_url);
