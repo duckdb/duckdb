@@ -23,25 +23,32 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+public struct Date: Hashable, Equatable {
+  var days: Int32
+}
+
+public extension Date {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  struct Components: Hashable, Equatable {
+    public var year: Int32
+    public var month: Int8
+    public var day: Int8
   }
   
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
+  init(components: Components) {
+    let cdatestruct = duckdb_to_date(duckdb_date_struct(components: components))
+    self = cdatestruct.asDate
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  var components: Components { Components(self) }
+}
+
+public extension Date.Components {
+  
+  init(_ date: Date) {
+    let cdate = duckdb_date(date: date)
+    let cdatestruct = duckdb_from_date(cdate)
+    self = cdatestruct.asDateComponents
   }
 }

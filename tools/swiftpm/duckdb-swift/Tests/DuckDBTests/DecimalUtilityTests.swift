@@ -22,26 +22,31 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
-@_implementationOnly import Cduckdb
-import Foundation
 
-final class DataChunk {
+import Foundation
+import XCTest
+@testable import DuckDB
+
+final class DecimalUtilityTests: XCTestCase {
   
-  var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
-  var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
-  
-  private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
-  
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  func test_decimal_int_huge_min() throws {
+    let minInt128 = Decimal(string: "\(IntHuge.min)")!
+    XCTAssertEqual(Decimal(IntHuge.min), minInt128)
   }
   
-  deinit {
-    duckdb_destroy_data_chunk(ptr)
-    ptr.deallocate()
+  func test_decimal_int_huge_max() throws {
+    let maxInt128 = Decimal(string: "\(IntHuge.max)")!
+    XCTAssertEqual(Decimal(IntHuge.max), maxInt128)
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  func test_decimal_uint_huge_min() throws {
+    let minUInt128 = Decimal(string: "\(UIntHuge.min)")!
+    XCTAssertEqual(Decimal(UIntHuge.min), minUInt128)
+  }
+  
+  func test_decimal_uint_huge_max() throws {
+    let maxUInt128 = Decimal(string: "\(UIntHuge.max)")!
+    XCTAssertEqual(Decimal(UIntHuge.max), maxUInt128)
   }
 }
+
