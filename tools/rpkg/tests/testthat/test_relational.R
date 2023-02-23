@@ -358,3 +358,25 @@ test_that("You can perform window functions on row_number", {
     res = duckdb:::rel_to_altrep(order_over_window)
     expect_equal(res, expected_result)
 })
+
+test_that("You can perform the window function min_rank", {
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    sum <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "row_number", list(), "row_number", list(), list(), list(), list())
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    res = duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform the window function dense_rank", {
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    sum <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "row_number", list(), "row_number", list(), list(), list(), list())
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    res = duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
