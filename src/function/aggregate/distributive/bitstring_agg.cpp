@@ -104,6 +104,8 @@ struct BitStringAggOperation {
 		if (!target->is_set) {
 			Assign(target, source.value);
 			target->is_set = true;
+			target->min = source.min;
+			target->max = source.max;
 		} else {
 			Bit::BitwiseOr(source.value, target->value, target->value);
 		}
