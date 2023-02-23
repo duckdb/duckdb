@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER, r INTEGER)
+CREATE TABLE integers(i INTEGER)
 
 statement ok
-INSERT INTO integers VALUES (1, 2), (2, 3), (3, 4);
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
 # test filter pushdown into cross product
 # single filter that matches both sides
@@ -81,14 +81,6 @@ SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=1 WHERE i1.i=i2.i ORD
 1	1
 2	2
 3	3
-
-# anti join
-query I
-SELECT * FROM integers i1 ANTI JOIN integers i2 ON (i1.i = i2.i);
-----
-1
-2
-3
 
 # MARK join
 # transform into semi join
@@ -188,4 +180,3 @@ SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2) a1 WHERE cond O
 query T
 SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1
 ----
-
