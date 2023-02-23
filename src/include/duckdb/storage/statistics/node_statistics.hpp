@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,28 @@ public:
 	NodeStatistics(idx_t estimated_cardinality, idx_t max_cardinality)
 	    : has_estimated_cardinality(true), estimated_cardinality(estimated_cardinality), has_max_cardinality(true),
 	      max_cardinality(max_cardinality) {
+	}
+	void Serialize(Serializer &serializer) const { 
+		serializer.Write(has_estimated_cardinality);
+		if (has_estimated_cardinality) {
+			serializer.Write(estimated_cardinality);
+			serializer.Write(has_max_cardinality);
+			if (has_max_cardinality) {
+				serializer.Write(max_cardinality);
+			}
+		} else {
+			assert(!has_max_cardinality);
+		}
+	}
+	static unique_ptr<NodeStatistics> Deserialize(Deserializer &source) {
+		if (!source.Read<bool>()) {
+			return make_unique<NodeStatistics>();
+		}
+		idx_t estimated_cardinality = source.Read<idx_t>();
+		if (!source.Read<bool>()) {
+			return make_unique<NodeStatistics>(estimated_cardinality);
+		}
+		return make_unique<NodeStatistics>(estimated_cardinality, source.Read<idx_t>());
 	}
 
 	//! Whether or not the node has an estimated cardinality specified
