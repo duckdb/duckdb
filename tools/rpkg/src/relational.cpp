@@ -177,13 +177,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
-[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel,
-                                                     std::string window_function,
-                                                     list children,
-                                                     std::string window_alias,
-                                                     list partitions, list orders,
-                                                     list bounds,
-                                                     list start_end_offset_default) {
+[[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
+                                                     list children, std::string window_alias, list partitions,
+                                                     list orders, list bounds, list start_end_offset_default) {
 	auto children_ = vector<unique_ptr<ParsedExpression>>();
 	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
 	auto orders_ = vector<unique_ptr<OrderByNode>>();
@@ -198,18 +194,10 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 		partitions_.emplace_back(partition->Copy());
 	}
 
-	auto res = std::make_shared<WindowRelation>(rel->rel,
-	                                            window_function,
-	                                            std::move(children_),
-	                                            window_alias,
-	                                            std::move(partitions_),
-	                                            std::move(orders_),
-	                                            nullptr,
-	                                            start_,
-	                                            end_,
+	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, std::move(children_), window_alias,
+	                                            std::move(partitions_), std::move(orders_), nullptr, start_, end_,
 	                                            std::move(start_end_offset_default_));
 	return make_external<RelationWrapper>("duckdb_relation", res);
-
 }
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
