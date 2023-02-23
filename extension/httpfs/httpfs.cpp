@@ -253,9 +253,34 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 			    if (hfs.stats) {
 				    hfs.stats->total_bytes_received += data_length;
 			    }
-			    hfs.data = data;
-			    hfs.data_length = data_length;
-			    hfs.length = data_length;
+			    if (!hfs.data) {
+				    hfs.data = unique_ptr<char[]>(new char[data_length]);
+				    hfs.length = data_length;
+				    hfs.capacity = data_length;
+				    memcpy(hfs.data.get(), data, data_length);
+			    } else {
+				    if (hfs.length + data_length > hfs.http_params.get_request_file_size) {
+					    throw duckdb::InvalidInputException(
+					        "File size is bigger than maximum allowed. Please verify that the server you are "
+					        "requesting data from supports Get-Range requests. If only Get requests are allowed, "
+					        "please increase the maximum set size.");
+				    }
+				    auto new_capacity = hfs.capacity;
+				    while (new_capacity < hfs.length + data_length) {
+					    new_capacity *= 2;
+				    }
+				    // Gotta eat your beans
+				    if (new_capacity != hfs.capacity) {
+					    auto new_hfs_data = unique_ptr<char[]>(new char[new_capacity]);
+					    // copy the old data
+					    memcpy(new_hfs_data.get(), hfs.data.get(), hfs.length);
+					    hfs.capacity = new_capacity;
+					    hfs.data = move(new_hfs_data);
+				    }
+				    // We can just copy stuff
+				    memcpy(hfs.data.get() + hfs.length, data, data_length);
+				    hfs.length += data_length;
+			    }
 			    return true;
 		    },
 		    hfs.http_params.get_request_file_size);
@@ -429,21 +454,20 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = (HTTPFileHandle &)handle;
-	idx_t max_read = hfh.length - hfh.file_offset;
 	if (hfh.range_read) {
+		idx_t max_read = hfh.length - hfh.file_offset;
 		nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 		Read(handle, buffer, nr_bytes, hfh.file_offset);
 	} else {
 		if (!hfh.data) {
 			Read(handle, buffer, nr_bytes, hfh.file_offset);
 		}
-		if (hfh.cur_pos < hfh.length) {
-			nr_bytes = MinValue<idx_t>(hfh.length - hfh.cur_pos, nr_bytes);
-			memcpy(buffer, hfh.data + hfh.cur_pos, nr_bytes);
-			hfh.cur_pos += nr_bytes;
-			hfh.file_offset = hfh.cur_pos;
+		if (hfh.file_offset < hfh.length) {
+			nr_bytes = MinValue<idx_t>(hfh.length - hfh.file_offset, nr_bytes);
+			memcpy(buffer, hfh.data.get() + hfh.file_offset, nr_bytes);
+			hfh.file_offset += nr_bytes;
 		} else {
-			nr_bytes = 0;
+			return 0;
 		}
 	}
 	return nr_bytes;

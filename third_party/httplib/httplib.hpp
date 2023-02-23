@@ -3300,8 +3300,8 @@ inline bool read_content_with_length(Stream &strm, uint64_t len,
 	while (r < len) {
 		auto read_len = static_cast<size_t>(len - r);
 		auto n = (uint64_t) strm.read(buf, (std::min)(read_len, CPPHTTPLIB_RECV_BUFSIZ));
-		if (n> strm.get_request_file_size){
-			throw duckdb::InvalidInputException("File size is bigger than maximum allowed. Please verify that the server you are requesting data from supports Get-Range requests. If only Get requests are allowed, please increase the maximum set size to: SET get_request_file_size=" + std::to_string(n+1));
+		if (read_len > strm.get_request_file_size){
+			throw duckdb::InvalidInputException("File size is bigger than maximum allowed. Please verify that the server you are requesting data from supports Get-Range requests. If only Get requests are allowed, please increase the maximum set size to: SET get_request_file_size=" + std::to_string(read_len+1));
 		}
 		if (n <= 0) { return false; }
 

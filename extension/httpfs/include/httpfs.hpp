@@ -61,9 +61,9 @@ public:
 	bool range_read = true;
 
 	// For regular - Get
-	const char *data = nullptr;
-	idx_t data_length = 0;
-	idx_t cur_pos = 0;
+	unique_ptr<char[]> data;
+	uint64_t capacity;
+
 	// Read info
 	idx_t buffer_available;
 	idx_t buffer_idx;

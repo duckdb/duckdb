@@ -4,66 +4,70 @@
 
 require httpfs
 
-query IIIIII rowsort res
-SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+query IIIIII rowsort
+SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
+2020	Allemagne	Germany	26.1	53196.069	200601.2
+2020	Autriche	Austria	18.0	4723.5	26215.8
+2020	Belgique	Belgium	28.999999999999996	9436.1	32553.0
+2020	Bulgarie	Bulgaria	11.600000000000001	1124.1	9698.7
 2020	Chypre	Cyprus	0.0	0.0	1627.6
+2020	Croatie	Croatia	16.3	1094.8	6726.3
 2020	Danemark	Denmark	11.600000000000001	1579.0	13601.4
+2020	Espagne	Spain	17.4	14211.7	81512.9
+2020	Estonie	Estonia	8.5	241.1	2827.3
 2020	Finlande	Finland	2.8000000000000003	692.3	24674.4
+2020	France	France	20.3	28278.9	139375.8
 2020	Grèce	Greece	5.800000000000001	896.5	15401.9
+2020	Hongrie	Hungary	30.5	5486.7	17872.4
+2020	Irlande	Ireland	17.4	1968.477	11296.601
 2020	Italie	Italy	29.2	33042.585	113119.475
+2020	Lettonie	Latvia	8.200000000000001	323.605	3926.131
+2020	Lituanie	Lithuania	10.7	584.104	5457.728
+2020	Luxembourg	Luxembourg	16.5	623.165	3786.785
 2020	Malte	Malta	0.0	0.0	547.5
+2020	Pays-Bas	Netherlands	37.1	16588.314	44682.656
+2020	Pologne	Poland	13.5	9323.205	69135.018
+2020	Portugal	Portugal	11.1	1814.878	16354.725
+2020	Roumanie	Romania	23.7	5626.161	23712.653
+2020	Royaume-Uni	United Kingdom	32.4	39311.416	121414.483
+2020	République tchèque	Czech Republic	21.4	5187.282	24263.896
+2020	Slovaquie	Slovakia	25.0	2564.876	10248.401
 2020	Slovénie	Slovenia	12.1	590.243	4861.315
+2020	Suède	Sweden	1.5	475.195	31311.413
+2020	UE 28	Europe 28	22.5	238152.4	1056907.5
+2021	Allemagne	Germany	26.760345686044435	51812.567	193616.957
+2021	Autriche	Austria	18.720006775926056	4645.795	24817.272
+2021	Belgique	Belgium	29.279402721103864	9088.083	31039.168
+2021	Bulgarie	Bulgaria	12.368015142641884	1176.537	9512.739
 2021	Chypre	Cyprus	0.0	0.0	1528.558
+2021	Croatie	Croatia	17.10389029082304	1100.12	6431.987
+2021	Danemark	Denmark	11.485631727184947	1508.152	13130.771
+2021	Espagne	Spain	19.10173955663722	13815.0	72323.256
 2021	Estonie	Estonia	8.988278645659518	245.094	2726.818
+2021	Finlande	Finland	2.9937725178230212	694.288	23191.074
+2021	France	France	20.649030024470434	26465.646	128168.955
+2021	Grèce	Greece	7.580480506088059	1097.87	14482.855
+2021	Hongrie	Hungary	32.344729318831554	5693.164	17601.52
 2021	Irlande	Ireland	18.020604987495144	1953.468	10840.191
 2021	Italie	Italy	30.86368769746751	31807.236	103057.147
 2021	Lettonie	Latvia	8.502139837843602	322.927	3798.185
 2021	Lituanie	Lithuania	11.029023816606903	582.797	5284.212
-2020	Hongrie	Hungary	30.5	5486.7	17872.4
-2020	Lituanie	Lithuania	10.7	584.104	5457.728
-2020	Pays-Bas	Netherlands	37.1	16588.314	44682.656
-2020	Pologne	Poland	13.5	9323.205	69135.018
-2020	Portugal	Portugal	11.1	1814.878	16354.725
-2020	République tchèque	Czech Republic	21.4	5187.282	24263.896
-2020	Royaume-Uni	United Kingdom	32.4	39311.416	121414.483
-2020	Slovaquie	Slovakia	25.0	2564.876	10248.401
-2020	UE 28	Europe 28	22.5	238152.4	1056907.5
-2021	Allemagne	Germany	26.760345686044435	51812.567	193616.957
-2021	France	France	20.649030024470434	26465.646	128168.955
+2021	Luxembourg	Luxembourg	17.282784281000467	564.365	3265.475
 2021	Malte	Malta	0.0	0.0	499.875
+2021	Pays-Bas	Netherlands	37.61392206122467	15896.316	42261.788
+2021	Pologne	Poland	13.146720200313602	9235.656	70250.647
 2021	Portugal	Portugal	11.437926753365227	1740.3	15215.17
+2021	Roumanie	Romania	24.909638477223016	5846.885	23472.38
 2021	République tchèque	Czech Republic	21.716683280446812	5158.445	23753.374
 2021	Slovaquie	Slovakia	25.253930010417324	2427.134	9610.916
 2021	Slovénie	Slovenia	13.141683407321874	582.024	4428.839
 2021	Suède	Sweden	1.497679952802663	471.085	31454.317
 2021	UE 27	UE 27	21.894190365821018	193930.95399999994	885764.4460000001
-2020	Autriche	Austria	18.0	4723.5	26215.8
-2020	Belgique	Belgium	28.999999999999996	9436.1	32553.0
-2020	Bulgarie	Bulgaria	11.600000000000001	1124.1	9698.7
-2020	Irlande	Ireland	17.4	1968.477	11296.601
-2020	Lettonie	Latvia	8.200000000000001	323.605	3926.131
-2021	Autriche	Austria	18.720006775926056	4645.795	24817.272
-2021	Danemark	Denmark	11.485631727184947	1508.152	13130.771
-2021	Finlande	Finland	2.9937725178230212	694.288	23191.074
-2021	Pologne	Poland	13.146720200313602	9235.656	70250.647
-2020	Croatie	Croatia	16.3	1094.8	6726.3
-2020	Estonie	Estonia	8.5	241.1	2827.3
-2020	Roumanie	Romania	23.7	5626.161	23712.653
-2021	Bulgarie	Bulgaria	12.368015142641884	1176.537	9512.739
-2021	Espagne	Spain	19.10173955663722	13815.0	72323.256
-2021	Grèce	Greece	7.580480506088059	1097.87	14482.855
-2021	Pays-Bas	Netherlands	37.61392206122467	15896.316	42261.788
-2021	Roumanie	Romania	24.909638477223016	5846.885	23472.38
-2020	Allemagne	Germany	26.1	53196.069	200601.2
-2020	Espagne	Spain	17.4	14211.7	81512.9
-2020	France	France	20.3	28278.9	139375.8
-2020	Luxembourg	Luxembourg	16.5	623.165	3786.785
-2020	Suède	Sweden	1.5	475.195	31311.413
-2021	Belgique	Belgium	29.279402721103864	9088.083	31039.168
-2021	Croatie	Croatia	17.10389029082304	1100.12	6431.987
-2021	Hongrie	Hungary	32.344729318831554	5693.164	17601.52
-2021	Luxembourg	Luxembourg	17.282784281000467	564.365	3265.475
+
+query IIIIII rowsort res
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+
 
 statement ok
 SET get_request_file_size=1000;
@@ -78,3 +82,12 @@ SET get_request_file_size=3224
 
 query IIIIII rowsort res
 SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+
+statement ok
+SET get_request_file_size=10000000
+
+# Give it a try to a request that returns length 0
+query I
+SELECT count(*) from read_csv_auto('https://query1.finance.yahoo.com/v7/finance/download/^GSPC?period1=1512086400&period2=1670630400&interval=1d&events=history')
+----
+1265
