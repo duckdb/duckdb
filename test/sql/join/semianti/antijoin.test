@@ -1,4 +1,4 @@
-# name: test/sql/join/semianti/anti.test
+# name: test/sql/join/semianti/antijoin.test
 # description: Test positional joins
 # group: [semianti]
 

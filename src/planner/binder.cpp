@@ -150,21 +150,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	}
 }
 
-unique_ptr<SubqueryRef> Binder::TransformJoinFilter(JoinRef &ref) {
-	return nullptr;
-}
-
-
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		result = Bind((BaseTableRef &)ref);
 		break;
-	case TableReferenceType::JOIN: {
+	case TableReferenceType::JOIN:
 		result = Bind((JoinRef &)ref);
 		break;
-	}
 	case TableReferenceType::SUBQUERY:
 		result = Bind((SubqueryRef &)ref);
 		break;

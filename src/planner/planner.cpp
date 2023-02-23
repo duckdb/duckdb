@@ -30,6 +30,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto parameter_count = statement.n_param;
 
 	BoundParameterMap bound_parameters(parameter_data);
+
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {

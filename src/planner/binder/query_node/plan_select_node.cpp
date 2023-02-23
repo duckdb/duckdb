@@ -104,10 +104,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		PlanSubqueries(&expr, &root);
 	}
 
-	// wondering if here we can change the semi anti join to just project the one side
-	// if both projection children are *'s, return only the left
-	// otherwise look through the select list, through an
-	// create the projection
 	auto proj = make_unique<LogicalProjection>(statement.projection_index, std::move(statement.select_list));
 	auto &projection = *proj;
 	proj->AddChild(std::move(root));

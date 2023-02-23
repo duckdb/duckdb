@@ -347,9 +347,6 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
-//			if (entry.first == "jintegers") {
-//				continue;
-//			}
 			for (auto &column_name : binding->names) {
 				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
 					continue;
@@ -558,7 +555,7 @@ void BindContext::AddContext(BindContext other) {
 	}
 }
 
-void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding*>> other_bindings_list) {
+void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> other_bindings_list) {
 	for (auto &other_binding : other_bindings_list) {
 		if (bindings.find(other_binding.first) != bindings.end()) {
 			bindings.erase(other_binding.first);
@@ -566,7 +563,7 @@ void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding*>> othe
 	}
 
 	vector<idx_t> delete_list_indexes;
-  	for (auto &other_binding : other_bindings_list) {
+	for (auto &other_binding : other_bindings_list) {
 		for (idx_t i = 0; i < bindings_list.size(); i++) {
 			if (bindings_list.at(i).first == other_binding.first) {
 				delete_list_indexes.push_back(i);

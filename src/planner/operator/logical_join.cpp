@@ -45,9 +45,6 @@ void LogicalJoin::ResolveTypes() {
 
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings) {
 	auto column_bindings = op.GetColumnBindings();
-	if (op.type == LogicalOperatorType::LOGICAL_JOIN) {
-		// check if it's an anti or semi join. If so, don't add bindings for right table.
-	}
 	for (auto binding : column_bindings) {
 		bindings.insert(binding.table_index);
 	}
