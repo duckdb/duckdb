@@ -146,8 +146,6 @@ struct DBConfigOptions {
 	bool immediate_transaction_mode = false;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
-	//! storage_init extension hook is used only for configuration and does not provide a storage_extension
-	bool extension_init_is_config_only = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
