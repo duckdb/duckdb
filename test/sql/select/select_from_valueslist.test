@@ -1,0 +1,21 @@
+# name: test/sql/select/select_from_valueslist.test
+# group: [select]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (a integer);
+
+statement ok
+insert into tbl values (3);
+
+query I
+select valueslist.b from tbl valueslist(b);
+----
+3
+
+query II
+select 1 as a, valueslist.a from tbl valueslist;
+----
+1	3

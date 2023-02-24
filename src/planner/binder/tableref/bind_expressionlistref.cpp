@@ -58,6 +58,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		}
 	}
 	result->bind_index = GenerateTableIndex();
+	D_ASSERT(!expr.alias.empty());
 	bind_context.AddGenericBinding(result->bind_index, expr.alias, result->names, result->types);
 	return std::move(result);
 }

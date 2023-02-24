@@ -93,11 +93,9 @@ string InsertStatement::ToString() const {
 	result += " ";
 	auto values_list = GetValuesList();
 	if (values_list) {
-		auto original_alias = values_list->alias;
-		// FIXME: this is not const!!!
+		// FIXME: THIS IS NOT CONST
 		values_list->alias = string();
 		result += values_list->ToString();
-		values_list->alias = original_alias;
 	} else {
 		result += select_statement->ToString();
 	}
