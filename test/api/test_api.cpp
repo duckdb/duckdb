@@ -555,14 +555,15 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api]") {
+TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
 
 	DBConfig config;
 	config.options.maximum_threads = 8;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("select setseed(0.1); CREATE TABLE T0 AS SELECT DISTINCT (RANDOM()*9999999)::BIGINT record_nb, 0.0 x_0, 1.0 y_0 FROM range(1000000) tbl"));
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1); CREATE TABLE T0 AS SELECT DISTINCT (RANDOM()*9999999)::BIGINT "
+	                          "record_nb, 0.0 x_0, 1.0 y_0 FROM range(1000000) tbl"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T1 AS SELECT record_nb, 0.0 x_1, 1.0 y_1 FROM T0"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T2 AS SELECT record_nb, 0.0 x_2, 1.0 y_2 FROM T0"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T3 AS SELECT record_nb, 0.0 x_3, 1.0 y_3 FROM T0"));
@@ -581,7 +582,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api]")
     )");
 
 	idx_t count = 0;
-	while(true) {
+	while (true) {
 		auto chunk = result->Fetch();
 		if (!chunk) {
 			break;
