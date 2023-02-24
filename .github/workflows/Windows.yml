@@ -63,6 +63,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -121,6 +122,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -172,6 +174,11 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
+           
+       - name: Tools Test
+         shell: msys2 {0}
+         run: |
+           tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  odbc-win-64:
     name: ODBC Windows
