@@ -189,8 +189,9 @@ test_that("Full join returns all outer relations", {
 test_that("cross join works", {
    left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
-   rel2 <- duckdb:::rel_join(left, right, list(), "cross")
-   rel_df <- duckdb:::rel_to_altrep(rel2)
+   cross <- duckdb:::rel_join(left, right, list(), "cross")
+   order_by <- duckdb:::rel_order(cross, list(duckdb:::expr_reference("right_a"), duckdb:::expr_reference("right_a")))
+   rel_df <- duckdb:::rel_to_altrep(order_by)
    dim(rel_df)
    expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
                                  left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
