@@ -555,7 +555,7 @@ void BindContext::AddContext(BindContext other) {
 	}
 }
 
-void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> other_bindings_list) {
+void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list) {
 	for (auto &other_binding : other_bindings_list) {
 		if (bindings.find(other_binding.first) != bindings.end()) {
 			bindings.erase(other_binding.first);
@@ -564,14 +564,10 @@ void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> oth
 
 	vector<idx_t> delete_list_indexes;
 	for (auto &other_binding : other_bindings_list) {
-		for (idx_t i = 0; i < bindings_list.size(); i++) {
-			if (bindings_list.at(i).first == other_binding.first) {
-				delete_list_indexes.push_back(i);
-			}
-		}
-	}
-	for (auto &j : delete_list_indexes) {
-		bindings_list.erase(bindings_list.begin() + j);
+		auto it =
+		    std::remove_if(bindings_list.begin(), bindings_list.end(),
+		                   [other_binding](std::pair<string, Binding *> x) { return x.first == other_binding.first; });
+		bindings_list.erase(it, bindings_list.end());
 	}
 }
 
