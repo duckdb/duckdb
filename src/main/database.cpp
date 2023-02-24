@@ -144,9 +144,15 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
-		// use storage extension to create the initial database
-		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-		                                                  info.name, info, access_mode);
+
+		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+			// use storage extension to create the initial database
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                  info.name, info, access_mode);
+		} else {
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), "",
+			                                                  info.path, access_mode);
+		}
 	} else {
 		// check if this is an in-memory database or not
 		attached_database =
@@ -201,11 +207,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
 
-	bool is_config_only_hook = config.storage_extensions.find(database_type) == config.storage_extensions.end() &&
-	                           config.options.extension_init_is_config_only;
-
-	auto attached_database =
-	    CreateAttachedDatabase(info, (is_config_only_hook) ? "" : database_type, config.options.access_mode);
+	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
 		Connection con(*this);
