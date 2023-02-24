@@ -13,6 +13,6 @@ A DuckDB connection object
 \code{default_connection()} returns a default, built-in connection
 }
 \examples{
-conn <- default_duckdb_connection()
+conn <- default_connection()
 print(sql("SELECT 42", conn=conn))
 }

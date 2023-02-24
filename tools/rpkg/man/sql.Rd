@@ -4,12 +4,12 @@
 \alias{sql}
 \title{Run a SQL query}
 \usage{
-sql(sql, conn = get_default_connection())
+sql(sql, conn = default_connection())
 }
 \arguments{
 \item{sql}{A SQL string}
 
-\item{conn}{An optional connection}
+\item{conn}{An optional connection, defaults to built-in default}
 }
 \value{
 A data frame with the query result
