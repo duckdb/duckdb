@@ -26,10 +26,7 @@ let package = Package(
     ),
     .testTarget(
       name: "DuckDBTests",
-      dependencies: ["DuckDB"],
-      resources: [
-          .process("Resources")
-      ]
+      dependencies: ["DuckDB"]
     )
   ],
   cxxLanguageStandard: .cxx11
