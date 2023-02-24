@@ -386,9 +386,6 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
-	//	if (location + nr_bytes > hfh.length) {
-	//		throw IOException("out of file");
-	//	}
 
 	// Don't buffer when DirectIO is set.
 	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
