@@ -150,7 +150,7 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
 			                                                  info.name, info, access_mode);
 		} else {
-			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), "",
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name,
 			                                                  info.path, access_mode);
 		}
 	} else {
