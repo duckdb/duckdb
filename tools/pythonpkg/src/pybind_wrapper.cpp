@@ -1,4 +1,5 @@
 #include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace pybind11 {
 
@@ -9,7 +10,9 @@ bool gil_check() {
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 void gil_assert() {
-	D_ASSERT(gil_check());
+	if (!gil_check()) {
+		throw duckdb::InternalException("The GIL should be held for this operation, but it's not!");
+	}
 }
 
 } // namespace pybind11
