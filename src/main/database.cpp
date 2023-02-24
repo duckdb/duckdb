@@ -200,10 +200,12 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
-	
-	bool is_config_only_hook = config.storage_extensions.find(database_type) == config.storage_extensions.end() && config.options.extension_init_is_config_only;
-	
-	auto attached_database = CreateAttachedDatabase(info, (is_config_only_hook) ? "" : database_type, config.options.access_mode);
+
+	bool is_config_only_hook = config.storage_extensions.find(database_type) == config.storage_extensions.end() &&
+	                           config.options.extension_init_is_config_only;
+
+	auto attached_database =
+	    CreateAttachedDatabase(info, (is_config_only_hook) ? "" : database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
 		Connection con(*this);
