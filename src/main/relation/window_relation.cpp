@@ -6,14 +6,42 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
-#include "duckdb/parser/transform/expression/transform_function"
 
 namespace duckdb {
+
+static ExpressionType WindowToExpressionType(string &fun_name) {
+	if (fun_name == "rank") {
+		return ExpressionType::WINDOW_RANK;
+	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
+		return ExpressionType::WINDOW_RANK_DENSE;
+	} else if (fun_name == "percent_rank") {
+		return ExpressionType::WINDOW_PERCENT_RANK;
+	} else if (fun_name == "row_number") {
+		return ExpressionType::WINDOW_ROW_NUMBER;
+	} else if (fun_name == "first_value" || fun_name == "first") {
+		return ExpressionType::WINDOW_FIRST_VALUE;
+	} else if (fun_name == "last_value" || fun_name == "last") {
+		return ExpressionType::WINDOW_LAST_VALUE;
+	} else if (fun_name == "nth_value" || fun_name == "last") {
+		return ExpressionType::WINDOW_NTH_VALUE;
+	} else if (fun_name == "cume_dist") {
+		return ExpressionType::WINDOW_CUME_DIST;
+	} else if (fun_name == "lead") {
+		return ExpressionType::WINDOW_LEAD;
+	} else if (fun_name == "lag") {
+		return ExpressionType::WINDOW_LAG;
+	} else if (fun_name == "ntile") {
+		return ExpressionType::WINDOW_NTILE;
+	}
+
+	return ExpressionType::WINDOW_AGGREGATE;
+}
+
 
 WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function_,
                                vector<unique_ptr<ParsedExpression>> children_, std::string window_alias_name,
                                vector<unique_ptr<ParsedExpression>> partitions_,
-                               vector<unique_ptr<OrderByNode>> orders_, unique_ptr<ParsedExpression> filter_expr_,
+                               shared_ptr<OrderRelation> orders_, unique_ptr<ParsedExpression> filter_expr_,
                                WindowBoundary start_, WindowBoundary end_,
                                vector<unique_ptr<ParsedExpression>> start_end_offset_default)
     : Relation(rel->context, RelationType::PROJECTION_RELATION) {
@@ -25,8 +53,8 @@ WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_func
 	for (auto &partition : partitions_) {
 		partitions.push_back(std::move(partition));
 	}
-	for (auto &o : orders_) {
-		orders.emplace_back(make_unique<OrderByNode>(o->type, o->null_order, o->expression->Copy()));
+	for (auto &actual_order : orders_->orders) {
+		orders.push_back(OrderByNode(actual_order.type, actual_order.null_order, actual_order.expression->Copy()));
 	}
 	window_function = window_function_;
 	alias = window_alias_name;
@@ -66,8 +94,6 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 	// select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
 	ExpressionType window_type = WindowToExpressionType(window_function);
-	// depending of the name of the function, it's either an aggregate or one of
-	// no schema name needed (I think??)
 	// WINDOW_ROW_NUMBER, WINDOW_FIRST_VALUE, WINDOW_LAST_VALUE, WINDOW_NTH_VALUE, WINDOW_RANK, WINDOW_RANK_DENSE,
 	// WINDOW_PERCENT_RANK, WINDOW_CUME_DIST, WINDOW_LEAD, WINDOW_LAG, WINDOW_NTILE
 	auto window_expr = make_unique<WindowExpression>(window_type, "", "", window_function);
@@ -77,6 +103,10 @@ unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
 	}
 	for (auto &partition : this->partitions) {
 		window_expr->partitions.push_back(partition->Copy());
+	}
+
+	for (auto &order : this->orders) {
+		window_expr->orders.push_back(OrderByNode(order.type, order.null_order, order.expression->Copy()));
 	}
 
 	// need to add support for more function names

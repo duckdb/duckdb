@@ -354,36 +354,51 @@ test_that("You can perform window functions on row_number", {
     sum2 <- list(duckdb:::expr_reference("a", window_function))
     order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
     res = duckdb:::rel_to_altrep(order_over_window)
+    expected_result <- data.frame(a=c(1:8), b=(4, 4, 3, 3, 2, 2, 1, 1), row_number=(8:1))
     expect_equal(res, expected_result)
 })
 
-test_that("You can perform window functions on row_number", {
-    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    sum <- list(duckdb:::expr_reference("a"))
-    partitions <- list(duckdb:::expr_reference("b"))
-    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "row_number", list(), "row_number", list(), list(), list(), list())
-    sum2 <- list(duckdb:::expr_reference("a", window_function))
-    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
-    res = duckdb:::rel_to_altrep(order_over_window)
-    expect_equal(res, expected_result)
-})
-
+# in dplyr min_rank = rank
+# here
 test_that("You can perform the window function min_rank", {
-    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    sum <- list(duckdb:::expr_reference("a"))
-    partitions <- list(duckdb:::expr_reference("b"))
-    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "row_number", list(), "row_number", list(), list(), list(), list())
-    sum2 <- list(duckdb:::expr_reference("a", window_function))
-    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+	con <- dbConnect(duckdb::duckdb())
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+    order_by_a <- duckdb:::rapi_rel_order(rel_a, list(duckdb:::expr_reference("a")))
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "rank", list(), "rank", list(), order_by_a, list(), list())
+	window_res <- duckdb:::rel_to_altrep(window_function)
     res = duckdb:::rel_to_altrep(order_over_window)
     expect_equal(res, expected_result)
 })
 
 test_that("You can perform the window function dense_rank", {
+   con <- dbConnect(duckdb::duckdb())
+   rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+   order_by_a <- duckdb:::rapi_rel_order(rel_a, list(duckdb:::expr_reference("a")))
+   window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "dense_rank", list(), "dense_rank", list(), order_by_a, list(), list())
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    res = duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+
+test_that("You can perform the window function cume_dist", {
+   con <- dbConnect(duckdb::duckdb())
+       rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+       order_by_a <- duckdb:::rapi_rel_order(rel_a, list(duckdb:::expr_reference("a")))
+       window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "rank", list(), "rank", list(), order_by_a, list(), list())
+    order_by_a <- duckdb:::rapi_rel_order(rel_a, duckdb:::expr_reference("a"))
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    res = duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform the window function percent rank", {
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     sum <- list(duckdb:::expr_reference("a"))
     partitions <- list(duckdb:::expr_reference("b"))
-    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "row_number", list(), "row_number", list(), list(), list(), list())
+    window_function <- duckdb:::rapi_rel_window_aggregation(rel_a, "percent_rank", list(), "percent_rank", list(), list(), list(), list())
     sum2 <- list(duckdb:::expr_reference("a", window_function))
     order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
     res = duckdb:::rel_to_altrep(order_over_window)

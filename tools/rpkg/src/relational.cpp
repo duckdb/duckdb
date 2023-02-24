@@ -179,10 +179,10 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
                                                      list children, std::string window_alias, list partitions,
-                                                     list orders, list bounds, list start_end_offset_default) {
+                                                     duckdb::rel_extptr_t order, list bounds, list start_end_offset_default) {
 	auto children_ = vector<unique_ptr<ParsedExpression>>();
 	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
-	auto orders_ = vector<unique_ptr<OrderByNode>>();
+	auto orders_ = shared_ptr<OrderRelation>();
 	unique_ptr<ParsedExpression> filter_expr_ = nullptr;
 	WindowBoundary start_ = WindowBoundary::UNBOUNDED_PRECEDING;
 	WindowBoundary end_ = WindowBoundary::CURRENT_ROW_RANGE;
@@ -192,6 +192,10 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	}
 	for (expr_extptr_t partition : partitions) {
 		partitions_.emplace_back(partition->Copy());
+	}
+	if (order && order->rel->type == RelationType::ORDER_RELATION) {
+		auto o_relation = std::dynamic_pointer_cast<OrderRelation>(order->rel);
+		orders_ = o_relation;
 	}
 
 	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, std::move(children_), window_alias,
