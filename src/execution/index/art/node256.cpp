@@ -6,12 +6,14 @@
 
 namespace duckdb {
 
-void Node256::Initialize() {
-	count = 0;
-	prefix = Prefix();
+Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
+	auto new_n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
+	new_n256->count = 0;
+	new_n256->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		children[i] = ARTNode();
+		new_n256->children[i] = ARTNode();
 	}
+	return new_n256;
 }
 
 void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -46,9 +48,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	if (n256->count <= ARTNode::NODE_256_SHRINK_THRESHOLD) {
 
 		ARTNode new_n48_node(art, ARTNodeType::N48);
-		auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(new_n48_node.GetPointer());
-		new_n48->Initialize();
-		art.IncreaseMemorySize(new_n48->MemorySize());
+		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->prefix = std::move(n256->prefix);
 
@@ -140,6 +140,19 @@ idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint16_t>();
+	prefix.Deserialize(art, reader);
+
+	// read child offsets
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		children[i] = ARTNode(reader);
+	}
+
+	art.IncreaseMemorySize(MemorySize());
 }
 
 idx_t Node256::MemorySize() {

@@ -12,6 +12,7 @@ add_library_unity(
   node256.cpp
   swizzleable_pointer.cpp
   prefix.cpp
+  prefix_segment.cpp
   art.cpp)
 
 set(ALL_OBJECT_FILES

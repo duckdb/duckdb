@@ -27,7 +27,7 @@ public:
 		return (pointer >> (sizeof(pointer) * 8 - 1)) & 1;
 	}
 	//! Get the pointer
-	inline idx_t GetPointer() {
+	inline idx_t GetPointer() const {
 		return pointer;
 	}
 	//! Get the block info from a swizzled pointer

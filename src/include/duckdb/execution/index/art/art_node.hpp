@@ -18,6 +18,7 @@ namespace duckdb {
 enum class ARTNodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class ARTNode;
+class Prefix;
 
 // structs
 struct MergeInfo {
@@ -46,17 +47,17 @@ struct ParentsOfARTNodes {
 class ARTNode : public SwizzleablePointer {
 public:
 	// constants (this allows testing performance with different ART node sizes)
-	// node prefixes
-	static constexpr idx_t PREFIX_INLINE_BYTES = 8;
-	static constexpr idx_t PREFIX_SECTION_SIZE = 32;
+	// node prefixes (NOTE: this should always hold: PREFIX_SEGMENT_SIZE >= PREFIX_INLINE_BYTES)
+	static constexpr uint32_t PREFIX_INLINE_BYTES = 8;
+	static constexpr uint32_t PREFIX_SEGMENT_SIZE = 32;
 	// node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
 	// node sizes
-	static constexpr idx_t NODE_4_CAPACITY = 4;
-	static constexpr idx_t NODE_16_CAPACITY = 16;
-	static constexpr idx_t NODE_48_CAPACITY = 48;
-	static constexpr idx_t NODE_256_CAPACITY = 256;
+	static constexpr uint16_t NODE_4_CAPACITY = 4;
+	static constexpr uint16_t NODE_16_CAPACITY = 16;
+	static constexpr uint16_t NODE_48_CAPACITY = 48;
+	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	// others
 	static constexpr uint8_t EMPTY_MARKER = 48;
 
@@ -64,7 +65,7 @@ public:
 	//! Constructs an empty ARTNode
 	ARTNode();
 	//! Constructs a swizzled pointer from a block ID and an offset
-	ARTNode(MetaBlockReader &reader);
+	explicit ARTNode(MetaBlockReader &reader);
 	//! Constructs an ARTNode pointing to a position in the ART buffers
 	ARTNode(ART &art, const ARTNodeType &type);
 
@@ -97,13 +98,19 @@ public:
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+
+	//! Deserialize this node
+	static void Deserialize(ART &art, idx_t block_id, idx_t offset);
+
 	//! Deserialize an ART node
-	void Deserialize(ART &art);
+	//	void Deserialize(ART &art);
 
 	//! Returns the string representation of a node
 	string ToString(ART &art);
 	//! Returns the capacity of a node
 	idx_t GetCapacity();
+	//! Returns a pointer to the prefix of a node
+	Prefix *GetPrefix(ART &art);
 
 	//! Merge two ARTs
 	static bool MergeARTs(ART *l_art, ART *r_art);

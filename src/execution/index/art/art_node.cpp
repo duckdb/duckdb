@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/art_node.hpp"
 
+#include "duckdb/storage/table_io_manager.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -13,7 +15,26 @@ ARTNode::ARTNode(MetaBlockReader &reader) : SwizzleablePointer(reader) {
 }
 
 ARTNode::ARTNode(ART &art, const ARTNodeType &type) {
-	// TODO
+	switch (type) {
+	case ARTNodeType::NLeaf:
+		pointer = art.leaf_nodes.GetPosition();
+		break;
+	case ARTNodeType::N4:
+		pointer = art.n4_nodes.GetPosition();
+		break;
+	case ARTNodeType::N16:
+		pointer = art.n16_nodes.GetPosition();
+		break;
+	case ARTNodeType::N48:
+		pointer = art.n48_nodes.GetPosition();
+		break;
+	case ARTNodeType::N256:
+		pointer = art.n256_nodes.GetPosition();
+		break;
+	default:
+		throw InternalException("Invalid node type for ARTNode constructor.");
+	}
+	art.IncreaseMemorySize(MemorySize(art, false));
 }
 
 //===--------------------------------------------------------------------===//
@@ -261,22 +282,84 @@ BlockPointer ARTNode::Serialize(ART &art, MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
-void ARTNode::Deserialize(ART &art) {
-	if (IsSwizzled()) {
-		// our pointer/node is not yet in memory, so we deserialize it
-		auto block_info = GetBlockInfo();
+void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 
+	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), block_id);
+	reader.offset = offset;
+
+	auto node_type_byte = reader.Read<uint8_t>();
+	ARTNodeType node_type((ARTNodeType)(node_type_byte));
+
+	switch (node_type) {
+	case ARTNodeType::NLeaf: {
 		// TODO
-		//		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
-		//		art.Verify();
+		//		auto leaf = Leaf::New();
+		//		leaf->Deserialize(art, reader);
+		//		art.IncreaseMemorySize(leaf->MemorySize(art, false));
+		//		return leaf;
+	}
+	case ARTNodeType::N4: {
+		ARTNode new_n4_node(art, ARTNodeType::N4);
+		auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(new_n4_node.GetPointer());
+		new_n4->Deserialize(art, reader);
+		//		auto new_n4 = Node4::Initialize(art, new_n4_node);
+		break;
+	}
+	case ARTNodeType::N16: {
+		deserialized_node = (Node *)Node16::New();
+		break;
+	}
+	case ARTNodeType::N48: {
+		deserialized_node = (Node *)Node48::New();
+		break;
+	}
+	case ARTNodeType::N256: {
+		deserialized_node = (Node *)Node256::New();
+		break;
+	}
+	default:
+		throw InternalException("Unrecognized node type");
+	}
+
+	return deserialized_node;
+}
+
+void Node::DeserializeInternal(ART &art, duckdb::MetaBlockReader &reader) {
+
+	art.IncreaseMemorySize(deserialized_node->MemorySize(art, false));
+
+	InternalType internal_type(this);
+	count = reader.Read<uint16_t>();
+	prefix.Deserialize(reader);
+
+	// read key values
+	for (idx_t i = 0; i < internal_type.key_size; i++) {
+		internal_type.key[i] = reader.Read<uint8_t>();
+	}
+
+	// read child offsets
+	for (idx_t i = 0; i < internal_type.children_size; i++) {
+		internal_type.children[i] = ARTPointer(reader);
 	}
 }
+
+// void ARTNode::Deserialize(ART &art) {
+//	if (IsSwizzled()) {
+//		// our pointer/node is not yet in memory, so we deserialize it
+//		auto block_info = GetBlockInfo();
+//
+//		// TODO
+//		//		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
+//		//		art.Verify();
+//	}
+// }
 
 //===--------------------------------------------------------------------===//
 // Utility
 //===--------------------------------------------------------------------===//
 
 string ARTNode::ToString(ART &art) {
+
 	string str = "Node";
 	auto type = GetARTNodeType();
 	switch (type) {
@@ -292,7 +375,7 @@ string ARTNode::ToString(ART &art) {
 	auto next_pos = GetNextPos(art, DConstants::INVALID_INDEX);
 	while (next_pos != DConstants::INVALID_INDEX) {
 		auto child = GetChild(art, next_pos);
-		str += "(" + to_string(next_pos) + ", " + child->ToString(art) + ")";
+		str += "(" + to_string(next_pos) + ", " + child.ToString(art) + ")";
 		next_pos = GetNextPos(art, next_pos);
 	}
 	return str + "]";
@@ -300,6 +383,24 @@ string ARTNode::ToString(ART &art) {
 
 idx_t ARTNode::GetCapacity() {
 	// TODO
+}
+
+Prefix *ARTNode::GetPrefix(ART &art) {
+	auto type = GetARTNodeType();
+	switch (type) {
+	case ARTNodeType::NLeaf:
+		// TODO
+	case ARTNodeType::N4:
+		return &art.n4_nodes.GetDataAtPosition<Node4>(GetPointer())->prefix;
+	case ARTNodeType::N16:
+		return &art.n16_nodes.GetDataAtPosition<Node16>(GetPointer())->prefix;
+	case ARTNodeType::N48:
+		return &art.n48_nodes.GetDataAtPosition<Node48>(GetPointer())->prefix;
+	case ARTNodeType::N256:
+		return &art.n256_nodes.GetDataAtPosition<Node256>(GetPointer())->prefix;
+	default:
+		throw InternalException("Invalid node type for GetPrefix.");
+	}
 }
 
 //===--------------------------------------------------------------------===//

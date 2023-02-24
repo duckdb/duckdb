@@ -11,6 +11,7 @@
 namespace duckdb {
 
 // TODO: when do I want to perform 'clean-ups'? At a certain free-list size?
+// TODO: make sure that the destructor cleans up all the memory
 
 class FixedSizeAllocator {
 public:

@@ -7,13 +7,15 @@
 
 namespace duckdb {
 
-void Node16::Initialize() {
-	count = 0;
-	prefix = Prefix();
+Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
+	auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(node.GetPointer());
+	new_n16->count = 0;
+	new_n16->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
-		key[i] = 0;
-		children[i] = ARTNode();
+		new_n16->key[i] = 0;
+		new_n16->children[i] = ARTNode();
 	}
+	return new_n16;
 }
 
 void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -42,9 +44,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 	} else {
 		// node is full, grow to Node48
 		ARTNode new_n48_node(art, ARTNodeType::N48);
-		auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(new_n48_node.GetPointer());
-		new_n48->Initialize();
-		art.IncreaseMemorySize(new_n48->MemorySize());
+		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->count = n16->count;
 		new_n48->prefix = std::move(n16->prefix);
@@ -99,9 +99,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	if (n16->count < ARTNode::NODE_4_CAPACITY) {
 
 		ARTNode new_n4_node(art, ARTNodeType::N4);
-		auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(new_n4_node.GetPointer());
-		new_n4->Initialize();
-		art.IncreaseMemorySize(new_n4->MemorySize());
+		auto new_n4 = Node4::Initialize(art, new_n4_node);
 
 		new_n4->prefix = std::move(n16->prefix);
 
@@ -186,6 +184,24 @@ idx_t Node16::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 		return pos;
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint16_t>();
+	prefix.Deserialize(art, reader);
+
+	// read key values
+	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
+		key[i] = reader.Read<uint8_t>();
+	}
+
+	// read child offsets
+	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
+		children[i] = ARTNode(reader);
+	}
+
+	art.IncreaseMemorySize(MemorySize());
 }
 
 idx_t Node16::MemorySize() {

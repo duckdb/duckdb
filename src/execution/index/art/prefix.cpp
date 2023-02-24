@@ -1,191 +1,207 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/prefix_segment.hpp"
 
 namespace duckdb {
 
-bool Prefix::IsInlined() const {
-	return size <= PREFIX_INLINE_BYTES;
+Prefix::Prefix() : count(0) {
 }
 
-uint8_t *Prefix::GetPrefixData() {
-	return IsInlined() ? &value.inlined[0] : value.ptr;
+Prefix::Prefix(const uint8_t &byte) : count(1) {
+	data.inlined[0] = byte;
 }
 
-const uint8_t *Prefix::GetPrefixData() const {
-	return IsInlined() ? &value.inlined[0] : value.ptr;
+void Prefix::Initialize() {
+	count = 0;
 }
 
-uint8_t *Prefix::AllocatePrefix(uint32_t size) {
-	Destroy();
+uint8_t Prefix::GetData(ART &art, const idx_t &pos) {
 
-	this->size = size;
-	uint8_t *prefix;
+	D_ASSERT(pos < count);
 	if (IsInlined()) {
-		prefix = &value.inlined[0];
+		return data.inlined[pos];
+	}
+
+	// get the prefix segment containing pos
+	idx_t segment_count = 0;
+	auto segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(data.position);
+	while (pos >= segment_count * ARTNode::PREFIX_SEGMENT_SIZE) {
+		D_ASSERT(segment->next != DConstants::INVALID_INDEX);
+		segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(segment->next);
+		segment_count++;
+	}
+
+	return segment->bytes[pos - segment_count * ARTNode::PREFIX_SEGMENT_SIZE];
+}
+
+void Prefix::Move(Prefix &other) {
+	count = other.count;
+	data = other.data;
+}
+
+void Prefix::Append(ART &art, ART &other_art, Prefix &other) {
+
+	// result fits into inlined data, i.e., both prefixes are also inlined
+	if (count + other.count <= ARTNode::PREFIX_INLINE_BYTES) {
+		memcpy(data.inlined + count, other.data.inlined, other.count);
+		count += other.count;
+		return;
+	}
+
+	// this prefix is inlined, but will no longer be after appending the other prefix,
+	// move the inlined bytes to the first prefix segment
+	if (IsInlined()) {
+		MoveInlinedToSegment(art);
+	}
+
+	// TODO: maybe this can be optimized a bit, because in theory only the first segment has to be filled up,
+	// TODO: after that, we always copy into an empty segment
+
+	PrefixSegment *other_segment;
+	PrefixSegment temp_segment;
+	if (other.IsInlined()) {
+		// if the other prefix is inlined, then we copy its data into a temporary prefix segment
+		memcpy(temp_segment.bytes, other.data.inlined, other.count);
+		other_segment = &temp_segment;
 	} else {
-		// allocate new prefix
-		value.ptr = AllocateArray<uint8_t>(size);
-		prefix = value.ptr;
+		// get the first prefix segment of the other prefix
+		other_segment = other_art.prefix_segments.GetDataAtPosition<PrefixSegment>(other.data.position);
 	}
-	return prefix;
-}
 
-Prefix::Prefix() : size(0) {
-}
+	idx_t copy_count = 0;
+	auto segment = PrefixSegment::GetTail(art, data.position);
 
-Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(0) {
-	auto prefix = AllocatePrefix(size);
+	// copy all the data of the other prefix into this prefix
+	while (copy_count < other.count) {
+		// get copy starting positions and copy length
+		idx_t free_in_this = count % ARTNode::PREFIX_SEGMENT_SIZE;
+		auto start_in_this = ARTNode::PREFIX_SEGMENT_SIZE - free_in_this;
+		auto start_in_other = copy_count % ARTNode::PREFIX_SEGMENT_SIZE;
+		auto copy_from_other = ARTNode::PREFIX_SEGMENT_SIZE - start_in_other;
 
-	// copy key to prefix
-	idx_t prefix_idx = 0;
-	for (idx_t i = depth; i < size + depth; i++) {
-		prefix[prefix_idx++] = key.data[i];
+		// copy data
+		auto this_copy_count = std::min(free_in_this, copy_from_other);
+		for (idx_t i = start_in_other; i < this_copy_count; i++) {
+			segment->bytes[start_in_this + i] = other_segment->bytes[start_in_other + i];
+		}
+
+		// adjust counters
+		copy_count += this_copy_count;
+		count += this_copy_count;
+
+		// get next prefix segments, if necessary
+		if (copy_count < other.count) {
+			// we need to append a prefix segment to this prefix
+			if (start_in_this + this_copy_count == ARTNode::PREFIX_SEGMENT_SIZE) {
+				auto new_position = art.prefix_segments.GetPosition();
+				segment->next = new_position;
+				segment = PrefixSegment::Initialize(art, new_position);
+			}
+			// we need to copy the next prefix segment in the other prefix
+			if (start_in_other + this_copy_count == ARTNode::PREFIX_SEGMENT_SIZE) {
+				D_ASSERT(other_segment->next != DConstants::INVALID_INDEX);
+				other_segment = other_art.prefix_segments.GetDataAtPosition<PrefixSegment>(other_segment->next);
+			}
+		}
 	}
 }
 
-Prefix::Prefix(Prefix &other_prefix, uint32_t size) : size(0) {
-	auto prefix = AllocatePrefix(size);
+void Prefix::Concatenate(ART &art, const uint8_t &byte, ART &other_art, Prefix &other) {
 
-	// copy key to Prefix
-	auto other_data = other_prefix.GetPrefixData();
-	for (idx_t i = 0; i < size; i++) {
-		prefix[i] = other_data[i];
+	auto new_size = count + 1 + other.count;
+
+	// overwrite into this prefix
+	if (new_size <= ARTNode::PREFIX_INLINE_BYTES) {
+		// move this.prefix backwards
+		for (idx_t i = 0; i < count; i++) {
+			data.inlined[other.count + 1 + i] = GetData(art, i);
+		}
+		// copy byte
+		data.inlined[other.count] = byte;
+		// copy other.prefix into this.prefix
+		for (idx_t i = 0; i < other.count; i++) {
+			data.inlined[i] = other.GetData(other_art, i);
+		}
+		count = new_size;
+		return;
 	}
+
+	// else, create a new prefix and then copy it into the existing prefix
+	Prefix new_prefix;
+	// append the other prefix
+	new_prefix.Append(art, other_art, other);
+	// copy the byte
+	Prefix byte_prefix(byte);
+	new_prefix.Append(art, art, byte_prefix);
+	// copy the prefix
+	new_prefix.Append(art, art, *this);
+	// move the new_prefix into this prefix
+	Move(new_prefix);
+	return;
 }
 
-Prefix::~Prefix() {
-	Destroy();
+void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint32_t>();
+
+	if (count <= ARTNode::PREFIX_INLINE_BYTES) {
+		for (idx_t i = 0; i < count; i++) {
+			data.inlined[i] = reader.Read<uint8_t>();
+		}
+		return;
+	}
+
+	// copy into prefix segment(s)
+	idx_t copy_count = 0;
+	data.position = DConstants::INVALID_INDEX;
+	PrefixSegment *segment;
+
+	while (copy_count != count) {
+
+		// we need a new segment
+		if (data.position == DConstants::INVALID_INDEX) {
+			auto position = art.prefix_segments.GetPosition();
+			data.position = position;
+			segment = PrefixSegment::Initialize(art, position);
+		}
+
+		D_ASSERT(count >= copy_count);
+		idx_t remaining = count - copy_count;
+		auto this_copy_count = std::min((idx_t)ARTNode::PREFIX_SEGMENT_SIZE, remaining);
+		for (idx_t i = 0; i < this_copy_count; i++) {
+			segment->bytes[i] = reader.Read<uint8_t>();
+		}
+
+		copy_count += this_copy_count;
+	}
 }
 
 idx_t Prefix::MemorySize() {
-	return sizeof(*this) + sizeof(uint8_t) * size;
-}
-
-void Prefix::Destroy() {
-	if (!IsInlined()) {
-		DeleteArray<uint8_t>(value.ptr, size);
-		size = 0;
+#ifdef DEBUG
+	if (IsInlined()) {
+		return sizeof(*this);
 	}
+	return sizeof(*this) + ((count / ARTNode::PREFIX_SEGMENT_SIZE) + 1) * sizeof(PrefixSegment);
+#endif
 }
 
-uint8_t &Prefix::operator[](idx_t idx) {
-	D_ASSERT(idx < Size());
-	return GetPrefixData()[idx];
+bool Prefix::IsInlined() const {
+	return count <= ARTNode::PREFIX_INLINE_BYTES;
 }
 
-Prefix &Prefix::operator=(const Prefix &src) {
-	auto prefix = AllocatePrefix(src.size);
+void Prefix::MoveInlinedToSegment(ART &art) {
+	D_ASSERT(IsInlined());
+	auto position = art.prefix_segments.GetPosition();
+	auto segment = PrefixSegment::Initialize(art, position);
 
-	// copy prefix
-	auto src_prefix = src.GetPrefixData();
-	for (idx_t i = 0; i < src.size; i++) {
-		prefix[i] = src_prefix[i];
+	// move data
+	D_ASSERT(ARTNode::PREFIX_SEGMENT_SIZE >= ARTNode::PREFIX_INLINE_BYTES);
+	for (idx_t i = 0; i < count; i++) {
+		segment->bytes[i] = data.inlined[i];
 	}
-	size = src.size;
-	return *this;
-}
-
-Prefix &Prefix::operator=(Prefix &&other) noexcept {
-	std::swap(size, other.size);
-	std::swap(value, other.value);
-	return *this;
-}
-
-void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
-	if (new_size <= PREFIX_INLINE_BYTES) {
-		// new entry would be inlined
-		// inline the data and destroy the pointer
-		auto prefix = AllocatePrefix(new_size);
-		for (idx_t i = 0; i < new_size; i++) {
-			prefix[i] = data[i];
-		}
-		DeleteArray<uint8_t>(data, new_size);
-
-	} else {
-		// new entry would not be inlined
-		// take over the data directly
-		Destroy();
-		size = new_size;
-		value.ptr = data;
-	}
-}
-
-void Prefix::Concatenate(ART &art, uint8_t key, Prefix &other) {
-	auto new_size = size + 1 + other.size;
-	art.IncreaseMemorySize((new_size - size) * sizeof(uint8_t));
-	// have to allocate space in our prefix array
-	auto new_prefix = AllocateArray<uint8_t>(new_size);
-	idx_t new_prefix_idx = 0;
-
-	// 1) add the to-be deleted node's prefix
-	for (uint32_t i = 0; i < other.size; i++) {
-		new_prefix[new_prefix_idx++] = other[i];
-	}
-
-	// 2) now move the current partial key byte as part of the prefix
-	new_prefix[new_prefix_idx++] = key;
-
-	// 3) move the existing prefix (if any)
-	auto prefix = GetPrefixData();
-	for (uint32_t i = 0; i < size; i++) {
-		new_prefix[new_prefix_idx++] = prefix[i];
-	}
-	Overwrite(new_size, new_prefix);
-}
-
-uint8_t Prefix::Reduce(ART &art, uint32_t n) {
-	auto new_size = size - n - 1;
-	art.DecreaseMemorySize((size - new_size) * sizeof(uint8_t));
-	auto prefix = GetPrefixData();
-	auto partial_key = prefix[n];
-
-	if (new_size == 0) {
-		Destroy();
-		size = 0;
-		return partial_key;
-	}
-	auto new_prefix = AllocateArray<uint8_t>(new_size);
-	for (idx_t i = 0; i < new_size; i++) {
-		new_prefix[i] = prefix[i + n + 1];
-	}
-	Overwrite(new_size, new_prefix);
-	return partial_key;
-}
-
-void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
-	writer.Write(size);
-	auto prefix = GetPrefixData();
-	writer.WriteData(prefix, size);
-}
-
-void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
-	auto prefix_size = reader.Read<uint32_t>();
-	auto prefix = AllocatePrefix(prefix_size);
-	this->size = prefix_size;
-	reader.ReadData(prefix, size);
-}
-
-uint32_t Prefix::KeyMismatchPosition(Key &key, uint32_t depth) {
-	uint64_t pos;
-	auto prefix = GetPrefixData();
-	for (pos = 0; pos < size; pos++) {
-		if (key[depth + pos] != prefix[pos]) {
-			return pos;
-		}
-	}
-	return pos;
-}
-
-uint32_t Prefix::MismatchPosition(Prefix &other) {
-	auto prefix = GetPrefixData();
-	auto other_data = other.GetPrefixData();
-	for (idx_t i = 0; i < size; i++) {
-		if (prefix[i] != other_data[i]) {
-			return i;
-		}
-	}
-	return size;
+	data.position = position;
 }
 
 } // namespace duckdb

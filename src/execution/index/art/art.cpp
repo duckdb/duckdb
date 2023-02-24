@@ -17,20 +17,19 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
          AttachedDatabase &db, bool track_memory, idx_t block_id, idx_t block_offset)
 
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type, track_memory) {
+    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type, track_memory),
+      prefix_sections(sizeof(PrefixSection)), leaf_nodes(sizeof(Leaf)), n4_nodes(sizeof(Node4)),
+      n16_nodes(sizeof(Node16)), n48_nodes(sizeof(Node48)), n256_nodes(sizeof(Node256)) {
 
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
 
 	// set the root node of the tree
-	tree = nullptr;
+	tree = ARTNode();
 	if (block_id != DConstants::INVALID_INDEX) {
-		tree = Node::Deserialize(*this, block_id, block_offset);
+		tree.Deserialize(*this, block_id, block_offset);
 		Verify();
-		if (track_memory) {
-			buffer_manager.IncreaseUsedMemory(memory_size);
-		}
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
@@ -58,18 +57,10 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 }
 
 ART::~ART() {
-
-	// TODO: free all the memory of the buffer managers
-
-	if (!tree) {
-		return;
+	if (tree) {
+		Verify();
+		tree = ARTNode();
 	}
-	Verify();
-	if (track_memory) {
-		buffer_manager.DecreaseUsedMemory(memory_size);
-	}
-	Node::Delete(tree);
-	tree = nullptr;
 }
 
 //===--------------------------------------------------------------------===//

@@ -8,82 +8,58 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
 // classes
 class ART;
-class Prefix;
-
-// structs
-struct PrefixSection {
-	uint8_t bytes[ARTNode::PREFIX_SECTION_SIZE];
-	ARTNode next;
-};
 
 class Prefix {
 public:
-	//! Empty prefix
+	//! Inlined empty prefix
 	Prefix();
-	//! Construct prefix from key starting at depth
-	Prefix(Key &key, uint32_t depth, uint32_t size);
-	//! Construct prefix from other prefix up to size
-	Prefix(Prefix &other_prefix, uint32_t size);
-	~Prefix();
+	//! Inlined prefix containing one byte
+	explicit Prefix(const uint8_t &byte);
 
-	//! Returns the prefix size
-	inline uint32_t Size() const {
-		return size;
-	}
-	//! Returns the memory size of the prefix
-	idx_t MemorySize();
-	//! Returns a pointer to the prefix data
-	uint8_t *GetPrefixData();
-	//! Returns a const pointer to the prefix data
-	const uint8_t *GetPrefixData() const;
+	//! Delete copy/assign operator
+	Prefix(const Prefix &) = delete;
+	//! Delete move operator
+	void operator=(const Prefix &) = delete;
 
-	//! Subscript operator
-	uint8_t &operator[](idx_t idx);
-	//! Assign operator
-	Prefix &operator=(const Prefix &src);
-	//! Move operator
-	Prefix &operator=(Prefix &&other) noexcept;
-
-	//	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
-	//	//! Used when deleting a node
-	//	void Concatenate(ART &art, uint8_t key, Prefix &other);
-	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
-	//! Used when deleting a node
-	static void Concatenate(ART &art, ARTNode &node, uint8_t key, ARTNode &other_node);
-	static Prefix *GetPrefix(ART &art, ARTNode &node);
-
-	//! Reduces the prefix in n bytes, and returns the new first byte
-	uint8_t Reduce(ART &art, uint32_t n);
-
-	//! Serializes the prefix
-	void Serialize(MetaBlockWriter &writer);
-	//! Deserializes the prefix
-	void Deserialize(MetaBlockReader &reader);
-
-	//! Compare the key with the prefix of the node, return the position where they mismatch
-	uint32_t KeyMismatchPosition(Key &key, uint32_t depth);
-	//! Compare this prefix to another prefix, return the position where they mismatch, or size otherwise
-	uint32_t MismatchPosition(Prefix &other);
-
-private:
-	uint32_t size;
+	//! Number of bytes in this prefix
+	uint32_t count;
 	union {
-		uint8_t *ptr;
+		//! Position to the head of the list of prefix segments
+		idx_t position;
+		//! Inlined prefix bytes
 		uint8_t inlined[ARTNode::PREFIX_INLINE_BYTES];
-	} value;
+	} data;
+
+public:
+	//! Initializes all the fields of the prefix
+	void Initialize();
+
+	//! Get the data at pos
+	uint8_t GetData(ART &art, const idx_t &pos);
+	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
+	void Move(Prefix &other);
+	//! Append a prefix to this prefix
+	void Append(ART &art, ART &other_art, Prefix &other);
+	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
+	void Concatenate(ART &art, const uint8_t &byte, ART &other_art, Prefix &other);
+
+	//! Deserialize this prefix
+	void Deserialize(ART &art, MetaBlockReader &reader);
+
+	//! Returns the in-memory size
+	idx_t MemorySize();
 
 private:
+	//! Returns whether this prefix is inlined
 	bool IsInlined() const;
-	uint8_t *AllocatePrefix(uint32_t size);
-	void Overwrite(uint32_t new_size, uint8_t *data);
-	void Destroy();
+	//! Moves all inlined bytes onto a prefix segment, does not change the size
+	//! so this will be an (temporarily) invalid prefix
+	void MoveInlinedToSegment(ART &art);
 };
 
 } // namespace duckdb

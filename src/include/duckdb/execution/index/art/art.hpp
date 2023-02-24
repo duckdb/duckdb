@@ -58,15 +58,15 @@ public:
 	~ART() override;
 
 	//! Root of the tree
-	ARTNode *tree;
+	ARTNode tree;
 
 	//! Fixed size node allocators
+	FixedSizeAllocator prefix_segments;
+	FixedSizeAllocator leaf_nodes;
 	FixedSizeAllocator n4_nodes;
 	FixedSizeAllocator n16_nodes;
 	FixedSizeAllocator n48_nodes;
 	FixedSizeAllocator n256_nodes;
-	FixedSizeAllocator prefixes;
-	FixedSizeAllocator prefix_sections;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs

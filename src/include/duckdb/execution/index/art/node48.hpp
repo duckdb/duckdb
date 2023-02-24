@@ -23,7 +23,7 @@ public:
 
 public:
 	//! Initializes all the fields of the node
-	void Initialize();
+	static Node48 *Initialize(ART &art, const ARTNode &node);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
@@ -51,6 +51,9 @@ public:
 	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
 	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte);
+
+	//! Deserialize this node
+	void Deserialize(ART &art, MetaBlockReader &reader);
 
 	//! Returns the in-memory size
 	idx_t MemorySize();

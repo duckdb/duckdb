@@ -6,13 +6,15 @@
 
 namespace duckdb {
 
-void Node4::Initialize() {
-	count = 0;
-	prefix = Prefix();
+Node4 *Node4::Initialize(ART &art, const ARTNode &node) {
+	auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(node.GetPointer());
+	new_n4->count = 0;
+	new_n4->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
-		key[i] = 0;
-		children[i] = ARTNode();
+		new_n4->key[i] = 0;
+		new_n4->children[i] = ARTNode();
 	}
+	return new_n4;
 }
 
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -41,12 +43,10 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 	} else {
 		// node is full, grow to Node16
 		ARTNode new_n16_node(art, ARTNodeType::N16);
-		auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(new_n16_node.GetPointer());
-		new_n16->Initialize();
-		art.IncreaseMemorySize(new_n16->MemorySize());
+		auto new_n16 = Node16::Initialize(art, new_n16_node);
 
 		new_n16->count = n4->count;
-		new_n16->prefix = std::move(n4->prefix);
+		new_n16->prefix.Move(n4->prefix);
 
 		for (idx_t i = 0; i < n4->count; i++) {
 			new_n16->key[i] = n4->key[i];
@@ -98,7 +98,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 		// get only child and concatenate prefixes
 		auto child = n4->GetChild(0);
-		Prefix::Concatenate(art, child, n4->key[0], node);
+		child.GetPrefix(art)->Concatenate(art, n4->key[0], art, *node.GetPrefix(art));
 
 		art.DecreaseMemorySize(n4->MemorySize());
 		art.n4_nodes.FreePosition(node.GetPointer());
@@ -175,6 +175,24 @@ idx_t Node4::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 		return pos;
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint16_t>();
+	prefix.Deserialize(art, reader);
+
+	// read key values
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		key[i] = reader.Read<uint8_t>();
+	}
+
+	// read child offsets
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		children[i] = ARTNode(reader);
+	}
+
+	art.IncreaseMemorySize(MemorySize());
 }
 
 idx_t Node4::MemorySize() {

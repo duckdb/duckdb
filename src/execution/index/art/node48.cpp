@@ -7,15 +7,17 @@
 
 namespace duckdb {
 
-void Node48::Initialize() {
-	count = 0;
-	prefix = Prefix();
+Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
+	auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(node.GetPointer());
+	new_n48->count = 0;
+	new_n48->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		child_index[i] = ARTNode::EMPTY_MARKER;
+		new_n48->child_index[i] = ARTNode::EMPTY_MARKER;
 	}
 	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
-		children[i] = ARTNode();
+		new_n48->children[i] = ARTNode();
 	}
+	return new_n48;
 }
 
 void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -42,9 +44,7 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 	} else {
 		// node is full, grow to Node256
 		ARTNode new_n256_node(art, ARTNodeType::N256);
-		auto new_n256 = art.n256_nodes.GetDataAtPosition<Node48>(new_n256_node.GetPointer());
-		new_n256->Initialize();
-		art.IncreaseMemorySize(new_n256->MemorySize());
+		auto new_n256 = Node256::Initialize(art, new_n256_node);
 
 		new_n256->count = n48->count;
 		new_n256->prefix = std::move(n48->prefix);
@@ -86,9 +86,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	if (n48->count < ARTNode::NODE_48_SHRINK_THRESHOLD) {
 
 		ARTNode new_n16_node(art, ARTNodeType::N16);
-		auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(new_n16_node.GetPointer());
-		new_n16->Initialize();
-		art.IncreaseMemorySize(new_n16->MemorySize());
+		auto new_n16 = Node16::Initialize(art, new_n16_node);
 
 		new_n16->prefix = std::move(n48->prefix);
 
@@ -182,6 +180,24 @@ idx_t Node48::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint16_t>();
+	prefix.Deserialize(art, reader);
+
+	// read key values
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		child_index[i] = reader.Read<uint8_t>();
+	}
+
+	// read child offsets
+	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
+		children[i] = ARTNode(reader);
+	}
+
+	art.IncreaseMemorySize(MemorySize());
 }
 
 idx_t Node48::MemorySize() {
