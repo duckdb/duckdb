@@ -24,7 +24,7 @@ public:
 	    : has_estimated_cardinality(true), estimated_cardinality(estimated_cardinality), has_max_cardinality(true),
 	      max_cardinality(max_cardinality) {
 	}
-	void Serialize(Serializer &serializer) const { 
+	void Serialize(Serializer &serializer) const {
 		serializer.Write(has_estimated_cardinality);
 		if (has_estimated_cardinality) {
 			serializer.Write(estimated_cardinality);
@@ -33,18 +33,21 @@ public:
 				serializer.Write(max_cardinality);
 			}
 		} else {
-			assert(!has_max_cardinality);
+			D_ASSERT(!has_max_cardinality);
 		}
 	}
 	static unique_ptr<NodeStatistics> Deserialize(Deserializer &source) {
-		if (!source.Read<bool>()) {
+		bool has_estimated_cardinality = source.Read<bool>();
+		if (!has_estimated_cardinality) {
 			return make_unique<NodeStatistics>();
 		}
 		idx_t estimated_cardinality = source.Read<idx_t>();
-		if (!source.Read<bool>()) {
+		bool has_max_cardinality = source.Read<bool>();
+		if (!has_max_cardinality) {
 			return make_unique<NodeStatistics>(estimated_cardinality);
 		}
-		return make_unique<NodeStatistics>(estimated_cardinality, source.Read<idx_t>());
+		idx_t max_cardinality = source.Read<idx_t>();
+		return make_unique<NodeStatistics>(estimated_cardinality, max_cardinality);
 	}
 
 	//! Whether or not the node has an estimated cardinality specified

@@ -39,7 +39,7 @@ public:
 	unique_ptr<BaseStatistics> validity_stats;
 	//! The approximate count distinct stats of the column (if any)
 	unique_ptr<BaseStatistics> distinct_stats;
-	idx_t distinct_count; // estimate that one may have even if distinct_stats==nullptr 
+	idx_t distinct_count; // estimate that one may have even if distinct_stats==nullptr
 
 	//! Whether these are 'global' stats, i.e., over a whole table, or just over a segment
 	//! Some statistics are more expensive to keep, therefore we only keep them globally
