@@ -23,16 +23,6 @@
 
 namespace duckdb {
 
-static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
-	vector<idx_t> ret;
-	for (idx_t i = 0; i < vec.size(); i++) {
-		if (vec[i]) {
-			ret.push_back(i);
-		}
-	}
-	return ret;
-}
-
 vector<string> GetUniqueNames(const vector<string> &original_names) {
 	unordered_set<string> name_set;
 	vector<string> unique_names;
@@ -115,7 +105,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 		if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
-			partition_cols = ColumnListToIndices(ParseColumnList(converted, select_node.names, loption));
+			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 			continue;
 		}
 		stmt.info->options[option.first] = option.second;
