@@ -145,8 +145,15 @@ public:
 	DUCKDB_API static string Replace(string source, const string &from, const string &to);
 
 	//! Get the levenshtein distance from two strings
-	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2);
+	//! The not_equal_penalty is the penalty given when two characters in a string are not equal
+	//! The regular levenshtein distance has a not equal penalty of 1, which means changing a character is as expensive
+	//! as adding or removing one For similarity searches we often want to give extra weight to changing a character For
+	//! example: with an equal penalty of 1, "pg_am" is closer to "depdelay" than "depdelay_minutes"
+	//! with an equal penalty of 3, "depdelay_minutes" is closer to "depdelay" than to "pg_am"
+	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2, idx_t not_equal_penalty = 1);
 
+	//! Returns the similarity score between two strings
+	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! At least one entry is returned (if there is one).
 	//! Strings are only returned if they have a score less than the threshold.
