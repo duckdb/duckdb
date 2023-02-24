@@ -264,9 +264,13 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 	}
 }
 
-bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star) {
+bool Binder::FindStarExpression(ParsedExpression &expr, StarExpression **star, bool is_root = false) {
 	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
 		auto current_star = (StarExpression *)&expr;
+		if (!is_root && !current_star->columns) {
+			throw BinderException(
+			    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
+		}
 		if (*star) {
 			// we can have multiple
 			if (!StarExpression::Equal(*star, current_star)) {
@@ -301,7 +305,7 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	StarExpression *star = nullptr;
-	if (!FindStarExpression(*expr, &star)) {
+	if (!FindStarExpression(*expr, &star, true)) {
 		// no star expression: add it as-is
 		D_ASSERT(!star);
 		new_select_list.push_back(std::move(expr));

@@ -520,16 +520,6 @@ sort_clause:
 					sort->location = -1;		/* no operator */
 					$$ = list_make1(sort);
 				}
-			| ORDER BY '*' opt_asc_desc opt_nulls_order
-				{
-					PGSortBy *sort = makeNode(PGSortBy);
-					sort->node = (PGNode *) makeNode(PGAStar);
-					sort->sortby_dir = $4;
-					sort->sortby_nulls = $5;
-					sort->useOp = NIL;
-					sort->location = -1;		/* no operator */
-					$$ = list_make1(sort);
-				}
 		;
 
 sortby_list:
@@ -779,11 +769,6 @@ first_or_next: FIRST_P								{ $$ = 0; }
 group_clause:
 			GROUP_P BY group_by_list_opt_comma				{ $$ = $3; }
 			| GROUP_P BY ALL
-				{
-					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
-					$$ = list_make1(node);
-				}
-			| GROUP_P BY '*'
 				{
 					PGNode *node = (PGNode *) makeGroupingSet(GROUPING_SET_ALL, NIL, @3);
 					$$ = list_make1(node);
@@ -2349,21 +2334,29 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| COLUMNS '(' '*' opt_except_list opt_replace_list ')'
-				{
-					PGAStar *star = makeNode(PGAStar);
-					star->except_list = $4;
-					star->replace_list = $5;
-					star->columns = true;
-
-					$$ = (PGNode *) star;
-				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
 					star->expr = $3;
 					star->columns = true;
 
+					$$ = (PGNode *) star;
+				}
+			| '*' opt_except_list opt_replace_list
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->except_list = $2;
+					star->replace_list = $3;
+					star->location = @1;
+					$$ = (PGNode *) star;
+				}
+			| ColId '.' '*' opt_except_list opt_replace_list
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->relation = $1;
+					star->except_list = $4;
+					star->replace_list = $5;
+					star->location = @1;
 					$$ = (PGNode *) star;
 				}
 		;
@@ -2623,22 +2616,6 @@ func_application:       func_name '(' ')'
 					n->agg_order = $5;
 					n->agg_ignore_nulls = $6;
 					n->agg_distinct = true;
-					$$ = (PGNode *)n;
-				}
-			| func_name '(' '*' ')'
-				{
-					/*
-					 * We consider AGGREGATE(*) to invoke a parameterless
-					 * aggregate.  This does the right thing for COUNT(*),
-					 * and there are no other aggregates in SQL that accept
-					 * '*' as parameter.
-					 *
-					 * The PGFuncCall node is also marked agg_star = true,
-					 * so that later processing can detect what the argument
-					 * really was.
-					 */
-					PGFuncCall *n = makeFuncCall($1, NIL, @1);
-					n->agg_star = true;
 					$$ = (PGNode *)n;
 				}
 		;
@@ -3566,37 +3543,6 @@ target_el:	a_expr AS ColLabelOrString
 					$$->name = NULL;
 					$$->indirection = NIL;
 					$$->val = (PGNode *)$1;
-					$$->location = @1;
-				}
-			| '*' opt_except_list opt_replace_list
-				{
-					PGColumnRef *n = makeNode(PGColumnRef);
-					PGAStar *star = makeNode(PGAStar);
-					n->fields = list_make1(star);
-					n->location = @1;
-					star->except_list = $2;
-					star->replace_list = $3;
-
-					$$ = makeNode(PGResTarget);
-					$$->name = NULL;
-					$$->indirection = NIL;
-					$$->val = (PGNode *)n;
-					$$->location = @1;
-				}
-			| ColId '.' '*' opt_except_list opt_replace_list
-				{
-					PGColumnRef *n = makeNode(PGColumnRef);
-					PGAStar *star = makeNode(PGAStar);
-					n->fields = list_make1(star);
-					n->location = @1;
-					star->relation = $1;
-					star->except_list = $4;
-					star->replace_list = $5;
-
-					$$ = makeNode(PGResTarget);
-					$$->name = NULL;
-					$$->indirection = NIL;
-					$$->val = (PGNode *)n;
 					$$->location = @1;
 				}
 		;

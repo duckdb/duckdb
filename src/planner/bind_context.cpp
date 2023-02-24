@@ -339,11 +339,11 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		bool found_match = true;
 		if (expr.expr) {
 			throw InternalException("FIXME: bind regex");
-//			regex = make_unique<duckdb_re2::RE2>(expr.regex);
-//			if (!regex->error().empty()) {
-//				throw BinderException("Failed to compile regex \"%s\": %s", expr.regex, regex->error());
-//			}
-//			found_match = false;
+			//			regex = make_unique<duckdb_re2::RE2>(expr.regex);
+			//			if (!regex->error().empty()) {
+			//				throw BinderException("Failed to compile regex \"%s\": %s", expr.regex, regex->error());
+			//			}
+			//			found_match = false;
 		}
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
@@ -387,7 +387,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 		if (!found_match) {
 			throw InternalException("FIXME; found match");
-//			throw BinderException("No matching columns found that match regex \"%s\"", expr.regex);
+			//			throw BinderException("No matching columns found that match regex \"%s\"", expr.regex);
 		}
 	} else {
 		// SELECT tbl.* case

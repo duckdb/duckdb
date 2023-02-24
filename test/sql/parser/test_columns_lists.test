@@ -1,0 +1,33 @@
+# name: test/sql/parser/test_columns_lists.test
+# description: Test the columns expression with list comprehension
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
+
+query II
+SELECT COLUMNS([x for x in *]) FROM integers
+----
+42	84
+13	14
+
+query II
+SELECT COLUMNS([x for x in * if x <> 'i']) FROM integers
+----
+42	84
+13	14
+
+query II
+SELECT COLUMNS(['i', 'j']) FROM integers
+----
+42	84
+13	14
+
+query II
+SELECT COLUMNS(list_concat(['i'], ['j'])) FROM integers
+----
+42	84
+13	14
