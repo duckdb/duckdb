@@ -1144,15 +1144,78 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 }
 
 //===--------------------------------------------------------------------===//
-// Create Index Scan
+// Index Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
+void DataTable::InitializeWALCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = std::unique_lock<mutex>(append_lock);
-	row_groups->InitializeCreateIndexScan(state);
 	InitializeScan(state, column_ids);
 }
 
+void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
+                            const vector<unique_ptr<Expression>> &expressions) {
+
+	// if the data table is empty
+	if (row_groups->IsEmpty()) {
+		info->indexes.AddIndex(std::move(index));
+		return;
+	}
+
+	auto &allocator = Allocator::Get(db);
+
+	DataChunk result;
+	result.Initialize(allocator, index->logical_types);
+
+	DataChunk intermediate;
+	vector<LogicalType> intermediate_types;
+	auto column_ids = index->column_ids;
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	for (auto &id : index->column_ids) {
+		auto &col = column_definitions[id];
+		intermediate_types.push_back(col.Type());
+	}
+	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
+	intermediate.Initialize(allocator, intermediate_types);
+
+	// initialize an index scan
+	CreateIndexScanState state;
+	InitializeWALCreateIndexScan(state, column_ids);
+
+	if (!is_root) {
+		throw InternalException("Error during WAL replay. Cannot add an index to a table that has been altered.");
+	}
+
+	// now start incrementally building the index
+	{
+		IndexLock lock;
+		index->InitializeLock(lock);
+
+		while (true) {
+			intermediate.Reset();
+			result.Reset();
+			// scan a new chunk from the table to index
+			CreateIndexScan(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			if (intermediate.size() == 0) {
+				// finished scanning for index creation
+				// release all locks
+				break;
+			}
+			// resolve the expressions for this chunk
+			index->ExecuteExpressions(intermediate, result);
+
+			// insert into the index
+			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
+				throw InternalException("Error during WAL replay. Can't create unique index, table contains "
+				                        "duplicate data on indexed column(s).");
+			}
+		}
+	}
+	info->indexes.AddIndex(std::move(index));
+}
+
+//===--------------------------------------------------------------------===//
+// Statistics
+//===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
