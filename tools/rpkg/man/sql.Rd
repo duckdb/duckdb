@@ -18,5 +18,5 @@ A data frame with the query result
 \code{sql()} runs an arbitrary SQL query and returns a data.frame the query results
 }
 \examples{
-print(sql("SELECT 42"))
+print(duckdb::sql("SELECT 42"))
 }

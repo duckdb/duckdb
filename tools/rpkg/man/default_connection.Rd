@@ -14,5 +14,5 @@ A DuckDB connection object
 }
 \examples{
 conn <- default_connection()
-print(sql("SELECT 42", conn=conn))
+print(duckdb::sql("SELECT 42", conn=conn))
 }

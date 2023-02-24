@@ -7,7 +7,7 @@
 #' @return A data frame with the query result
 #' @export
 #' @examples
-#' print(sql("SELECT 42"))
+#' print(duckdb::sql("SELECT 42"))
 
 sql <- function(sql, conn = default_connection()) {
   stopifnot(dbIsValid(conn))
@@ -24,7 +24,7 @@ default_duckdb_connection <- new.env(parent=emptyenv())
 #' @export
 #' @examples
 #' conn <- default_connection()
-#' print(sql("SELECT 42", conn=conn))
+#' print(duckdb::sql("SELECT 42", conn=conn))
 default_connection <- function() {
   if(!exists("con", default_duckdb_connection)) {
     con <- DBI::dbConnect(duckdb::duckdb())
