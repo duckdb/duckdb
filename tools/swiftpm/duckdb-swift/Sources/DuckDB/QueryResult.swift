@@ -49,6 +49,14 @@ public final class QueryResult {
     }
   }
   
+  init(prepared: PreparedStatement) throws {
+    let status = prepared.withCPreparedStatement { duckdb_execute_prepared($0, ptr) }
+    guard status == .success else {
+      let error = duckdb_result_error(ptr).map(String.init(cString:))
+      throw DatabaseError.queryError(reason: error)
+    }
+  }
+  
   deinit {
     duckdb_destroy_result(ptr)
     ptr.deallocate()

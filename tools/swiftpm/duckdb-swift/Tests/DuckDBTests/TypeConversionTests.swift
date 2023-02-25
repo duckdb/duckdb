@@ -30,123 +30,68 @@ import XCTest
 final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_bool() throws {
-    let expected = [false, true, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT bool FROM test_all_types();")
-    let column = result[0].cast(to: Bool.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "bool", expected: [false, true, nil]) { $0.cast(to: Bool.self) }
   }
   
   func test_extract_from_utinyint() throws {
-    let expected = [UInt8.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT utinyint FROM test_all_types();")
-    let column = result[0].cast(to: UInt8.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "utinyint", expected: [UInt8.min, .max, nil]) { $0.cast(to: UInt8.self) }
   }
   
   func test_extract_from_usmallint() throws {
-    let expected = [UInt16.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT usmallint FROM test_all_types();")
-    let column = result[0].cast(to: UInt16.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "usmallint", expected: [UInt16.min, .max, nil]) { $0.cast(to: UInt16.self) }
   }
   
   func test_extract_from_uint() throws {
-    let expected = [UInt32.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT uint FROM test_all_types();")
-    let column = result[0].cast(to: UInt32.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "uint", expected: [UInt32.min, .max, nil]) { $0.cast(to: UInt32.self) }
   }
   
   func test_extract_from_ubigint() throws {
-    let expected = [UInt64.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT ubigint FROM test_all_types();")
-    let column = result[0].cast(to: UInt64.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "ubigint", expected: [UInt64.min, .max, nil]) { $0.cast(to: UInt64.self) }
   }
   
   func test_extract_from_tinyint() throws {
-    let expected = [Int8.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT tinyint FROM test_all_types();")
-    let column = result[0].cast(to: Int8.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "tinyint", expected: [Int8.min, .max, nil]) { $0.cast(to: Int8.self) }
   }
   
   func test_extract_from_smallint() throws {
-    let expected = [Int16.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT smallint FROM test_all_types();")
-    let column = result[0].cast(to: Int16.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "smallint", expected: [Int16.min, .max, nil]) { $0.cast(to: Int16.self) }
   }
   
   func test_extract_from_int() throws {
-    let expected = [Int32.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT int FROM test_all_types();")
-    let column = result[0].cast(to: Int32.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "int", expected: [Int32.min, .max, nil]) { $0.cast(to: Int32.self) }
   }
   
   func test_extract_from_bigint() throws {
-    let expected = [Int64.min, .max, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT bigint FROM test_all_types();")
-    let column = result[0].cast(to: Int64.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(
+      testColumnName: "bigint", expected: [Int64.min, .max, nil]) { $0.cast(to: Int64.self) }
+  }
+  
+  func test_extract_from_hugeint() throws {
+    let expected = [IntHuge.min + 1, IntHuge.max, nil]
+    try extractTest(testColumnName: "hugeint", expected: expected) { $0.cast(to: IntHuge.self) }
   }
   
   func test_extract_from_float() throws {
     let expected = [-Float.greatestFiniteMagnitude, .greatestFiniteMagnitude, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT float FROM test_all_types();")
-    let column = result[0].cast(to: Float.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "float", expected: expected) { $0.cast(to: Float.self) }
   }
   
   func test_extract_from_double() throws {
     let expected = [-Double.greatestFiniteMagnitude, .greatestFiniteMagnitude, nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT double FROM test_all_types();")
-    let column = result[0].cast(to: Double.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "double", expected: expected) { $0.cast(to: Double.self) }
   }
   
   func test_extract_from_varchar() throws {
     let expected = ["🦆🦆🦆🦆🦆🦆", "goo\0se", nil]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT varchar FROM test_all_types();")
-    let column = result[0].cast(to: String.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "varchar", expected: expected) { $0.cast(to: String.self) }
   }
   
   func test_extract_from_uuid() throws {
@@ -155,60 +100,34 @@ final class TypeConversionTests: XCTestCase {
       UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT uuid FROM test_all_types();")
-    let column = result[0].cast(to: UUID.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "uuid", expected: expected) { $0.cast(to: UUID.self) }
   }
   
   func test_extract_from_time() throws {
-    let t1 = Time.Components(hour: 0, minute: 0, second: 0, microsecond: 0)
-    let t2 = Time.Components(hour: 23, minute: 59, second: 59, microsecond: 999_999)
     let expected = [
-      Time(components: t1),
-      Time(components: t2),
+      Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
+      Time(components: .init(hour: 23, minute: 59, second: 59, microsecond: 999_999)),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT time FROM test_all_types();")
-    let column = result[0].cast(to: Time.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "time", expected: expected) { $0.cast(to: Time.self) }
   }
   
   func test_extract_from_time_tz() throws {
-    let t1 = Time.Components(hour: 0, minute: 0, second: 0, microsecond: 0)
-    let t2 = Time.Components(hour: 23, minute: 59, second: 59, microsecond: 999_999)
     let expected = [
-      Time(components: t1),
-      Time(components: t2),
+      Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
+      Time(components: .init(hour: 23, minute: 59, second: 59, microsecond: 999_999)),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT time_tz FROM test_all_types();")
-    let column = result[0].cast(to: Time.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: Time.self) }
   }
   
   func test_extract_from_date() throws {
-    let d1 = Date.Components(year: -5_877_641, month: 06, day: 25)
-    let d2 = Date.Components(year: 5_881_580, month: 07, day: 10)
     let expected = [
-      Date(components: d1),
-      Date(components: d2),
+      Date(components: .init(year: -5_877_641, month: 06, day: 25)),
+      Date(components: .init(year: 5_881_580, month: 07, day: 10)),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT date FROM test_all_types();")
-    let column = result[0].cast(to: Date.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "date", expected: expected) { $0.cast(to: Date.self) }
   }
   
   func test_extract_from_timestamp() throws {
@@ -216,17 +135,8 @@ final class TypeConversionTests: XCTestCase {
       year: -290_308, month: 12, day: 22, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
       year: 294_247, month: 01, day: 10, hour: 04, minute: 0, second: 54, microsecond: 775_806)
-    let expected = [
-      Timestamp(components: t1),
-      Timestamp(components: t2),
-      nil
-    ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT timestamp FROM test_all_types();")
-    let column = result[0].cast(to: Timestamp.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
+    try extractTest(testColumnName: "timestamp", expected: expected) { $0.cast(to: Timestamp.self) }
   }
   
   func test_extract_from_timestamp_tz() throws {
@@ -234,17 +144,9 @@ final class TypeConversionTests: XCTestCase {
       year: -290_308, month: 12, day: 22, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
       year: 294_247, month: 01, day: 10, hour: 04, minute: 0, second: 54, microsecond: 775_806)
-    let expected = [
-      Timestamp(components: t1),
-      Timestamp(components: t2),
-      nil
-    ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT timestamp_tz FROM test_all_types();")
-    let column = result[0].cast(to: Timestamp.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
+    try extractTest(
+      testColumnName: "timestamp_tz", expected: expected) { $0.cast(to: Timestamp.self) }
   }
   
   func test_extract_from_timestamp_s() throws {
@@ -252,17 +154,9 @@ final class TypeConversionTests: XCTestCase {
       year: -290_308, month: 12, day: 22, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
       year: 294_247, month: 01, day: 10, hour: 04, minute: 0, second: 54, microsecond: 0)
-    let expected = [
-      Timestamp(components: t1),
-      Timestamp(components: t2),
-      nil
-    ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT timestamp_s FROM test_all_types();")
-    let column = result[0].cast(to: Timestamp.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
+    try extractTest(
+      testColumnName: "timestamp_s", expected: expected) { $0.cast(to: Timestamp.self) }
   }
   
   func test_extract_from_timestamp_ms() throws {
@@ -270,17 +164,9 @@ final class TypeConversionTests: XCTestCase {
       year: -290_308, month: 12, day: 22, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
       year: 294_247, month: 01, day: 10, hour: 04, minute: 0, second: 54, microsecond: 775_000)
-    let expected = [
-      Timestamp(components: t1),
-      Timestamp(components: t2),
-      nil
-    ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT timestamp_ms FROM test_all_types();")
-    let column = result[0].cast(to: Timestamp.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
+    try extractTest(
+      testColumnName: "timestamp_ms", expected: expected) { $0.cast(to: Timestamp.self) }
   }
   
   func test_extract_from_timestamp_ns() throws {
@@ -288,17 +174,9 @@ final class TypeConversionTests: XCTestCase {
       year: 1677, month: 09, day: 21, hour: 0, minute: 12, second: 43, microsecond: 145_225)
     let t2 = Timestamp.Components(
       year: 2262, month: 04, day: 11, hour: 23, minute: 47, second: 16, microsecond: 854_775)
-    let expected = [
-      Timestamp(components: t1),
-      Timestamp(components: t2),
-      nil
-    ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT timestamp_ns FROM test_all_types();")
-    let column = result[0].cast(to: Timestamp.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
+    try extractTest(
+      testColumnName: "timestamp_ns", expected: expected) { $0.cast(to: Timestamp.self) }
   }
   
   func test_extract_from_interval() throws {
@@ -309,12 +187,7 @@ final class TypeConversionTests: XCTestCase {
         years: 83, months: 3, days: 999, hours: 0, minutes: 16, seconds: 39, microseconds: 999_999),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT interval FROM test_all_types();")
-    let column = result[0].cast(to: Interval.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "interval", expected: expected) { $0.cast(to: Interval.self) }
   }
   
   func test_extract_from_blob() throws {
@@ -323,12 +196,7 @@ final class TypeConversionTests: XCTestCase {
       "\0\0\0a".data(using: .ascii)!,
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT blob FROM test_all_types();")
-    let column = result[0].cast(to: Data.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "blob", expected: expected) { $0.cast(to: Data.self) }
   }
   
   func test_extract_from_decimal_4_1() throws {
@@ -337,12 +205,7 @@ final class TypeConversionTests: XCTestCase {
       Decimal(string: " 999.9"),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT dec_4_1 FROM test_all_types();")
-    let column = result[0].cast(to: Decimal.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "dec_4_1", expected: expected) { $0.cast(to: Decimal.self) }
   }
   
   func test_extract_from_decimal_9_4() throws {
@@ -351,12 +214,7 @@ final class TypeConversionTests: XCTestCase {
       Decimal(string: " 99999.9999"),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT dec_9_4 FROM test_all_types();")
-    let column = result[0].cast(to: Decimal.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "dec_9_4", expected: expected) { $0.cast(to: Decimal.self) }
   }
   
   func test_extract_from_decimal_18_6() throws {
@@ -365,12 +223,7 @@ final class TypeConversionTests: XCTestCase {
       Decimal(string:  "999999999999.999999"),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT dec_18_6 FROM test_all_types();")
-    let column = result[0].cast(to: Decimal.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "dec_18_6", expected: expected) { $0.cast(to: Decimal.self) }
   }
   
   func test_extract_from_decimal_38_10() throws {
@@ -379,23 +232,20 @@ final class TypeConversionTests: XCTestCase {
       Decimal(string:  "9999999999999999999999999999.9999999999"),
       nil
     ]
-    let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT dec38_10 FROM test_all_types();")
-    let column = result[0].cast(to: Decimal.self)
-    for (index, item) in expected.enumerated() {
-      XCTAssertEqual(column[DBInt(index)], item)
-    }
+    try extractTest(testColumnName: "dec38_10", expected: expected) { $0.cast(to: Decimal.self) }
   }
+}
+
+private extension TypeConversionTests {
   
-  func test_extract_from_hugeint() throws {
-    let expected = [
-      IntHuge.min + 1,
-      IntHuge.max,
-      nil
-    ]
+  func extractTest<T: Equatable>(
+    testColumnName: String,
+    expected: [T?],
+    cast: (Column<Void>) -> Column<T>
+  ) throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT hugeint FROM test_all_types();")
-    let column = result[0].cast(to: IntHuge.self)
+    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types();")
+    let column = cast(result[0])
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)], item)
     }
