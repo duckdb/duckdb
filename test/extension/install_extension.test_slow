@@ -9,6 +9,9 @@ require skip_reload
 statement ok
 PRAGMA enable_verification
 
+# we need a persistent database because otherwise we are not allowed to restart
+load __TEST_DIR__/dummy_database_for_extension_installation.db
+
 statement error
 INSTALL 'asdf';
 
@@ -24,5 +27,66 @@ FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb
 statement ok
 LOAD 'loadable_extension_demo';
 
+statement ok
+LOAD 'loadable_extension_demo';
+
+# need to restart to unload extensions
+restart
+
+# can't find extension in non-default extension location
+statement ok
+SET extension_directory='__TEST_DIR__/extension_directory'
+
+statement error
+LOAD 'loadable_extension_demo';
+
+# can install after setting directory, even if the extension directory does not yet exist
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# ensure file is there
+query I
+select COUNT(*) from glob('__TEST_DIR__/extension_directory/.duckdb/**/loadable_extension_demo.extension')
+----
+1
+
+# can load now
+statement ok
+LOAD 'loadable_extension_demo';
+
+# unload again
+
+restart
+
+
+statement ok
+SET extension_directory=''
+
+# we will use a nonstandard home directory, but we won't create it if it does not exist
+
+# can't find extension in non-default home location
+statement ok
+SET home_directory='__TEST_DIR__/home_directory'
+
+statement error
+LOAD 'loadable_extension_demo';
+
+# we can't install because we will not create a non-existing home directory
+statement error
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# but this one should exist
+statement ok
+SET home_directory='__TEST_DIR__'
+
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+select COUNT(*) from glob('__TEST_DIR__/.duckdb/**/loadable_extension_demo.extension')
+----
+1
+
+# can load now
 statement ok
 LOAD 'loadable_extension_demo';
