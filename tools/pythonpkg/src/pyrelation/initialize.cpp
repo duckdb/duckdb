@@ -188,12 +188,17 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 
 	    // Aren't these also technically consumers?
 	    .def("insert_into", &DuckDBPyRelation::InsertInto,
-	         "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
-	    .def("create", &DuckDBPyRelation::Create,
-	         "Creates a new table named table_name with the contents of the relation object", py::arg("table_name"))
-	    .def("create_view", &DuckDBPyRelation::CreateView,
-	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
-	         py::arg("replace") = true)
+	         "Inserts the relation object into an existing table named table_name", py::arg("table_name"));
+
+	DefineMethod({"create", "to_table"}, relation_module, &DuckDBPyRelation::Create,
+	             "Creates a new table named table_name with the contents of the relation object",
+	             py::arg("table_name"));
+
+	DefineMethod({"create_view", "to_view"}, relation_module, &DuckDBPyRelation::CreateView,
+	             "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
+	             py::arg("replace") = true);
+
+	relation_module
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data")
 	    .def("__str__", &DuckDBPyRelation::ToString)
