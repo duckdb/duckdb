@@ -2,6 +2,8 @@ version: '3.3'
 services:
   minio:
     image: minio/minio:RELEASE.2021-11-03T03-36-36Z
+    networks:
+      duckdb_network:
     hostname: duckdb-minio.com
     ports:
       - "9000:9000"
@@ -18,6 +20,8 @@ services:
 
   minio_setup:
     image: minio/mc:RELEASE.2021-11-05T10-05-06Z
+    networks:
+      duckdb_network:
     depends_on:
       - minio
     links:
@@ -56,3 +60,5 @@ services:
         /usr/bin/mc policy get myminio/test-bucket-public
         exit 0;
       "
+networks:
+  duckdb_network:
