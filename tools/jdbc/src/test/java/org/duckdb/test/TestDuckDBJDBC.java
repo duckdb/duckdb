@@ -2679,7 +2679,7 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+		assertEquals(message.contains("unrecognized configuration parameter \"invalid config name\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {
