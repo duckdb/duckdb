@@ -691,6 +691,12 @@ jobs:
         ./scripts/run_s3_test_server.sh
         sleep 60
 
+    - name: Generate S3 Presigned url
+      shell: bash
+      run: |
+        source ./scripts/generate_presigned_url.sh
+        sleep 60
+
     - name: Test
       shell: bash
       run: |
