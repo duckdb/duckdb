@@ -489,6 +489,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
+	string range_length;
 
 	if (res->code != 200) {
 		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
@@ -499,8 +500,25 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			length = 0;
 			return;
 		} else {
-			throw IOException("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" + res->error +
-			                  ")");
+			// HEAD request fail, use Range requet for another try (read only one byte)
+			if ((flags & FileFlags::FILE_FLAGS_READ)) {
+				char dummy_buffer[2];
+				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, dummy_buffer, 2);
+				if (range_res->code != 206) {
+					throw IOException("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" + res->error +
+									")");
+				}
+				auto range_find = range_res->headers["Content-Range"].find("/");
+				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
+				if (range_length == "*") {
+					throw IOException("Unknown total length of the document \"" + path + "\": " + to_string(res->code) + " (" +
+									res->error + ")");
+				}
+				res = std::move(range_res); 
+			}else{
+				throw IOException("Unable to connect to URL \"" + path + "\": " + to_string(res->code) + " (" + res->error +
+								")");
+			}
 		}
 	}
 
@@ -515,7 +533,11 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	try {
-		length = std::stoll(res->headers["Content-Length"]);
+		if(res->headers.find("Content-Range") == res->headers.end() || res->headers["Content-Range"].empty()){
+			length = std::stoll(res->headers["Content-Length"]);
+		}else {
+			length = std::move(std::stoll(range_length));
+		}
 	} catch (std::invalid_argument &e) {
 		throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 	} catch (std::out_of_range &e) {
