@@ -1,4 +1,4 @@
-# name: test/sql/copy/s3/upload_large_file.test_slow
+# name: test/sql/copy/s3/s3_presigned_upload.test_slow
 # description: Copy large csv/parquet files from and to S3.
 # group: [s3]
 

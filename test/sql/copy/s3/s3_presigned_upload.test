@@ -1,5 +1,5 @@
 # name: test/sql/copy/s3/s3_presigned_upload.test
-# description: This test upload the data for later presigend url test  
+# description: This test upload the data for later presigend url test
 # group: [s3]
 
 require parquet
