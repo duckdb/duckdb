@@ -1046,9 +1046,25 @@ int sqlite3_complete(const char *zSql) {
 
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
-	// fprintf(stderr, "sqlite3_column_bytes: unsupported.\n");
-	return pStmt->current_text[iCol].data_len;
-	// return -1;
+
+	if (!pStmt || iCol < 0 || pStmt->result->types.size() <= static_cast<size_t>(iCol))
+		return 0;
+
+	// checks if the current column is initialized
+	if (!pStmt->current_text) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+			return 0;
+		}
+	}
+	sqlite3_string_buffer *col_text = &pStmt->current_text[iCol];
+	if (!col_text->data) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+			return 0;
+		}
+		col_text = &pStmt->current_text[iCol];
+	}
+
+	return col_text->data_len;
 }
 
 sqlite3_value *sqlite3_column_value(sqlite3_stmt *, int iCol) {
@@ -1090,11 +1106,30 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
+const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return nullptr;
+	}
+
+	auto &&names = pStmt->prepared->GetNames();
+	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	return names[iCol].c_str();
+}
+
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
-		return NULL;
+		return nullptr;
 	}
-	auto column_type = pStmt->prepared->GetTypes()[iCol];
+
+	auto &&types = pStmt->prepared->GetTypes();
+	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	auto column_type = types[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";

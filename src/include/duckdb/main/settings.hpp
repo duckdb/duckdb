@@ -216,6 +216,15 @@ struct ExplainOutputSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ExtensionDirectorySetting {
+	static constexpr const char *Name = "extension_directory";
+	static constexpr const char *Description = "Set the directory to store extensions in";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ExternalThreadsSetting {
 	static constexpr const char *Name = "external_threads";
 	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";

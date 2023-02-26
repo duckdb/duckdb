@@ -532,6 +532,22 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Extension Directory Setting
+//===--------------------------------------------------------------------===//
+void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_directory = input.ToString();
+	config.options.extension_directory = input.ToString();
+}
+
+void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.extension_directory = DBConfig().options.extension_directory;
+}
+
+Value ExtensionDirectorySetting::GetSetting(ClientContext &context) {
+	return Value(DBConfig::GetConfig(context).options.extension_directory);
+}
+
+//===--------------------------------------------------------------------===//
 // External Threads Setting
 //===--------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

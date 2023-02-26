@@ -87,7 +87,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::TABLE_MACRO_ENTRY:
 		log->WriteCreateTableMacro((TableMacroCatalogEntry *)parent);
 		break;
-
+	case CatalogType::INDEX_ENTRY:
+		log->WriteCreateIndex((IndexCatalogEntry *)parent);
+		break;
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
@@ -119,6 +121,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropType((TypeCatalogEntry *)entry);
 			break;
 		case CatalogType::INDEX_ENTRY:
+			log->WriteDropIndex((IndexCatalogEntry *)entry);
+			break;
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			// do nothing, indexes/prepared statements/functions aren't persisted to disk
@@ -127,7 +131,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			throw InternalException("Don't know how to drop this type!");
 		}
 		break;
-	case CatalogType::INDEX_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:

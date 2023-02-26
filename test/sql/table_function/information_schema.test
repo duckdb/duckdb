@@ -23,7 +23,7 @@ statement ok
 CREATE TABLE scheme.integers (i INTEGER);
 
 query T
-SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='integers'
+SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='integers' AND table_catalog IS NOT NULL
 ----
 BASE TABLE
 
@@ -69,7 +69,7 @@ SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND
 VIEW
 
 query ITT
-SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_schema='scheme' AND table_name='vintegers'
+SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_schema='scheme' AND table_name='vintegers' AND table_catalog IS NOT NULL
 ----
 1	i	INTEGER
 
