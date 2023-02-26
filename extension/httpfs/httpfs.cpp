@@ -265,7 +265,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    if (hfs.stats) {
 				    hfs.stats->total_bytes_received += data_length;
 			    }
-			    if (!buffer_out) {
+			    if (buffer_out != nullptr) {
 				    memcpy(buffer_out + out_offset, data, data_length);
 				    out_offset += data_length;
 			    }
