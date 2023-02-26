@@ -16,8 +16,6 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 }
 
 SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
-	SEXP varvalue = NULL;
-
 	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return NEW_STRING(nrows);
 	}
@@ -78,10 +76,6 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
-	if (!varvalue) {
-		throw std::bad_alloc();
-	}
-	return varvalue;
 }
 
 // Convert DuckDB's timestamp to R's timestamp (POSIXct). This is a represented as the number of seconds since the
