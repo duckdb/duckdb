@@ -409,7 +409,7 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 
 				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP
-				auto list_element = ele_prot.Protect(duckdb_r_allocate(child_type, ele_prot, src_data[row_idx].length));
+				cpp11::sexp list_element = duckdb_r_allocate(child_type, ele_prot, src_data[row_idx].length);
 				duckdb_r_decorate(child_type, list_element, integer64);
 				duckdb_r_transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
 
