@@ -73,11 +73,8 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		return NEW_STRING(nrows);
 	case LogicalTypeId::BLOB:
 		return NEW_LIST(nrows);
-	case LogicalTypeId::ENUM: {
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
-
-		break;
-	}
+	case LogicalTypeId::ENUM:
+		return NEW_INTEGER(nrows);
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
