@@ -219,7 +219,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		RProtector r_varvalue;
-		auto varvalue = r_varvalue.Protect(duckdb_r_allocate(result->types[col_idx], r_varvalue, nrows));
+		cpp11::sexp varvalue = duckdb_r_allocate(result->types[col_idx], r_varvalue, nrows);
 		duckdb_r_decorate(result->types[col_idx], varvalue, integer64);
 		SET_VECTOR_ELT(data_frame, col_idx, varvalue);
 	}
