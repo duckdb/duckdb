@@ -30,8 +30,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::INTEGER:
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
-		break;
+		return NEW_INTEGER(nrows);
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
