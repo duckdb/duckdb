@@ -33,6 +33,13 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	return (extptr);
 }
 
+template <typename T, typename... ARGS>
+external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&... args) {
+	auto extptr = external_pointer<T>(new T(std::forward<ARGS>(args)...), true, true, prot);
+	((sexp)extptr).attr("class") = rclass;
+	return (extptr);
+}
+
 // DuckDB Expressions
 
 [[cpp11::register]] SEXP rapi_expr_reference(std::string name, std::string table) {
@@ -134,7 +141,7 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	}
 
 	auto res = std::make_shared<ProjectionRelation>(rel->rel, std::move(projections), std::move(aliases));
-	return make_external<RelationWrapper>("duckdb_relation", res);
+	return make_external_prot<RelationWrapper>("duckdb_relation", (sexp)rel, res);
 }
 
 [[cpp11::register]] SEXP rapi_rel_aggregate(duckdb::rel_extptr_t rel, list groups, list aggregates) {
