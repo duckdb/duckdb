@@ -15,7 +15,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
+SEXP duckdb_r_allocate(const LogicalType &type, idx_t nrows) {
 	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return NEW_STRING(nrows);
 	}
@@ -54,8 +54,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 			const auto &name = child.first;
 			const auto &child_type = child.second;
 
-			RProtector child_protector;
-			cpp11::sexp dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
+			cpp11::sexp dest_child = duckdb_r_allocate(child_type, nrows);
 			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
 		}
 
@@ -391,9 +390,8 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 				const auto end = src_data[row_idx].offset + src_data[row_idx].length;
 				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset, end);
 
-				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP
-				cpp11::sexp list_element = duckdb_r_allocate(child_type, ele_prot, src_data[row_idx].length);
+				cpp11::sexp list_element = duckdb_r_allocate(child_type, src_data[row_idx].length);
 				duckdb_r_decorate(child_type, list_element, integer64);
 				duckdb_r_transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
 

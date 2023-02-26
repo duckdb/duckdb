@@ -106,8 +106,7 @@ struct AltrepVectorWrapper {
 	void *Dataptr() {
 		if (transformed_vector.data() == R_NilValue) {
 			auto res = rel->GetQueryResult();
-			RProtector r_varvalue;
-			transformed_vector = duckdb_r_allocate(res->types[column_index], r_varvalue, res->RowCount());
+			transformed_vector = duckdb_r_allocate(res->types[column_index], res->RowCount());
 			idx_t dest_offset = 0;
 			for (auto &chunk : res->Collection().Chunks()) {
 				SEXP dest = transformed_vector.data();
