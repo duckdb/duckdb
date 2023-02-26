@@ -61,7 +61,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 			const auto &child_type = child.second;
 
 			RProtector child_protector;
-			auto dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
+			cpp11::sexp dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
 			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
 		}
 
