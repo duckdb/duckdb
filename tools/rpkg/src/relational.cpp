@@ -104,7 +104,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	auto rel =
 	    con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)->Alias(alias);
 
-	cpp11::writable::list prot = { df };
+	cpp11::writable::list prot = {df};
 
 	auto res = sexp(make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel)));
 	res.attr("df") = df;
@@ -127,7 +127,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	}
 	auto res = std::make_shared<FilterRelation>(rel->rel, std::move(filter_expr));
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -148,7 +148,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 
 	auto res = std::make_shared<ProjectionRelation>(rel->rel, std::move(projections), std::move(aliases));
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -178,7 +178,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 
 	auto res = std::make_shared<AggregateRelation>(rel->rel, std::move(res_aggregates), std::move(res_groups));
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -192,7 +192,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 
 	auto res = std::make_shared<OrderRelation>(rel->rel, std::move(res_orders));
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -223,7 +223,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	}
 	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
 
-	cpp11::writable::list prot = { left, right };
+	cpp11::writable::list prot = {left, right};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -257,21 +257,22 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_union_all(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
 	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::UNION);
 
-	cpp11::writable::list prot = { rel_a, rel_b };
+	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
 [[cpp11::register]] SEXP rapi_rel_limit(duckdb::rel_extptr_t rel, int64_t n) {
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
-	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::make_shared<LimitRelation>(rel->rel, n, 0));
+	return make_external_prot<RelationWrapper>("duckdb_relation", prot,
+	                                           std::make_shared<LimitRelation>(rel->rel, n, 0));
 }
 
 [[cpp11::register]] SEXP rapi_rel_distinct(duckdb::rel_extptr_t rel) {
 
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::make_shared<DistinctRelation>(rel->rel));
 }
@@ -293,7 +294,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_set_alias(duckdb::rel_extptr_t rel, std::string alias) {
-	cpp11::writable::list prot = { rel };
+	cpp11::writable::list prot = {rel};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, rel->rel->Alias(alias));
 }
@@ -317,7 +318,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_set_intersect(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
 	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::INTERSECT);
 
-	cpp11::writable::list prot = { rel_a, rel_b };
+	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -325,7 +326,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_set_diff(duckdb::rel_extptr_t rel_a, duckdb::rel_extptr_t rel_b) {
 	auto res = std::make_shared<SetOpRelation>(rel_a->rel, rel_b->rel, SetOperationType::EXCEPT);
 
-	cpp11::writable::list prot = { rel_a, rel_b };
+	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
@@ -337,7 +338,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	auto b_except_a = std::make_shared<SetOpRelation>(rel_b->rel, rel_a->rel, SetOperationType::EXCEPT);
 	auto symdiff = std::make_shared<SetOpRelation>(a_except_b, b_except_a, SetOperationType::UNION);
 
-	cpp11::writable::list prot = { rel_a, rel_b };
+	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, symdiff);
 }
