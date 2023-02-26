@@ -154,12 +154,11 @@ private:
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
 	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
-		RProtector r;
-		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
+		cpp11::sexp conjunction_sexp = TransformFilterExpression(**fit, column_name, functions, timezone_config);
 		fit++;
 		for (; fit != filters.end(); ++fit) {
-			SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
-			conjunction_sexp = r.Protect(CreateExpression(functions, op, conjunction_sexp, rhs));
+			cpp11::sexp rhs = TransformFilterExpression(**fit, column_name, functions, timezone_config);
+			conjunction_sexp = CreateExpression(functions, op, conjunction_sexp, rhs);
 		}
 		return conjunction_sexp;
 	}
