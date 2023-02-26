@@ -32,12 +32,26 @@ SELECT COLUMNS(list_concat(['i'], ['i'])) FROM integers
 42	42
 13	13
 
-# multiple columns that are the same
+# star with exclude
+query I
+SELECT COLUMNS([x for x in (* EXCLUDE (i))]) FROM integers
+----
+84
+14
+
+# multiple columns that are the same works
 query I
 SELECT COLUMNS(['i']) + COLUMNS(['i']) FROM integers
 ----
 84
 26
+
+# columns are turned into strings
+query II
+SELECT COLUMNS([i, j]) FROM integers
+----
+42	84
+13	14
 
 # nested columns
 statement error

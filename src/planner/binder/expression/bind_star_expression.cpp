@@ -6,24 +6,26 @@
 
 namespace duckdb {
 
-bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root, bool in_columns) {
+bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
+                                bool in_columns) {
 	bool has_star = false;
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
-		auto current_star = (StarExpression *) expr.get();
+		auto current_star = (StarExpression *)expr.get();
 		if (!current_star->columns) {
 			if (is_root) {
+				*star = current_star;
 				return true;
 			}
 			if (!in_columns) {
 				throw BinderException(
-					"STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
+				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
 			// star expression inside a COLUMNS - convert to a constant list
 			vector<unique_ptr<ParsedExpression>> star_list;
 			bind_context.GenerateAllColumnExpressions(*current_star, star_list);
 
 			vector<Value> values;
-			for(auto &expr : star_list) {
+			for (auto &expr : star_list) {
 				values.emplace_back(expr->ToString());
 			}
 			D_ASSERT(!values.empty());
@@ -101,8 +103,8 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				throw BinderException(FormatError(*star, err));
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
-			for(idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = (ColumnRefExpression &) *expr;
+			for (idx_t i = 0; i < star_list.size(); i++) {
+				auto &colref = (ColumnRefExpression &)*expr;
 				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
 					continue;
 				}
@@ -113,15 +115,17 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				throw BinderException(FormatError(*star, err));
 			}
 			star_list = std::move(new_list);
-		} else if (val.type().id() == LogicalTypeId::LIST && ListType::GetChildType(val.type()).id() == LogicalTypeId::VARCHAR) {
+		} else if (val.type().id() == LogicalTypeId::LIST &&
+		           ListType::GetChildType(val.type()).id() == LogicalTypeId::VARCHAR) {
 			// list of varchar columns
 			auto &children = ListValue::GetChildren(val);
 			if (children.empty()) {
-				auto err = StringUtil::Format("Star expression \"%s\" resulted in an empty set of columns", star->ToString());
+				auto err =
+				    StringUtil::Format("Star expression \"%s\" resulted in an empty set of columns", star->ToString());
 				throw BinderException(FormatError(*star, err));
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
-			for(auto &child : children) {
+			for (auto &child : children) {
 				auto qname = QualifiedName::Parse(StringValue::Get(child));
 				vector<string> names;
 				if (!qname.catalog.empty()) {
@@ -135,7 +139,8 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			star_list = std::move(new_list);
 		} else {
-			throw BinderException(FormatError(*star, "COLUMNS expects either a VARCHAR argument (regex) or a LIST of VARCHAR (list of columns)"));
+			throw BinderException(FormatError(
+			    *star, "COLUMNS expects either a VARCHAR argument (regex) or a LIST of VARCHAR (list of columns)"));
 		}
 	}
 
@@ -154,4 +159,4 @@ void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_
 	}
 }
 
-}
+} // namespace duckdb
