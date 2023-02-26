@@ -72,24 +72,6 @@ struct RStringsType {
 	static LogicalType Get();
 };
 
-struct RProtector {
-	RProtector() : protect_count(0) {
-	}
-	~RProtector() {
-		if (protect_count > 0) {
-			UNPROTECT(protect_count);
-		}
-	}
-
-	SEXP Protect(SEXP sexp) {
-		protect_count++;
-		return PROTECT(sexp);
-	}
-
-private:
-	int protect_count;
-};
-
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction();
 };
