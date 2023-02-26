@@ -78,11 +78,10 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 
-		RProtector r;
 		auto res = make_unique<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
-		auto schema_ptr_sexp =
-		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema))));
+		cpp11::sexp schema_ptr_sexp =
+		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema)));
 
 		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 4);
 
