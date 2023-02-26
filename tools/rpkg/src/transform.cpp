@@ -70,8 +70,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
-		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
-		break;
+		return NEW_STRING(nrows);
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
