@@ -24639,7 +24639,7 @@ yyreduce:
 					PGAStar *star = makeNode(PGAStar);
 					star->expr = (yyvsp[(3) - (4)].node);
 					star->columns = true;
-
+					star->location = (yylsp[(1) - (4)]);
 					(yyval.node) = (PGNode *) star;
 				;}
     break;

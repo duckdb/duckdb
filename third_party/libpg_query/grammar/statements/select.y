@@ -2339,7 +2339,7 @@ a_expr:		c_expr									{ $$ = $1; }
 					PGAStar *star = makeNode(PGAStar);
 					star->expr = $3;
 					star->columns = true;
-
+					star->location = @1;
 					$$ = (PGNode *) star;
 				}
 			| '*' opt_except_list opt_replace_list

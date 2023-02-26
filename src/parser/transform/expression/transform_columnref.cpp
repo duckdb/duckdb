@@ -43,6 +43,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		result->expr = TransformExpression(star->expr);
 	}
 	result->columns = star->columns;
+	result->query_location = star->location;
 	return std::move(result);
 }
 

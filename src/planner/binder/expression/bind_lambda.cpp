@@ -48,7 +48,6 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// positional parameters as column references
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-
 		if (expr.params[i]->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
 			throw BinderException("Parameter must be a column name.");
 		}
@@ -80,7 +79,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	// bind the parameter expressions
 	for (idx_t i = 0; i < expr.params.size(); i++) {
 		auto result = BindExpression(&expr.params[i], depth, false);
-		D_ASSERT(!result.HasError());
+		if (result.HasError()) {
+			throw InternalException("Error during lambda binding: %s", result.error);
+		}
 	}
 
 	auto result = BindExpression(&expr.expr, depth, false);
