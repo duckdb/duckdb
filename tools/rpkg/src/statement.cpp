@@ -244,12 +244,12 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 
 struct AppendableRList {
 	AppendableRList() {
-		the_list = r.Protect(NEW_LIST(capacity));
+		the_list = NEW_LIST(capacity);
 	}
 	void PrepAppend() {
 		if (size >= capacity) {
 			capacity = capacity * 2;
-			SEXP new_list = r.Protect(NEW_LIST(capacity));
+			cpp11::sexp new_list = NEW_LIST(capacity);
 			D_ASSERT(new_list);
 			for (idx_t i = 0; i < size; i++) {
 				SET_VECTOR_ELT(new_list, i, VECTOR_ELT(the_list, i));
@@ -263,10 +263,9 @@ struct AppendableRList {
 		D_ASSERT(the_list != R_NilValue);
 		SET_VECTOR_ELT(the_list, size++, val);
 	}
-	SEXP the_list;
+	cpp11::sexp the_list;
 	idx_t capacity = 1000;
 	idx_t size = 0;
-	RProtector r;
 };
 
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
