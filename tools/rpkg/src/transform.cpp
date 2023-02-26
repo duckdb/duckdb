@@ -66,8 +66,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		dest_list.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
 		dest_list.attr(R_RowNamesSymbol) = {NA_INTEGER, -static_cast<int>(nrows)};
 
-		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
-		break;
+		return dest_list;
 	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
