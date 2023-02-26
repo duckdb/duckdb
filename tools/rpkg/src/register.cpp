@@ -187,8 +187,7 @@ private:
 	}
 
 	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {
-		RProtector r;
-		auto name_sexp = r.Protect(Rf_mkString(name.c_str()));
+		cpp11::sexp name_sexp = Rf_mkString(name.c_str());
 		return CallArrowFactory(functions, 1, name_sexp, op1, op2);
 	}
 
