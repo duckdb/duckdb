@@ -95,15 +95,14 @@ public:
 private:
 	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions,
 	                                      string &timezone_config) {
-		RProtector r;
-		auto column_name_sexp = r.Protect(Rf_mkString(column_name.c_str()));
-		auto column_name_expr = r.Protect(CreateFieldRef(functions, column_name_sexp));
+		cpp11::sexp column_name_sexp = Rf_mkString(column_name.c_str());
+		cpp11::sexp column_name_expr = CreateFieldRef(functions, column_name_sexp);
 
 		switch (filter.filter_type) {
 		case TableFilterType::CONSTANT_COMPARISON: {
 			auto constant_filter = (ConstantFilter &)filter;
-			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant, timezone_config));
-			auto constant_expr = r.Protect(CreateScalar(functions, constant_sexp));
+			cpp11::sexp constant_sexp = RApiTypes::ValueToSexp(constant_filter.constant, timezone_config);
+			cpp11::sexp constant_expr = CreateScalar(functions, constant_sexp);
 			switch (constant_filter.comparison_type) {
 			case ExpressionType::COMPARE_EQUAL: {
 				return CreateExpression(functions, "equal", column_name_expr, constant_expr);
@@ -132,7 +131,7 @@ private:
 			return CreateExpression(functions, "is_null", column_name_expr);
 		}
 		case TableFilterType::IS_NOT_NULL: {
-			auto is_null_expr = r.Protect(CreateExpression(functions, "is_null", column_name_expr));
+			cpp11::sexp is_null_expr = CreateExpression(functions, "is_null", column_name_expr);
 			return CreateExpression(functions, "invert", is_null_expr);
 		}
 		case TableFilterType::CONJUNCTION_AND: {
