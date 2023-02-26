@@ -165,15 +165,12 @@ private:
 
 	static SEXP TransformFilter(TableFilterSet &filter_collection, std::unordered_map<idx_t, string> &columns,
 	                            SEXP functions, string &timezone_config) {
-		RProtector r;
-
 		auto fit = filter_collection.filters.begin();
-		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
+		cpp11::sexp res = TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config);
 		fit++;
 		for (; fit != filter_collection.filters.end(); ++fit) {
-			SEXP rhs =
-			    r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
-			res = r.Protect(CreateExpression(functions, "and_kleene", res, rhs));
+			cpp11::sexp rhs = TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config);
+			res = CreateExpression(functions, "and_kleene", res, rhs);
 		}
 		return res;
 	}
