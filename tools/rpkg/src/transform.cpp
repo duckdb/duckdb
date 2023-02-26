@@ -24,8 +24,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
-		break;
+		return NEW_LOGICAL(nrows);
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
