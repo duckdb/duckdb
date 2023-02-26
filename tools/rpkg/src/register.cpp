@@ -52,11 +52,10 @@ public:
 	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
-		RProtector r;
 		auto res = make_unique<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
-		auto stream_ptr_sexp =
-		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
+		cpp11::sexp stream_ptr_sexp =
+		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream)));
 
 		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 0);
 
@@ -66,12 +65,11 @@ public:
 		if (column_list.empty()) {
 			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
-			auto projection_sexp = r.Protect(StringsToSexp(column_list));
-			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
+			cpp11::sexp projection_sexp = StringsToSexp(column_list);
+			cpp11::sexp filters_sexp = Rf_ScalarLogical(true);
 			if (filters && !filters->filters.empty()) {
 				auto timezone_config = factory->config.ExtractTimezone();
-				filters_sexp =
-				    r.Protect(TransformFilter(*filters, projection_map, factory->export_fun, timezone_config));
+				filters_sexp = TransformFilter(*filters, projection_map, factory->export_fun, timezone_config);
 			}
 			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
