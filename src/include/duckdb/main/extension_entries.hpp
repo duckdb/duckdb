@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/extension_functions.hpp
+// duckdb/main/extension_entries.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-struct ExtensionFunction {
-	char function[48];
+struct ExtensionEntry {
+	char name[48];
 	char extension[48];
 };
 
-static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
+static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json"},
     {"array_to_json", "json"},
     {"create_fts_index", "fts"},
@@ -30,9 +30,9 @@ static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"from_json", "json"},
     {"from_json_strict", "json"},
     {"from_substrait", "substrait"},
+    {"from_substrait_json", "substrait"},
     {"get_substrait", "substrait"},
     {"get_substrait_json", "substrait"},
-    {"from_substrait_json", "substrait"},
     {"icu_calendar_names", "icu"},
     {"icu_sort_key", "icu"},
     {"json", "json"},
@@ -87,5 +87,26 @@ static constexpr ExtensionFunction EXTENSION_FUNCTIONS[] = {
     {"visualize_diff_profiling_output", "visualizer"},
     {"visualize_json_profiling_output", "visualizer"},
     {"visualize_last_profiling_output", "visualizer"},
+};
+
+static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"binary_as_string", "parquet"},
+    {"calendar", "icu"},
+    {"http_retries", "httpfs"},
+    {"http_retry_backoff", "httpfs"},
+    {"http_retry_wait_ms", "httpfs"},
+    {"http_timeout", "httpfs"},
+    {"s3_access_key_id", "httpfs"},
+    {"s3_endpoint", "httpfs"},
+    {"s3_region", "httpfs"},
+    {"s3_secret_access_key", "httpfs"},
+    {"s3_session_token", "httpfs"},
+    {"s3_uploader_max_filesize", "httpfs"},
+    {"s3_uploader_max_parts_per_file", "httpfs"},
+    {"s3_uploader_thread_limit", "httpfs"},
+    {"s3_url_style", "httpfs"},
+    {"s3_use_ssl", "httpfs"},
+    {"sqlite_all_varchar", "sqlite_scanner"},
+    {"timezone", "icu"},
 };
 } // namespace duckdb
