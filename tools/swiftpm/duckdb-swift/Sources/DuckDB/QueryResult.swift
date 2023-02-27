@@ -44,7 +44,7 @@ public final class QueryResult {
     }
     guard status == .success else {
       let error = duckdb_result_error(ptr).map(String.init(cString:))
-      throw DatabaseError.queryError(reason: error)
+      throw DatabaseError.connectionQueryError(reason: error)
     }
   }
   
@@ -52,7 +52,7 @@ public final class QueryResult {
     let status = prepared.withCPreparedStatement { duckdb_execute_prepared($0, ptr) }
     guard status == .success else {
       let error = duckdb_result_error(ptr).map(String.init(cString:))
-      throw DatabaseError.queryError(reason: error)
+      throw DatabaseError.preparedStatementQueryError(reason: error)
     }
   }
   

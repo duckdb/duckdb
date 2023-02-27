@@ -28,9 +28,10 @@ enum DatabaseError: Error {
   case appenderFailedToEndRow(reason: String?)
   case appenderFailedToFlush(reason: String?)
   case appenderFailedToInitialize(reason: String?)
-  case failedToCreatePreparedStatement(reason: String?)
-  case failedToBindParameter(reason: String?)
-  case failedToOpenDatabase(reason: String?)
-  case failedToOpenConnection
-  case queryError(reason: String?)
+  case connectionFailedToInitialize
+  case connectionQueryError(reason: String?)
+  case databaseFailedToInitialize(reason: String?)
+  case preparedStatementFailedToInitialize(reason: String?)
+  case preparedStatementFailedToBindParameter(reason: String?)
+  case preparedStatementQueryError(reason: String?)
 }
