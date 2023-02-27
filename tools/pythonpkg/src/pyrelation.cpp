@@ -124,6 +124,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+	if (!rel) {
+		return nullptr;
+	}
 	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
@@ -637,22 +640,14 @@ void DuckDBPyRelation::Close() {
 	result->Close();
 }
 
-static bool ContainsColumnByName(const string &name, const vector<ColumnDefinition> &columns) {
-	for (auto &column : columns) {
-		if (column.Name() == name) {
-			return true;
-		}
-	}
-	return false;
+bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
+	return std::find(names.begin(), names.end(), name) != names.end();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) {
-	if (!rel) {
-		return nullptr;
-	}
-	auto &columns = rel->Columns();
-	if (!ContainsColumnByName(name, columns)) {
-		return nullptr;
+	// TODO: support fetching a result containing only column 'name' from a value_relation
+	if (!rel || !ContainsColumnByName(name)) {
+		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
 	}
 	return make_unique<DuckDBPyRelation>(rel->Project({name}));
 }

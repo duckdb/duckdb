@@ -260,6 +260,7 @@ private:
 	void AssertRelation() const;
 	void ExecuteOrThrow();
 	unique_ptr<QueryResult> ExecuteInternal();
+	bool ContainsColumnByName(const string &name) const;
 
 private:
 	shared_ptr<Relation> rel;
