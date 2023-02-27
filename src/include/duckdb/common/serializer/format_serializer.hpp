@@ -14,28 +14,9 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-
-#include <type_traits>
+#include "duckdb/common/serializer/serialization_traits.hpp"
 
 namespace duckdb {
-
-class FormatSerializer; // Forward declare
-
-// Type trait helpers for anything implementing a `void FormatSerialize(FormatSerializer &FormatSerializer)`
-template <class...>
-using void_t = void; // Backport to c++11
-
-template <typename SELF, typename = void_t<>>
-struct has_serialize : std::false_type {};
-
-template <typename SELF>
-struct has_serialize<SELF, void_t<decltype(std::declval<SELF>().FormatSerialize(std::declval<FormatSerializer &>()))>>
-    : std::true_type {};
-
-template <typename SELF>
-constexpr bool has_serialize_v() {
-	return has_serialize<SELF>::value;
-}
 
 class FormatSerializer {
 protected:
@@ -97,7 +78,6 @@ public:
 	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
 	WriteOptionalProperty(const char *tag, T ptr) {
 		WriteTag(tag);
-		BeginWriteOptional(false);
 		if(ptr == nullptr) {
 			BeginWriteOptional(false);
 			EndWriteOptional(false);
@@ -113,7 +93,6 @@ public:
 	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
 	WriteOptionalProperty(const char *tag, T& ptr) {
 		WriteTag(tag);
-		BeginWriteOptional(false);
 		if(ptr == nullptr) {
 			BeginWriteOptional(false);
 			EndWriteOptional(false);

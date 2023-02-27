@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,7 @@ public:
 	void AddDistinct();
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,

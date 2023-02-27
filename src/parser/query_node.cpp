@@ -175,7 +175,7 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.WriteSerializableList(modifiers);
 	// cte_map
 
-	/*
+
 	writer.WriteField<uint32_t>((uint32_t)cte_map.map.size());
 	auto &serializer = writer.GetSerializer();
 	for (auto &cte : cte_map.map) {
@@ -184,7 +184,7 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 		cte.second->query->Serialize(serializer);
 	}
 	Serialize(writer);
-	*/
+
 	writer.Finalize();
 }
 
@@ -192,7 +192,13 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("type", type, duckdb::ToString);
 	serializer.WriteProperty("modifiers", modifiers);
-	//serializer.WriteProperty("cte_map", cte_map);
+	serializer.WriteProperty("cte_map", cte_map);
+}
+
+unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	unique_ptr<QueryNode> result;
+
+	return result;
 }
 
 unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {

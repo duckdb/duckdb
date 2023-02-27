@@ -1,211 +1,129 @@
-#include "json_executors.hpp"
+#include "json_functions.hpp"
+#include "json_serializer.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
-struct JsonSerializer : FormatSerializer {
-private:
-	yyjson_mut_doc *doc;
-	yyjson_mut_val *current_tag;
-	vector<yyjson_mut_val *> stack;
+
+struct JsonSerializeBindData : public FunctionData {
 	bool skip_if_null = false;
+	bool skip_if_empty = false;
 
-	inline yyjson_mut_val *Current() {
-		return stack.back();
-	};
-
-	// Either adds a value to the current object with the current tag, or appends it to the current array
-	void push_value(yyjson_mut_val *val) {
-
-		auto current = Current();
-		// Array case, just append the value
-		if (yyjson_mut_is_arr(current)) {
-			yyjson_mut_arr_append(current, val);
-		}
-		// Object case, use the currently set tag.
-		else if (yyjson_mut_is_obj(current)) {
-			yyjson_mut_obj_add(current, current_tag, val);
-		}
-		// Else throw
-		else {
-			throw InternalException("Cannot add value to non-array/object json value");
-		}
-	}
-
+	JsonSerializeBindData(bool skip_if_null_p, bool skip_if_empty_p)
+	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p) { }
 public:
-	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null) : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null) {
-		serialize_enum_as_string = true;
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty);
 	}
-
-	yyjson_mut_val *GetRootObject() {
-		D_ASSERT(stack.size() == 1); // or we forgot to pop somewhere
-		return stack.front();
-	};
-
-	void BeginWriteOptional(bool present) override {
-		// Always write the tag for optional values, just set the value to null if not present.
-		if(!present) {
-			WriteNull();
-		}
-		// TODO: allow skipping writing null properties
-	}
-
-	void BeginWriteList(idx_t count) override {
-		auto new_value = yyjson_mut_arr(doc);
-		push_value(new_value);
-		stack.push_back(new_value);
-	}
-
-	void EndWriteList(idx_t count) override {
-		stack.pop_back();
-	}
-
-	void BeginWriteMap(idx_t count) override {
-		auto new_value = yyjson_mut_obj(doc);
-		push_value(new_value);
-		stack.push_back(new_value);
-	}
-
-	void EndWriteMap(idx_t count) override {
-		stack.pop_back();
-	}
-
-	void BeginWriteObject() override {
-		auto new_value = yyjson_mut_obj(doc);
-		push_value(new_value);
-		stack.push_back(new_value);
-	}
-
-	void EndWriteObject() override {
-		stack.pop_back();
-	}
-
-	void WriteTag(const char *tag) override {
-		current_tag = yyjson_mut_strcpy(doc, tag);
-	}
-
-	void WriteNull() override {
-	    auto val = yyjson_mut_null(doc);
-		push_value(val);
-	}
-
-	void WriteValue(uint8_t value) override {
-		auto val = yyjson_mut_uint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(int8_t value) override {
-		auto val = yyjson_mut_sint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(uint16_t value) override {
-		auto val = yyjson_mut_uint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(int16_t value) override {
-		auto val = yyjson_mut_sint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(uint32_t value) override {
-		auto val = yyjson_mut_uint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(int32_t value) override {
-		auto val = yyjson_mut_int(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(uint64_t value) override {
-		auto val = yyjson_mut_uint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(int64_t value) override {
-		auto val = yyjson_mut_sint(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(hugeint_t value) override {
-		throw NotImplementedException("Cannot serialize hugeint to json yet!");
-	}
-
-	void WriteValue(float value) override {
-		auto val = yyjson_mut_real(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(double value) override {
-		auto val = yyjson_mut_real(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(interval_t value) override {
-		throw NotImplementedException("Cannot serialize interval_t to json yet!");
-	}
-
-	void WriteValue(const string &value) override {
-		auto val = yyjson_mut_strcpy(doc, value.c_str());
-		push_value(val);
-	}
-
-	void WriteValue(const string_t value) override {
-		auto str = value.GetString();
-		auto val = yyjson_mut_strcpy(doc, str.c_str());
-		push_value(val);
-	}
-
-	void WriteValue(const char *value) override {
-		auto val = yyjson_mut_strcpy(doc, value);
-		push_value(val);
-	}
-
-	void WriteValue(bool value) override {
-		auto val = yyjson_mut_bool(doc, value);
-		push_value(val);
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 };
 
-static yyjson_mut_val *Serialize(SelectStatement &stmt, yyjson_mut_doc *doc) {
-	auto serialize = JsonSerializer(doc, false);
-	stmt.FormatSerialize(serialize);
-	return serialize.GetRootObject();
+static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.empty()) {
+		throw BinderException("json_serialize_sql takes at least one argument");
+	}
+
+	if(arguments[0]->return_type != LogicalType::VARCHAR) {
+		throw InvalidTypeException("json_serialize_sql first argument must be a VARCHAR");
+	}
+
+	// Optional arguments
+
+	bool skip_if_null = false;
+	bool skip_if_empty = false;
+
+	if (arguments.size() > 1 && arguments.size() < 4) {
+		for(idx_t i = 1; i < arguments.size(); i++) {
+			auto &arg = arguments[i];
+			if (arg->alias == "skip_if_null") {
+				if (arg->HasParameter()) {
+					throw ParameterNotResolvedException();
+				}
+				if (!arg->IsFoldable()) {
+					throw InvalidInputException("skip_if_null argument must be constant");
+				}
+				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+					throw InvalidTypeException("skip_if_null argument must be a boolean");
+				}
+				skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			} else if(arg->alias == "skip_if_empty") {
+				if (arg->HasParameter()) {
+					throw ParameterNotResolvedException();
+				}
+				if (!arg->IsFoldable()) {
+					throw InvalidInputException("skip_if_empty argument must be constant");
+				}
+				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+					throw InvalidTypeException("skip_if_empty argument must be a boolean");
+				}
+				skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			}
+		}
+	}
+	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty);
 }
 
+
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = local_state.json_allocator.GetYYJSONAllocator();
 	auto &inputs = args.data[0];
 
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	const auto &info = (JsonSerializeBindData &)*func_expr.bind_info;
+
+
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
-		auto parser = Parser();
-		parser.ParseQuery(input.GetString());
 
 		auto doc = JSONCommon::CreateDocument(alc);
-		auto arr = yyjson_mut_arr(doc);
-		yyjson_mut_doc_set_root(doc, arr);
+		auto result_obj = yyjson_mut_obj(doc);
+		yyjson_mut_doc_set_root(doc, result_obj);
 
-		for (auto &statement : parser.statements) {
-			if (statement->type != StatementType::SELECT_STATEMENT) {
-				throw NotImplementedException("Only SELECT statements can be serialized to json!");
+		try {
+			auto parser = Parser();
+			parser.ParseQuery(input.GetString());
+
+			auto statements_arr = yyjson_mut_arr(doc);
+
+			for (auto &statement : parser.statements) {
+				if (statement->type != StatementType::SELECT_STATEMENT) {
+					throw NotImplementedException("Only SELECT statements can be serialized to json!");
+				}
+				auto &select = (SelectStatement &)*statement;
+				auto serializer = JsonSerializer(doc, info.skip_if_null, info.skip_if_empty);
+				select.FormatSerialize(serializer);
+				auto json = serializer.GetRootObject();
+
+				yyjson_mut_arr_append(statements_arr, json);
 			}
-			auto &select = (SelectStatement &)*statement;
-			auto json = Serialize(select, doc);
-			yyjson_mut_arr_append(arr, json);
-		}
 
-		return JSONCommon::WriteVal(arr, alc);
+			yyjson_mut_obj_add_false(doc, result_obj, "error");
+			yyjson_mut_obj_add_val(doc, result_obj, "statements", statements_arr);
+			return JSONCommon::WriteVal(result_obj, alc);
+
+		} catch (Exception &exception) {
+			yyjson_mut_obj_add_true(doc, result_obj, "error");
+			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type", StringUtil::Lower(exception.ExceptionTypeToString(exception.type)).c_str());
+			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", exception.RawMessage().c_str());
+			return JSONCommon::WriteVal(result_obj, alc);
+		}
 	});
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
-	auto func = ScalarFunction("json_serialize_sql", {LogicalType::VARCHAR}, JSONCommon::JSONType(),
-	                           JsonSerializeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
-	return CreateScalarFunctionInfo(func);
+	ScalarFunctionSet set("json_serialize_sql");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(),
+	                               JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
+	                                   JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
+	                               JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+
+	return CreateScalarFunctionInfo(set);
 }
 
 } // namespace duckdb

@@ -13,6 +13,8 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 
 namespace duckdb {
 
@@ -44,5 +46,7 @@ public:
 	bool Equals(const SQLStatement *other) const;
 
 	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<SelectStatement> FormatDeserialize(FormatDeserializer &deserializer);
+
 };
 } // namespace duckdb
