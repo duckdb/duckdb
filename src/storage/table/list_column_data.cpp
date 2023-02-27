@@ -213,7 +213,6 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	}
 
 	UnifiedVectorFormat vdata;
-	vdata.validity.SetAllValid(count);
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = (data_ptr_t)append_offsets.get();
 
