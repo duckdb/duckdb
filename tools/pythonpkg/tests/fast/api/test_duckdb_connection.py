@@ -197,6 +197,13 @@ class TestDuckDBConnection(object):
     def test_register(self):
         assert None != duckdb.register
 
+    def test_register_relation(self):
+        rel = duckdb.sql('select [5,4,3]')
+        duckdb.register("relation", rel)
+
+        duckdb.sql("create table tbl as select * from relation")
+        assert duckdb.table('tbl').fetchall() == [([5, 4, 3],)]
+
     def test_table(self):
         duckdb.execute("create table tbl as select 1")
         assert [(1,)] == duckdb.table("tbl").fetchall()
