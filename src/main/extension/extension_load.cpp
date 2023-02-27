@@ -22,7 +22,8 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension, ExtensionInitResult &result, string &error) {
+bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
+                                     ExtensionInitResult &result, string &error) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
@@ -188,7 +189,11 @@ void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
-		// FIXME: install extension
+		// the extension load failed - try installing the extension
+		if (!config.file_system) {
+			throw InternalException("Attempting to install an extension without a file system");
+		}
+		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
 		// try loading again
 		if (!TryInitialLoad(config, nullptr, extension, res, error)) {
 			throw IOException(error);
