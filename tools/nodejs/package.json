@@ -41,7 +41,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cwida/duckdb.git"
+    "url": "git+https://github.com/duckdb/duckdb.git"
   },
   "ts-node": {
     "require": [
@@ -56,7 +56,7 @@
   "author": "Hannes Mühleisen",
   "license": "MPL-2.0",
   "bugs": {
-    "url": "https://github.com/cwida/duckdb/issues"
+    "url": "https://github.com/duckdb/duckdb/issues"
   },
   "homepage": "https://www.duckdb.org"
 }
