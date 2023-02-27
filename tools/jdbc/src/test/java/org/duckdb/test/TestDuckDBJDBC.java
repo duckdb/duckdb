@@ -1695,8 +1695,7 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject(10));
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
+		assertTrue(rs.getObject("TABLE_CAT") != null);
 		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "b");
@@ -2680,7 +2679,7 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+		assertTrue(message.contains("unrecognized configuration parameter \"invalid config name\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {

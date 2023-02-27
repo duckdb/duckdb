@@ -33,7 +33,7 @@ statement ok
 CREATE TABLE dates(d DATE);
 
 statement ok
-COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/a?/*.csv' (AUTO_DETECT 1);
+COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/a[123]/*.csv' (AUTO_DETECT 1);
 
 # simple globbing for both url styles
 foreach urlstyle path vhost
