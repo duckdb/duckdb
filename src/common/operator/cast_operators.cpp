@@ -1425,6 +1425,21 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	return result;
 }
 
+template <>
+duckdb::string_t CastBlobToBit::Operation(duckdb::string_t input, Vector &vector) {
+	idx_t result_size = input.GetSize();
+	if (result_size == 0) {
+		throw ConversionException("Cannot cast empty string to BIT");
+	}
+
+	string_t result = StringVector::EmptyString(vector, result_size + 1);
+
+	*result.GetDataWriteable() = 0;
+	memcpy(result.GetDataWriteable() + 1, input.GetDataUnsafe(), result_size);
+
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Bit
 //===--------------------------------------------------------------------===//
@@ -1435,6 +1450,16 @@ string_t CastFromBit::Operation(string_t input, Vector &vector) {
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Bit::ToString(input, result.GetDataWriteable());
 	result.Finalize();
+
+	return result;
+}
+
+template <>
+duckdb::string_t CastBitToBlob::Operation(duckdb::string_t input, Vector &vector) {
+	idx_t result_size = input.GetSize();
+	string_t result = StringVector::EmptyString(vector, result_size - 1);
+
+	memcpy(result.GetDataWriteable(), input.GetDataUnsafe() + 1, result_size - 1);
 
 	return result;
 }
@@ -1475,7 +1500,6 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	if (!Bit::TryGetBitStringSize(input, result_size, error_message)) {
 		return false;
 	}
-
 	result = StringVector::EmptyString(result_vector, result_size);
 	Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();

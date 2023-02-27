@@ -10,7 +10,7 @@ BoundCastInfo DefaultCasts::BitCastSwitch(BindCastInput &input, const LogicalTyp
 		// bit to varchar
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::CastFromBit>);
 	case LogicalTypeId::BLOB:
-		return DefaultCasts::ReinterpretCast;
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::CastBitToBlob>);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

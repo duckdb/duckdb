@@ -23,13 +23,12 @@ COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
 query I nosort alltypes
 SELECT * REPLACE (
 	hugeint::DOUBLE AS hugeint,
+	bit::BLOB as bit
 )
 FROM all_types
 ----
 
 query I nosort alltypes
-SELECT * REPLACE (
-	bit::BIT AS bit
-)
+SELECT *
 FROM '__TEST_DIR__/all_types.parquet'
 ----
