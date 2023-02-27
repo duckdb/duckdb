@@ -178,20 +178,16 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
-                                                     list children, list partitions,
-                                                     duckdb::rel_extptr_t order,
-                                                     std::string window_boundary_start,
-                                                     std::string window_boundary_end,
-                                                     duckdb::rel_extptr_t start_expr,
-                                                     duckdb::rel_extptr_t end_expr,
-                                                     duckdb::rel_extptr_t offset_expr,
-                                                     duckdb::rel_extptr_t default_expr) {
+                                                     list children, list partitions, duckdb::rel_extptr_t order,
+                                                     std::string window_boundary_start, std::string window_boundary_end,
+                                                     duckdb::expr_extptr_t filter_expression,
+                                                     duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
+                                                     duckdb::expr_extptr_t offset_expr,
+                                                     duckdb::expr_extptr_t default_expr) {
 	auto children_ = vector<unique_ptr<ParsedExpression>>();
 	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
 	auto orders_ = shared_ptr<OrderRelation>();
-	unique_ptr<ParsedExpression> filter_expr_ = nullptr;
-	WindowBoundary start_ = WindowBoundary::UNBOUNDED_PRECEDING;
-	WindowBoundary end_ = WindowBoundary::CURRENT_ROW_RANGE;
+	unique_ptr<ParsedExpression> filter_expr_ = filter_expression ? filter_expression->Copy() : nullptr;
 	vector<unique_ptr<ParsedExpression>> start_end_offset_default_;
 	for (expr_extptr_t child : children) {
 		children_.emplace_back(child->Copy());
@@ -204,15 +200,15 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 		orders_ = o_relation;
 	}
 
-	auto res = std::make_shared<WindowRelation>(rel->rel,
-	                                            window_function,
-	                                            std::move(children_),
-	                                            std::move(partitions_),
-	                                            std::move(orders_),
-	                                            filter_expr_,
-	                                            start_,
-	                                            end_,
-	                                            std::move(start_end_offset_default_));
+	unique_ptr<ParsedExpression> start_expr_ = start_expr ? start_expr->Copy() : nullptr;
+	unique_ptr<ParsedExpression> end_expr_ = end_expr ? end_expr->Copy() : nullptr;
+	unique_ptr<ParsedExpression> offset_expr_ = offset_expr ? offset_expr->Copy() : nullptr;
+	unique_ptr<ParsedExpression> default_expr_ = default_expr ? default_expr->Copy() : nullptr;
+
+	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, std::move(children_), std::move(partitions_),
+	                                            std::move(orders_), std::move(filter_expr_), window_boundary_start,
+	                                            window_boundary_end, std::move(start_expr_), std::move(end_expr_),
+	                                            std::move(offset_expr_), std::move(default_expr_));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 
