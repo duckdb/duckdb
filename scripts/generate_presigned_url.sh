@@ -14,8 +14,9 @@ docker compose -f scripts/presigned_url.yml -p duckdb-mc up -d
 sleep 3
 
 # 3 
-# duckdb-mc_minio_mc-[1-9]* or duckdb-mc_minio_mc_[1-9]*
-mc_container_name=$(docker ps -a --format '{{.Names}}' | grep -m 1 "duckdb-mc_minio_mc")
+# duckdb-mc-minio_mc-[1-9]* or duckdb-mc_minio_mc_[1-9]*
+mc_container_name=$(docker ps -a --format '{{.Names}}' | grep -m 1 "duckdb-mc")
+echo $mc_container_name
 
 export S3_SMALL_CSV_PRESIGNED_URL=$(docker logs $mc_container_name | grep -m 1 'Share:.*web_page\.csv' | grep -o 'http[s]\?://[^ ]\+')
 echo $S3_SMALL_CSV_PRESIGNED_URL
