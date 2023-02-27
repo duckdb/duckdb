@@ -62,7 +62,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	state.child_states.push_back(std::move(validity_state));
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
-	auto child_offset = FetchListOffset(row_idx - 1);
+	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
 
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	ColumnScanState child_state;
