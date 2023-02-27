@@ -27,4 +27,14 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id)
 	return segment;
 }
 
+LeafSegment *LeafSegment::GetTail(ART &art) {
+	auto segment = this;
+	auto position = next;
+	while (next != DConstants::INVALID_INDEX) {
+		segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+		position = segment->next;
+	}
+	return segment;
+}
+
 } // namespace duckdb

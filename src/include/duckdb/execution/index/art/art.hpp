@@ -128,11 +128,11 @@ public:
 
 private:
 	//! Insert a row ID into a leaf
-	bool InsertToLeaf(Leaf &leaf, row_t row_id);
+	bool InsertToLeaf(Leaf &leaf, const row_t &row_id);
 	//! Insert a key into the tree
-	bool Insert(Node *&node, Key &key, idx_t depth, row_t row_id);
+	bool Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id);
 	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself
-	void Erase(Node *&node, Key &key, idx_t depth, row_t row_id);
+	void Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id);
 	//! Find the node with a matching key, or return nullptr if not found
 	Leaf *Lookup(Node *node, Key &key, idx_t depth);
 	//! Returns all row IDs belonging to a key greater (or equal) than the search key

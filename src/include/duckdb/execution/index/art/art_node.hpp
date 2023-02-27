@@ -84,21 +84,21 @@ public:
 	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode GetChild(ART &art, const idx_t &pos);
+	ARTNode GetChild(ART &art, const idx_t &pos) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	idx_t GetChildPos(ART &art, const uint8_t &byte);
+	idx_t GetChildPos(ART &art, const uint8_t &byte) const;
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive);
+	idx_t GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	idx_t GetMinPos(ART &art);
+	idx_t GetMinPos(ART &art) const;
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
-	idx_t GetNextPos(ART &art, idx_t pos);
+	idx_t GetNextPos(ART &art, idx_t pos) const;
 	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	idx_t GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte);
+	idx_t GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) const;
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -107,11 +107,13 @@ public:
 	void Deserialize(ART &art, idx_t block_id, idx_t offset);
 
 	//! Returns the string representation of a node
-	string ToString(ART &art);
+	string ToString(ART &art) const;
 	//! Returns the capacity of a node
-	idx_t GetCapacity();
+	idx_t GetCapacity() const;
 	//! Returns a pointer to the prefix of a node
-	Prefix *GetPrefix(ART &art);
+	Prefix *GetPrefix(ART &art) const;
+	//! Returns the type stored in the [leftmost - 1, leftmost - 3] bits of the ART node pointer
+	ARTNodeType GetARTNodeType() const;
 	//! Returns the matching node type for a given count
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 
@@ -124,10 +126,6 @@ public:
 	idx_t MemorySize(ART &art, const bool &recurse);
 	//! Returns whether the child at pos is in-memory
 	bool ChildIsInMemory(ART &art, const idx_t &pos);
-
-private:
-	//! Returns the type stored in the [leftmost - 1, leftmost - 3] bits of the ART node pointer
-	ARTNodeType GetARTNodeType();
 };
 
 } // namespace duckdb

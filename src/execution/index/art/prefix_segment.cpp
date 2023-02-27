@@ -30,4 +30,15 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &b
 	return segment;
 }
 
+PrefixSegment *PrefixSegment::GetTail(ART &art, idx_t &position) {
+	auto segment = this;
+	auto next_position = next;
+	while (next != DConstants::INVALID_INDEX) {
+		position = segment->next;
+		segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(next_position);
+		next_position = segment->next;
+	}
+	return segment;
+}
+
 } // namespace duckdb

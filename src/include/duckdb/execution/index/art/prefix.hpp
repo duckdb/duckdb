@@ -42,14 +42,19 @@ public:
 	//! Initialize a prefix from an ART key
 	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
 
-	//! Get the byte at pos
-	uint8_t GetByte(ART &art, const idx_t &pos);
 	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
 	void Move(Prefix &other);
 	//! Append a prefix to this prefix
 	void Append(ART &art, Prefix &other);
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
 	void Concatenate(ART &art, const uint8_t &byte, Prefix &other);
+	//! Removes the first n bytes, and returns the new first byte
+	uint8_t Reduce(ART &art, const idx_t &n);
+
+	//! Get the byte at position
+	uint8_t GetByte(ART &art, const idx_t &position) const;
+	//! Compare the key with the prefix of the node, return the position where they mismatch
+	uint32_t KeyMismatchPosition(ART &art, const Key &key, const uint32_t &depth) const;
 
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
@@ -58,6 +63,8 @@ public:
 	idx_t MemorySize();
 
 private:
+	//! Delete all prefix segments (if not inlined) and reset all fields
+	void Delete(ART &art);
 	//! Returns whether this prefix is inlined
 	bool IsInlined() const;
 	//! Moves all inlined bytes onto a prefix segment, does not change the size

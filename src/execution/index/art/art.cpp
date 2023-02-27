@@ -367,7 +367,8 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 
-	// TODO: track old vs. new memory size
+	// TODO: verify and track old vs. new memory size
+
 	if (failed_index != DConstants::INVALID_INDEX) {
 		return false;
 	}
@@ -395,10 +396,10 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
+bool ART::InsertToLeaf(Leaf &leaf, const row_t &row_id) {
 #ifdef DEBUG
 	for (idx_t k = 0; k < leaf.count; k++) {
-		D_ASSERT(leaf.GetRowId(k) != row_id);
+		D_ASSERT(leaf.GetRowID(*this, k) != row_id);
 	}
 #endif
 	if (IsUnique() && leaf.count != 0) {
@@ -408,86 +409,88 @@ bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	return true;
 }
 
-bool ART::Insert(Node *&node, Key &key, idx_t depth, row_t row_id) {
+bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id) {
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = Leaf::New(key, depth, row_id);
-		IncreaseMemorySize(node->MemorySize(*this, false));
+		node = ARTNode(*this, ARTNodeType::NLeaf);
+		Leaf::Initialize(*this, node, key, depth, row_id);
 		return true;
 	}
 
-	if (node->type == NodeType::NLeaf) {
-		// replace leaf with Node4 and store both leaves in it
-		// or add a row ID to a leaf, if they have the same key
-		auto leaf = (Leaf *)node;
+	auto node_prefix = node.GetPrefix(*this);
+	if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+		// add a row ID to a leaf, if they have the same key
+		auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
 		uint32_t new_prefix_length = 0;
 
 		// FIXME: this code (if and while) can be optimized, less branching, see Construct
 		// leaf node is already there (its key matches the current key), update row_id vector
-		if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
+		if (new_prefix_length == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
-		while (leaf->prefix[new_prefix_length] == key[depth + new_prefix_length]) {
+		while (leaf->prefix.GetByte(*this, new_prefix_length) == key[depth + new_prefix_length]) {
 			new_prefix_length++;
 			// leaf node is already there (its key matches the current key), update row_id vector
-			if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
+			if (new_prefix_length == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
 
-		Node *new_node = Node4::New();
-		new_node->prefix = Prefix(key, depth, new_prefix_length);
-		IncreaseMemorySize(new_node->MemorySize(*this, false));
+		// replace leaf with Node4 and store both leaves in it
+		ARTNode new_n4_node(*this, ARTNodeType::N4);
+		auto new_n4 = Node4::Initialize(*this, new_n4_node);
+		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
 
-		auto key_byte = node->prefix.Reduce(*this, new_prefix_length);
-		Node4::InsertChild(*this, new_node, key_byte, node);
+		auto key_byte = node_prefix->Reduce(*this, new_prefix_length);
+		Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
-		Node *leaf_node = Leaf::New(key, depth + new_prefix_length + 1, row_id);
-		Node4::InsertChild(*this, new_node, key[depth + new_prefix_length], leaf_node);
-		IncreaseMemorySize(leaf_node->MemorySize(*this, false));
+		ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+		Leaf::Initialize(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
+		Node4::InsertChild(*this, new_n4_node, key[depth + new_prefix_length], leaf_node);
 
-		node = new_node;
+		node = new_n4_node;
 		return true;
 	}
 
 	// handle prefix of inner node
-	if (node->prefix.Size()) {
+	if (node_prefix->count) {
 
-		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
-		if (mismatch_pos != node->prefix.Size()) {
+		auto mismatch_position = node_prefix->KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position != node_prefix->count) {
+
 			// prefix differs, create new node
-			Node *new_node = Node4::New();
-			new_node->prefix = Prefix(key, depth, mismatch_pos);
-			IncreaseMemorySize(new_node->MemorySize(*this, false));
+			ARTNode new_n4_node(*this, ARTNodeType::N4);
+			auto new_n4 = Node4::Initialize(*this, new_n4_node);
+			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
-			// break up prefix
-			auto key_byte = node->prefix.Reduce(*this, mismatch_pos);
-			Node4::InsertChild(*this, new_node, key_byte, node);
+			auto key_byte = node_prefix->Reduce(*this, mismatch_position);
+			Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
-			Node *leaf_node = Leaf::New(key, depth + mismatch_pos + 1, row_id);
-			Node4::InsertChild(*this, new_node, key[depth + mismatch_pos], leaf_node);
-			IncreaseMemorySize(leaf_node->MemorySize(*this, false));
+			ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+			Leaf::Initialize(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
+			Node4::InsertChild(*this, new_n4_node, key[depth + mismatch_position], leaf_node);
 
-			node = new_node;
+			node = new_n4_node;
 			return true;
 		}
-		depth += node->prefix.Size();
+		depth += node_prefix->count;
 	}
 
 	// recurse
 	D_ASSERT(depth < key.len);
-	idx_t pos = node->GetChildPos(key[depth]);
-	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(*this, pos);
-		bool insertion_result = Insert(child, key, depth + 1, row_id);
-		node->ReplaceChildPointer(pos, child);
-		return insertion_result;
+	idx_t position = node.GetChildPos(*this, key[depth]);
+	if (position != DConstants::INVALID_INDEX) {
+		auto child = node.GetChild(*this, position);
+		bool success = Insert(child, key, depth + 1, row_id);
+		node.ReplaceChild(*this, position, child);
+		return success;
 	}
 
-	Node *leaf_node = Leaf::New(key, depth + 1, row_id);
-	Node::InsertChild(*this, node, key[depth], leaf_node);
-	IncreaseMemorySize(leaf_node->MemorySize(*this, false));
+	// insert at position
+	ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+	Leaf::Initialize(*this, leaf_node, key, depth + 1, row_id);
+	ARTNode::InsertChild(*this, node, key[depth], leaf_node);
 	return true;
 }
 
@@ -508,7 +511,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 
 	// now erase the elements from the database
 	row_ids.Flatten(input.size());
@@ -530,25 +533,18 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 	}
 
-	// if we deserialize nodes while erasing, then we might end up with more
-	// memory afterwards, so we have to either increase or decrease the used memory
-	Verify();
-	if (track_memory && old_memory_size >= memory_size) {
-		buffer_manager.DecreaseUsedMemory(old_memory_size - memory_size);
-	} else if (track_memory) {
-		buffer_manager.IncreaseUsedMemory(memory_size - old_memory_size);
-	}
+	// TODO: verify and track old vs. new memory size
 }
 
-void ART::Erase(Node *&node, Key &key, idx_t depth, row_t row_id) {
+void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id) {
 
 	if (!node) {
 		return;
 	}
 
-	// delete a leaf from a tree
-	if (node->type == NodeType::NLeaf) {
-		auto leaf = (Leaf *)node;
+	// delete a row ID from a leaf
+	if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+		auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
 		leaf->Remove(*this, row_id);
 
 		if (leaf->count == 0) {

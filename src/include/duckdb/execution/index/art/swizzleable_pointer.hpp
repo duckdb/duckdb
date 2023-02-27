@@ -23,7 +23,7 @@ public:
 	SwizzleablePointer(MetaBlockReader &reader);
 
 	//! Checks if the pointer is swizzled
-	inline bool IsSwizzled() {
+	inline bool IsSwizzled() const {
 		return (pointer >> (sizeof(pointer) * 8 - 1)) & 1;
 	}
 	//! Get the pointer

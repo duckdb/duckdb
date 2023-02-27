@@ -22,6 +22,8 @@ public:
 	static LeafSegment *Initialize(ART &art, const idx_t &position);
 	//! Appends a row ID to the current segment, or creates a new segment containing that row ID
 	LeafSegment *Append(ART &art, uint32_t &count, const row_t &row_id);
+	//! Get the tail of a list of segments
+	LeafSegment *GetTail(ART &art);
 };
 
 } // namespace duckdb

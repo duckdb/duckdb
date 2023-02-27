@@ -163,7 +163,7 @@ void ARTNode::Delete(ART &art, ARTNode &node) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) {
+ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) const {
 
 	D_ASSERT(!IsSwizzled());
 	ARTNode node;
@@ -202,7 +202,7 @@ ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) {
 	return node;
 }
 
-idx_t ARTNode::GetChildPos(ART &art, const uint8_t &byte) {
+idx_t ARTNode::GetChildPos(ART &art, const uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -223,7 +223,7 @@ idx_t ARTNode::GetChildPos(ART &art, const uint8_t &byte) {
 	}
 }
 
-idx_t ARTNode::GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) {
+idx_t ARTNode::GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -244,7 +244,7 @@ idx_t ARTNode::GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &incl
 	}
 }
 
-idx_t ARTNode::GetMinPos(ART &art) {
+idx_t ARTNode::GetMinPos(ART &art) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -265,7 +265,7 @@ idx_t ARTNode::GetMinPos(ART &art) {
 	}
 }
 
-idx_t ARTNode::GetNextPos(ART &art, idx_t pos) {
+idx_t ARTNode::GetNextPos(ART &art, idx_t pos) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -286,7 +286,7 @@ idx_t ARTNode::GetNextPos(ART &art, idx_t pos) {
 	}
 }
 
-idx_t ARTNode::GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) {
+idx_t ARTNode::GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -366,7 +366,7 @@ void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string ARTNode::ToString(ART &art) {
+string ARTNode::ToString(ART &art) const {
 
 	string str = "Node";
 	auto type = GetARTNodeType();
@@ -389,11 +389,11 @@ string ARTNode::ToString(ART &art) {
 	return str + "]";
 }
 
-idx_t ARTNode::GetCapacity() {
+idx_t ARTNode::GetCapacity() const {
 	// TODO
 }
 
-Prefix *ARTNode::GetPrefix(ART &art) {
+Prefix *ARTNode::GetPrefix(ART &art) const {
 	auto type = GetARTNodeType();
 	switch (type) {
 	case ARTNodeType::NLeaf:
@@ -409,6 +409,10 @@ Prefix *ARTNode::GetPrefix(ART &art) {
 	default:
 		throw InternalException("Invalid node type for GetPrefix.");
 	}
+}
+
+ARTNodeType ARTNode::GetARTNodeType() const {
+	// TODO
 }
 
 ARTNodeType ARTNode::GetARTNodeTypeByCount(const idx_t &count) {
@@ -670,14 +674,6 @@ bool ARTNode::ChildIsInMemory(ART &art, const idx_t &pos) {
 	}
 
 #endif
-}
-
-//===--------------------------------------------------------------------===//
-// Private functions
-//===--------------------------------------------------------------------===//
-
-ARTNodeType ARTNode::GetARTNodeType() {
-	// TODO
 }
 
 } // namespace duckdb
