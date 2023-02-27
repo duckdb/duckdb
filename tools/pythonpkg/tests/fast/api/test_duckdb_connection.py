@@ -203,6 +203,7 @@ class TestDuckDBConnection(object):
 
         duckdb.sql("create table tbl as select * from relation")
         assert duckdb.table('tbl').fetchall() == [([5, 4, 3],)]
+        duckdb.execute('drop table tbl')
 
     def test_table(self):
         duckdb.execute("create table tbl as select 1")
