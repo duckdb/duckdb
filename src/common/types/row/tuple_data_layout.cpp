@@ -26,6 +26,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 			for (auto &ct : child_types) {
 				child_type_vector.emplace_back(ct.second);
 			}
+			// TODO: the nested TupleDataLayout does not need a HeapPtr!
 			auto struct_entry = struct_layouts.emplace(col_idx, TupleDataLayout());
 			struct_entry.first->second.Initialize(std::move(child_type_vector), false);
 			all_constant = all_constant && struct_entry.first->second.AllConstant();

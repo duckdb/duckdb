@@ -12,8 +12,9 @@
 
 namespace duckdb {
 
-struct TupleDataChunk;
 struct TupleDataSegment;
+struct TupleDataChunk;
+struct TupleDataChunkPart;
 struct TupleDataManagementState;
 struct TupleDataAppendState;
 
@@ -54,21 +55,26 @@ class TupleDataAllocator {
 public:
 	explicit TupleDataAllocator(ClientContext &context, const TupleDataLayout &layout);
 
+	//! Get the buffer allocator
+	Allocator &GetAllocator();
+
 public:
-	//! Builds out the segments for next append, given the metadata in the append state
+	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment);
-	//! Gets the base pointer to the rows for the given segment
-	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunk &segment);
-	//! Gets the base pointer to the heap for the given segment
-	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunk &segment);
+	//! Prepares a chunk for scanning
+	void InitializeChunkState(TupleDataManagementState &state, const TupleDataChunk &chunk);
 
 private:
-	//! Builds out a single segment (grabs the lock)
-	TupleDataChunk BuildChunk(TupleDataAppendState &append_state, idx_t offset, idx_t count);
+	//! Builds out a single part (grabs the lock)
+	void BuildChunkPart(TupleDataAppendState &append_state, idx_t offset, idx_t count, TupleDataChunk &chunk);
 	//! Pins the given row block
 	void PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index);
 	//! Pins the given heap block
 	void PinHeapBlock(TupleDataManagementState &state, const uint32_t heap_block_index);
+	//! Gets the base pointer to the rows for the given segment
+	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
+	//! Gets the base pointer to the heap for the given segment
+	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
 
 private:
 	//! The lock (for shared allocations)

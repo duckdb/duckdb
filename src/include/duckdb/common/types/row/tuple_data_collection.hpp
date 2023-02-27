@@ -13,9 +13,11 @@
 namespace duckdb {
 
 class TupleDataAllocator;
-struct TupleDataChunk;
-struct TupleDataAppendState;
+struct TupleDataChunkPart;
+struct TupleDataSegment;
 struct TupleDataManagementState;
+struct TupleDataAppendState;
+
 struct TupleDataScatterFunction;
 struct TupleDataGatherFunction;
 
@@ -45,7 +47,36 @@ public:
 	void InitializeAppend(TupleDataAppendState &append_state);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
 	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
-	//! TODO: combine / scan
+	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
+	void Append(DataChunk &new_chunk);
+	//! Appends the other TupleDataCollection to this, destroying the other data collection
+	void Combine(TupleDataCollection &other);
+
+	//! Initializes a chunk with the correct types that can be used to call Scan
+	void InitializeScanChunk(DataChunk &chunk) const;
+	//! Initializes a chunk with the correct types for a given scan state
+	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
+	//! Initializes a Scan state for scanning all columns
+	void InitializeScan(TupleDataScanState &state,
+	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	//! Initializes a Scan state for scanning a subset of the columns
+	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
+	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	//! Initialize a parallel scan over the column data collection over all columns
+	void InitializeScan(TupleDataParallelScanState &state,
+	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	//! Initialize a parallel scan over the column data collection over a subset of the columns
+	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
+	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	//! Scans a DataChunk from the TupleDataCollection
+	bool Scan(TupleDataScanState &state, DataChunk &result) const;
+	//! Scans a DataChunk from the TupleDataCollection
+	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result) const;
+	//! Scans a DataChunk from the TupleDataCollection TODO
+	void Scan(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
+	          DataChunk &result) const;
+	//! TODO:
+	void Scan(Vector &row_locations, const column_t column_id, const idx_t scan_count, Vector &result) const;
 
 private:
 	//! TODO:
@@ -55,7 +86,15 @@ private:
 	//! TODO:
 	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! TODO:
-	void ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &chunk);
+	void ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	//! TODO:
+	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
+	//!
+	void ScanAtIndex(TupleDataManagementState &chunk_state, const vector<column_t> &column_ids, idx_t segment_index,
+	                 idx_t chunk_index, DataChunk &result) const;
+
+	//! Verify counts of the segments in this collection
+	void Verify() const;
 
 private:
 	//! The TupleDataAllocator
