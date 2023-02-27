@@ -33,59 +33,63 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	} else if (fun_name == "ntile") {
 		return ExpressionType::WINDOW_NTILE;
 	}
-
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
+static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+	if (window_boundary == "unbounded_preceding") {
+		return WindowBoundary::INVALID;
+	} else if (window_boundary == "unbounded_following") {
+		return WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_boundary == "current_row_range") {
+		return WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_boundary == "current_row_rows") {
+		return WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_boundary == "expr_following_rows") {
+		return WindowBoundary::CURRENT_ROW_ROWS;
+	} else if (window_boundary == "expr_preceding_rows") {
+		return WindowBoundary::EXPR_PRECEDING_ROWS;
+	} else if (window_boundary == "expre_following_rows") {
+		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+	} else if (window_boundary == "expr_preceding_range") {
+		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	}
+	return WindowBoundary::EXPR_FOLLOWING_RANGE;
+}
 
-WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function_,
-                               vector<unique_ptr<ParsedExpression>> children_, std::string window_alias_name,
-                               vector<unique_ptr<ParsedExpression>> partitions_,
-                               shared_ptr<OrderRelation> orders_, unique_ptr<ParsedExpression> filter_expr_,
-                               WindowBoundary start_, WindowBoundary end_,
-                               vector<unique_ptr<ParsedExpression>> start_end_offset_default)
-    : Relation(rel->context, RelationType::PROJECTION_RELATION) {
+WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function,
+               vector<unique_ptr<ParsedExpression>> children_,
+               vector<unique_ptr<ParsedExpression>> partitions_, shared_ptr<OrderRelation> order_,
+                               unique_ptr<ParsedExpression> filter_expr,
+               std::string window_boundary_start, std::string window_boundary_end,
+               unique_ptr<ParsedExpression> start_expr,
+               unique_ptr<ParsedExpression> end_expr,
+               unique_ptr<ParsedExpression> offset_expr,
+               unique_ptr<ParsedExpression> default_expr)
+    : Relation(rel->context, RelationType::PROJECTION_RELATION),
+      	window_function(window_function),
+      	from_table(rel),
+      	start(StringToWindowBoundary(window_boundary_start)),
+      	end(StringToWindowBoundary(window_boundary_end)),
+		start_expr(std::move(start_expr)),
+      end_expr(std::move(end_expr)),
+      offset_expr(std::move(offset_expr)),
+      default_expr(std::move(default_expr)) {
 
+	type = RelationType::WINDOW_RELATION;
 	for (auto &child : children_) {
 		children.push_back(std::move(child));
 	}
-	type = RelationType::WINDOW_RELATION;
+
 	for (auto &partition : partitions_) {
 		partitions.push_back(std::move(partition));
 	}
-	for (auto &actual_order : orders_->orders) {
+	for (auto &actual_order : order_->orders) {
 		orders.push_back(OrderByNode(actual_order.type, actual_order.null_order, actual_order.expression->Copy()));
 	}
-	window_function = window_function_;
-	alias = window_alias_name;
-	from_table = rel;
 
-	filter_expr = filter_expr_ ? filter_expr_->Copy() : nullptr;
+	filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
 
-	start = start_;
-	end = end_;
-
-	start_expr = nullptr;
-	end_expr = nullptr;
-	offset_expr = nullptr;
-	default_expr = nullptr;
-
-	idx_t i = 0;
-	while (i < 4) {
-		if (i == 0 && start_end_offset_default.size() >= 1 && start_end_offset_default.at(i) != nullptr) {
-			start_expr = std::move(start_end_offset_default.at(i));
-		}
-		if (i == 1 && start_end_offset_default.size() >= 2 && start_end_offset_default.at(i) != nullptr) {
-			end_expr = std::move(start_end_offset_default.at(i));
-		}
-		if (i == 2 && start_end_offset_default.size() >= 3 && start_end_offset_default.at(i) != nullptr) {
-			offset_expr = std::move(start_end_offset_default.at(i));
-		}
-		if (i == 3 && start_end_offset_default.size() >= 4 && start_end_offset_default.at(i) != nullptr) {
-			default_expr = std::move(start_end_offset_default.at(i));
-		}
-		i += 1;
-	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 

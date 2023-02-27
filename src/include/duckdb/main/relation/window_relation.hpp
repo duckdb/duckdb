@@ -17,10 +17,15 @@ namespace duckdb {
 class WindowRelation : public Relation {
 public:
 	WindowRelation(shared_ptr<Relation> rel, std::string window_function,
-	               vector<unique_ptr<ParsedExpression>> children_, std::string window_alias_name,
-	               vector<unique_ptr<ParsedExpression>> partitions_, shared_ptr<OrderRelation> orders_,
-	               unique_ptr<ParsedExpression> filter_expr_, WindowBoundary start_, WindowBoundary end_,
-	               vector<unique_ptr<ParsedExpression>> start_end_offset_default);
+	               vector<unique_ptr<ParsedExpression>> children_,
+	               vector<unique_ptr<ParsedExpression>> partitions_, shared_ptr<OrderRelation> order_,
+	               unique_ptr<ParsedExpression> filter_expr,
+	               std::string window_boundary_start, std::string window_boundary_end,
+	               unique_ptr<ParsedExpression> start_expr,
+	               unique_ptr<ParsedExpression> end_expr,
+	               unique_ptr<ParsedExpression> offset_expr,
+	               unique_ptr<ParsedExpression> default_expr
+	               );
 
 	string alias;
 	string window_function;
