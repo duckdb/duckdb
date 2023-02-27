@@ -566,7 +566,7 @@ void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> &ot
 	for (auto &other_binding : other_bindings_list) {
 		auto it =
 		    std::remove_if(bindings_list.begin(), bindings_list.end(),
-		                   [other_binding](std::pair<string, Binding *> x) { return x.first == other_binding.first; });
+		                   [other_binding](std::pair<string, Binding *> &x) { return x.first == other_binding.first; });
 		bindings_list.erase(it, bindings_list.end());
 	}
 }
