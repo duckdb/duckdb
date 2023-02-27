@@ -13,13 +13,14 @@ namespace duckdb {
 
 // classes
 class ART;
+class PrefixSegment;
 
 class Prefix {
 public:
 	//! Inlined empty prefix
-	Prefix();
+	Prefix(); // TODO: necessary?
 	//! Inlined prefix containing one byte
-	explicit Prefix(const uint8_t &byte);
+	explicit Prefix(const uint8_t &byte); // TODO: necessary?
 
 	//! Delete copy/assign operator
 	Prefix(const Prefix &) = delete;
@@ -36,17 +37,19 @@ public:
 	} data;
 
 public:
-	//! Initializes all the fields of the prefix
+	//! Initializes all the fields of an empty prefix
 	void Initialize();
+	//! Initialize a prefix from an ART key
+	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
 
-	//! Get the data at pos
-	uint8_t GetData(ART &art, const idx_t &pos);
+	//! Get the byte at pos
+	uint8_t GetByte(ART &art, const idx_t &pos);
 	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
 	void Move(Prefix &other);
 	//! Append a prefix to this prefix
-	void Append(ART &art, ART &other_art, Prefix &other);
+	void Append(ART &art, Prefix &other);
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
-	void Concatenate(ART &art, const uint8_t &byte, ART &other_art, Prefix &other);
+	void Concatenate(ART &art, const uint8_t &byte, Prefix &other);
 
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);

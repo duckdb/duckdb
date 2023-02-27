@@ -6,6 +6,7 @@ add_library_unity(
   fixed_size_allocator.cpp
   iterator.cpp
   leaf.cpp
+  leaf_segment.cpp
   node4.cpp
   node16.cpp
   node48.cpp

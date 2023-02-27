@@ -60,6 +60,7 @@ public:
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	// others
 	static constexpr uint8_t EMPTY_MARKER = 48;
+	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
 
 public:
 	//! Constructs an empty ARTNode
@@ -68,6 +69,9 @@ public:
 	explicit ARTNode(MetaBlockReader &reader);
 	//! Constructs an ARTNode pointing to a position in the ART buffers
 	ARTNode(ART &art, const ARTNodeType &type);
+
+	//! Initializes a new ART node
+	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
@@ -100,10 +104,7 @@ public:
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 
 	//! Deserialize this node
-	static void Deserialize(ART &art, idx_t block_id, idx_t offset);
-
-	//! Deserialize an ART node
-	//	void Deserialize(ART &art);
+	void Deserialize(ART &art, idx_t block_id, idx_t offset);
 
 	//! Returns the string representation of a node
 	string ToString(ART &art);
@@ -111,6 +112,8 @@ public:
 	idx_t GetCapacity();
 	//! Returns a pointer to the prefix of a node
 	Prefix *GetPrefix(ART &art);
+	//! Returns the matching node type for a given count
+	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 
 	//! Merge two ARTs
 	static bool MergeARTs(ART *l_art, ART *r_art);

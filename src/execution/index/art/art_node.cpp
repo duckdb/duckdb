@@ -34,7 +34,32 @@ ARTNode::ARTNode(ART &art, const ARTNodeType &type) {
 	default:
 		throw InternalException("Invalid node type for ARTNode constructor.");
 	}
-	art.IncreaseMemorySize(MemorySize(art, false));
+}
+
+void ARTNode::Initialize(ART &art, ARTNode &node, const ARTNodeType &type) {
+	switch (type) {
+	case ARTNodeType::NLeaf:
+		// TODO
+		break;
+	case ARTNodeType::N4:
+		node.pointer = art.n4_nodes.GetPosition();
+		Node4::Initialize(art, node);
+		break;
+	case ARTNodeType::N16:
+		node.pointer = art.n16_nodes.GetPosition();
+		Node16::Initialize(art, node);
+		break;
+	case ARTNodeType::N48:
+		node.pointer = art.n48_nodes.GetPosition();
+		Node48::Initialize(art, node);
+		break;
+	case ARTNodeType::N256:
+		node.pointer = art.n256_nodes.GetPosition();
+		Node256::Initialize(art, node);
+		break;
+	default:
+		throw InternalException("Invalid node type for ARTNode constructor.");
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -50,12 +75,18 @@ void ARTNode::ReplaceChild(ART &art, const idx_t &pos, ARTNode &child) {
 		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
 		return n4->ReplaceChild(pos, child);
 	}
-	case ARTNodeType::N16:
-		// TODO
-	case ARTNodeType::N48:
-		// TODO
-	case ARTNodeType::N256:
-		// TODO
+	case ARTNodeType::N16: {
+		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		return n16->ReplaceChild(pos, child);
+	}
+	case ARTNodeType::N48: {
+		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		return n48->ReplaceChild(pos, child);
+	}
+	case ARTNodeType::N256: {
+		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		return n256->ReplaceChild(pos, child);
+	}
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
@@ -68,11 +99,11 @@ void ARTNode::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 	case ARTNodeType::N4:
 		return Node4::InsertChild(art, node, byte, child);
 	case ARTNodeType::N16:
-		// TODO
+		return Node16::InsertChild(art, node, byte, child);
 	case ARTNodeType::N48:
-		// TODO
+		return Node48::InsertChild(art, node, byte, child);
 	case ARTNodeType::N256:
-		// TODO
+		return Node256::InsertChild(art, node, byte, child);
 	default:
 		throw InternalException("Invalid node type for InsertChild.");
 	}
@@ -89,11 +120,11 @@ void ARTNode::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	case ARTNodeType::N4:
 		return Node4::DeleteChild(art, node, pos);
 	case ARTNodeType::N16:
-		// TODO
+		return Node16::DeleteChild(art, node, pos);
 	case ARTNodeType::N48:
-		// TODO
+		return Node48::DeleteChild(art, node, pos);
 	case ARTNodeType::N256:
-		// TODO
+		return Node256::DeleteChild(art, node, pos);
 	default:
 		throw InternalException("Invalid node type for DeleteChild.");
 	}
@@ -113,13 +144,13 @@ void ARTNode::Delete(ART &art, ARTNode &node) {
 			Node4::Delete(art, node);
 			break;
 		case ARTNodeType::N16:
-			// TODO
+			Node16::Delete(art, node);
 			break;
 		case ARTNodeType::N48:
-			// TODO
+			Node48::Delete(art, node);
 			break;
 		case ARTNodeType::N256:
-			// TODO
+			Node256::Delete(art, node);
 			break;
 		default:
 			throw InternalException("Invalid node type for Delete.");
@@ -144,22 +175,29 @@ ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) {
 		node = n4->GetChild(pos);
 		break;
 	}
-	case ARTNodeType::N16:
-		// TODO
+	case ARTNodeType::N16: {
+		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		node = n16->GetChild(pos);
 		break;
-	case ARTNodeType::N48:
-		// TODO
+	}
+	case ARTNodeType::N48: {
+		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		node = n48->GetChild(pos);
 		break;
-	case ARTNodeType::N256:
-		// TODO
+	}
+	case ARTNodeType::N256: {
+		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		node = n256->GetChild(pos);
 		break;
+	}
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
 
 	// unswizzle the ART node before returning it
 	if (node.IsSwizzled()) {
-		node.Deserialize(art);
+		auto block = node.GetBlockInfo();
+		node.Deserialize(art, block.block_id, block.offset);
 	}
 	return node;
 }
@@ -289,6 +327,7 @@ void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 
 	auto node_type_byte = reader.Read<uint8_t>();
 	ARTNodeType node_type((ARTNodeType)(node_type_byte));
+	*this = ARTNode(art, node_type);
 
 	switch (node_type) {
 	case ARTNodeType::NLeaf: {
@@ -299,60 +338,29 @@ void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 		//		return leaf;
 	}
 	case ARTNodeType::N4: {
-		ARTNode new_n4_node(art, ARTNodeType::N4);
-		auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(new_n4_node.GetPointer());
+		auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
 		new_n4->Deserialize(art, reader);
-		//		auto new_n4 = Node4::Initialize(art, new_n4_node);
-		break;
+		return;
 	}
 	case ARTNodeType::N16: {
-		deserialized_node = (Node *)Node16::New();
-		break;
+		auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		new_n16->Deserialize(art, reader);
+		return;
 	}
 	case ARTNodeType::N48: {
-		deserialized_node = (Node *)Node48::New();
-		break;
+		auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		new_n48->Deserialize(art, reader);
+		return;
 	}
 	case ARTNodeType::N256: {
-		deserialized_node = (Node *)Node256::New();
-		break;
+		auto new_n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		new_n256->Deserialize(art, reader);
+		return;
 	}
 	default:
 		throw InternalException("Unrecognized node type");
 	}
-
-	return deserialized_node;
 }
-
-void Node::DeserializeInternal(ART &art, duckdb::MetaBlockReader &reader) {
-
-	art.IncreaseMemorySize(deserialized_node->MemorySize(art, false));
-
-	InternalType internal_type(this);
-	count = reader.Read<uint16_t>();
-	prefix.Deserialize(reader);
-
-	// read key values
-	for (idx_t i = 0; i < internal_type.key_size; i++) {
-		internal_type.key[i] = reader.Read<uint8_t>();
-	}
-
-	// read child offsets
-	for (idx_t i = 0; i < internal_type.children_size; i++) {
-		internal_type.children[i] = ARTPointer(reader);
-	}
-}
-
-// void ARTNode::Deserialize(ART &art) {
-//	if (IsSwizzled()) {
-//		// our pointer/node is not yet in memory, so we deserialize it
-//		auto block_info = GetBlockInfo();
-//
-//		// TODO
-//		//		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
-//		//		art.Verify();
-//	}
-// }
 
 //===--------------------------------------------------------------------===//
 // Utility
@@ -401,6 +409,17 @@ Prefix *ARTNode::GetPrefix(ART &art) {
 	default:
 		throw InternalException("Invalid node type for GetPrefix.");
 	}
+}
+
+ARTNodeType ARTNode::GetARTNodeTypeByCount(const idx_t &count) {
+	if (count <= NODE_4_CAPACITY) {
+		return ARTNodeType::N4;
+	} else if (count <= NODE_16_CAPACITY) {
+		return ARTNodeType::N16;
+	} else if (count <= NODE_48_CAPACITY) {
+		return ARTNodeType::N48;
+	}
+	return ARTNodeType::N256;
 }
 
 //===--------------------------------------------------------------------===//

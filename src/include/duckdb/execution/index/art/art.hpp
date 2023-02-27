@@ -60,8 +60,9 @@ public:
 	//! Root of the tree
 	ARTNode tree;
 
-	//! Fixed size node allocators
+	//! Fixed size allocators
 	FixedSizeAllocator prefix_segments;
+	FixedSizeAllocator leaf_segments;
 	FixedSizeAllocator leaf_nodes;
 	FixedSizeAllocator n4_nodes;
 	FixedSizeAllocator n16_nodes;

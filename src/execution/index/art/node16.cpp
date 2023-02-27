@@ -8,14 +8,16 @@
 namespace duckdb {
 
 Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
-	auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(node.GetPointer());
-	new_n16->count = 0;
-	new_n16->prefix.Initialize();
+	auto node16 = art.n16_nodes.GetDataAtPosition<Node16>(node.GetPointer());
+	art.IncreaseMemorySize(sizeof(Node16));
+
+	node16->count = 0;
+	node16->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
-		new_n16->key[i] = 0;
-		new_n16->children[i] = ARTNode();
+		node16->key[i] = 0;
+		node16->children[i] = ARTNode();
 	}
-	return new_n16;
+	return node16;
 }
 
 void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -47,7 +49,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->count = n16->count;
-		new_n48->prefix = std::move(n16->prefix);
+		new_n48->prefix.Move(n16->prefix);
 
 		for (idx_t i = 0; i < n16->count; i++) {
 			new_n48->child_index[n16->key[i]] = i;
@@ -55,8 +57,10 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 			n16->children[i] = ARTNode();
 		}
 
-		art.DecreaseMemorySize(n16->MemorySize());
+		// no need to track or free the memory of the prefix, because we moved it to the new Node48
+		art.DecreaseMemorySize(sizeof(Node16));
 		art.n16_nodes.FreePosition(node.GetPointer());
+
 		node = new_n48_node;
 		Node48::InsertChild(art, node, byte, child);
 	}
@@ -69,14 +73,6 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(node.GetPointer());
 
 	D_ASSERT(pos < n16->count);
-
-#ifdef DEBUG
-	// adjust the ART size
-	if (n16->ChildIsInMemory(pos)) {
-		auto child = n16->GetChild(pos);
-		art.DecreaseMemorySize(child.MemorySize(art, true));
-	}
-#endif
 
 	// erase the child and decrease the count
 	ARTNode::Delete(art, n16->children[pos]);
@@ -101,7 +97,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 		ARTNode new_n4_node(art, ARTNodeType::N4);
 		auto new_n4 = Node4::Initialize(art, new_n4_node);
 
-		new_n4->prefix = std::move(n16->prefix);
+		new_n4->prefix.Move(n16->prefix);
 
 		for (idx_t i = 0; i < n16->count; i++) {
 			new_n4->key[new_n4->count] = n16->key[i];
@@ -109,7 +105,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 			n16->children[i] = ARTNode();
 		}
 
-		art.DecreaseMemorySize(n16->MemorySize());
+		art.DecreaseMemorySize(sizeof(Node16));
 		art.n16_nodes.FreePosition(node.GetPointer());
 		node = new_n4_node;
 	}
@@ -126,6 +122,8 @@ void Node16::Delete(ART &art, ARTNode &node) {
 	for (idx_t i = 0; i < n16->count; i++) {
 		ARTNode::Delete(art, n16->children[i]);
 	}
+
+	art.DecreaseMemorySize(sizeof(Node16));
 	art.n16_nodes.FreePosition(node.GetPointer());
 }
 

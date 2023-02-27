@@ -8,16 +8,18 @@
 namespace duckdb {
 
 Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
-	auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(node.GetPointer());
-	new_n48->count = 0;
-	new_n48->prefix.Initialize();
+	auto node48 = art.n48_nodes.GetDataAtPosition<Node48>(node.GetPointer());
+	art.IncreaseMemorySize(sizeof(Node48));
+
+	node48->count = 0;
+	node48->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		new_n48->child_index[i] = ARTNode::EMPTY_MARKER;
+		node48->child_index[i] = ARTNode::EMPTY_MARKER;
 	}
 	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
-		new_n48->children[i] = ARTNode();
+		node48->children[i] = ARTNode();
 	}
-	return new_n48;
+	return node48;
 }
 
 void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -47,7 +49,7 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 		auto new_n256 = Node256::Initialize(art, new_n256_node);
 
 		new_n256->count = n48->count;
-		new_n256->prefix = std::move(n48->prefix);
+		new_n256->prefix.Move(n48->prefix);
 
 		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 			if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
@@ -56,8 +58,10 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 			}
 		}
 
-		art.DecreaseMemorySize(n48->MemorySize());
+		// no need to track or free the memory of the prefix, because we moved it to the new Node256
+		art.DecreaseMemorySize(sizeof(Node48));
 		art.n48_nodes.FreePosition(node.GetPointer());
+
 		node = new_n256_node;
 		Node256::InsertChild(art, node, byte, child);
 	}
@@ -68,14 +72,6 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 	auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(node.GetPointer());
-
-#ifdef DEBUG
-	// adjust the ART size
-	if (n48->ChildIsInMemory(pos)) {
-		auto child = n48->GetChild(pos);
-		art.DecreaseMemorySize(child.MemorySize(art, true));
-	}
-#endif
 
 	// erase the child and decrease the count
 	ARTNode::Delete(art, n48->children[n48->child_index[pos]]);
@@ -88,7 +84,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 		ARTNode new_n16_node(art, ARTNodeType::N16);
 		auto new_n16 = Node16::Initialize(art, new_n16_node);
 
-		new_n16->prefix = std::move(n48->prefix);
+		new_n16->prefix.Move(n48->prefix);
 
 		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 			if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
@@ -98,7 +94,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 			}
 		}
 
-		art.DecreaseMemorySize(n48->MemorySize());
+		art.DecreaseMemorySize(sizeof(Node48));
 		art.n48_nodes.FreePosition(node.GetPointer());
 		node = new_n16_node;
 	}
@@ -117,6 +113,8 @@ void Node48::Delete(ART &art, ARTNode &node) {
 			ARTNode::Delete(art, n48->children[n48->child_index[i]]);
 		}
 	}
+
+	art.DecreaseMemorySize(sizeof(Node48));
 	art.n48_nodes.FreePosition(node.GetPointer());
 }
 

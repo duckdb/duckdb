@@ -7,13 +7,15 @@
 namespace duckdb {
 
 Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
-	auto new_n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
-	new_n256->count = 0;
-	new_n256->prefix.Initialize();
+	auto node256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
+	art.IncreaseMemorySize(sizeof(Node256));
+
+	node256->count = 0;
+	node256->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		new_n256->children[i] = ARTNode();
+		node256->children[i] = ARTNode();
 	}
-	return new_n256;
+	return node256;
 }
 
 void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -32,14 +34,6 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	D_ASSERT(!node.IsSwizzled());
 	auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
 
-#ifdef DEBUG
-	// adjust the ART size
-	if (n256->ChildIsInMemory(pos)) {
-		auto child = n256->GetChild(pos);
-		art.DecreaseMemorySize(child.MemorySize(art, true));
-	}
-#endif
-
 	// erase the child and decrease the count
 	ARTNode::Delete(art, n256->children[pos]);
 	n256->count--;
@@ -50,7 +44,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 		ARTNode new_n48_node(art, ARTNodeType::N48);
 		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
-		new_n48->prefix = std::move(n256->prefix);
+		new_n48->prefix.Move(n256->prefix);
 
 		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 			if (n256->children[i]) {
@@ -60,7 +54,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 			}
 		}
 
-		art.DecreaseMemorySize(n256->MemorySize());
+		art.DecreaseMemorySize(sizeof(Node256));
 		art.n256_nodes.FreePosition(node.GetPointer());
 		node = new_n48_node;
 	}
@@ -79,6 +73,8 @@ void Node256::Delete(ART &art, ARTNode &node) {
 			ARTNode::Delete(art, n256->children[i]);
 		}
 	}
+
+	art.DecreaseMemorySize(sizeof(Node256));
 	art.n256_nodes.FreePosition(node.GetPointer());
 }
 

@@ -7,14 +7,16 @@
 namespace duckdb {
 
 Node4 *Node4::Initialize(ART &art, const ARTNode &node) {
-	auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(node.GetPointer());
-	new_n4->count = 0;
-	new_n4->prefix.Initialize();
+	auto node4 = art.n4_nodes.GetDataAtPosition<Node4>(node.GetPointer());
+	art.IncreaseMemorySize(sizeof(Node4));
+
+	node4->count = 0;
+	node4->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
-		new_n4->key[i] = 0;
-		new_n4->children[i] = ARTNode();
+		node4->key[i] = 0;
+		node4->children[i] = ARTNode();
 	}
-	return new_n4;
+	return node4;
 }
 
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
@@ -54,8 +56,10 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 			n4->children[i] = ARTNode();
 		}
 
-		art.DecreaseMemorySize(n4->MemorySize());
+		// no need to track or free the memory of the prefix, because we moved it to the new Node16
+		art.DecreaseMemorySize(sizeof(Node4));
 		art.n4_nodes.FreePosition(node.GetPointer());
+
 		node = new_n16_node;
 		Node16::InsertChild(art, node, byte, child);
 	}
@@ -69,14 +73,6 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(pos < n4->count);
 	D_ASSERT(n4->count > 1);
-
-#ifdef DEBUG
-	// adjust the ART size
-	if (n4->ChildIsInMemory(pos)) {
-		auto child = n4->GetChild(pos);
-		art.DecreaseMemorySize(child.MemorySize(art, true));
-	}
-#endif
 
 	// erase the child and decrease the count
 	ARTNode::Delete(art, n4->children[pos]);
@@ -98,9 +94,9 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 		// get only child and concatenate prefixes
 		auto child = n4->GetChild(0);
-		child.GetPrefix(art)->Concatenate(art, n4->key[0], art, *node.GetPrefix(art));
+		child.GetPrefix(art)->Concatenate(art, n4->key[0], *node.GetPrefix(art));
 
-		art.DecreaseMemorySize(n4->MemorySize());
+		art.DecreaseMemorySize(sizeof(Node4));
 		art.n4_nodes.FreePosition(node.GetPointer());
 		node = child;
 	}
@@ -117,6 +113,8 @@ void Node4::Delete(ART &art, ARTNode &node) {
 	for (idx_t i = 0; i < n4->count; i++) {
 		ARTNode::Delete(art, n4->children[i]);
 	}
+
+	art.DecreaseMemorySize(sizeof(Node4));
 	art.n4_nodes.FreePosition(node.GetPointer());
 }
 

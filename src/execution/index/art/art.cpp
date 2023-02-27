@@ -18,8 +18,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          AttachedDatabase &db, bool track_memory, idx_t block_id, idx_t block_offset)
 
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type, track_memory),
-      prefix_sections(sizeof(PrefixSection)), leaf_nodes(sizeof(Leaf)), n4_nodes(sizeof(Node4)),
-      n16_nodes(sizeof(Node16)), n48_nodes(sizeof(Node48)), n256_nodes(sizeof(Node256)) {
+      prefix_segments(sizeof(PrefixSegment)), leaf_segments(sizeof(LeafSegment)), leaf_nodes(sizeof(Leaf)),
+      n4_nodes(sizeof(Node4)), n16_nodes(sizeof(Node16)), n48_nodes(sizeof(Node48)), n256_nodes(sizeof(Node256)) {
 
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
@@ -250,7 +250,7 @@ void GetChildSections(vector<KeySection> &child_sections, vector<Key> &keys, Key
 	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
 }
 
-bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySection &key_section,
+bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, ARTNode &node, KeySection &key_section,
                bool &has_constraint) {
 
 	D_ASSERT(key_section.start < keys.size());
@@ -277,32 +277,32 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, Node *&node, KeySect
 			return false;
 		}
 
+		node = ARTNode(art, ARTNodeType::NLeaf);
 		if (single_row_id) {
-			node = Leaf::New(start_key, prefix_start, row_ids[key_section.start]);
+			Leaf::Initialize(art, node, start_key, prefix_start, row_ids[key_section.start]);
 		} else {
-			node = Leaf::New(start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+			Leaf::Initialize(art, node, start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 		}
-		art.IncreaseMemorySize(node->MemorySize(art, false));
 		return true;
 	}
+
 	// create a new node and recurse
 
 	// we will find at least two child entries of this node, otherwise we'd have reached a leaf
 	vector<KeySection> child_sections;
 	GetChildSections(child_sections, keys, key_section);
 
-	auto node_type = Node::GetTypeBySize(child_sections.size());
-	Node::New(node_type, node);
+	auto node_type = ARTNode::GetARTNodeTypeByCount(child_sections.size());
+	ARTNode::Initialize(art, node, node_type);
 
 	auto prefix_length = key_section.depth - prefix_start;
-	node->prefix = Prefix(start_key, prefix_start, prefix_length);
-	art.IncreaseMemorySize(node->MemorySize(art, false));
+	node.GetPrefix(art)->Initialize(art, start_key, prefix_start, prefix_length);
 
 	// recurse on each child section
 	for (auto &child_section : child_sections) {
-		Node *new_child = nullptr;
+		ARTNode new_child;
 		auto no_violation = Construct(art, keys, row_ids, new_child, child_section, has_constraint);
-		Node::InsertChild(art, node, child_section.key_byte, new_child);
+		ARTNode::InsertChild(art, node, child_section.key_byte, new_child);
 		if (!no_violation) {
 			return false;
 		}
@@ -330,7 +330,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
@@ -367,7 +367,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: track old vs. new memory size
 	if (failed_index != DConstants::INVALID_INDEX) {
 		return false;
 	}
