@@ -24,6 +24,10 @@
 
 enum DatabaseError: Error {
   case decimalUnrepresentable
+  case appenderFailedToAppendItem(reason: String?)
+  case appenderFailedToEndRow(reason: String?)
+  case appenderFailedToFlush(reason: String?)
+  case appenderFailedToInitialize(reason: String?)
   case failedToCreatePreparedStatement(reason: String?)
   case failedToBindParameter(reason: String?)
   case failedToOpenDatabase(reason: String?)
