@@ -62,7 +62,7 @@ struct ArrowScanReplacementData : public ReplacementScanData {
 	DBWrapper *wrapper;
 };
 
-SEXP StringsToSexp(vector<std::string> s);
+cpp11::strings StringsToSexp(vector<std::string> s);
 
 SEXP ToUtf8(SEXP string_sexp);
 
