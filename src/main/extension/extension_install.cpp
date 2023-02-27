@@ -38,16 +38,10 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto opener = FileSystem::GetFileOpener(context);
-	Value extension_directory_value;
+string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, FileOpener *opener) {
 	string extension_directory;
-
-	if (context.TryGetCurrentSetting("extension_directory", extension_directory_value) &&
-	    !extension_directory_value.IsNull() &&
-	    !extension_directory_value.ToString().empty()) { // create the extension directory if not present
-		extension_directory = extension_directory_value.ToString();
+	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
+		extension_directory = config.options.extension_directory;
 		// TODO this should probably live in the FileSystem
 		// convert random separators to platform-canonic
 		extension_directory = fs.ConvertSeparators(extension_directory);
@@ -90,6 +84,13 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	return extension_directory;
 }
 
+string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto opener = FileSystem::GetFileOpener(context);
+	return ExtensionDirectory(config, fs, opener);
+}
+
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
 	vector<string> candidates;
 	for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
@@ -109,15 +110,24 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
+void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install) {
+	string local_path = ExtensionDirectory(config, fs, nullptr);
+	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
+}
+
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	string local_path = ExtensionDirectory(context);
+	auto &client_config = ClientConfig::GetConfig(context);
+	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
+}
+
+void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
+                                               const string &local_path, const string &extension, bool force_install) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	string local_path = ExtensionDirectory(context);
-
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
@@ -157,7 +167,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 
 	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
-	string &custom_endpoint = ClientConfig::GetConfig(context).custom_extension_repo;
+	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
 	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
 	string url_template = endpoint + versioned_path;
 
