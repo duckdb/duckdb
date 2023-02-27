@@ -33,7 +33,7 @@ final class DataChunk {
   private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
   
   init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0, index)! }
+    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
   }
   
   deinit {

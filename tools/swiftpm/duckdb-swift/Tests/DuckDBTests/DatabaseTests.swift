@@ -25,7 +25,7 @@
 import XCTest
 @testable import DuckDB
 
-final class DuckDBTests: XCTestCase {
+final class DatabaseTests: XCTestCase {
   
   func test_create_in_memory_database() throws {
     let _ = try Database(store: .inMemory)
@@ -62,7 +62,7 @@ final class DuckDBTests: XCTestCase {
 
 // MARK: - Temp Directory Helpers
 
-private extension DuckDBTests {
+private extension DatabaseTests {
   
   static func generateTemporaryFileURL(forFileNamed fileName: String) throws -> URL {
     let tmpDirURL = try FileManager.default.url(

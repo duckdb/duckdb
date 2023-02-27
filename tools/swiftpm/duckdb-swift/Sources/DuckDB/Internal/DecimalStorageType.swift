@@ -22,8 +22,27 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
-enum DatabaseError: Error {
-  case failedToOpenDatabase(reason: String?)
-  case failedToOpenConnection
-  case queryError(reason: String?)
+import Foundation
+
+protocol DecimalStorageType {
+  var asDecimal: Decimal { get }
+}
+
+extension Int8: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension Int16: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+extension Int32: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension Int64: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
+}
+
+extension IntHuge: DecimalStorageType {
+  var asDecimal: Decimal { Decimal(self) }
 }

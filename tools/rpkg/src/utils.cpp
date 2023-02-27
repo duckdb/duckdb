@@ -32,9 +32,8 @@ static SEXP cpp_str_to_charsexp(string s) {
 	return cstr_to_charsexp(s.c_str());
 }
 
-SEXP duckdb::StringsToSexp(vector<string> s) {
-	RProtector r;
-	SEXP retsexp = r.Protect(NEW_STRING(s.size()));
+cpp11::strings duckdb::StringsToSexp(vector<string> s) {
+	cpp11::writable::strings retsexp(s.size());
 	for (idx_t i = 0; i < s.size(); i++) {
 		SET_STRING_ELT(retsexp, i, cpp_str_to_charsexp(s[i]));
 	}
