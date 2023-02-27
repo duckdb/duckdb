@@ -637,6 +637,26 @@ void DuckDBPyRelation::Close() {
 	result->Close();
 }
 
+static bool ContainsColumnByName(const string &name, const vector<ColumnDefinition> &columns) {
+	for (auto &column : columns) {
+		if (column.Name() == name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) {
+	if (!rel) {
+		return nullptr;
+	}
+	auto &columns = rel->Columns();
+	if (!ContainsColumnByName(name, columns)) {
+		return nullptr;
+	}
+	return make_unique<DuckDBPyRelation>(rel->Project({name}));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
 	return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
 }

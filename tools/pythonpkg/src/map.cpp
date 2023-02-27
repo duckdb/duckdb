@@ -18,6 +18,9 @@ struct MapFunctionData : public TableFunctionData {
 	vector<string> in_names, out_names;
 };
 
+static py::object TransformInputValues() {
+}
+
 static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string> &names, PyObject *function) {
 	py::dict in_numpy_dict;
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {

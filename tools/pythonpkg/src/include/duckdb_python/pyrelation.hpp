@@ -50,6 +50,8 @@ public:
 
 	void Close();
 
+	unique_ptr<DuckDBPyRelation> GetAttribute(const string &name);
+
 	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),

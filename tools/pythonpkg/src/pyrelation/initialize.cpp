@@ -155,6 +155,10 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);
 
+	relation_module.def("__getattr__", &DuckDBPyRelation::GetAttribute,
+	                    "Get a projection relation created from this relation, on the provided column name",
+	                    py::arg("name"));
+
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
 	         py::arg("filter_expr"))
