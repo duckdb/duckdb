@@ -33,7 +33,9 @@ using namespace duckdb;
 	}
 
 #define NormalConfig()                                                                                                 \
-	unique_ptr<DBConfig> GetConfig() { return make_unique<DBConfig>(); }
+	unique_ptr<DBConfig> GetConfig() {                                                                                 \
+		return make_unique<DBConfig>();                                                                                \
+	}
 
 DUCKDB_BENCHMARK(TPCHEmptyStartup, "[startup]")
 TPCHStartup("SELECT * FROM lineitem WHERE 1=0") NormalConfig() string VerifyResult(QueryResult *result) override {
