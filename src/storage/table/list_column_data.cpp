@@ -213,13 +213,14 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	}
 
 	UnifiedVectorFormat vdata;
-	vdata.validity = append_mask;
+	vdata.validity.SetAllValid(count);
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);
 	// append the validity data
+	vdata.validity = append_mask;
 	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);
 	// append the child vector
 	if (child_count > 0) {
