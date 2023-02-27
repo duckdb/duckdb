@@ -78,7 +78,7 @@ jobs:
       - name: Cache clang-tidy
         id: date
         shell: bash
-        run: echo "::set-output name=now::$(date)"
+        run: echo "name=now::$(date)" >> $GITHUB_OUTPUT
 
       - name: Cache clang-tidy
         uses: actions/cache@v3
