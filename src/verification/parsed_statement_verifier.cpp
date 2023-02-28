@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-ParsedStatementVerifier::ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::PARSED, "Parsed", std::move(statement_p)) {
+ParsedStatementVerifier::ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p, string query_str)
+    : StatementVerifier(VerificationType::PARSED, "Parsed", std::move(statement_p)), query_str(std::move(query_str)) {
 }
 
 unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement &statement) {
@@ -18,7 +18,7 @@ unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement
 	}
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-	return make_unique<ParsedStatementVerifier>(std::move(parser.statements[0]));
+	return make_unique<ParsedStatementVerifier>(std::move(parser.statements[0]), std::move(query_str));
 }
 
 } // namespace duckdb
