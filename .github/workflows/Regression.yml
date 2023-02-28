@@ -1,6 +1,7 @@
 name: Regression
 on:
   workflow_dispatch:
+  repository_dispatch:
   push:
     branches:
       - '**'
