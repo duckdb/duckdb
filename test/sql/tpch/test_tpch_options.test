@@ -1,0 +1,24 @@
+# name: test/sql/tpch/test_tpch_options.test
+# description: Test TPC-H Generator Options
+# group: [tpch]
+
+require tpch
+
+# Test wrong parameters
+statement error
+CALL dbgen(sf=0.01, children=-1);
+----
+Invalid Input Error: Failed to cast value: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT32
+
+statement error
+CALL dbgen(sf=0.01, children=2);
+----
+Step must be defined when children are defined
+
+statement ok
+CALL dbgen(sf=0.01, children =2, step = 10000);
+
+query I
+select count(*) from lineitem
+----
+60175

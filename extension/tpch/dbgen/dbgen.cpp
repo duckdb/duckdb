@@ -438,13 +438,14 @@ void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, strin
 	CreateTPCHTable<LineitemInfo>(context, schema, suffix);
 }
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix) {
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p, int step_p) {
 	if (flt_scale == 0) {
 		return;
 	}
 
 	// generate the actual data
 	DSS_HUGE rowcnt = 0;
+	DSS_HUGE extra;
 	DSS_HUGE i;
 	// all tables
 	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
@@ -472,7 +473,8 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = NATIONS_MAX;
 	tdefs[REGION].base = NATIONS_MAX;
 
-	children = 1;
+	children = children_p;
+	step = step_p;
 	d_path = NULL;
 
 	if (flt_scale < MIN_SCALE) {
@@ -509,6 +511,22 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			append_info[i].appender = make_unique<InternalAppender>(context, *tbl_catalog);
 		}
 	}
+	if (step != -1){
+		for (i = PART; i <= REGION; i++) {
+			if (table & (1 << i)) {
+				rowcnt = set_state(i, dbgen_ctx.scale_factor, children, step, &extra, &dbgen_ctx);
+				if (step == children){
+					gen_tbl((int) i, rowcnt * (step - 1) + 1, rowcnt + extra,  &dbgen_ctx);
+				} else{
+					gen_tbl ((int) i, rowcnt * (step - 1) + 1, rowcnt, upd_num);
+				}
+				// actually doing something
+				gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			}
+	}
+
+	}
+
 
 	for (i = PART; i <= REGION; i++) {
 		if (table & (1 << i)) {
