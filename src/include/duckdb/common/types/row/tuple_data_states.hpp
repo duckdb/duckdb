@@ -18,7 +18,7 @@ struct TupleDataManagementState {
 	unordered_map<uint32_t, BufferHandle> heap_handles;
 	Vector row_locations = Vector(LogicalType::POINTER);
 	Vector heap_locations = Vector(LogicalType::POINTER);
-	Vector heap_sizes = Vector(LogicalType::UINTEGER);
+	Vector heap_sizes = Vector(LogicalType::UBIGINT);
 };
 
 struct TupleDataAppendState {

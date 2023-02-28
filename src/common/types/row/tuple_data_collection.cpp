@@ -104,27 +104,26 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
 	}
 }
 
-void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &sel) {
+void TupleDataCollection::Append(DataChunk &new_chunk) {
 	TupleDataAppendState append_state;
 	InitializeAppend(append_state);
-	Append(append_state, new_chunk, sel);
+	Append(append_state, new_chunk);
 }
 
-void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_ids, const SelectionVector &sel) {
+void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_ids) {
 	TupleDataAppendState append_state;
 	InitializeAppend(append_state, std::move(column_ids));
-	Append(append_state, new_chunk, sel);
+	Append(append_state, new_chunk);
 }
 
-void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk, const SelectionVector &sel) {
+void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk) {
 	D_ASSERT(segments.size() == 1);                                    // Cannot append after Combine
 	D_ASSERT(append_state.vector_data.size() == layout.ColumnCount()); // Needs InitializeAppend
-	D_ASSERT(new_chunk.ColumnCount() == layout.ColumnCount());         // Chunk needs to adhere to schema
 	for (const auto &col_idx : append_state.column_ids) {
 		new_chunk.data[col_idx].ToUnifiedFormat(new_chunk.size(), append_state.vector_data[col_idx]);
 	}
 	if (!layout.AllConstant()) {
-		ComputeEntrySizes(append_state, new_chunk, sel);
+		ComputeHeapSizes(append_state, new_chunk);
 	}
 	allocator->Build(append_state, count, segments.back());
 
@@ -136,7 +135,8 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 
 	// Write the data
 	for (const auto &col_idx : append_state.column_ids) {
-		Scatter(append_state, new_chunk.data[col_idx], col_idx, new_chunk.size());
+		Scatter(append_state, new_chunk.data[col_idx], col_idx, new_chunk.size(),
+		        *FlatVector::IncrementalSelectionVector());
 	}
 }
 
@@ -256,26 +256,52 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	                         gather_function.child_functions);
 }
 
-void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &new_chunk,
-                                            const SelectionVector &row_sel) {
-	auto entry_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
-	memset(entry_sizes, 0, new_chunk.size() * sizeof(idx_t));
+void TupleDataCollection::ComputeHeapSizes(TupleDataAppendState &append_state, DataChunk &new_chunk) {
+	auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
+	std::fill_n(heap_sizes, new_chunk.size(), 0);
 
-	for (const auto &col_idx : append_state.column_ids) {
-		auto type = layout.GetTypes()[col_idx].InternalType();
-		if (TypeIsConstantSize(type)) {
-			continue;
-		}
+	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
+		ComputeHeapSizes(append_state.chunk_state.heap_sizes, new_chunk.data[col_idx],
+		                 append_state.vector_data[col_idx], new_chunk.size());
+	}
+}
 
-		// TODO: write ComputeEntrySizes for VARCHAR/STRUCT
-		switch (type) {
-		case PhysicalType::LIST:
-			RowOperations::ComputeEntrySizes(new_chunk.data[col_idx], append_state.vector_data[col_idx], entry_sizes,
-			                                 new_chunk.size(), new_chunk.size(), row_sel);
-			break;
-		default:
-			throw InternalException("Unsupported type for RowOperations::ComputeEntrySizes");
+void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
+                                           const idx_t count) {
+	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
+	const auto &source_sel = *source.sel;
+	const auto &source_validity = source.validity;
+
+	switch (source_v.GetType().InternalType()) {
+	case PhysicalType::VARCHAR: {
+		const auto source_data = (string_t *)source.data;
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = source_sel.get_index(i);
+			if (source_validity.RowIsValid(idx) && !source_data[idx].IsInlined()) {
+				heap_sizes[i] += source_data[idx].GetSize();
+			}
 		}
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		auto &struct_sources = StructVector::GetEntries(source_v);
+
+		// Recurse through the struct children
+		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
+			const auto &struct_source = struct_sources[struct_col_idx];
+			UnifiedVectorFormat struct_source_data;
+			struct_source->ToUnifiedFormat(count, struct_source_data);
+			ComputeHeapSizes(heap_sizes_v, *struct_source, struct_source_data, count);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		RowOperations::ComputeEntrySizes(source_v, source, heap_sizes, count, count,
+		                                 *FlatVector::IncrementalSelectionVector());
+		break;
+	}
+	default:
+		return;
 	}
 }
 

@@ -62,7 +62,7 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	}
 
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<uint32_t>(append_state.chunk_state.heap_sizes);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
 	auto heap_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.heap_locations);
 
 	idx_t offset = 0;
@@ -120,7 +120,7 @@ void TupleDataAllocator::BuildChunkPart(TupleDataAppendState &append_state, idx_
 	data_ptr_t base_heap_ptr = nullptr;
 	uint32_t last_heap_size = 0;
 	if (!layout.AllConstant()) {
-		const auto heap_sizes = FlatVector::GetData<uint32_t>(append_state.chunk_state.heap_sizes);
+		const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
 
 		// Allocate heap block (if needed)
 		if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[offset]) {

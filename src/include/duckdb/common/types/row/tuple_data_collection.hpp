@@ -48,16 +48,14 @@ public:
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
-	void Append(DataChunk &new_chunk, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	void Append(DataChunk &new_chunk);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally TODO
-	void Append(DataChunk &new_chunk, vector<column_t> column_ids,
-	            const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	void Append(DataChunk &new_chunk, vector<column_t> column_ids);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
-	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk,
-	            const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
 	//! TODO:
 	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id, const idx_t append_count,
-	             const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	             const SelectionVector &sel);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
 
@@ -96,7 +94,10 @@ private:
 	//! TODO:
 	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! TODO:
-	void ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &new_chunk, const SelectionVector &sel);
+	static void ComputeHeapSizes(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	//! TODO:
+	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
+	                             const idx_t count);
 	//! TODO:
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
 	//!
