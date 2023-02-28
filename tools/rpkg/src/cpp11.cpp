@@ -139,10 +139,10 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function, list children, list partitions, duckdb::rel_extptr_t order, std::string window_boundary_start, std::string window_boundary_end, duckdb::expr_extptr_t filter_expression, duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr, duckdb::expr_extptr_t offset_expr, duckdb::expr_extptr_t default_expr);
-extern "C" SEXP _duckdb_rapi_rel_window_aggregation(SEXP rel, SEXP window_function, SEXP children, SEXP partitions, SEXP order, SEXP window_boundary_start, SEXP window_boundary_end, SEXP filter_expression, SEXP start_expr, SEXP end_expr, SEXP offset_expr, SEXP default_expr) {
+SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function, std::string window_alias, list children, list partitions, list orders, std::string window_boundary_start, std::string window_boundary_end, list filter_expressions, list start_exprs, list end_exprs, list offset_exprs, list default_exprs);
+extern "C" SEXP _duckdb_rapi_rel_window_aggregation(SEXP rel, SEXP window_function, SEXP window_alias, SEXP children, SEXP partitions, SEXP orders, SEXP window_boundary_start, SEXP window_boundary_end, SEXP filter_expressions, SEXP start_exprs, SEXP end_exprs, SEXP offset_exprs, SEXP default_exprs) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_rel_window_aggregation(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_function), cpp11::as_cpp<cpp11::decay_t<list>>(children), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(order), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_start), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_end), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(filter_expression), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(start_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(end_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(offset_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(default_expr)));
+    return cpp11::as_sexp(rapi_rel_window_aggregation(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_function), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_alias), cpp11::as_cpp<cpp11::decay_t<list>>(children), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<list>>(orders), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_start), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_end), cpp11::as_cpp<cpp11::decay_t<list>>(filter_expressions), cpp11::as_cpp<cpp11::decay_t<list>>(start_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(end_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(offset_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(default_exprs)));
   END_CPP11
 }
 // relational.cpp
@@ -386,7 +386,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_to_df",              (DL_FUNC) &_duckdb_rapi_rel_to_df,               1},
     {"_duckdb_rapi_rel_tostring",           (DL_FUNC) &_duckdb_rapi_rel_tostring,            1},
     {"_duckdb_rapi_rel_union_all",          (DL_FUNC) &_duckdb_rapi_rel_union_all,           2},
-    {"_duckdb_rapi_rel_window_aggregation", (DL_FUNC) &_duckdb_rapi_rel_window_aggregation, 12},
+    {"_duckdb_rapi_rel_window_aggregation", (DL_FUNC) &_duckdb_rapi_rel_window_aggregation, 13},
     {"_duckdb_rapi_release",                (DL_FUNC) &_duckdb_rapi_release,                 1},
     {"_duckdb_rapi_shutdown",               (DL_FUNC) &_duckdb_rapi_shutdown,                1},
     {"_duckdb_rapi_startup",                (DL_FUNC) &_duckdb_rapi_startup,                 3},

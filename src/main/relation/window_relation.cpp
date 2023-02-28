@@ -38,33 +38,32 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 
 static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	if (window_boundary == "unbounded_preceding") {
-		return WindowBoundary::INVALID;
-	} else if (window_boundary == "unbounded_following") {
 		return WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (window_boundary == "current_row_range") {
+	} else if (window_boundary == "unbounded_following") {
 		return WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (window_boundary == "current_row_rows") {
+	} else if (window_boundary == "current_row_range") {
 		return WindowBoundary::CURRENT_ROW_RANGE;
-	} else if (window_boundary == "expr_following_rows") {
+	} else if (window_boundary == "current_row_rows") {
 		return WindowBoundary::CURRENT_ROW_ROWS;
 	} else if (window_boundary == "expr_preceding_rows") {
 		return WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_boundary == "expre_following_rows") {
+	} else if (window_boundary == "expr_following_rows") {
 		return WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_boundary == "expr_preceding_range") {
 		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	} else {
+		return WindowBoundary::EXPR_FOLLOWING_RANGE;
 	}
-	return WindowBoundary::EXPR_FOLLOWING_RANGE;
 }
 
-WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function,
+WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function, std::string window_alias,
                                vector<unique_ptr<ParsedExpression>> children_,
                                vector<unique_ptr<ParsedExpression>> partitions_, shared_ptr<OrderRelation> order_,
                                unique_ptr<ParsedExpression> filter_expr, std::string window_boundary_start,
                                std::string window_boundary_end, unique_ptr<ParsedExpression> start_expr,
                                unique_ptr<ParsedExpression> end_expr, unique_ptr<ParsedExpression> offset_expr,
                                unique_ptr<ParsedExpression> default_expr)
-    : Relation(rel->context, RelationType::WINDOW_RELATION), window_function(window_function), from_table(rel),
+    : Relation(rel->context, RelationType::WINDOW_RELATION), alias(window_alias), window_function(window_function), from_table(rel),
       start(StringToWindowBoundary(window_boundary_start)), end(StringToWindowBoundary(window_boundary_end)),
       start_expr(std::move(start_expr)), end_expr(std::move(end_expr)), offset_expr(std::move(offset_expr)),
       default_expr(std::move(default_expr)) {
@@ -76,8 +75,10 @@ WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_func
 	for (auto &partition : partitions_) {
 		partitions.push_back(std::move(partition));
 	}
-	for (auto &actual_order : order_->orders) {
-		orders.push_back(OrderByNode(actual_order.type, actual_order.null_order, actual_order.expression->Copy()));
+	if (order_) {
+		for (auto &actual_order : order_->orders) {
+			orders.push_back(OrderByNode(actual_order.type, actual_order.null_order, actual_order.expression->Copy()));
+		}
 	}
 
 	filter_expr = filter_expr ? filter_expr->Copy() : nullptr;

@@ -178,16 +178,16 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
-                                                     list children, list partitions, duckdb::rel_extptr_t order,
+                                                     std::string window_alias,
+                                                     list children, list partitions, list orders,
                                                      std::string window_boundary_start, std::string window_boundary_end,
-                                                     duckdb::expr_extptr_t filter_expression,
-                                                     duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
-                                                     duckdb::expr_extptr_t offset_expr,
-                                                     duckdb::expr_extptr_t default_expr) {
+                                                     list filter_expressions,
+                                                     list start_exprs, list end_exprs,
+                                                     list offset_exprs, list default_exprs) {
 	auto children_ = vector<unique_ptr<ParsedExpression>>();
 	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
 	auto orders_ = shared_ptr<OrderRelation>();
-	unique_ptr<ParsedExpression> filter_expr_ = filter_expression ? filter_expression->Copy() : nullptr;
+
 	vector<unique_ptr<ParsedExpression>> start_end_offset_default_;
 	for (expr_extptr_t child : children) {
 		children_.emplace_back(child->Copy());
@@ -195,17 +195,35 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	for (expr_extptr_t partition : partitions) {
 		partitions_.emplace_back(partition->Copy());
 	}
-	if (order && order->rel->type == RelationType::ORDER_RELATION) {
-		auto o_relation = std::dynamic_pointer_cast<OrderRelation>(order->rel);
-		orders_ = o_relation;
+	for (duckdb::rel_extptr_t order : orders) {
+		if (order && order->rel->type == RelationType::ORDER_RELATION) {
+			auto o_relation = std::dynamic_pointer_cast<OrderRelation>(order->rel);
+			orders_ = o_relation;
+		}
 	}
 
-	unique_ptr<ParsedExpression> start_expr_ = start_expr ? start_expr->Copy() : nullptr;
-	unique_ptr<ParsedExpression> end_expr_ = end_expr ? end_expr->Copy() : nullptr;
-	unique_ptr<ParsedExpression> offset_expr_ = offset_expr ? offset_expr->Copy() : nullptr;
-	unique_ptr<ParsedExpression> default_expr_ = default_expr ? default_expr->Copy() : nullptr;
+	unique_ptr<ParsedExpression> filter_expr_ = nullptr;
+	for (duckdb::expr_extptr_t filter_expression : filter_expressions) {
+		filter_expr_ = filter_expression ? filter_expression->Copy() : nullptr;
+	}
+	unique_ptr<ParsedExpression> start_expr_ = nullptr;
+	for (duckdb::expr_extptr_t start_expr: start_exprs) {
+		 start_expr_ = start_expr ? start_expr->Copy() : nullptr;
+	}
+	unique_ptr<ParsedExpression> end_expr_ = nullptr;
+	for (duckdb::expr_extptr_t end_expr: end_exprs) {
+		 end_expr_ = end_expr ? end_expr->Copy() : nullptr;
+	}
+	unique_ptr<ParsedExpression> offset_expr_ = nullptr;
+	for (duckdb::expr_extptr_t offset_expr: offset_exprs) {
+		 offset_expr_ = offset_expr ? offset_expr->Copy() : nullptr;
+	}
+	unique_ptr<ParsedExpression> default_expr_ = nullptr;
+	for (duckdb::expr_extptr_t default_expr: default_exprs) {
+		 default_expr_ = default_expr ? default_expr->Copy() : nullptr;
+	}
 
-	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, std::move(children_), std::move(partitions_),
+	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, window_alias, std::move(children_), std::move(partitions_),
 	                                            std::move(orders_), std::move(filter_expr_), window_boundary_start,
 	                                            window_boundary_end, std::move(start_expr_), std::move(end_expr_),
 	                                            std::move(offset_expr_), std::move(default_expr_));
