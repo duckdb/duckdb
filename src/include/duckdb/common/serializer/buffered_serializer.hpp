@@ -33,7 +33,6 @@ public:
 
 	BinaryData blob;
 
-
 public:
 	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
 

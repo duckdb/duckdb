@@ -1589,21 +1589,11 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 				auto enum_type = catalog->GetType(client_context, schema_name, enum_name, true);
 				if (enum_type != LogicalType::INVALID) {
 					extra_info = enum_type.GetAuxInfoShrPtr();
-					break;
 				}
 			}
-			// Look into set catalog paths
-			auto &catalog_paths = client_context.client_data->catalog_search_path->GetSetPaths();
-			for (auto &path : catalog_paths) {
-				if (Catalog::TypeExists(client_context, path.catalog, path.schema, enum_name)) {
-					extra_info =
-					    Catalog::GetType(client_context, path.catalog, path.schema, enum_name).GetAuxInfoShrPtr();
-					break;
-				}
+			if (!extra_info) {
+				throw InternalException("Could not find ENUM in the Catalog to deserialize");
 			}
-
-			auto enum_type = Catalog::GetType(client_context, INVALID_CATALOG, schema_name, enum_name);
-			extra_info = enum_type.GetAuxInfoShrPtr();
 			break;
 		} else {
 			auto enum_size = reader.ReadRequired<uint32_t>();
