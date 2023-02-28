@@ -1380,7 +1380,6 @@ void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bo
 		writer.WriteField<uint32_t>(dict_size);
 		// Store Vector Order By Insertion
 		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer());
-		;
 	}
 }
 
@@ -1593,12 +1592,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 					break;
 				}
 			}
-			// Try the DB Path as a catalog name
-			auto catalog_name = AttachedDatabase::ExtractDatabaseName(client_context.db->config.options.database_path);
-			if (Catalog::TypeExists(client_context, catalog_name, schema_name, enum_name)) {
-				extra_info = Catalog::GetType(client_context, catalog_name, schema_name, enum_name).GetAuxInfoShrPtr();
-				break;
-			}
 			// Look into set catalog paths
 			auto &catalog_paths = client_context.client_data->catalog_search_path->GetSetPaths();
 			for (auto &path : catalog_paths) {
@@ -1608,21 +1601,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 					break;
 				}
 			}
-			// Look into databases in the DB Manager
-			auto &db_manager = client_context.db->GetDatabaseManager();
-			auto all_databases = db_manager.GetDatabases(client_context);
-			for (auto &db : all_databases) {
-				auto db_catalog_name = AttachedDatabase::ExtractDatabaseName(db->name);
-				if (Catalog::TypeExists(client_context, db_catalog_name, schema_name, enum_name)) {
-					extra_info =
-					    Catalog::GetType(client_context, db_catalog_name, schema_name, enum_name).GetAuxInfoShrPtr();
-					break;
-				}
-			}
-			if (!extra_info) {
-				// capture error
-				auto enum_type = Catalog::GetType(client_context, catalog_name, schema_name, enum_name);
-			}
+
+			auto enum_type = Catalog::GetType(client_context, INVALID_CATALOG, schema_name, enum_name);
+			extra_info = enum_type.GetAuxInfoShrPtr();
 			break;
 		} else {
 			auto enum_size = reader.ReadRequired<uint32_t>();
