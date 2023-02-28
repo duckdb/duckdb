@@ -22,8 +22,8 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 	return R"(
 			SELECT
 				t.table_name,
-				LIST(c.column_name order by c.column_name) AS column_names,
-				LIST(c.data_type order by c.column_name) AS column_types,
+				LIST(c.column_name order by c.column_index) AS column_names,
+				LIST(c.data_type order by c.column_index) AS column_types,
 				FIRST(t.temporary) AS temporary
 			FROM duckdb_tables t
 			JOIN duckdb_columns c

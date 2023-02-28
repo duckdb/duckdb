@@ -90,28 +90,7 @@ TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	REQUIRE(result2->ColumnCount() == 1);
 	REQUIRE(CHECK_COLUMN(result2, 0, {1, 3, 5}));
 
-	// Check stream result
-	auto result =
-	    con.SendQuery("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
-	REQUIRE_NO_FAIL(*result);
-
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 1);
-
-	chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 3);
-
-	chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 5);
-
-	chunk = result->Fetch();
-	REQUIRE(!chunk);
+	// TODO: streaming these is currently unsupported
 
 	// Large result into aggregation
 	auto result3 = con.Query(

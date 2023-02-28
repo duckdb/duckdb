@@ -184,3 +184,24 @@ class TestPythonFilesystem:
         # duckdb sometimes seems to swallow write errors, so we use this to ensure that 
         # isn't happening
         assert not write_errors
+
+    def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a))")
+
+        assert memory.open(
+            '/root\\a=1\\data_0.csv'
+            if sys.platform == 'win32' else
+            '/root/a=1/data_0.csv'
+        ).read() == b'1\n'
+
+    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
+            fh.write(b'1\n')
+
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+
+        assert duckdb_cursor.fetchall() == [(1, '1')]
