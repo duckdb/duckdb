@@ -12,7 +12,7 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
-	D_ASSERT(constant.type().id() == stats.type.id());
+	D_ASSERT(constant.type().id() == stats.GetType().id());
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:

@@ -46,7 +46,7 @@ RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableI
 
 	// set up the statistics
 	for (auto &stats : pointer.statistics) {
-		auto stats_type = stats->type;
+		auto stats_type = stats->GetType();
 		this->stats.push_back(make_shared<SegmentStatistics>(stats_type, std::move(stats)));
 	}
 	this->version_info = std::move(pointer.versions);

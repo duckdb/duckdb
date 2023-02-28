@@ -44,7 +44,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 	if (!IsCompareDistinct(comparison_type)) {
 		stats.validity_stats = make_unique<ValidityStatistics>(false);
 	}
-	if (!stats.type.IsNumeric()) {
+	if (!stats.GetType().IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
@@ -84,8 +84,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		lstats.validity_stats = make_unique<ValidityStatistics>(false);
 		rstats.validity_stats = make_unique<ValidityStatistics>(false);
 	}
-	D_ASSERT(lstats.type == rstats.type);
-	if (!lstats.type.IsNumeric()) {
+	D_ASSERT(lstats.GetType() == rstats.GetType());
+	if (!lstats.GetType().IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
 		return;
 	}

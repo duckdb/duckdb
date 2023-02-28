@@ -33,8 +33,6 @@ public:
 	BaseStatistics(LogicalType type, StatisticsType stats_type);
 	virtual ~BaseStatistics();
 
-	//! The type of the logical segment
-	LogicalType type;
 	//! The validity stats of the column (if any)
 	unique_ptr<BaseStatistics> validity_stats;
 	//! The approximate count distinct stats of the column (if any)
@@ -57,6 +55,10 @@ public:
 		return false;
 	}
 
+	const LogicalType &GetType() {
+		return type;
+	}
+
 	virtual void Merge(const BaseStatistics &other);
 
 	virtual unique_ptr<BaseStatistics> Copy() const;
@@ -77,6 +79,9 @@ public:
 
 protected:
 	void InitializeBase();
+
+	//! The type of the logical segment
+	LogicalType type;
 };
 
 } // namespace duckdb

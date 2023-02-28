@@ -125,7 +125,7 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 		return nullptr;
 	}
 	auto &list_stats = (ListStatistics &)*child_stats[0];
-	if (!list_stats.child_stats || list_stats.child_stats->type == LogicalTypeId::SQLNULL) {
+	if (!list_stats.child_stats || list_stats.child_stats->GetType() == LogicalTypeId::SQLNULL) {
 		return nullptr;
 	}
 

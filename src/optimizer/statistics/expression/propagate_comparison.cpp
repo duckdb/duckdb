@@ -9,7 +9,7 @@ namespace duckdb {
 FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &left, BaseStatistics &right,
                                                                 ExpressionType comparison) {
 	// only handle numerics for now
-	switch (left.type.InternalType()) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
