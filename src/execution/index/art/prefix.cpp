@@ -58,8 +58,7 @@ void Prefix::Append(ART &art, Prefix &other) {
 	}
 
 	// get the tail of the segments of this prefix
-	idx_t tail = data.position;
-	auto segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(data.position)->GetTail(art, tail);
+	auto segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(data.position)->GetTail(art);
 
 	// the other prefix is inlined
 	if (other.IsInlined()) {

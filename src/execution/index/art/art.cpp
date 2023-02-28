@@ -548,41 +548,42 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 		leaf->Remove(*this, row_id);
 
 		if (leaf->count == 0) {
-			DecreaseMemorySize(leaf->MemorySize(*this, false));
-			Node::Delete(node);
-			node = nullptr;
+			DecreaseMemorySize(sizeof(Leaf));
+			leaf_nodes.FreePosition(node.GetPointer());
+			node = ARTNode();
 		}
 		return;
 	}
 
 	// handle prefix
-	if (node->prefix.Size()) {
-		if (node->prefix.KeyMismatchPosition(key, depth) != node->prefix.Size()) {
+	auto node_prefix = node.GetPrefix(*this);
+	if (node_prefix->count) {
+		if (node_prefix->KeyMismatchPosition(*this, key, depth) != node_prefix->count) {
 			return;
 		}
-		depth += node->prefix.Size();
+		depth += node_prefix->count;
 	}
 
-	idx_t pos = node->GetChildPos(key[depth]);
-	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(*this, pos);
+	idx_t position = node.GetChildPos(*this, key[depth]);
+	if (position != DConstants::INVALID_INDEX) {
+		auto child = node.GetChild(*this, position);
 		D_ASSERT(child);
 
-		if (child->type == NodeType::NLeaf) {
+		if (child.GetARTNodeType() == ARTNodeType::NLeaf) {
 			// leaf found, remove entry
-			auto leaf = (Leaf *)child;
+			auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(child.GetPointer());
 			leaf->Remove(*this, row_id);
 
 			if (leaf->count == 0) {
 				// leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::EraseChild(*this, node, pos);
+				ARTNode::DeleteChild(*this, node, position);
 			}
-
-		} else {
-			// recurse
-			Erase(child, key, depth + 1, row_id);
-			node->ReplaceChildPointer(pos, child);
+			return;
 		}
+
+		// recurse
+		Erase(child, key, depth + 1, row_id);
+		node.ReplaceChild(*this, position, child);
 	}
 }
 
@@ -660,40 +661,40 @@ void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 // Lookup
 //===--------------------------------------------------------------------===//
 
-Leaf *ART::Lookup(Node *node, Key &key, idx_t depth) {
+Leaf *ART::Lookup(ARTNode &node, const Key &key, idx_t depth) {
 
 	while (node) {
-		if (node->type == NodeType::NLeaf) {
-			auto leaf = (Leaf *)node;
-			auto &leaf_prefix = leaf->prefix;
+		if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+			auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
 
 			// check if leaf contains key
-			for (idx_t i = 0; i < leaf->prefix.Size(); i++) {
-				if (leaf_prefix[i] != key[i + depth]) {
+			for (idx_t i = 0; i < leaf->prefix.count; i++) {
+				if (leaf->prefix.GetByte(*this, i) != key[i + depth]) {
 					return nullptr;
 				}
 			}
-			return (Leaf *)node;
+			return leaf;
 		}
 
-		if (node->prefix.Size()) {
-			for (idx_t pos = 0; pos < node->prefix.Size(); pos++) {
-				if (key[depth + pos] != node->prefix[pos]) {
-					// prefix mismatch, does not contain key
+		auto node_prefix = node.GetPrefix(*this);
+		if (node_prefix->count) {
+			for (idx_t pos = 0; pos < node_prefix->count; pos++) {
+				if (key[depth + pos] != node_prefix->GetByte(*this, pos)) {
+					// prefix mismatch, subtree of node does not contain key
 					return nullptr;
 				}
 			}
-			depth += node->prefix.Size();
+			depth += node_prefix->count;
 		}
 
 		// prefix matches key, but no child at byte, does not contain key
-		idx_t pos = node->GetChildPos(key[depth]);
-		if (pos == DConstants::INVALID_INDEX) {
+		idx_t position = node.GetChildPos(*this, key[depth]);
+		if (position == DConstants::INVALID_INDEX) {
 			return nullptr;
 		}
 
 		// recurse into child
-		node = node->GetChild(*this, pos);
+		node = node.GetChild(*this, position);
 		D_ASSERT(node);
 		depth++;
 	}
@@ -710,7 +711,8 @@ Leaf *ART::Lookup(Node *node, Key &key, idx_t depth) {
 bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count,
                         vector<row_t> &result_ids) {
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
+
 	Iterator *it = &state->iterator;
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
@@ -719,7 +721,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_
 		it->art = this;
 		bool found = it->LowerBound(tree, key, inclusive);
 		if (!found) {
-			IncreaseAndVerifyMemorySize(old_memory_size);
+			// TODO: verify and track old vs. new memory size
 			return true;
 		}
 	}
@@ -727,7 +729,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_
 	// automatically bigger and hence satisfies our predicate
 	Key empty_key = Key();
 	auto success = it->Scan(empty_key, max_count, result_ids, false);
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: verify and track old vs. new memory size
 	return success;
 }
 
@@ -742,7 +744,7 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 		return true;
 	}
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 	Iterator *it = &state->iterator;
 
 	if (!it->art) {
@@ -751,13 +753,13 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 		it->FindMinimum(*tree);
 		// early out min value higher than upper bound query
 		if (it->cur_key > upper_bound) {
-			IncreaseAndVerifyMemorySize(old_memory_size);
+			// TODO: verify and track old vs. new memory size
 			return true;
 		}
 	}
 	// now continue the scan until we reach the upper bound
 	auto success = it->Scan(upper_bound, max_count, result_ids, inclusive);
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: verify and track old vs. new memory size
 	return success;
 }
 
@@ -768,7 +770,7 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
                            bool right_inclusive, idx_t max_count, vector<row_t> &result_ids) {
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 	Iterator *it = &state->iterator;
 
 	// first find the first node that satisfies the left predicate
@@ -776,13 +778,13 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &uppe
 		it->art = this;
 		bool found = it->LowerBound(tree, lower_bound, left_inclusive);
 		if (!found) {
-			IncreaseAndVerifyMemorySize(old_memory_size);
+			// TODO: verify and track old vs. new memory size
 			return true;
 		}
 	}
 	// now continue the scan until we reach the upper bound
 	auto success = it->Scan(upper_bound, max_count, result_ids, right_inclusive);
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: verify and track old vs. new memory size
 	return success;
 }
 
@@ -907,7 +909,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	// don't alter the index during constraint checking
 	lock_guard<mutex> l(lock);
 
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 
 	// first resolve the expressions for the index
 	DataChunk expression_chunk;
@@ -947,7 +949,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	}
 
 	conflict_manager.FinishLookup();
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: verify and track old vs. new memory size
 
 	if (found_conflict == DConstants::INVALID_INDEX) {
 		// No conflicts detected
@@ -965,13 +967,13 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
-	auto old_memory_size = memory_size;
+	// TODO: track old vs. new memory size
 	if (tree) {
 		serialized_data_pointer = tree->Serialize(*this, writer);
 	} else {
 		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
-	IncreaseAndVerifyMemorySize(old_memory_size);
+	// TODO: verify and track old vs. new memory size
 	return serialized_data_pointer;
 }
 

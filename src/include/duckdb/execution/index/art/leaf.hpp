@@ -43,7 +43,7 @@ public:
 	//! Get the row ID at pos
 	uint8_t GetRowID(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
-	idx_t FindRowID(ART &art, const row_t &row_id) const;
+	idx_t FindRowID(ART &art, idx_t &position, const row_t &row_id) const;
 
 private:
 	//! Returns whether this leaf is inlined

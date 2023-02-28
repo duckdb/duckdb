@@ -27,7 +27,7 @@ public:
 	//! Appends a byte to the current segment, or creates a new segment containing that byte
 	PrefixSegment *Append(ART &art, uint32_t &count, const uint8_t &byte);
 	//! Get the tail of a list of segments
-	PrefixSegment *GetTail(ART &art, idx_t &position);
+	PrefixSegment *GetTail(ART &art);
 };
 
 } // namespace duckdb

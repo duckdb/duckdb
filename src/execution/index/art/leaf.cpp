@@ -77,43 +77,72 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 		return;
 	}
 
-	// TODO: if true, then we have to later delete the tail
-	auto delete_tail = count % ARTNode::LEAF_SEGMENT_SIZE == 1;
+	// possibly inline the row ID
+	if (count == 2) {
+		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(row_ids.position);
+		if (segment->row_ids[0] != row_id && segment->row_ids[1] != row_id) {
+			return;
+		}
+
+		auto temp_row_id = segment->row_ids[0] == row_id ? segment->row_ids[1] : segment->row_ids[0];
+
+		art.DecreaseMemorySize(sizeof(LeafSegment));
+		art.leaf_segments.FreePosition(row_ids.position);
+		row_ids.inlined = temp_row_id;
+		count--;
+		return;
+	}
 
 	// find the row ID, and the segment containing that row ID
-	auto row_id_position = FindRowID(art, row_id);
-	// TODO: wrong segment and position
 	auto position = row_ids.position;
-	auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(row_ids.position);
-
-	// iterate all segments and copy/shift their data
-	auto copy_start = row_id_position + 1;
-	auto remaining = count - copy_start;
-	count = row_id_position;
-
-	// TODO: super messy
-	//	while (position) {
-	//		auto other_segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
-	//		auto copy_count = std::min(remaining, ARTNode::LEAF_SEGMENT_SIZE);
-	//
-	//		// now copy/shift the data
-	//		for (idx_t i = 0; i < copy_count; i++) {
-	//			segment = segment->Append(art, count, other_segment->row_ids[i]);
-	//		}
-	//
-	//		// adjust the loop variables
-	//		position = other_segment->next;
-	//		remaining -= copy_count;
-	//	}
-	//	D_ASSERT(remaining == 0);
-
-	if (delete_tail) {
-		// TODO: get tail method, then use position to free
+	auto row_id_position = FindRowID(art, position, row_id);
+	if (row_id_position == DConstants::INVALID_INDEX) {
+		return;
 	}
 
-	// possibly inline the row ID
-	if (IsInlined()) {
+	// iterate all remaining segments and move the row IDs one field to the left
+	LeafSegment *prev_segment = nullptr;
+	while (position != DConstants::INVALID_INDEX) {
+
+		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+		if (prev_segment) {
+			// this segment has at least one element, and we need to copy it into the previous segment
+			prev_segment->row_ids[ARTNode::LEAF_SEGMENT_SIZE - 1] = segment->row_ids[0];
+		}
+
+		// move the data
+		auto start = row_id_position % ARTNode::LEAF_SEGMENT_SIZE;
+		auto len = std::min(count - row_id_position + 1, (idx_t)ARTNode::LEAF_SEGMENT_SIZE);
+		memmove(segment->row_ids + start, segment->row_ids + start + 1, len);
+
+		// adjust loop variables
+		row_id_position += len;
+		prev_segment = segment;
+		position = segment->next;
 	}
+
+	// true, if we need to delete the last segment
+	if (count % ARTNode::LEAF_SEGMENT_SIZE == 1) {
+		position = row_ids.position;
+		while (position != DConstants::INVALID_INDEX) {
+
+			// get the segment succeeding the current segment
+			auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+			D_ASSERT(segment->next != DConstants::INVALID_INDEX);
+			auto next_segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(segment->next);
+
+			// the segment following next_segment is the tail of the segment list
+			if (next_segment->next == DConstants::INVALID_INDEX) {
+				art.DecreaseMemorySize(sizeof(LeafSegment));
+				art.leaf_segments.FreePosition(segment->next);
+				segment->next = DConstants::INVALID_INDEX;
+			}
+
+			// adjust loop variables
+			position = segment->next;
+		}
+	}
+	count--;
 }
 
 uint8_t Leaf::GetRowID(ART &art, const idx_t &position) const {
@@ -133,22 +162,27 @@ uint8_t Leaf::GetRowID(ART &art, const idx_t &position) const {
 	return segment->row_ids[position % ARTNode::PREFIX_SEGMENT_SIZE];
 }
 
-idx_t Leaf::FindRowID(ART &art, const row_t &row_id) const {
+idx_t Leaf::FindRowID(ART &art, idx_t &position, const row_t &row_id) const {
 	D_ASSERT(!IsInlined());
 
+	auto next_position = position;
 	auto remaining = count;
-	auto position = row_ids.position;
+	while (next_position != DConstants::INVALID_INDEX) {
 
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
-		auto find_count = std::min(remaining, ARTNode::LEAF_SEGMENT_SIZE);
-		for (idx_t i = 0; i < find_count; i++) {
+		position = next_position;
+		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(next_position);
+		auto search_count = std::min(remaining, ARTNode::LEAF_SEGMENT_SIZE);
+
+		// search in this segment
+		for (idx_t i = 0; i < search_count; i++) {
 			if (segment->row_ids[i] == row_id) {
 				return count - remaining + i;
 			}
 		}
-		remaining -= find_count;
-		position = segment->next;
+
+		// adjust loop variables
+		remaining -= search_count;
+		next_position = segment->next;
 	}
 	return DConstants::INVALID_INDEX;
 }
