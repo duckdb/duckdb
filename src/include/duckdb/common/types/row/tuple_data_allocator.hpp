@@ -57,6 +57,8 @@ public:
 
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
+	//! Get the layout
+	const TupleDataLayout &GetLayout();
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state

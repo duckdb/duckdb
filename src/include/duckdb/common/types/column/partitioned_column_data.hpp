@@ -28,10 +28,16 @@ public:
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 };
 
-enum class PartitionedColumnDataType : uint8_t { RADIX, HIVE, INVALID };
+enum class PartitionedColumnDataType : uint8_t {
+	INVALID,
+	//! Radix partitioning on a hash column
+	RADIX,
+	//! Hive-style multi-field partitioning
+	HIVE
+};
 
 //! Shared allocators for parallel partitioning
-struct PartitionAllocators {
+struct PartitionColumnDataAllocators {
 	mutex lock;
 	vector<shared_ptr<ColumnDataAllocator>> allocators;
 };
@@ -98,7 +104,7 @@ protected:
 	vector<LogicalType> types;
 
 	mutex lock;
-	shared_ptr<PartitionAllocators> allocators;
+	shared_ptr<PartitionColumnDataAllocators> allocators;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
 };
 

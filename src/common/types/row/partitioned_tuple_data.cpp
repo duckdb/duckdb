@@ -1,48 +1,45 @@
-#include "duckdb/common/types/column/partitioned_column_data.hpp"
+#include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
-                                             vector<LogicalType> types_p)
-    : type(type_p), context(context_p), types(std::move(types_p)),
-      allocators(make_shared<PartitionColumnDataAllocators>()) {
+PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, ClientContext &context_p,
+                                           TupleDataLayout layout_p)
+    : type(type_p), context(context_p), layout(std::move(layout_p)),
+      allocators(make_shared<PartitionTupleDataAllocators>()) {
 }
 
-PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
-    : type(other.type), context(other.context), types(other.types), allocators(other.allocators) {
+PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
+    : type(other.type), context(other.context), layout(other.layout) {
 }
 
-unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
+unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {
 	switch (type) {
-	case PartitionedColumnDataType::RADIX:
-		return make_unique<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
-	case PartitionedColumnDataType::HIVE:
-		return make_unique<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
+		//	case PartitionedTupleDataType::RADIX:
+		//		return make_unique<RadixPartitionedTupleData>((RadixPartitionedTupleData &)*this);
 	default:
-		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
+		throw NotImplementedException("CreateShared for this type of PartitionedTupleData");
 	}
 }
 
-PartitionedColumnData::~PartitionedColumnData() {
+PartitionedTupleData::~PartitionedTupleData() {
 }
 
-void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) const {
+void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state) const {
 	state.partition_sel.Initialize();
-	state.slice_chunk.Initialize(context, types);
+	state.slice_chunk.Initialize(context, layout.GetTypes());
 	InitializeAppendStateInternal(state);
 }
 
-unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
+unique_ptr<DataChunk> PartitionedTupleData::CreatePartitionBuffer() const {
 	auto result = make_unique<DataChunk>();
-	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
+	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), layout.GetTypes(), BufferSize());
 	return result;
 }
 
-void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
+void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataChunk &input) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);
 
@@ -66,7 +63,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 		partition_entries[partition_indices[0]] = list_entry_t(0, count);
 		break;
 	default:
-		throw InternalException("Unexpected VectorType in PartitionedColumnData::Append");
+		throw InternalException("Unexpected VectorType in PartitionedTupleData::Append");
 	}
 
 	// Early out: check if everything belongs to a single partition
@@ -133,7 +130,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	}
 }
 
-void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
+void PartitionedTupleData::FlushAppendState(PartitionedTupleDataAppendState &state) {
 	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
 		auto &partition_buffer = *state.partition_buffers[i];
 		if (partition_buffer.size() > 0) {
@@ -143,7 +140,7 @@ void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &s
 	}
 }
 
-void PartitionedColumnData::Combine(PartitionedColumnData &other) {
+void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
 
@@ -152,20 +149,19 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 		partitions = std::move(other.partitions);
 	} else {
 		D_ASSERT(partitions.size() == other.partitions.size());
-		// Combine the append state's partitions into this PartitionedColumnData
+		// Combine the append state's partitions into this PartitionedTupleData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {
 			partitions[i]->Combine(*other.partitions[i]);
 		}
 	}
 }
 
-vector<unique_ptr<ColumnDataCollection>> &PartitionedColumnData::GetPartitions() {
+vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 	return partitions;
 }
 
-void PartitionedColumnData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
-	allocators->allocators.back()->MakeShared();
+void PartitionedTupleData::CreateAllocator() {
+	allocators->allocators.emplace_back(make_shared<TupleDataAllocator>(context, layout));
 }
 
 } // namespace duckdb

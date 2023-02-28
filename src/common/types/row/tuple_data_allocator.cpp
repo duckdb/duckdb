@@ -31,6 +31,10 @@ Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
 }
 
+const TupleDataLayout &TupleDataAllocator::GetLayout() {
+	return layout;
+}
+
 static void ReleaseHandles(unordered_map<uint32_t, BufferHandle> &handles, const unordered_set<uint32_t> &block_ids,
                            vector<BufferHandle> *pinned_handles) {
 	bool found_handle;

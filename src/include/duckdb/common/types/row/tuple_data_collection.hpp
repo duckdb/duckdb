@@ -9,15 +9,12 @@
 #pragma once
 
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_segment.hpp"
+#include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
 
 class TupleDataAllocator;
-struct TupleDataChunkPart;
-struct TupleDataSegment;
-struct TupleDataManagementState;
-struct TupleDataAppendState;
-
 struct TupleDataScatterFunction;
 struct TupleDataGatherFunction;
 
@@ -32,6 +29,10 @@ public:
 	TupleDataCollection(ClientContext &context, vector<LogicalType> types, bool align = true);
 	//! Constructs a buffer-managed tuple data collection with the specified aggregates
 	TupleDataCollection(ClientContext &context, vector<AggregateObject> aggregates, bool align = true);
+	//! TODO:
+	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
+
+	~TupleDataCollection();
 
 public:
 	//! The layout of the stored rows
@@ -93,6 +94,8 @@ public:
 private:
 	//! TODO:
 	void Initialize(ClientContext &context, vector<LogicalType> types, vector<AggregateObject> aggregates, bool align);
+	//! TODO:
+	void InitializeScatterGatherFunctions();
 	//! TODO:
 	static TupleDataScatterFunction GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! TODO:

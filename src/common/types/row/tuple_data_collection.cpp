@@ -3,7 +3,6 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
-#include "duckdb/common/types/row/tuple_data_states.hpp"
 
 #include <algorithm>
 
@@ -11,7 +10,6 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-// TODO: add SelectionVector to scatter/gather functions!
 typedef void (*tuple_data_scatter_function_t)(Vector &source, const UnifiedVectorFormat &source_data,
                                               const idx_t source_offset, const idx_t count,
                                               const TupleDataLayout &layout, Vector &row_locations,
@@ -46,13 +44,25 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, vector<Aggregat
     : TupleDataCollection(context, {}, std::move(aggregates), align) {
 }
 
+TupleDataCollection::TupleDataCollection(shared_ptr<TupleDataAllocator> allocator) {
+	this->layout = allocator->GetLayout();
+	this->allocator = std::move(allocator);
+	this->count = 0;
+	InitializeScatterGatherFunctions();
+}
+
+TupleDataCollection::~TupleDataCollection() {
+}
+
 void TupleDataCollection::Initialize(ClientContext &context, vector<LogicalType> types,
                                      vector<AggregateObject> aggregates, bool align) {
 	D_ASSERT(!types.empty());
 	layout.Initialize(std::move(types), std::move(aggregates), align);
 	allocator = make_shared<TupleDataAllocator>(context, layout);
 	this->count = 0;
+}
 
+void TupleDataCollection::InitializeScatterGatherFunctions() {
 	scatter_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		scatter_functions.emplace_back(GetScatterFunction(layout, col_idx));

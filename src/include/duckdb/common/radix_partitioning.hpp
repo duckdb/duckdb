@@ -10,6 +10,7 @@
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
+#include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,51 @@ protected:
 	}
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
+
+	static constexpr idx_t GetBufferSize(idx_t div) {
+		return STANDARD_VECTOR_SIZE / div == 0 ? 1 : STANDARD_VECTOR_SIZE / div;
+	}
+
+private:
+	//! The number of radix bits
+	const idx_t radix_bits;
+	//! The index of the column holding the hashes
+	const idx_t hash_col_idx;
+};
+
+//! RadixPartitionedTupleData is a PartitionedTupleData that partitions input based on the radix of a hash
+class RadixPartitionedTupleData : public PartitionedTupleData {
+public:
+	RadixPartitionedTupleData(ClientContext &context_p, TupleDataLayout layout, idx_t radix_bits_p,
+	                          idx_t hash_col_idx_p);
+	RadixPartitionedTupleData(const RadixPartitionedTupleData &other);
+	~RadixPartitionedTupleData() override;
+
+	idx_t GetRadixBits() const {
+		return radix_bits;
+	}
+
+protected:
+	//===--------------------------------------------------------------------===//
+	// Radix Partitioning interface implementation
+	//===--------------------------------------------------------------------===//
+	idx_t BufferSize() const override {
+		switch (radix_bits) {
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+			return GetBufferSize(1 << 1);
+		case 5:
+			return GetBufferSize(1 << 2);
+		case 6:
+			return GetBufferSize(1 << 3);
+		default:
+			return GetBufferSize(1 << 4);
+		}
+	}
+	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const override;
+	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) override;
 
 	static constexpr idx_t GetBufferSize(idx_t div) {
 		return STANDARD_VECTOR_SIZE / div == 0 ? 1 : STANDARD_VECTOR_SIZE / div;
