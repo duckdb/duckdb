@@ -62,7 +62,7 @@ public:
 	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment);
 	//! Prepares a chunk for scanning
-	void InitializeChunkState(TupleDataManagementState &state, const TupleDataChunk &chunk);
+	void InitializeChunkState(TupleDataManagementState &state, TupleDataChunk &chunk);
 
 private:
 	//! Builds out a single part (grabs the lock)

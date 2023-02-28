@@ -31,7 +31,8 @@ Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
 }
 
-static void ReleaseHandles(unordered_map<uint32_t, BufferHandle> &handles, const unordered_set<uint32_t> &block_ids) {
+static void ReleaseHandles(unordered_map<uint32_t, BufferHandle> &handles, const unordered_set<uint32_t> &block_ids,
+                           vector<BufferHandle> *pinned_handles) {
 	bool found_handle;
 	do {
 		found_handle = false;
@@ -40,25 +41,39 @@ static void ReleaseHandles(unordered_map<uint32_t, BufferHandle> &handles, const
 				// still required: do not release
 				continue;
 			}
-			handles.erase(it);
+			if (pinned_handles) {
+				pinned_handles->emplace_back(std::move(handles.erase(it)->second));
+			} else {
+				handles.erase(it);
+			}
 			found_handle = true;
 			break;
 		}
 	} while (found_handle);
 }
 
-static void ReleaseHandles(TupleDataManagementState &state, const TupleDataChunk &chunk, bool all_constant) {
-	ReleaseHandles(state.row_handles, chunk.row_block_ids);
+static void ReleaseHandles(TupleDataManagementState &state, const TupleDataChunk &chunk, bool all_constant,
+                           vector<BufferHandle> *pinned_handles) {
+	ReleaseHandles(state.row_handles, chunk.row_block_ids, pinned_handles);
 	if (!all_constant) {
-		ReleaseHandles(state.heap_handles, chunk.heap_block_ids);
+		ReleaseHandles(state.heap_handles, chunk.heap_block_ids, pinned_handles);
 	}
 }
 
 void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment) {
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
-		// Release any handles that are no longer required
-		ReleaseHandles(append_state.chunk_state, chunks.back(), layout.AllConstant());
+		vector<BufferHandle> *pinned_handles;
+		if (append_state.properties == TupleDataAppendProperties::KEEP_EVERYTHING_PINNED) {
+			// Keep handles pinned
+			pinned_handles = &segment.pinned_handles;
+		} else if (append_state.properties == TupleDataAppendProperties::UNPIN_AFTER_DONE) {
+			// Release any handles that are no longer required
+			pinned_handles = nullptr;
+		} else {
+			throw InternalException("Encountered TupleDataAppendProperties::INVALID");
+		}
+		ReleaseHandles(append_state.chunk_state, chunks.back(), layout.AllConstant(), pinned_handles);
 	}
 
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
@@ -199,13 +214,13 @@ static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data
 	}
 }
 
-void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, const TupleDataChunk &chunk) {
+void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, TupleDataChunk &chunk) {
 	// Release any handles that are no longer required
-	ReleaseHandles(state, chunk, layout.AllConstant());
+	ReleaseHandles(state, chunk, layout.AllConstant(), nullptr);
 
 	idx_t offset = 0;
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
-	for (const auto &part : chunk.parts) {
+	for (auto &part : chunk.parts) {
 		// Set up row locations for the scan
 		const auto base_row_ptr = GetRowPointer(state, part);
 		for (idx_t i = 0; i < part.count; i++) {
@@ -218,6 +233,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, c
 				// Heap block has changed - re-compute the pointers within each row
 				RecomputeHeapPointers(old_base_heap_ptr, new_base_heap_ptr, row_locations, offset, part.count, layout,
 				                      0);
+				part.base_heap_ptr = new_base_heap_ptr;
 			}
 		}
 		offset += part.count;

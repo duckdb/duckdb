@@ -92,6 +92,8 @@ public:
 	vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
+	//! TODO
+	vector<BufferHandle> pinned_handles;
 };
 
 } // namespace duckdb

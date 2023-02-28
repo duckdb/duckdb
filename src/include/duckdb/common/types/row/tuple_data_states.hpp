@@ -13,6 +13,14 @@
 
 namespace duckdb {
 
+enum class TupleDataAppendProperties : uint8_t {
+	INVALID,
+	//! TODO
+	KEEP_EVERYTHING_PINNED,
+	//! TODO
+	UNPIN_AFTER_DONE
+};
+
 struct TupleDataManagementState {
 	unordered_map<uint32_t, BufferHandle> row_handles;
 	unordered_map<uint32_t, BufferHandle> heap_handles;
@@ -24,6 +32,7 @@ struct TupleDataManagementState {
 struct TupleDataAppendState {
 	TupleDataManagementState chunk_state;
 	vector<UnifiedVectorFormat> vector_data;
+	TupleDataAppendProperties properties;
 	vector<column_t> column_ids;
 };
 

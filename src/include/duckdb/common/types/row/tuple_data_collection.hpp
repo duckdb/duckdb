@@ -44,9 +44,11 @@ public:
 	}
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
-	void InitializeAppend(TupleDataAppendState &append_state);
+	void InitializeAppend(TupleDataAppendState &append_state,
+	                      TupleDataAppendProperties properties = TupleDataAppendProperties::UNPIN_AFTER_DONE);
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
-	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids);
+	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
+	                      TupleDataAppendProperties properties = TupleDataAppendProperties::UNPIN_AFTER_DONE);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally TODO
@@ -58,6 +60,8 @@ public:
 	             const SelectionVector &sel);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
+	//! TODO:
+	void Unpin();
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	void InitializeScanChunk(DataChunk &chunk) const;
@@ -76,9 +80,9 @@ public:
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Scans a DataChunk from the TupleDataCollection
-	bool Scan(TupleDataScanState &state, DataChunk &result) const;
+	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
-	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result) const;
+	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection TODO
 	void Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
 	            const idx_t scan_count, DataChunk &result) const;
@@ -100,9 +104,9 @@ private:
 	                             const idx_t count);
 	//! TODO:
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
-	//!
+	//! TODO:
 	void ScanAtIndex(TupleDataManagementState &chunk_state, const vector<column_t> &column_ids, idx_t segment_index,
-	                 idx_t chunk_index, DataChunk &result) const;
+	                 idx_t chunk_index, DataChunk &result);
 
 	//! Verify counts of the segments in this collection
 	void Verify() const;

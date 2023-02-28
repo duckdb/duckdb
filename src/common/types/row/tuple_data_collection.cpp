@@ -64,15 +64,6 @@ void TupleDataCollection::Initialize(ClientContext &context, vector<LogicalType>
 	}
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state) {
-	vector<column_t> column_ids;
-	column_ids.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		column_ids.emplace_back(col_idx);
-	}
-	InitializeAppend(append_state, std::move(column_ids));
-}
-
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -95,9 +86,20 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 #endif
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids) {
+void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, TupleDataAppendProperties properties) {
+	vector<column_t> column_ids;
+	column_ids.reserve(layout.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+	InitializeAppend(append_state, std::move(column_ids), properties);
+}
+
+void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
+                                           TupleDataAppendProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	append_state.vector_data.resize(layout.ColumnCount());
+	append_state.properties = properties;
 	append_state.column_ids = std::move(column_ids);
 	if (segments.empty()) {
 		segments.emplace_back(allocator);
@@ -125,6 +127,7 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 	if (!layout.AllConstant()) {
 		ComputeHeapSizes(append_state, new_chunk);
 	}
+
 	allocator->Build(append_state, count, segments.back());
 
 	// Set the validity mask for each row before inserting data
@@ -161,6 +164,12 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 		segments.push_back(std::move(other_seg));
 	}
 	Verify();
+}
+
+void TupleDataCollection::Unpin() {
+	for (auto &segment : segments) {
+		segment.pinned_handles.clear();
+	}
 }
 
 void TupleDataCollection::InitializeScanChunk(DataChunk &chunk) const {
@@ -207,7 +216,7 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
-bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) const {
+bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	const auto segment_index_before = state.segment_index;
 	idx_t segment_index;
 	idx_t chunk_index;
@@ -222,8 +231,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) con
 	return true;
 }
 
-bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate,
-                               DataChunk &result) const {
+bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result) {
 	idx_t segment_index;
 	idx_t chunk_index;
 	{
@@ -505,7 +513,7 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 }
 
 void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, const vector<column_t> &column_ids,
-                                      idx_t segment_index, idx_t chunk_index, DataChunk &result) const {
+                                      idx_t segment_index, idx_t chunk_index, DataChunk &result) {
 	auto &segment = segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(chunk_state, chunk);
