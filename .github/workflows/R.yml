@@ -7,6 +7,8 @@ on:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -55,7 +57,7 @@ jobs:
       with:
         run_tests: 0
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: r-test-extensions
         path: |
