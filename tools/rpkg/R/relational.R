@@ -165,7 +165,7 @@ rel_order <- rapi_rel_order
 window_functions <- c("sum", "rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
 window_boundaries <- c("unbounded_preceding", "unbounded_following", "current_row_range", "current_row_rows", "expr_following_rows", "expr_preceding_rows", "expre_following_rows", "expr_preceding_range", "expr_following_range")
 
-rel_window <-function(rel, window_function = "sum",
+rel_window <-function(rel=rel, window_function = "sum",
                             children = list(),
                             partitions = list(),
                             orders = NULL,
@@ -194,8 +194,8 @@ rel_window_mandatory_args <-function(rel,
   default_expr = NULL) {
 
     window_function <- match.arg(window_function)
-    window_boundary_start <- match.arg(window_boundaries)
-    window_boundary_end <- match.arg(window_boundaries)
+    window_boundary_start <- match.arg(window_boundary_start)
+    window_boundary_end <- match.arg(window_boundary_end)
 
     rapi_rel_window_aggregation(rel,
                                 window_function,
