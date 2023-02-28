@@ -44,7 +44,7 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {
-			idx_t distance = StringUtil::LevenshteinDistance(name, column_name);
+			idx_t distance = StringUtil::SimilarityScore(name, column_name);
 			scores.emplace_back(binding->alias + "." + name, distance);
 		}
 	}

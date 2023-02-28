@@ -7,9 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#include <utility>
-
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
@@ -118,9 +115,9 @@ public:
 
 	duckdb::unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
-	duckdb::unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
+	duckdb::unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
 
-	duckdb::unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
+	duckdb::unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
 
 	duckdb::unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
 
@@ -155,6 +152,10 @@ public:
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
@@ -180,5 +181,11 @@ private:
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };
+
+template <class T>
+static bool ModuleIsLoaded() {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
+}
 
 } // namespace duckdb

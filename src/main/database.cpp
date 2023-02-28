@@ -135,18 +135,24 @@ string DatabaseInstance::ExtractDatabaseType(string &path) {
 	return string();
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                      AccessMode access_mode) {
-	unique_ptr<AttachedDatabase> attached_database;
+duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
+                                                                              AccessMode access_mode) {
+	duckdb::unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extensionon database
 		auto entry = config.storage_extensions.find(type);
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
-		// use storage extension to create the initial database
-		attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-		                                                info.name, info, access_mode);
+
+		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+			// use storage extension to create the initial database
+			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                info.name, info, access_mode);
+		} else {
+			attached_database =
+			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+		}
 	} else {
 		// check if this is an in-memory database or not
 		attached_database =
@@ -185,7 +191,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
+	buffer_manager = make_uniq<BufferManager>(*this, config.options.temporary_directory);
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -199,6 +205,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
+
 	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
@@ -261,6 +268,10 @@ DuckDB::~DuckDB() {
 
 BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
+}
+
+BufferPool &DatabaseInstance::GetBufferPool() {
+	return *config.buffer_pool;
 }
 
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
@@ -332,6 +343,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
 	}
+	if (new_config.buffer_pool) {
+		config.buffer_pool = std::move(new_config.buffer_pool);
+	} else {
+		config.buffer_pool = make_shared<BufferPool>(config.options.maximum_memory);
+	}
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -355,7 +371,8 @@ idx_t DuckDB::NumberOfThreads() {
 }
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	return loaded_extensions.find(name) != loaded_extensions.end();
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	return loaded_extensions.find(extension_name) != loaded_extensions.end();
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -363,7 +380,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
-	loaded_extensions.insert(name);
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	loaded_extensions.insert(extension_name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

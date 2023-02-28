@@ -1,15 +1,21 @@
 #include "duckdb_python/pyconnection.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/read_json_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -40,12 +46,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
-
-template <class T>
-static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
-}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -123,6 +123,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
+	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()")
+	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -178,9 +181,11 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	      py::arg("proto"))
-	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
+	         py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
-	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::kw_only(),
+	         py::arg("enable_optimizer") = true)
 	    .def("from_substrait_json", &DuckDBPyConnection::FromSubstraitJSON,
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
@@ -332,7 +337,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto pending_query = connection->PendingQuery(std::move(statements[i]));
+			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -397,8 +402,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	auto res = ExecuteInternal(query, std::move(params), many);
 	if (res) {
-		auto py_result = make_uniq<DuckDBPyResult>();
-		py_result->result = std::move(res);
+		auto py_result = make_uniq<DuckDBPyResult>(std::move(res));
 		result = make_uniq<DuckDBPyRelation>(std::move(py_result));
 	}
 	return shared_from_this();
@@ -828,10 +832,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
-	auto rel = make_uniq<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
+	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df));
-	return rel;
+	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
@@ -907,15 +911,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
-	auto rel = make_uniq<DuckDBPyRelation>(
-	    connection
-	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                       Value::POINTER((uintptr_t)stream_factory_produce),
-	                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
-	        ->Alias(name));
-	rel->rel->extra_dependencies =
+	auto rel = connection
+	               ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                              Value::POINTER((uintptr_t)stream_factory_produce),
+	                                              Value::POINTER((uintptr_t)stream_factory_get_schema)})
+	               ->Alias(name);
+	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	return rel;
+	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
@@ -928,22 +931,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 	return make_uniq<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_uniq<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_uniq<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait", params, named_parameters)->Alias(query));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_uniq<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_uniq<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait_json", params, named_parameters)->Alias(query));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
@@ -1078,6 +1085,20 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	return result->ToArrowTable(chunk_size);
 }
 
+py::dict DuckDBPyConnection::FetchPyTorch() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchPyTorch();
+}
+
+py::dict DuckDBPyConnection::FetchTF() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchTF();
+}
+
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
 	auto arrow = FetchArrow(chunk_size);
 	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
@@ -1128,7 +1149,7 @@ static duckdb::unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &tabl
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
 		auto select = make_uniq<SelectStatement>();
-		select->node = pyrel->rel->GetQueryNode();
+		select->node = pyrel->GetRel().GetQueryNode();
 
 		auto subquery = make_uniq<SubqueryRef>(std::move(select));
 		return std::move(subquery);
@@ -1301,22 +1322,6 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
 	import_cache.reset();
-}
-
-bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
-}
-
-bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {

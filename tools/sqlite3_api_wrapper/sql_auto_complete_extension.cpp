@@ -57,9 +57,9 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		auto score = idx_t(BASE_SCORE - bonus);
 		if (prefix.size() == 0) {
 		} else if (prefix.size() < str.size()) {
-			score += StringUtil::LevenshteinDistance(str.substr(0, prefix.size()), prefix);
+			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
-			score += StringUtil::LevenshteinDistance(str, prefix);
+			score += StringUtil::SimilarityScore(str, prefix);
 		}
 		D_ASSERT(score >= 0);
 		scores.emplace_back(str, score);

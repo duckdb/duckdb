@@ -13,6 +13,14 @@
 #include <pybind11/stl.h>
 #include "duckdb/common/unique_ptr.hpp"
 #include <vector>
+#include "duckdb/common/assert.hpp"
+
+namespace pybind11 {
+
+bool gil_check();
+void gil_assert();
+
+} // namespace pybind11
 
 namespace py = pybind11;
 

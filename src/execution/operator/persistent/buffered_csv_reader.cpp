@@ -721,6 +721,9 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 			names.push_back(column_name);
 		}
 	}
+	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), options.name_list.size()); i++) {
+		names[i] = options.name_list[i];
+	}
 }
 
 vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
@@ -889,6 +892,12 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	DataChunk best_header_row;
 	DetectCandidateTypes(type_candidates, format_template_candidates, info_candidates, original_options, best_num_cols,
 	                     best_sql_types_candidates, best_format_candidates, best_header_row);
+
+	if (best_format_candidates.empty() || best_header_row.size() == 0) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    original_options.file_path);
+	}
 
 	// #######
 	// ### header detection

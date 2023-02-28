@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
+unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *stmt) {
 	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
 	auto stack_checker = StackCheck();
 

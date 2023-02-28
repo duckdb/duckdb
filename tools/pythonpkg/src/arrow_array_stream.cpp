@@ -112,9 +112,9 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 }
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
-	VerifyArrowDatasetLoaded();
-
 	py::gil_scoped_acquire acquire;
+
+	VerifyArrowDatasetLoaded();
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
 	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");

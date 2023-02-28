@@ -26,6 +26,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	info->query = TransformSelect(stmt->query, false);
+	if (HasPivotEntries()) {
+		throw ParserException("Cannot use PIVOT statement syntax in a view. Use the SQL standard PIVOT syntax in the "
+		                      "FROM clause instead.");
+	}
 
 	if (stmt->aliases && stmt->aliases->length > 0) {
 		for (auto c = stmt->aliases->head; c != nullptr; c = lnext(c)) {

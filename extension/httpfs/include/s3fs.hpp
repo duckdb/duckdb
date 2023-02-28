@@ -41,6 +41,7 @@ struct S3AuthParams {
 	string endpoint;
 	string url_style;
 	bool use_ssl;
+	bool s3_url_compatibility_mode;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
@@ -51,6 +52,9 @@ struct ParsedS3Url {
 	const string bucket;
 	const string path;
 	const string query_param;
+	const string trimmed_s3_url;
+
+	string GetHTTPUrl(S3AuthParams &auth_params, string http_query_string = "");
 };
 
 struct S3ConfigParams {
@@ -95,11 +99,10 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, string path_p, const string &stripped_path_p, uint8_t flags,
-	             const HTTPParams &http_params, const S3AuthParams &auth_params_p,
-	             const S3ConfigParams &config_params_p)
+	S3FileHandle(FileSystem &fs, string path_p, uint8_t flags, const HTTPParams &http_params,
+	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
-	      config_params(config_params_p), stripped_path(stripped_path_p) {
+	      config_params(config_params_p) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
@@ -109,7 +112,6 @@ public:
 	}
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
-	string stripped_path;
 
 public:
 	void Close() override;
@@ -167,16 +169,17 @@ public:
 	string GetName() const override;
 
 public:
-	// HTTP Requests
-	duckdb::unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                                duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
-	                                                char *buffer_in, idx_t buffer_in_len) override;
-	duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                               char *buffer_in, idx_t buffer_in_len) override;
-	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map) override;
-	duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
+	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string s3_url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out,
 	                                                    idx_t buffer_out_len) override;
+	duckdb::unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
+	                                                duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+	                                                char *buffer_in, idx_t buffer_in_len,
+	                                                string http_params = "") override;
+	duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
+	                                               char *buffer_in, idx_t buffer_in_len,
+	                                               string http_params = "") override;
 
 	static void Verify();
 
@@ -215,9 +218,8 @@ public:
 	}
 
 protected:
-	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param, uint8_t flags,
-	                                                FileLockType lock, FileCompressionType compression,
-	                                                FileOpener *opener) override;
+	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+	                                                FileCompressionType compression, FileOpener *opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);

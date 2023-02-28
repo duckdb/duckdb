@@ -131,6 +131,7 @@ protected:
 	ParquetReader &reader;
 	LogicalType type;
 	duckdb::unique_ptr<Vector> byte_array_data;
+	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
 

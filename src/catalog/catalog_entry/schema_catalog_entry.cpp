@@ -24,7 +24,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const string &name) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), type, [&](CatalogEntry *entry) {
-		auto ldist = StringUtil::LevenshteinDistance(entry->name, name);
+		auto ldist = StringUtil::SimilarityScore(entry->name, name);
 		if (ldist < result.distance) {
 			result.distance = ldist;
 			result.name = entry->name;

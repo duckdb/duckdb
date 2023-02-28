@@ -28,24 +28,24 @@ public:
 
 public:
 	template <class T>
-	static inline Key CreateKey(ArenaAllocator &allocator, T element) {
+	static inline Key CreateKey(ArenaAllocator &allocator, const LogicalType &type, T element) {
 		auto data = Key::CreateData<T>(allocator, element);
 		return Key(data, sizeof(element));
 	}
 
 	template <class T>
-	static inline Key CreateKey(ArenaAllocator &allocator, const Value &element) {
-		return CreateKey(allocator, element.GetValueUnsafe<T>());
+	static inline Key CreateKey(ArenaAllocator &allocator, const LogicalType &type, const Value &element) {
+		return CreateKey(allocator, type, element.GetValueUnsafe<T>());
 	}
 
 	template <class T>
-	static inline void CreateKey(ArenaAllocator &allocator, Key &key, T element) {
+	static inline void CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, T element) {
 		key.data = Key::CreateData<T>(allocator, element);
 		key.len = sizeof(element);
 	}
 
 	template <class T>
-	static inline void CreateKey(ArenaAllocator &allocator, Key &key, const Value element) {
+	static inline void CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, const Value element) {
 		key.data = Key::CreateData<T>(allocator, element.GetValueUnsafe<T>());
 		key.len = sizeof(element);
 	}
@@ -76,12 +76,9 @@ private:
 };
 
 template <>
-Key Key::CreateKey(ArenaAllocator &allocator, string_t value);
+Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, string_t value);
 template <>
-Key Key::CreateKey(ArenaAllocator &allocator, const char *value);
+Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, const char *value);
 template <>
-void Key::CreateKey(ArenaAllocator &allocator, Key &key, string_t value);
-template <>
-void Key::CreateKey(ArenaAllocator &allocator, Key &key, const char *value);
-
+void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, string_t value);
 } // namespace duckdb

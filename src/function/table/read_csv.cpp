@@ -28,10 +28,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &patterns) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
-		auto found_files = fs.Glob(file_pattern, context);
-		if (found_files.empty()) {
-			throw FileSystem::MissingFileException(file_pattern, context);
-		}
+		auto found_files = fs.GlobFiles(file_pattern, context);
 		files.insert(files.end(), found_files.begin(), found_files.end());
 	}
 }
@@ -98,6 +95,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		} else if (loption == "column_names" || loption == "names") {
+			if (!options.name_list.empty()) {
+				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+			}
+			if (kv.second.IsNull()) {
+				throw BinderException("read_csv_auto %s cannot be NULL", kv.first);
+			}
+			auto &children = ListValue::GetChildren(kv.second);
+			for (auto &child : children) {
+				options.name_list.push_back(StringValue::Get(child));
 			}
 		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
 			auto &child_type = kv.second.type();
@@ -302,7 +310,7 @@ public:
 			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
-		double percentage = double(file_index) / total_files;
+		double percentage = double(file_index - 1) / total_files;
 		percentage += (double(1) / double(total_files)) * progress;
 		return percentage * 100;
 	}
@@ -576,6 +584,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		{
 			lock_guard<mutex> l(csv_lock);
 			if (initial_reader) {
+				total_size = initial_reader->file_handle ? initial_reader->file_handle->FileSize() : 0;
 				return std::move(initial_reader);
 			}
 			if (next_file >= total_files) {
@@ -964,6 +973,8 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
+	read_csv_auto.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
+	read_csv_auto.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	return read_csv_auto;
 }
 

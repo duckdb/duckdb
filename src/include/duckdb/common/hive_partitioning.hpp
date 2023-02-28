@@ -52,7 +52,15 @@ struct HivePartitionKey {
 
 	struct Equality {
 		bool operator()(const HivePartitionKey &a, const HivePartitionKey &b) const {
-			return a.values == b.values;
+			if (a.values.size() != b.values.size()) {
+				return false;
+			}
+			for (idx_t i = 0; i < a.values.size(); i++) {
+				if (!Value::NotDistinctFrom(a.values[i], b.values[i])) {
+					return false;
+				}
+			}
+			return true;
 		}
 	};
 };

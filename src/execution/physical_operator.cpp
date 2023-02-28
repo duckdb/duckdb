@@ -252,15 +252,15 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	if (!state.initialized) {
 		state.initialized = true;
 		state.can_cache_chunk = true;
+
 		if (!context.pipeline || !caching_supported) {
 			state.can_cache_chunk = false;
-		}
-
-		if (context.pipeline->GetSink() && context.pipeline->GetSink()->RequiresBatchIndex()) {
+		} else if (!context.pipeline->GetSink()) {
+			// Disabling for pipelines without Sink, i.e. when pulling
 			state.can_cache_chunk = false;
-		}
-
-		if (context.pipeline->IsOrderDependent()) {
+		} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
+			state.can_cache_chunk = false;
+		} else if (context.pipeline->IsOrderDependent()) {
 			state.can_cache_chunk = false;
 		}
 	}

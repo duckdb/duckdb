@@ -54,7 +54,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		auto &config = DBConfig::GetConfig(context);
 		// for now assume only one storage extension provides the custom drop_database impl
 		for (auto &extension_entry : config.storage_extensions) {
-			if (extension_entry.second->drop_database != nullptr) {
+			if (extension_entry.second->drop_database == nullptr) {
 				continue;
 			}
 			auto &storage_extension = extension_entry.second;
@@ -64,7 +64,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				auto bound_drop_database_func = Bind(*drop_database_function_ref);
 				result.plan = CreatePlan(*bound_drop_database_func);
 				result.names = {"Success"};
-				result.types = {LogicalType::BOOLEAN};
+				result.types = {LogicalType::BIGINT};
 				properties.allow_stream_result = false;
 				properties.return_type = StatementReturnType::NOTHING;
 				return result;

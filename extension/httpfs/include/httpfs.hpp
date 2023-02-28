@@ -19,10 +19,11 @@ using HeaderMap = case_insensitive_map_t<string>;
 // avoid including httplib in header
 struct ResponseWrapper {
 public:
-	explicit ResponseWrapper(duckdb_httplib_openssl::Response &res);
+	explicit ResponseWrapper(duckdb_httplib_openssl::Response &res, string &original_url);
 	int code;
 	string error;
 	HeaderMap headers;
+	string http_url;
 };
 
 struct HTTPParams {
@@ -91,8 +92,6 @@ public:
 	}
 
 	// HTTP Requests
-	virtual duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                                       char *buffer_in, idx_t buffer_in_len);
 	virtual duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -101,8 +100,10 @@ public:
 	// Post Request that can handle variable sized responses without a content-length header (needed for s3 multipart)
 	virtual duckdb::unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                        duckdb::unique_ptr<char[]> &buffer_out,
-	                                                        idx_t &buffer_out_len, char *buffer_in,
-	                                                        idx_t buffer_in_len);
+	                                                        idx_t &buffer_out_len, char *buffer_in, idx_t buffer_in_len,
+	                                                        string params = "");
+	virtual duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string url, HeaderMap header_map,
+	                                                       char *buffer_in, idx_t buffer_in_len, string params = "");
 
 	// FS methods
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -131,8 +132,7 @@ public:
 	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
 
 protected:
-	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, const string &query_param,
-	                                                        uint8_t flags, FileLockType lock,
+	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
 	                                                        FileCompressionType compression, FileOpener *opener);
 };
 
