@@ -23,6 +23,9 @@
 //  IN THE SOFTWARE.
 
 enum DatabaseError: Error {
+  case decimalUnrepresentable
+  case failedToCreatePreparedStatement(reason: String?)
+  case failedToBindParameter(reason: String?)
   case failedToOpenDatabase(reason: String?)
   case failedToOpenConnection
   case queryError(reason: String?)

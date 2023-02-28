@@ -38,6 +38,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_url_style", "S3 url style ('vhost' (default) or 'path')", LogicalType::VARCHAR,
 	                          Value("vhost"));
 	config.AddExtensionOption("s3_use_ssl", "S3 use SSL (default true)", LogicalType::BOOLEAN, Value(true));
+	config.AddExtensionOption("s3_url_compatibility_mode", "Disable Globs and Query Parameters on S3 urls",
+	                          LogicalType::BOOLEAN, Value(false));
 
 	// S3 Uploader config
 	config.AddExtensionOption("s3_uploader_max_filesize",
