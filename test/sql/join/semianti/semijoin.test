@@ -103,3 +103,29 @@ SELECT * FROM left_table
 NATURAL SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table;
 ----
 42	1	1
+
+# test correlated queries
+
+# right_table.a and left_table.a have the value 42
+# only left_table.a has the value 43
+# test inequality joins
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a <> right_table.a) ORDER BY a, c;
+----
+43	1	1
+
+# range joins
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a);
+----
+43	1	1
+
+statement ok
+INSERT INTO right_table VALUES (1, 42);
+
+# test complex predicates
+query III
+SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+----
+42	1	1
+43	1	1
