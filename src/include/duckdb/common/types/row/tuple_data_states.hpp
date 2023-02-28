@@ -18,12 +18,13 @@ struct TupleDataManagementState {
 	unordered_map<uint32_t, BufferHandle> heap_handles;
 	Vector row_locations = Vector(LogicalType::POINTER);
 	Vector heap_locations = Vector(LogicalType::POINTER);
-	Vector heap_sizes = Vector(LogicalType::UBIGINT);
+	Vector heap_sizes = Vector(LogicalType::UINTEGER);
 };
 
 struct TupleDataAppendState {
 	TupleDataManagementState chunk_state;
 	vector<UnifiedVectorFormat> vector_data;
+	vector<column_t> column_ids;
 };
 
 enum class TupleDataScanProperties : uint8_t {

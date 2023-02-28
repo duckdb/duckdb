@@ -1,13 +1,14 @@
-#include "duckdb/common/types/row/row_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
-    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
+    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_offset(0) {
 }
 
-void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align) {
+void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align, bool heap_offset_p) {
 	offsets.clear();
 	types = std::move(types_p);
 
@@ -26,9 +27,8 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 			for (auto &ct : child_types) {
 				child_type_vector.emplace_back(ct.second);
 			}
-			// TODO: the nested TupleDataLayout does not need a HeapPtr!
 			auto struct_entry = struct_layouts.emplace(col_idx, TupleDataLayout());
-			struct_entry.first->second.Initialize(std::move(child_type_vector), false);
+			struct_entry.first->second.Initialize(std::move(child_type_vector), false, false);
 			all_constant = all_constant && struct_entry.first->second.AllConstant();
 		} else {
 			all_constant = all_constant && TypeIsConstantSize(type.InternalType());
@@ -36,13 +36,9 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 	}
 
 	// This enables pointer swizzling for out-of-core computation.
-	if (!all_constant) {
-		// When unswizzled the pointer lives here.
-		// When swizzled, the pointer is replaced by an offset.
-		heap_pointer_offset = row_width;
-		// The 8 byte pointer will be replaced with an 8 byte idx_t when swizzled.
-		// However, this cannot be sizeof(data_ptr_t), since 32 bit builds use 4 byte pointers.
-		row_width += sizeof(idx_t);
+	if (heap_offset_p && !all_constant) {
+		heap_offset = row_width;
+		row_width += sizeof(uint32_t);
 	}
 
 	// Data columns. No alignment required.
@@ -90,12 +86,12 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 #endif
 }
 
-void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align) {
-	Initialize(std::move(types_p), Aggregates(), align);
+void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align, bool heap_offset_p) {
+	Initialize(std::move(types_p), Aggregates(), align, heap_offset_p);
 }
 
-void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align) {
-	Initialize(vector<LogicalType>(), std::move(aggregates_p), align);
+void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_offset_p) {
+	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
 }
 
 } // namespace duckdb

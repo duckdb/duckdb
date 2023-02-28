@@ -25,11 +25,11 @@ public:
 
 public:
 	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true);
+	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true, bool heap_offset = true);
 	//! Initializes the RowLayout with the specified types to an empty RowLayout
-	void Initialize(vector<LogicalType> types, bool align = true);
+	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
 	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
-	void Initialize(Aggregates aggregates_p, bool align = true);
+	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
 		return types.size();
@@ -79,7 +79,7 @@ public:
 		return all_constant;
 	}
 	inline idx_t GetHeapOffset() const {
-		return heap_pointer_offset;
+		return heap_offset;
 	}
 
 private:
@@ -101,8 +101,8 @@ private:
 	vector<idx_t> offsets;
 	//! Whether all columns in this layout are constant size
 	bool all_constant;
-	//! Offset to the pointer to the heap for each row
-	idx_t heap_pointer_offset;
+	//! Offset to the heap offset
+	idx_t heap_offset;
 };
 
 } // namespace duckdb

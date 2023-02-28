@@ -2,11 +2,12 @@
 
 namespace duckdb {
 
-TupleDataChunkPart::TupleDataChunkPart(uint32_t row_block_index_p, idx_t row_block_offset_p,
-                                       uint32_t heap_block_index_p, idx_t heap_block_offset_p,
-                                       idx_t last_heap_row_size_p, uint32_t count_p)
+TupleDataChunkPart::TupleDataChunkPart(uint32_t row_block_index_p, uint32_t row_block_offset_p,
+                                       uint32_t heap_block_index_p, uint32_t heap_block_offset_p,
+                                       data_ptr_t base_heap_ptr_p, idx_t last_heap_row_size_p, uint32_t count_p)
     : row_block_index(row_block_index_p), row_block_offset(row_block_offset_p), heap_block_index(heap_block_index_p),
-      heap_block_offset(heap_block_offset_p), last_heap_size(last_heap_row_size_p), count(count_p) {
+      heap_block_offset(heap_block_offset_p), base_heap_ptr(base_heap_ptr_p), last_heap_size(last_heap_row_size_p),
+      count(count_p) {
 }
 
 TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept {

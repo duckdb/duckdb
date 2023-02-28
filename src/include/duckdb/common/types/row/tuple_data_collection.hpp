@@ -43,12 +43,16 @@ public:
 		return count;
 	}
 
-	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
+	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
 	void InitializeAppend(TupleDataAppendState &append_state);
-	//! Append a DataChunk to this TupleDataCollection using the specified append state
-	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
+	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk);
+	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally TODO
+	void Append(DataChunk &new_chunk, vector<column_t> column_ids);
+	//! Append a DataChunk to this TupleDataCollection using the specified append state
+	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
 
@@ -73,10 +77,10 @@ public:
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result) const;
 	//! Scans a DataChunk from the TupleDataCollection TODO
-	void Scan(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
-	          DataChunk &result) const;
+	void Gather(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
+	            DataChunk &result) const;
 	//! TODO:
-	void Scan(Vector &row_locations, const column_t column_id, const idx_t scan_count, Vector &result) const;
+	void Gather(Vector &row_locations, const column_t column_id, const idx_t scan_count, Vector &result) const;
 
 private:
 	//! TODO:

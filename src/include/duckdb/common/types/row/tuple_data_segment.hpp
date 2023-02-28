@@ -14,8 +14,9 @@ class TupleDataAllocator;
 
 struct TupleDataChunkPart {
 public:
-	TupleDataChunkPart(uint32_t row_block_index_p, idx_t row_block_offset_p, uint32_t heap_block_index_p,
-	                   idx_t heap_block_offset_p, idx_t last_heap_row_size_p, uint32_t count_p);
+	TupleDataChunkPart(uint32_t row_block_index_p, uint32_t row_block_offset_p, uint32_t heap_block_index_p,
+	                   uint32_t heap_block_offset_p, data_ptr_t base_heap_ptr, idx_t last_heap_row_size_p,
+	                   uint32_t count_p);
 
 	//! Disable copy constructors
 	TupleDataChunkPart(const TupleDataChunkPart &other) = delete;
@@ -28,12 +29,13 @@ public:
 public:
 	//! Index/offset of the row block
 	uint32_t row_block_index;
-	idx_t row_block_offset;
-	//! Index/offset of the heap block
+	uint32_t row_block_offset;
+	//! Pointer/index/offset of the heap block
 	uint32_t heap_block_index;
-	idx_t heap_block_offset;
+	uint32_t heap_block_offset;
+	data_ptr_t base_heap_ptr;
 	//! Size of the last heap row (for all but the last we can infer the size from the pointer difference)
-	idx_t last_heap_size;
+	uint32_t last_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
 };

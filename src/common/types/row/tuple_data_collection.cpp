@@ -5,10 +5,13 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
+// TODO: add SelectionVector to scatter/gather functions!
 typedef void (*tuple_data_scatter_function_t)(Vector &source, const UnifiedVectorFormat &source_data,
                                               const idx_t source_offset, const idx_t count,
                                               const TupleDataLayout &layout, Vector &row_locations,
@@ -61,18 +64,63 @@ void TupleDataCollection::Initialize(ClientContext &context, vector<LogicalType>
 }
 
 void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state) {
+	vector<column_t> column_ids;
+	column_ids.reserve(layout.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+	InitializeAppend(append_state, std::move(column_ids));
+}
+
+void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
+#ifdef DEBUG
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		if (std::find(column_ids.begin(), column_ids.end(), col_idx) != column_ids.end()) {
+			continue;
+		}
+		// This column will not be appended in the first go - verify that it is fixed-size - we cannot resize heap after
+		const auto physical_type = layout.GetTypes()[col_idx].InternalType();
+		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST);
+		if (physical_type == PhysicalType::STRUCT) {
+			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+			vector<column_t> struct_column_ids;
+			struct_column_ids.reserve(struct_layout.ColumnCount());
+			for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
+				struct_column_ids.emplace_back(struct_col_idx);
+			}
+			VerifyAppendColumns(struct_layout, struct_column_ids);
+		}
+	}
+#endif
+}
+
+void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids) {
+	VerifyAppendColumns(layout, column_ids);
 	append_state.vector_data.resize(layout.ColumnCount());
+	append_state.column_ids = std::move(column_ids);
 	if (segments.empty()) {
 		segments.emplace_back(allocator);
 	}
+}
+
+void TupleDataCollection::Append(DataChunk &new_chunk) {
+	TupleDataAppendState append_state;
+	InitializeAppend(append_state);
+	Append(append_state, new_chunk);
+}
+
+void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_ids) {
+	TupleDataAppendState append_state;
+	InitializeAppend(append_state, std::move(column_ids));
+	Append(append_state, new_chunk);
 }
 
 void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk) {
 	D_ASSERT(segments.size() == 1);                                    // Cannot append after Combine
 	D_ASSERT(append_state.vector_data.size() == layout.ColumnCount()); // Needs InitializeAppend
 	D_ASSERT(new_chunk.ColumnCount() == layout.ColumnCount());         // Chunk needs to adhere to schema
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
-		new_chunk.data[i].ToUnifiedFormat(new_chunk.size(), append_state.vector_data[i]);
+	for (const auto &col_idx : append_state.column_ids) {
+		new_chunk.data[col_idx].ToUnifiedFormat(new_chunk.size(), append_state.vector_data[col_idx]);
 	}
 	if (!layout.AllConstant()) {
 		ComputeEntrySizes(append_state, new_chunk);
@@ -86,18 +134,12 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 	}
 
 	// Write the data
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+	for (const auto &col_idx : append_state.column_ids) {
 		const auto &scatter_function = scatter_functions[col_idx];
 		scatter_function.function(new_chunk.data[col_idx], append_state.vector_data[col_idx], 0, new_chunk.size(),
 		                          layout, append_state.chunk_state.row_locations,
 		                          append_state.chunk_state.heap_locations, col_idx, scatter_function.child_functions);
 	}
-}
-
-void TupleDataCollection::Append(DataChunk &new_chunk) {
-	TupleDataAppendState append_state;
-	InitializeAppend(append_state);
-	Append(append_state, new_chunk);
 }
 
 void TupleDataCollection::Combine(TupleDataCollection &other) {
@@ -193,16 +235,16 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	return true;
 }
 
-void TupleDataCollection::Scan(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
-                               DataChunk &result) const {
+void TupleDataCollection::Gather(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
+                                 DataChunk &result) const {
 	D_ASSERT(column_ids.size() == result.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		Scan(row_locations, column_ids[col_idx], scan_count, result.data[col_idx]);
+		Gather(row_locations, column_ids[col_idx], scan_count, result.data[col_idx]);
 	}
 }
 
-void TupleDataCollection::Scan(Vector &row_locations, const column_t column_id, const idx_t scan_count,
-                               Vector &result) const {
+void TupleDataCollection::Gather(Vector &row_locations, const column_t column_id, const idx_t scan_count,
+                                 Vector &result) const {
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.function(row_locations, layout, column_id, scan_count, result, gather_function.child_functions);
 }
@@ -211,8 +253,8 @@ void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, 
 	auto entry_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
 	memset(entry_sizes, 0, new_chunk.size() * sizeof(idx_t));
 
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
-		auto type = layout.GetTypes()[i].InternalType();
+	for (const auto &col_idx : append_state.column_ids) {
+		auto type = layout.GetTypes()[col_idx].InternalType();
 		if (TypeIsConstantSize(type)) {
 			continue;
 		}
@@ -220,7 +262,7 @@ void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, 
 		// TODO: write ComputeEntrySizes for VARCHAR/STRUCT
 		switch (type) {
 		case PhysicalType::LIST:
-			RowOperations::ComputeEntrySizes(new_chunk.data[i], append_state.vector_data[i], entry_sizes,
+			RowOperations::ComputeEntrySizes(new_chunk.data[col_idx], append_state.vector_data[col_idx], entry_sizes,
 			                                 new_chunk.size(), new_chunk.size(),
 			                                 *FlatVector::IncrementalSelectionVector());
 			break;
@@ -428,7 +470,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, con
 	auto &segment = segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(chunk_state, chunk);
-	Scan(chunk_state.row_locations, column_ids, chunk.count, result);
+	Gather(chunk_state.row_locations, column_ids, chunk.count, result);
 }
 
 template <class T>
