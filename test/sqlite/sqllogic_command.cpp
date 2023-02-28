@@ -1,6 +1,7 @@
 #include "sqllogic_command.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/storage.hpp"
 
 namespace duckdb {
 class Serializer;
