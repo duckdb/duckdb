@@ -69,7 +69,6 @@ public:
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-
 	static idx_t GetAllocSize(idx_t block_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
 	}

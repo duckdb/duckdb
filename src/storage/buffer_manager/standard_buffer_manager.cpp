@@ -57,9 +57,9 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
-    : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)), temporary_id(MAXIMUM_BLOCK),
-      buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
-                       make_unique<BufferAllocatorData>(*this)) {
+    : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
+      temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
+                                                    BufferAllocatorRealloc, make_unique<BufferAllocatorData>(*this)) {
 	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
 }
 
@@ -90,8 +90,8 @@ void StandardBufferManager::DecreaseUsedMemory(idx_t size) {
 }
 
 template <typename... ARGS>
-TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(idx_t memory_delta,
-                                                                    unique_ptr<FileBuffer> *buffer, ARGS... args) {
+TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+                                                                    ARGS... args) {
 	auto r = EvictBlocks(memory_delta, buffer_pool.GetMaxMemory(), buffer);
 	if (!r.success) {
 		throw OutOfMemoryException(args..., InMemoryWarning());
@@ -233,7 +233,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 BufferPool::EvictionResult StandardBufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-                                                                         unique_ptr<FileBuffer> *buffer) {
+                                                              unique_ptr<FileBuffer> *buffer) {
 	return buffer_pool.EvictBlocks(extra_memory, memory_limit, buffer);
 }
 

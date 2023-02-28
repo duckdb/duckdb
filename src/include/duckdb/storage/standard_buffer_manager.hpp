@@ -90,8 +90,7 @@ public:
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-	                                             ARGS...);
+	TempBufferPoolReservation EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer, ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
@@ -106,7 +105,8 @@ protected:
 	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
 	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
 	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
-	BufferPool::EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	BufferPool::EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit,
+	                                       unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue() final override;
