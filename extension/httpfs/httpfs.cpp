@@ -489,7 +489,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			return;
 		} else {
 			// HEAD request fail, use Range request for another try (read only one byte)
-			if (flags & FileFlags::FILE_FLAGS_READ) {
+			if ((flags & FileFlags::FILE_FLAGS_READ) && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
 				if (range_res->code != 206) {
 					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
@@ -506,7 +506,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				res = std::move(range_res);
 			} else {
-				throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
+				throw IOException("Unable to connect to URL \"%s\": %d (%s)", res->http_url, res->code, res->error);
 			}
 		}
 	}
