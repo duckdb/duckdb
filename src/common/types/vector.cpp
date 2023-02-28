@@ -73,9 +73,9 @@ void Vector::Reference(const Value &value) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
-		auto &value_children = StructValue::GetChildren(value);
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto vector = make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : value_children[i]);
+			auto vector =
+			    make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
 			child_vectors.push_back(std::move(vector));
 		}
 		auxiliary = std::move(struct_buffer);
@@ -372,15 +372,18 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
 		auto &children = StructVector::GetEntries(*this);
-		auto &val_children = StructValue::GetChildren(val);
-		D_ASSERT(val.IsNull() || children.size() == val_children.size());
-		for (size_t i = 0; i < children.size(); i++) {
-			auto &vec_child = children[i];
-			if (!val.IsNull()) {
+		if (val.IsNull()) {
+			for (size_t i = 0; i < children.size(); i++) {
+				auto &vec_child = children[i];
+				vec_child->SetValue(index, Value());
+			}
+		} else {
+			auto &val_children = StructValue::GetChildren(val);
+			D_ASSERT(children.size() == val_children.size());
+			for (size_t i = 0; i < children.size(); i++) {
+				auto &vec_child = children[i];
 				auto &struct_child = val_children[i];
 				vec_child->SetValue(index, struct_child);
-			} else {
-				vec_child->SetValue(index, Value());
 			}
 		}
 		break;
