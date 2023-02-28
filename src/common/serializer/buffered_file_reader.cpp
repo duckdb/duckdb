@@ -63,4 +63,8 @@ ClientContext &BufferedFileReader::GetContext() {
 	return *context;
 }
 
+Catalog *BufferedFileReader::GetCatalog() {
+	return catalog;
+}
+
 } // namespace duckdb

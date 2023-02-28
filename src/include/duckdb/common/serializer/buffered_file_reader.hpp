@@ -23,6 +23,7 @@ public:
 	idx_t read_data;
 	unique_ptr<FileHandle> handle;
 	ClientContext *context;
+	Catalog *catalog = nullptr;
 
 public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
@@ -37,6 +38,8 @@ public:
 	uint64_t CurrentOffset();
 
 	ClientContext &GetContext() override;
+
+	Catalog *GetCatalog() override;
 
 private:
 	idx_t file_size;
