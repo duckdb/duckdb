@@ -399,7 +399,7 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 bool ART::InsertToLeaf(Leaf &leaf, const row_t &row_id) {
 #ifdef DEBUG
 	for (idx_t k = 0; k < leaf.count; k++) {
-		D_ASSERT(leaf.GetRowID(*this, k) != row_id);
+		D_ASSERT(leaf.GetRowId(*this, k) != row_id);
 	}
 #endif
 	if (IsUnique() && leaf.count != 0) {
@@ -527,7 +527,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (node) {
 			auto leaf = (Leaf *)node;
 			for (idx_t k = 0; k < leaf->count; k++) {
-				D_ASSERT(leaf->GetRowId(k) != row_identifiers[i]);
+				D_ASSERT(leaf->GetRowId(*this, k) != row_identifiers[i]);
 			}
 		}
 #endif
@@ -638,7 +638,7 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 		return false;
 	}
 	for (idx_t i = 0; i < leaf->count; i++) {
-		row_t row_id = leaf->GetRowId(i);
+		row_t row_id = leaf->GetRowId(*this, i);
 		result_ids.push_back(row_id);
 	}
 	return true;
@@ -750,7 +750,7 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 	if (!it->art) {
 		it->art = this;
 		// first find the minimum value in the ART: we start scanning from this value
-		it->FindMinimum(*tree);
+		it->FindMinimum(tree);
 		// early out min value higher than upper bound query
 		if (it->cur_key > upper_bound) {
 			// TODO: verify and track old vs. new memory size
@@ -942,7 +942,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 		// When we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
 		D_ASSERT(leaf_ptr->count == 1);
-		auto row_id = leaf_ptr->GetRowId(0);
+		auto row_id = leaf_ptr->GetRowId(*this, 0);
 		if (conflict_manager.AddHit(i, row_id)) {
 			found_conflict = i;
 		}

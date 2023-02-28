@@ -56,6 +56,8 @@ public:
 	//! Compare the key with the prefix of the node, return the position where they mismatch
 	uint32_t KeyMismatchPosition(ART &art, const Key &key, const uint32_t &depth) const;
 
+	//! Serialize this prefix
+	void Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
 

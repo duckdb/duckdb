@@ -85,6 +85,8 @@ public:
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
 	ARTNode GetChild(ART &art, const idx_t &pos) const;
+	//! Get the byte at the specified position
+	uint8_t GetKeyByte(ART &art, const idx_t &pos) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
 	idx_t GetChildPos(ART &art, const uint8_t &byte) const;
@@ -102,7 +104,6 @@ public:
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
-
 	//! Deserialize this node
 	void Deserialize(ART &art, idx_t block_id, idx_t offset);
 

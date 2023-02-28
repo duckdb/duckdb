@@ -123,12 +123,17 @@ void Node4::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[pos] = child;
 }
 
-ARTNode Node4::GetChild(const idx_t &pos) {
+ARTNode Node4::GetChild(const idx_t &pos) const {
 	D_ASSERT(pos < count);
 	return children[pos];
 }
 
-idx_t Node4::GetChildPos(const uint8_t &byte) {
+uint8_t Node4::GetKeyByte(const idx_t &pos) const {
+	D_ASSERT(pos < count);
+	return key[pos];
+}
+
+idx_t Node4::GetChildPos(const uint8_t &byte) const {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] == byte) {
 			return pos;
@@ -137,7 +142,7 @@ idx_t Node4::GetChildPos(const uint8_t &byte) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
+idx_t Node4::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) const {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] >= byte) {
 			inclusive = false;
@@ -150,11 +155,11 @@ idx_t Node4::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetMinPos() {
+idx_t Node4::GetMinPos() const {
 	return 0;
 }
 
-idx_t Node4::GetNextPos(idx_t pos) {
+idx_t Node4::GetNextPos(idx_t pos) const {
 	if (pos == DConstants::INVALID_INDEX) {
 		return 0;
 	}
@@ -162,7 +167,7 @@ idx_t Node4::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
+idx_t Node4::GetNextPosAndByte(idx_t pos, uint8_t &byte) const {
 	if (pos == DConstants::INVALID_INDEX) {
 		byte = key[0];
 		return 0;
@@ -175,6 +180,34 @@ idx_t Node4::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 	return DConstants::INVALID_INDEX;
 }
 
+BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// recurse into children and retrieve child block pointers
+	vector<BlockPointer> child_block_pointers;
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		child_block_pointers.push_back(children[i].Serialize(art, writer));
+	}
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(ARTNodeType::N4);
+	writer.Write<uint16_t>(count);
+	prefix.Serialize(art, writer);
+
+	// write key values
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		writer.Write(key[i]);
+	}
+
+	// write child block pointers
+	for (auto &child_block_pointer : child_block_pointers) {
+		writer.Write(child_block_pointer.block_id);
+		writer.Write(child_block_pointer.offset);
+	}
+
+	return block_pointer;
+}
+
 void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	count = reader.Read<uint16_t>();
@@ -185,7 +218,7 @@ void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 		key[i] = reader.Read<uint8_t>();
 	}
 
-	// read child offsets
+	// read child block pointers
 	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}

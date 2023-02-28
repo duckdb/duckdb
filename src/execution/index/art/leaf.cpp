@@ -47,6 +47,28 @@ Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint
 	leaf->prefix.Initialize(art, key, depth, key.len - depth);
 }
 
+void Leaf::Delete(ART &art, ARTNode &node) {
+
+	D_ASSERT(node);
+	D_ASSERT(!node.IsSwizzled());
+
+	auto leaf = art.leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+
+	// delete all leaf segments
+	if (!leaf->IsInlined()) {
+		auto position = leaf->row_ids.position;
+		while (position != DConstants::INVALID_INDEX) {
+			auto next_position = art.leaf_segments.GetDataAtPosition<LeafSegment>(position)->next;
+			art.DecreaseMemorySize(sizeof(LeafSegment));
+			art.leaf_segments.FreePosition(position);
+			position = next_position;
+		}
+	}
+
+	art.DecreaseMemorySize(sizeof(Leaf));
+	art.leaf_nodes.FreePosition(node.GetPointer());
+}
+
 void Leaf::Insert(ART &art, const row_t &row_id) {
 
 	if (count == 0) {
@@ -145,7 +167,11 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 	count--;
 }
 
-uint8_t Leaf::GetRowID(ART &art, const idx_t &position) const {
+bool Leaf::IsInlined() const {
+	return count <= 1;
+}
+
+uint8_t Leaf::GetRowId(ART &art, const idx_t &position) const {
 
 	D_ASSERT(position < count);
 	if (IsInlined()) {
@@ -187,8 +213,83 @@ idx_t Leaf::FindRowID(ART &art, idx_t &position, const row_t &row_id) const {
 	return DConstants::INVALID_INDEX;
 }
 
-bool Leaf::IsInlined() const {
-	return count <= 1;
+string Leaf::ToString(ART &art) {
+
+	string str = "Leaf: [";
+
+	if (IsInlined()) {
+		str += to_string(row_ids.inlined);
+		return str + "]";
+	}
+
+	auto position = row_ids.position;
+	auto remaining = count;
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+		auto to_string_count = std::min(remaining, ARTNode::LEAF_SEGMENT_SIZE);
+		for (idx_t i = 0; i < to_string_count; i++) {
+			str += i == 0 ? to_string(segment->row_ids[i]) : ", " + to_string(segment->row_ids[i]);
+		}
+		remaining -= to_string_count;
+		position = segment->next;
+	}
+	return str + "]";
+}
+
+BlockPointer Leaf::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(ARTNodeType::NLeaf);
+	writer.Write<uint32_t>(count);
+	prefix.Serialize(art, writer);
+
+	if (IsInlined()) {
+		writer.Write(row_ids.inlined);
+		return block_pointer;
+	}
+
+	D_ASSERT(row_ids.position);
+	auto position = row_ids.position;
+	auto remaining = count;
+
+	// iterate all leaf segments and write their row IDs
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+		auto copy_count = std::min(remaining, ARTNode::LEAF_SEGMENT_SIZE);
+
+		// write the row IDs
+		for (idx_t i = 0; i < copy_count; i++) {
+			writer.Write(segment->row_ids[i]);
+		}
+
+		// adjust loop variables
+		remaining -= copy_count;
+		position = segment->next;
+	}
+
+	return block_pointer;
+}
+
+void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	auto count_p = reader.Read<uint32_t>();
+	prefix.Deserialize(art, reader);
+
+	// inlined
+	if (count_p == 1) {
+		row_ids.inlined = reader.Read<row_t>();
+		count = count_p;
+		return;
+	}
+
+	// copy into segments
+	row_ids.position = art.leaf_segments.GetPosition();
+	auto segment = LeafSegment::Initialize(art, row_ids.position);
+	for (idx_t i = 0; i < count_p; i++) {
+		segment = segment->Append(art, count, reader.Read<uint8_t>());
+	}
+	D_ASSERT(count_p == count);
 }
 
 void Leaf::MoveInlinedToSegment(ART &art) {

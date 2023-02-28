@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/prefix.hpp"
+
 namespace duckdb {
 
 class Node48 {
@@ -36,22 +38,26 @@ public:
 	void ReplaceChild(const idx_t &pos, ARTNode &child);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode GetChild(const idx_t &pos);
+	ARTNode GetChild(const idx_t &pos) const;
+	//! Get the byte at the specified position
+	uint8_t GetKeyByte(const idx_t &pos) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	idx_t GetChildPos(const uint8_t &byte);
+	idx_t GetChildPos(const uint8_t &byte) const;
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive);
+	idx_t GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	idx_t GetMinPos();
+	idx_t GetMinPos() const;
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
-	idx_t GetNextPos(idx_t pos);
+	idx_t GetNextPos(idx_t pos) const;
 	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte);
+	idx_t GetNextPosAndByte(idx_t pos, uint8_t &byte) const;
 
+	//! Serialize an ART node
+	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
 	void Deserialize(ART &art, MetaBlockReader &reader);
 

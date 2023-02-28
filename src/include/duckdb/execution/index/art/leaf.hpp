@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -35,19 +36,30 @@ public:
 	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
 	                        const idx_t &count);
 
+	//! Delete the ART node
+	static void Delete(ART &art, ARTNode &node);
+
 	//! Insert a row ID into a leaf
 	void Insert(ART &art, const row_t &row_id);
 	//! Remove a row ID from a leaf
 	void Remove(ART &art, const row_t &row_id);
 
+	//! Returns whether this leaf is inlined
+	bool IsInlined() const;
 	//! Get the row ID at pos
-	uint8_t GetRowID(ART &art, const idx_t &position) const;
+	uint8_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
 	idx_t FindRowID(ART &art, idx_t &position, const row_t &row_id) const;
 
+	//! Returns the string representation of a leaf
+	string ToString(ART &art);
+
+	//! Serialize this leaf
+	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	//! Deserialize this leaf
+	void Deserialize(ART &art, MetaBlockReader &reader);
+
 private:
-	//! Returns whether this leaf is inlined
-	bool IsInlined() const;
 	//! Moves the inlined row ID onto a leaf segment, does not change the size
 	//! so this will be an (temporarily) invalid leaf
 	void MoveInlinedToSegment(ART &art);

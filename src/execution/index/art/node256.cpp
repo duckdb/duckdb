@@ -83,19 +83,24 @@ void Node256::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[pos] = child;
 }
 
-ARTNode Node256::GetChild(const idx_t &pos) {
+ARTNode Node256::GetChild(const idx_t &pos) const {
 	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
 	return children[pos];
 }
 
-idx_t Node256::GetChildPos(const uint8_t &byte) {
+uint8_t Node256::GetKeyByte(const idx_t &pos) const {
+	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
+	return pos;
+}
+
+idx_t Node256::GetChildPos(const uint8_t &byte) const {
 	if (children[byte]) {
 		return byte;
 	}
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
+idx_t Node256::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) const {
 	for (idx_t pos = byte; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (children[pos]) {
 			inclusive = false;
@@ -108,7 +113,7 @@ idx_t Node256::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetMinPos() {
+idx_t Node256::GetMinPos() const {
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i]) {
 			return i;
@@ -117,7 +122,7 @@ idx_t Node256::GetMinPos() {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetNextPos(idx_t pos) {
+idx_t Node256::GetNextPos(idx_t pos) const {
 	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
 	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (children[pos]) {
@@ -127,7 +132,7 @@ idx_t Node256::GetNextPos(idx_t pos) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
+idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) const {
 	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
 	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (children[pos]) {
@@ -138,12 +143,35 @@ idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 	return DConstants::INVALID_INDEX;
 }
 
+BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// recurse into children and retrieve child block pointers
+	vector<BlockPointer> child_block_pointers;
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		child_block_pointers.push_back(children[i].Serialize(art, writer));
+	}
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(ARTNodeType::N256);
+	writer.Write<uint16_t>(count);
+	prefix.Serialize(art, writer);
+
+	// write child block pointers
+	for (auto &child_block_pointer : child_block_pointers) {
+		writer.Write(child_block_pointer.block_id);
+		writer.Write(child_block_pointer.offset);
+	}
+
+	return block_pointer;
+}
+
 void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	count = reader.Read<uint16_t>();
 	prefix.Deserialize(art, reader);
 
-	// read child offsets
+	// read child block pointers
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}

@@ -195,15 +195,41 @@ uint32_t Prefix::KeyMismatchPosition(ART &art, const Key &key, const uint32_t &d
 	return position;
 }
 
+void Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	writer.Write(count);
+
+	// write inlined data
+	if (IsInlined()) {
+		writer.WriteData(data.inlined, count);
+		return;
+	}
+
+	D_ASSERT(data.position);
+	auto position = data.position;
+	auto remaining = count;
+
+	// iterate all prefix segments and write their bytes
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(position);
+		auto copy_count = std::min(remaining, ARTNode::PREFIX_SEGMENT_SIZE);
+
+		// write the bytes
+		writer.WriteData(segment->bytes, copy_count);
+
+		// adjust loop variables
+		remaining -= copy_count;
+		position = segment->next;
+	}
+}
+
 void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	auto count_p = reader.Read<uint32_t>();
 
 	// copy into inlined data
 	if (count_p <= ARTNode::PREFIX_INLINE_BYTES) {
-		for (idx_t i = 0; i < count_p; i++) {
-			data.inlined[i] = reader.Read<uint8_t>();
-		}
+		reader.ReadData(data.inlined, count_p);
 		count = count_p;
 		return;
 	}

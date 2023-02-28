@@ -124,20 +124,25 @@ void Node48::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[child_index[pos]] = child;
 }
 
-ARTNode Node48::GetChild(const idx_t &pos) {
+ARTNode Node48::GetChild(const idx_t &pos) const {
 	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
 	D_ASSERT(child_index[pos] < ARTNode::NODE_48_CAPACITY);
 	return children[child_index[pos]];
 }
 
-idx_t Node48::GetChildPos(const uint8_t &byte) {
+uint8_t Node48::GetKeyByte(const idx_t &pos) const {
+	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
+	return pos;
+}
+
+idx_t Node48::GetChildPos(const uint8_t &byte) const {
 	if (child_index[byte] == ARTNode::EMPTY_MARKER) {
 		return DConstants::INVALID_INDEX;
 	}
 	return byte;
 }
 
-idx_t Node48::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
+idx_t Node48::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) const {
 	for (idx_t pos = byte; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (child_index[pos] != ARTNode::EMPTY_MARKER) {
 			inclusive = false;
@@ -150,7 +155,7 @@ idx_t Node48::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node48::GetMinPos() {
+idx_t Node48::GetMinPos() const {
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {
 			return i;
@@ -159,7 +164,7 @@ idx_t Node48::GetMinPos() {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node48::GetNextPos(idx_t pos) {
+idx_t Node48::GetNextPos(idx_t pos) const {
 	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
 	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (child_index[pos] != ARTNode::EMPTY_MARKER) {
@@ -169,7 +174,7 @@ idx_t Node48::GetNextPos(idx_t pos) {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node48::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
+idx_t Node48::GetNextPosAndByte(idx_t pos, uint8_t &byte) const {
 	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
 	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
 		if (child_index[pos] != ARTNode::EMPTY_MARKER) {
@@ -178,6 +183,34 @@ idx_t Node48::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+BlockPointer Node48::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// recurse into children and retrieve child block pointers
+	vector<BlockPointer> child_block_pointers;
+	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
+		child_block_pointers.push_back(children[i].Serialize(art, writer));
+	}
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(ARTNodeType::N48);
+	writer.Write<uint16_t>(count);
+	prefix.Serialize(art, writer);
+
+	// write key values
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		writer.Write(child_index[i]);
+	}
+
+	// write child block pointers
+	for (auto &child_block_pointer : child_block_pointers) {
+		writer.Write(child_block_pointer.block_id);
+		writer.Write(child_block_pointer.offset);
+	}
+
+	return block_pointer;
 }
 
 void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
@@ -190,7 +223,7 @@ void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
 		child_index[i] = reader.Read<uint8_t>();
 	}
 
-	// read child offsets
+	// read child block pointers
 	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}
