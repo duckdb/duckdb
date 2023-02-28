@@ -157,12 +157,17 @@ Value::Value(const Value &other)
     : type_(other.type_), is_null(other.is_null), value_(other.value_), value_info_(other.value_info_) {
 }
 
-Value::Value(Value &&other) noexcept
-    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_),
-      value_info_(std::move(other.value_info_)) {
+Value::Value(Value &&other) noexcept {
+	std::swap(type_, other.type_);
+	std::swap(is_null, other.is_null);
+	std::swap(value_, other.value_);
+	std::swap(value_info_, other.value_info_);
 }
 
 Value &Value::operator=(const Value &other) {
+	if (this == &other) {
+		return *this;
+	}
 	type_ = other.type_;
 	is_null = other.is_null;
 	value_ = other.value_;
@@ -171,10 +176,10 @@ Value &Value::operator=(const Value &other) {
 }
 
 Value &Value::operator=(Value &&other) noexcept {
-	type_ = std::move(other.type_);
-	is_null = other.is_null;
-	value_ = other.value_;
-	value_info_ = std::move(other.value_info_);
+	std::swap(type_, other.type_);
+	std::swap(is_null, other.is_null);
+	std::swap(value_, other.value_);
+	std::swap(value_info_, other.value_info_);
 	return *this;
 }
 
