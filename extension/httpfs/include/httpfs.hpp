@@ -30,13 +30,11 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
 	static constexpr uint64_t DEFAULT_RETRIES = 3;
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
-	static constexpr uint64_t DEFAULT_GET_REQUEST_FILE_SIZE = 100000000;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 
 	uint64_t timeout;
 	uint64_t retries;
 	uint64_t retry_wait_ms;
-	uint64_t get_request_file_size;
 	float retry_backoff;
 
 	static HTTPParams ReadFrom(FileOpener *opener);

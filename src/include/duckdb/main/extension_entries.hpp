@@ -96,7 +96,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
-    {"get_request_file_size", "httpfs"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
     {"s3_region", "httpfs"},

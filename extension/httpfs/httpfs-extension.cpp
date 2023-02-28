@@ -28,9 +28,6 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("http_retry_backoff",
 	                          "Backoff factor for exponentially increasing retry wait time (default 4)",
 	                          LogicalType::FLOAT, Value(4));
-	// If no range request is possible, max file size to be downloaded (Default = 100Mb)
-	config.AddExtensionOption("get_request_file_size", "Max File Size allowed for Get Requests", LogicalType::UBIGINT,
-	                          Value(100000000));
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);

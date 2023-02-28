@@ -198,7 +198,6 @@ using socket_t = SOCKET;
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include "duckdb/common/exception.hpp"
 
 using socket_t = int;
 #ifndef INVALID_SOCKET
@@ -433,9 +432,6 @@ struct Request {
 	ResponseHandler response_handler;
 	ContentReceiverWithProgress content_receiver;
 	Progress progress;
-
-	// For get request
-	uint64_t get_request_file_size = 100000000;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 	const SSL *ssl = nullptr;
 #endif
@@ -519,8 +515,6 @@ struct Response {
 
 class Stream {
 public:
-	// For get request
-	uint64_t get_request_file_size = 100000000;
 	virtual ~Stream() = default;
 
 	virtual bool is_readable() const = 0;
@@ -891,12 +885,12 @@ public:
 	           ContentReceiver content_receiver);
 	Result Get(const char *path, const Headers &headers,
 	           ResponseHandler response_handler,
-	           ContentReceiver content_receiver, uint64_t get_request_file_size = 100000000);
+	           ContentReceiver content_receiver);
 	Result Get(const char *path, ResponseHandler response_handler,
 	           ContentReceiver content_receiver, Progress progress);
 	Result Get(const char *path, const Headers &headers,
 	           ResponseHandler response_handler, ContentReceiver content_receiver,
-	           Progress progress, uint64_t get_request_file_size = 100000000);
+	           Progress progress);
 
 	Result Get(const char *path, const Params &params, const Headers &headers,
 	           Progress progress = nullptr);
@@ -1212,6 +1206,7 @@ public:
 	~Client();
 
 	bool is_valid() const;
+
 	Result Get(const char *path);
 	Result Get(const char *path, const Headers &headers);
 	Result Get(const char *path, Progress progress);
@@ -1227,7 +1222,7 @@ public:
 	           ContentReceiver content_receiver);
 	Result Get(const char *path, const Headers &headers,
 	           ResponseHandler response_handler,
-	           ContentReceiver content_receiver, uint64_t get_request_file_size = 100000000);
+	           ContentReceiver content_receiver);
 	Result Get(const char *path, const Headers &headers,
 	           ResponseHandler response_handler, ContentReceiver content_receiver,
 	           Progress progress);
@@ -1241,7 +1236,6 @@ public:
 	Result Get(const char *path, const Params &params, const Headers &headers,
 	           ResponseHandler response_handler, ContentReceiver content_receiver,
 	           Progress progress = nullptr);
-
 
 	Result Head(const char *path);
 	Result Head(const char *path, const Headers &headers);
@@ -3299,10 +3293,7 @@ inline bool read_content_with_length(Stream &strm, uint64_t len,
 	uint64_t r = 0;
 	while (r < len) {
 		auto read_len = static_cast<size_t>(len - r);
-		auto n = (uint64_t) strm.read(buf, (std::min)(read_len, CPPHTTPLIB_RECV_BUFSIZ));
-		if (read_len > strm.get_request_file_size){
-			throw duckdb::InvalidInputException("File size is bigger than maximum allowed. Please verify that the server you are requesting data from supports Get-Range requests. If only Get requests are allowed, please increase the maximum set size to: SET get_request_file_size=" + std::to_string(read_len+1));
-		}
+		auto n = strm.read(buf, (std::min)(read_len, CPPHTTPLIB_RECV_BUFSIZ));
 		if (n <= 0) { return false; }
 
 		if (!out(buf, static_cast<size_t>(n), r, len)) { return false; }
@@ -6437,7 +6428,6 @@ inline bool ClientImpl::process_request(Stream &strm, Request &req,
 		};
 
 		int dummy_status;
-		strm.get_request_file_size = req.get_request_file_size;
 		if (!detail::read_content(strm, res, (std::numeric_limits<size_t>::max)(),
 		                          dummy_status, std::move(progress), std::move(out),
 		                          decompress_)) {
@@ -6536,9 +6526,9 @@ inline Result ClientImpl::Get(const char *path,
 
 inline Result ClientImpl::Get(const char *path, const Headers &headers,
                               ResponseHandler response_handler,
-                              ContentReceiver content_receiver, uint64_t get_request_file_size) {
+                              ContentReceiver content_receiver) {
 	return Get(path, headers, std::move(response_handler),
-	           std::move(content_receiver), nullptr, get_request_file_size);
+	           std::move(content_receiver), nullptr);
 }
 
 inline Result ClientImpl::Get(const char *path,
@@ -6552,7 +6542,7 @@ inline Result ClientImpl::Get(const char *path,
 inline Result ClientImpl::Get(const char *path, const Headers &headers,
                               ResponseHandler response_handler,
                               ContentReceiver content_receiver,
-                              Progress progress, uint64_t get_request_file_size) {
+                              Progress progress) {
 	Request req;
 	req.method = "GET";
 	req.path = path;
@@ -6564,7 +6554,6 @@ inline Result ClientImpl::Get(const char *path, const Headers &headers,
 		    return content_receiver(data, data_length);
 	    };
 	req.progress = std::move(progress);
-	req.get_request_file_size = get_request_file_size;
 
 	return send_(std::move(req));
 }
@@ -7863,9 +7852,9 @@ inline Result Client::Get(const char *path, ResponseHandler response_handler,
 }
 inline Result Client::Get(const char *path, const Headers &headers,
                           ResponseHandler response_handler,
-                          ContentReceiver content_receiver, uint64_t get_request_file_size) {
+                          ContentReceiver content_receiver) {
 	return cli_->Get(path, headers, std::move(response_handler),
-	                 std::move(content_receiver), get_request_file_size);
+	                 std::move(content_receiver));
 }
 inline Result Client::Get(const char *path, ResponseHandler response_handler,
                           ContentReceiver content_receiver, Progress progress) {

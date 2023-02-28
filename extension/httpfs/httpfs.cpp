@@ -32,7 +32,6 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t timeout = DEFAULT_TIMEOUT;
 	uint64_t retries = DEFAULT_RETRIES;
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
-	uint64_t get_request_file_size = DEFAULT_GET_REQUEST_FILE_SIZE;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -47,10 +46,8 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
 		retry_backoff = value.GetValue<float>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "get_request_file_size", value)) {
-		get_request_file_size = value.GetValue<uint64_t>();
-	}
-	return {timeout, retries, retry_wait_ms, get_request_file_size, retry_backoff};
+
+	return {timeout, retries, retry_wait_ms, retry_backoff};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -259,12 +256,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfs.capacity = data_length;
 				    memcpy(hfs.data.get(), data, data_length);
 			    } else {
-				    if (hfs.length + data_length > hfs.http_params.get_request_file_size) {
-					    throw duckdb::InvalidInputException(
-					        "File size is bigger than maximum allowed. Please verify that the server you are "
-					        "requesting data from supports Get-Range requests. If only Get requests are allowed, "
-					        "please increase the maximum set size.");
-				    }
 				    auto new_capacity = hfs.capacity;
 				    while (new_capacity < hfs.length + data_length) {
 					    new_capacity *= 2;
@@ -282,8 +273,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfs.length += data_length;
 			    }
 			    return true;
-		    },
-		    hfs.http_params.get_request_file_size);
+		    });
 	});
 
 	std::function<void(void)> on_retry(
