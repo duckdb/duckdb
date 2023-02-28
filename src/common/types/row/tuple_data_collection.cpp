@@ -15,7 +15,8 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 typedef void (*tuple_data_scatter_function_t)(Vector &source, const UnifiedVectorFormat &source_data,
                                               const idx_t source_offset, const idx_t count,
                                               const TupleDataLayout &layout, Vector &row_locations,
-                                              Vector &heap_locations, const idx_t col_idx,
+                                              Vector &heap_locations, const SelectionVector &row_sel,
+                                              const idx_t col_idx,
                                               const vector<TupleDataScatterFunction> &child_functions);
 
 struct TupleDataScatterFunction {
@@ -23,9 +24,9 @@ struct TupleDataScatterFunction {
 	vector<TupleDataScatterFunction> child_functions;
 };
 
-typedef void (*tuple_data_gather_function_t)(Vector &row_locations, const TupleDataLayout &layout, const idx_t col_idx,
-                                             const idx_t count, Vector &target,
-                                             const vector<TupleDataGatherFunction> &child_functions);
+typedef void (*tuple_data_gather_function_t)(Vector &row_locations, const SelectionVector &sel,
+                                             const TupleDataLayout &layout, const idx_t col_idx, const idx_t count,
+                                             Vector &target, const vector<TupleDataGatherFunction> &child_functions);
 
 struct TupleDataGatherFunction {
 	tuple_data_gather_function_t function;
@@ -103,19 +104,19 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
 	}
 }
 
-void TupleDataCollection::Append(DataChunk &new_chunk) {
+void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &sel) {
 	TupleDataAppendState append_state;
 	InitializeAppend(append_state);
-	Append(append_state, new_chunk);
+	Append(append_state, new_chunk, sel);
 }
 
-void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_ids) {
+void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_ids, const SelectionVector &sel) {
 	TupleDataAppendState append_state;
 	InitializeAppend(append_state, std::move(column_ids));
-	Append(append_state, new_chunk);
+	Append(append_state, new_chunk, sel);
 }
 
-void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk) {
+void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk, const SelectionVector &sel) {
 	D_ASSERT(segments.size() == 1);                                    // Cannot append after Combine
 	D_ASSERT(append_state.vector_data.size() == layout.ColumnCount()); // Needs InitializeAppend
 	D_ASSERT(new_chunk.ColumnCount() == layout.ColumnCount());         // Chunk needs to adhere to schema
@@ -123,7 +124,7 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 		new_chunk.data[col_idx].ToUnifiedFormat(new_chunk.size(), append_state.vector_data[col_idx]);
 	}
 	if (!layout.AllConstant()) {
-		ComputeEntrySizes(append_state, new_chunk);
+		ComputeEntrySizes(append_state, new_chunk, sel);
 	}
 	allocator->Build(append_state, count, segments.back());
 
@@ -135,11 +136,16 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 
 	// Write the data
 	for (const auto &col_idx : append_state.column_ids) {
-		const auto &scatter_function = scatter_functions[col_idx];
-		scatter_function.function(new_chunk.data[col_idx], append_state.vector_data[col_idx], 0, new_chunk.size(),
-		                          layout, append_state.chunk_state.row_locations,
-		                          append_state.chunk_state.heap_locations, col_idx, scatter_function.child_functions);
+		Scatter(append_state, new_chunk.data[col_idx], col_idx, new_chunk.size());
 	}
+}
+
+void TupleDataCollection::Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id,
+                                  const idx_t append_count, const SelectionVector &sel) {
+	const auto &scatter_function = scatter_functions[column_id];
+	scatter_function.function(source, append_state.vector_data[column_id], 0, append_count, layout,
+	                          append_state.chunk_state.row_locations, append_state.chunk_state.heap_locations, sel,
+	                          column_id, scatter_function.child_functions);
 }
 
 void TupleDataCollection::Combine(TupleDataCollection &other) {
@@ -235,21 +241,23 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	return true;
 }
 
-void TupleDataCollection::Gather(Vector &row_locations, const vector<column_t> &column_ids, const idx_t scan_count,
-                                 DataChunk &result) const {
+void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
+                                 const idx_t scan_count, DataChunk &result) const {
 	D_ASSERT(column_ids.size() == result.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		Gather(row_locations, column_ids[col_idx], scan_count, result.data[col_idx]);
+		Gather(row_locations, sel, column_ids[col_idx], scan_count, result.data[col_idx]);
 	}
 }
 
-void TupleDataCollection::Gather(Vector &row_locations, const column_t column_id, const idx_t scan_count,
-                                 Vector &result) const {
+void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &sel, const column_t column_id,
+                                 const idx_t scan_count, Vector &result) const {
 	const auto &gather_function = gather_functions[column_id];
-	gather_function.function(row_locations, layout, column_id, scan_count, result, gather_function.child_functions);
+	gather_function.function(row_locations, sel, layout, column_id, scan_count, result,
+	                         gather_function.child_functions);
 }
 
-void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &new_chunk) {
+void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, DataChunk &new_chunk,
+                                            const SelectionVector &row_sel) {
 	auto entry_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
 	memset(entry_sizes, 0, new_chunk.size() * sizeof(idx_t));
 
@@ -263,8 +271,7 @@ void TupleDataCollection::ComputeEntrySizes(TupleDataAppendState &append_state, 
 		switch (type) {
 		case PhysicalType::LIST:
 			RowOperations::ComputeEntrySizes(new_chunk.data[col_idx], append_state.vector_data[col_idx], entry_sizes,
-			                                 new_chunk.size(), new_chunk.size(),
-			                                 *FlatVector::IncrementalSelectionVector());
+			                                 new_chunk.size(), new_chunk.size(), row_sel);
 			break;
 		default:
 			throw InternalException("Unsupported type for RowOperations::ComputeEntrySizes");
@@ -289,10 +296,10 @@ inline void TupleDataValueScatter(const string_t &source, const data_ptr_t &row_
 template <class T>
 static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
                                       const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
-                                      Vector &heap_locations, const idx_t col_idx,
+                                      Vector &heap_locations, const SelectionVector &row_sel, const idx_t col_idx,
                                       const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
-	const auto sel = *source_data.sel;
+	const auto source_sel = *source_data.sel;
 	const auto data = (T *)source_data.data;
 	const auto &validity = source_data.validity;
 
@@ -303,17 +310,22 @@ static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	if (validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i + source_offset);
-			TupleDataValueScatter<T>(data[idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			auto idx = row_sel.get_index(i + source_offset);
+			auto source_idx = source_sel.get_index(idx);
+			TupleDataValueScatter<T>(data[source_idx], target_locations[idx], offset_in_row,
+			                         target_heap_locations[idx]);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i + source_offset);
-			if (validity.RowIsValid(idx)) {
-				TupleDataValueScatter<T>(data[idx], target_locations[i], offset_in_row, target_heap_locations[i]);
+			auto idx = row_sel.get_index(i + source_offset);
+			auto source_idx = source_sel.get_index(idx);
+			if (validity.RowIsValid(source_idx)) {
+				TupleDataValueScatter<T>(data[source_idx], target_locations[idx], offset_in_row,
+				                         target_heap_locations[idx]);
 			} else {
-				TupleDataValueScatter<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
-				ValidityBytes(target_locations[i]).SetValidUnsafe(col_idx);
+				TupleDataValueScatter<T>(data[source_idx], target_locations[idx], offset_in_row,
+				                         target_heap_locations[idx]);
+				ValidityBytes(target_locations[idx]).SetValidUnsafe(col_idx);
 			}
 		}
 	}
@@ -321,10 +333,10 @@ static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat 
 
 static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
                                    const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
-                                   Vector &heap_locations, const idx_t col_idx,
+                                   Vector &heap_locations, const SelectionVector &row_sel, const idx_t col_idx,
                                    const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
-	const auto sel = *source_data.sel;
+	const auto source_sel = *source_data.sel;
 	const auto &validity = source_data.validity;
 
 	// Target
@@ -332,9 +344,10 @@ static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &so
 
 	// Set validity of the struct
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = sel.get_index(i + source_offset);
-		if (!validity.RowIsValid(idx)) {
-			ValidityBytes(target_locations[i]).SetValidUnsafe(col_idx);
+		auto idx = row_sel.get_index(i + source_offset);
+		auto source_idx = source_sel.get_index(idx);
+		if (!validity.RowIsValid(source_idx)) {
+			ValidityBytes(target_locations[idx]).SetValidUnsafe(col_idx);
 		}
 	}
 
@@ -358,22 +371,22 @@ static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &so
 		struct_source->ToUnifiedFormat(count, struct_source_data);
 		const auto &struct_scatter_function = child_functions[col_idx];
 		struct_scatter_function.function(*struct_sources[struct_col_idx], struct_source_data, source_offset, count,
-		                                 struct_layout, struct_row_locations, heap_locations, struct_col_idx,
+		                                 struct_layout, struct_row_locations, heap_locations, row_sel, struct_col_idx,
 		                                 struct_scatter_function.child_functions);
 	}
 }
 
 static void ListTupleDataScatter(Vector &source, const UnifiedVectorFormat &source_data, const idx_t source_offset,
                                  const idx_t count, const TupleDataLayout &layout, Vector &row_locations,
-                                 Vector &heap_locations, const idx_t col_idx,
+                                 Vector &heap_locations, const SelectionVector &row_sel, const idx_t col_idx,
                                  const vector<TupleDataScatterFunction> &child_functions) {
 	// Target
 	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// TODO: re-write the list scatter at some point
 	// TODO: also the parameters passed here are probably wrong
-	RowOperations::HeapScatter(source, count, *FlatVector::IncrementalSelectionVector(), count, col_idx,
-	                           target_locations, target_locations, source_offset);
+	RowOperations::HeapScatter(source, count, row_sel, count, col_idx, target_locations, target_locations,
+	                           source_offset);
 }
 
 TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx) {
@@ -470,12 +483,12 @@ void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, con
 	auto &segment = segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(chunk_state, chunk);
-	Gather(chunk_state.row_locations, column_ids, chunk.count, result);
+	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), column_ids, chunk.count, result);
 }
 
 template <class T>
-static void TemplatedTupleDataGather(Vector &row_locations, const TupleDataLayout &layout, const idx_t col_idx,
-                                     const idx_t count, Vector &target,
+static void TemplatedTupleDataGather(Vector &row_locations, const SelectionVector &sel, const TupleDataLayout &layout,
+                                     const idx_t col_idx, const idx_t count, Vector &target,
                                      const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -491,17 +504,18 @@ static void TemplatedTupleDataGather(Vector &row_locations, const TupleDataLayou
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 
 	for (idx_t i = 0; i < count; i++) {
-		ValidityBytes row_mask(source_locations[i]);
+		const auto &source_location = source_locations[sel.get_index(i)];
+		ValidityBytes row_mask(source_location);
 		if (row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
-			target_data[i] = Load<T>(source_locations[i] + offset_in_row);
+			target_data[i] = Load<T>(source_location + offset_in_row);
 		} else {
 			target_validity.SetInvalid(i);
 		}
 	}
 }
 
-static void StructTupleDataGather(Vector &row_locations, const TupleDataLayout &layout, const idx_t col_idx,
-                                  const idx_t count, Vector &target,
+static void StructTupleDataGather(Vector &row_locations, const SelectionVector &sel, const TupleDataLayout &layout,
+                                  const idx_t col_idx, const idx_t count, Vector &target,
                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -516,7 +530,8 @@ static void StructTupleDataGather(Vector &row_locations, const TupleDataLayout &
 
 	// Get validity of the struct
 	for (idx_t i = 0; i < count; i++) {
-		ValidityBytes row_mask(source_locations[i]);
+		const auto &source_location = source_locations[sel.get_index(i)];
+		ValidityBytes row_mask(source_location);
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			target_validity.SetInvalid(i);
 		}
@@ -527,7 +542,8 @@ static void StructTupleDataGather(Vector &row_locations, const TupleDataLayout &
 	auto struct_source_locations = FlatVector::GetData<data_ptr_t>(struct_row_locations);
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	for (idx_t i = 0; i < count; i++) {
-		struct_source_locations[i] = source_locations[i] + offset_in_row;
+		const auto &source_location = source_locations[sel.get_index(i)];
+		struct_source_locations[i] = source_location + offset_in_row;
 	}
 
 	D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
@@ -539,21 +555,21 @@ static void StructTupleDataGather(Vector &row_locations, const TupleDataLayout &
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
 		const auto &struct_target = struct_targets[struct_col_idx];
 		const auto &struct_gather_function = child_functions[col_idx];
-		struct_gather_function.function(struct_row_locations, struct_layout, struct_col_idx, count, *struct_target,
-		                                struct_gather_function.child_functions);
+		// We pass an incremental selection vector instead of 'sel' because of how we built struct_source_locations
+		struct_gather_function.function(struct_row_locations, *FlatVector::IncrementalSelectionVector(), struct_layout,
+		                                struct_col_idx, count, *struct_target, struct_gather_function.child_functions);
 	}
 }
 
-static void ListTupleDataGather(Vector &row_locations, const TupleDataLayout &layout, const idx_t col_idx,
-                                const idx_t count, Vector &target,
+static void ListTupleDataGather(Vector &row_locations, const SelectionVector &sel, const TupleDataLayout &layout,
+                                const idx_t col_idx, const idx_t count, Vector &target,
                                 const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// TODO: re-write the list gather at some point
 	// TODO: also the parameters passed here are probably wrong
-	RowOperations::HeapGather(target, count, *FlatVector::IncrementalSelectionVector(), col_idx, source_locations,
-	                          source_locations);
+	RowOperations::HeapGather(target, count, sel, col_idx, source_locations, source_locations);
 }
 
 TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx) {
