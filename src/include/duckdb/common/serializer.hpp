@@ -22,6 +22,8 @@ private:
 	uint64_t version = 0L;
 
 public:
+	bool is_query_plan = false;
+
 	virtual ~Serializer() {
 	}
 

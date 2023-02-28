@@ -1350,7 +1350,7 @@ protected:
 		if (dict_type != EnumDictType::VECTOR_DICT) {
 			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
 		}
-		bool serialize_internals = GetSchemaName().empty();
+		bool serialize_internals = GetSchemaName().empty() || writer.GetSerializer().is_query_plan;
 		EnumType::Serialize(writer, *this, serialize_internals);
 	}
 

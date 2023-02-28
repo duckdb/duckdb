@@ -126,6 +126,8 @@ void LogicalOperator::Verify(ClientContext &context) {
 			continue;
 		}
 		BufferedSerializer serializer;
+		// We are serializing a query plan
+		serializer.is_query_plan = true;
 		try {
 			expressions[expr_idx]->Serialize(serializer);
 		} catch (NotImplementedException &ex) {

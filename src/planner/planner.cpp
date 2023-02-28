@@ -183,6 +183,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	}
 
 	BufferedSerializer serializer;
+	serializer.is_query_plan = true;
 	try {
 		op->Serialize(serializer);
 	} catch (NotImplementedException &ex) {
