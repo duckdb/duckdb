@@ -84,12 +84,16 @@ public:
 	    : ExtraValueInfo(ExtraValueInfoType::STRING_VALUE_INFO), str(std::move(str_p)) {
 	}
 
-	string str;
+	const string &GetString() {
+		return str;
+	}
 
 protected:
 	bool EqualsInternal(ExtraValueInfo *other_p) const override {
 		return other_p->Get<StringValueInfo>().str == str;
 	}
+
+	string str;
 };
 
 //===--------------------------------------------------------------------===//
@@ -105,12 +109,16 @@ public:
 	    : ExtraValueInfo(ExtraValueInfoType::NESTED_VALUE_INFO), values(std::move(values_p)) {
 	}
 
-	vector<Value> values;
+	const vector<Value> &GetValues() {
+		return values;
+	}
 
 protected:
 	bool EqualsInternal(ExtraValueInfo *other_p) const override {
 		return other_p->Get<NestedValueInfo>().values == values;
 	}
+
+	vector<Value> values;
 };
 //===--------------------------------------------------------------------===//
 // Value
@@ -157,11 +165,9 @@ Value::Value(const Value &other)
     : type_(other.type_), is_null(other.is_null), value_(other.value_), value_info_(other.value_info_) {
 }
 
-Value::Value(Value &&other) noexcept {
-	std::swap(type_, other.type_);
-	std::swap(is_null, other.is_null);
-	std::swap(value_, other.value_);
-	std::swap(value_info_, other.value_info_);
+Value::Value(Value &&other) noexcept
+    : type_(std::move(other.type_)), is_null(other.is_null), value_(other.value_),
+      value_info_(std::move(other.value_info_)) {
 }
 
 Value &Value::operator=(const Value &other) {
@@ -176,10 +182,10 @@ Value &Value::operator=(const Value &other) {
 }
 
 Value &Value::operator=(Value &&other) noexcept {
-	std::swap(type_, other.type_);
-	std::swap(is_null, other.is_null);
-	std::swap(value_, other.value_);
-	std::swap(value_info_, other.value_info_);
+	type_ = std::move(other.type_);
+	is_null = other.is_null;
+	value_ = other.value_;
+	value_info_ = std::move(other.value_info_);
 	return *this;
 }
 
@@ -1464,7 +1470,7 @@ const string &StringValue::Get(const Value &value) {
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(value.value_info_);
-	return value.value_info_->Get<StringValueInfo>().str;
+	return value.value_info_->Get<StringValueInfo>().GetString();
 }
 
 date_t DateValue::Get(const Value &value) {
@@ -1489,7 +1495,7 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(value.value_info_);
-	return value.value_info_->Get<NestedValueInfo>().values;
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
 const vector<Value> &ListValue::GetChildren(const Value &value) {
@@ -1498,7 +1504,7 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
 	D_ASSERT(value.value_info_);
-	return value.value_info_->Get<NestedValueInfo>().values;
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
 const Value &UnionValue::GetValue(const Value &value) {
