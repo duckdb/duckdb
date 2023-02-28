@@ -12,11 +12,12 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 class BlockManager;
 class BufferHandle;
-class BufferManager;
+class StandardBufferPool;
 class DatabaseInstance;
 class FileBuffer;
 
@@ -24,9 +25,9 @@ enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 struct BufferPoolReservation {
 	idx_t size {0};
-	BufferManager &manager;
+	BufferPool &pool;
 
-	BufferPoolReservation(BufferManager &manager) : manager(manager) {
+	BufferPoolReservation(BufferPool &pool) : pool(pool) {
 	}
 	BufferPoolReservation(const BufferPoolReservation &) = delete;
 	BufferPoolReservation &operator=(const BufferPoolReservation &) = delete;
@@ -41,7 +42,7 @@ struct BufferPoolReservation {
 };
 
 struct TempBufferPoolReservation : BufferPoolReservation {
-	TempBufferPoolReservation(BufferManager &manager, idx_t size) : BufferPoolReservation(manager) {
+	TempBufferPoolReservation(BufferPool &pool, idx_t size) : BufferPoolReservation(pool) {
 		Resize(size);
 	}
 	TempBufferPoolReservation(TempBufferPoolReservation &&) = default;
@@ -57,6 +58,7 @@ class BlockHandle {
 	friend class BufferManager;
 	friend class CBufferManager;
 	friend class StandardBufferManager;
+	friend class StandardBufferPool;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id);

@@ -1,9 +1,9 @@
-// Should maybe be called ExternalBufferManager??
-
 #pragma once
 
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -57,6 +57,7 @@ public:
 	idx_t GetMaxMemory() const final override;
 	Allocator &GetBufferAllocator() final override;
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final override;
+	BufferPool &GetBufferPool() final override;
 
 protected:
 	void PurgeQueue() final override;
@@ -71,6 +72,7 @@ private:
 private:
 	CBufferManagerConfig config;
 	unique_ptr<BlockManager> block_manager;
+	unique_ptr<DummyBufferPool> buffer_pool;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 	Allocator custom_allocator;

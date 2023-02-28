@@ -21,6 +21,7 @@ add_library(
   vector_conversion.cpp
   python_conversion.cpp
   python_objects.cpp
+  pybind_wrapper.cpp
   arrow_array_stream.cpp)
 
 set(ALL_OBJECT_FILES

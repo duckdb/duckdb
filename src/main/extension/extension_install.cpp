@@ -40,20 +40,54 @@ const vector<string> ExtensionHelper::PathComponents() {
 
 string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
-	if (!fs.DirectoryExists(local_path)) {
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  local_path);
+	auto opener = FileSystem::GetFileOpener(context);
+	Value extension_directory_value;
+	string extension_directory;
+
+	if (context.TryGetCurrentSetting("extension_directory", extension_directory_value) &&
+	    !extension_directory_value.IsNull() &&
+	    !extension_directory_value.ToString().empty()) { // create the extension directory if not present
+		extension_directory = extension_directory_value.ToString();
+		// TODO this should probably live in the FileSystem
+		// convert random separators to platform-canonic
+		extension_directory = fs.ConvertSeparators(extension_directory);
+		// expand ~ in extension directory
+		extension_directory = fs.ExpandPath(extension_directory, opener);
+		if (!fs.DirectoryExists(extension_directory)) {
+			auto sep = fs.PathSeparator();
+			auto splits = StringUtil::Split(extension_directory, sep);
+			D_ASSERT(!splits.empty());
+			string extension_directory_prefix;
+			if (StringUtil::StartsWith(extension_directory, sep)) {
+				extension_directory_prefix = sep; // this is swallowed by Split otherwise
+			}
+			for (auto &split : splits) {
+				extension_directory_prefix = extension_directory_prefix + split + sep;
+				if (!fs.DirectoryExists(extension_directory_prefix)) {
+					fs.CreateDirectory(extension_directory_prefix);
+				}
+			}
+		}
+	} else { // otherwise default to home
+		string home_directory = fs.GetHomeDirectory(opener);
+		// exception if the home directory does not exist, don't create whatever we think is home
+		if (!fs.DirectoryExists(home_directory)) {
+			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+			                  "home_directory='/path/to/dir' option.",
+			                  home_directory);
+		}
+		extension_directory = home_directory;
 	}
+	D_ASSERT(fs.DirectoryExists(extension_directory));
+
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
-		local_path = fs.JoinPath(local_path, path_ele);
-		if (!fs.DirectoryExists(local_path)) {
-			fs.CreateDirectory(local_path);
+		extension_directory = fs.JoinPath(extension_directory, path_ele);
+		if (!fs.DirectoryExists(extension_directory)) {
+			fs.CreateDirectory(extension_directory);
 		}
 	}
-	return local_path;
+	return extension_directory;
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {

@@ -19,6 +19,7 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
+#include "duckdb/storage/buffer/standard_buffer_pool.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -145,9 +146,15 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
-		// use storage extension to create the initial database
-		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-		                                                  info.name, info, access_mode);
+
+		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+			// use storage extension to create the initial database
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                  info.name, info, access_mode);
+		} else {
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name,
+			                                                  info.path, access_mode);
+		}
 	} else {
 		// check if this is an in-memory database or not
 		attached_database =
@@ -189,8 +196,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	if (!config.custom_buffer_manager) {
 		// Only when no custom buffer manager is provided do we create one
 		// otherwise we take the buffer manager from the config instead when it's requested
-		buffer_manager = make_unique<StandardBufferManager>(*this, config.options.temporary_directory,
-		                                                    config.options.maximum_memory);
+		buffer_manager = make_unique<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
@@ -205,6 +211,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
+
 	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
@@ -270,6 +277,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 		return *config.custom_buffer_manager;
 	}
 	return *buffer_manager;
+}
+
+BufferPool &DatabaseInstance::GetBufferPool() {
+	return *config.buffer_pool;
 }
 
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
@@ -341,7 +352,16 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
 	}
-	config.custom_buffer_manager = std::move(new_config.custom_buffer_manager);
+	// Set the custom buffer manager (if it's provided)
+	if (new_config.custom_buffer_manager) {
+		config.custom_buffer_manager = std::move(new_config.custom_buffer_manager);
+	}
+	// Set the custom buffer pool if it's provided, otherwise create a default one
+	if (new_config.buffer_pool) {
+		config.buffer_pool = std::move(new_config.buffer_pool);
+	} else {
+		config.buffer_pool = make_shared<StandardBufferPool>(config.options.maximum_memory);
+	}
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

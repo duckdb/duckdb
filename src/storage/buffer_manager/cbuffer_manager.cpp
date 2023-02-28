@@ -2,6 +2,8 @@
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/common/external_file_buffer.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -14,6 +16,7 @@ CBufferManager::CBufferManager(CBufferManagerConfig config_p)
       custom_allocator(CBufferAllocatorAllocate, CBufferAllocatorFree, CBufferAllocatorRealloc,
                        make_unique<CBufferAllocatorData>(*this)) {
 	block_manager = make_unique<InMemoryBlockManager>(*this);
+	buffer_pool = make_unique<DummyBufferPool>();
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
@@ -25,7 +28,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, alloc_size);
 
 	// Used to manage the used_memory counter with RAII
-	BufferPoolReservation reservation(*this);
+	BufferPoolReservation reservation(this->GetBufferPool());
 	reservation.size = alloc_size;
 
 	// create a new block pointer for this block
@@ -34,11 +37,15 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	return Pin(*handle_p);
 }
 
+BufferPool &CBufferManager::GetBufferPool() {
+	return *buffer_pool;
+}
+
 shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
 	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, block_size);
 
 	// create a new block pointer for this block
-	BufferPoolReservation reservation(*this);
+	BufferPoolReservation reservation(this->GetBufferPool());
 	reservation.size = block_size;
 	return make_shared<BlockHandle>(*block_manager, ++temporary_id, std::move(buffer), false, block_size,
 	                                std::move(reservation));

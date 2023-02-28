@@ -24,8 +24,16 @@ void BufferManager::SetLimit(idx_t limit) {
 	throw NotImplementedException("This type of BufferManager can not set a limit");
 }
 
+vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles() {
+	throw InternalException("This type of BufferManager does not allow temporary files");
+}
+
 const string &BufferManager::GetTemporaryDirectory() {
-	throw InternalException("CBufferManager does not allow a temporary directory");
+	throw InternalException("This type of BufferManager does not allow a temporary directory");
+}
+
+BufferPool &BufferManager::GetBufferPool() {
+	throw InternalException("This type of BufferManager does not have a buffer pool");
 }
 
 void BufferManager::SetTemporaryDirectory(const string &new_dir) {

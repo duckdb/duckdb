@@ -6,10 +6,11 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
-BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept : manager(src.manager) {
+BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept : pool(src.pool) {
 	size = src.size;
 	src.size = 0;
 }
@@ -26,9 +27,7 @@ BufferPoolReservation::~BufferPoolReservation() {
 
 void BufferPoolReservation::Resize(idx_t new_size) {
 	int64_t delta = (int64_t)new_size - size;
-	// When increasing the memory through the reservation, we don't want to instantly throw
-	// this is done before starting the eviction loop
-	manager.IncreaseUsedMemory(delta, true);
+	pool.IncreaseUsedMemory(delta);
 	size = new_size;
 }
 

@@ -17,6 +17,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 class ColumnSegment;

@@ -9,14 +9,15 @@
 #pragma once
 
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 
 class Allocator;
+class BufferPool;
 
 class BufferManager {
 	friend class BufferHandle;
@@ -47,6 +48,7 @@ public:
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	virtual void SetLimit(idx_t limit = (idx_t)-1);
+	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
 	virtual const string &GetTemporaryDirectory();
 	virtual void SetTemporaryDirectory(const string &new_dir);
 	virtual DatabaseInstance &GetDatabase();
@@ -58,12 +60,15 @@ public:
 	virtual void IncreaseUsedMemory(idx_t size, bool unsafe = false) = 0;
 	//! Decrease the currently allocated memory, but the actual deallocation does not go through the buffer manager
 	virtual void DecreaseUsedMemory(idx_t size) = 0;
+	//! Get the underlying buffer pool responsible for managing the buffers
+	virtual BufferPool &GetBufferPool();
 
 	// Static methods
 
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
+
 
 	static idx_t GetAllocSize(idx_t block_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
