@@ -22,13 +22,8 @@ struct TupleDataGatherFunction;
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
 public:
-	//! Constructs a buffer-managed tuple data collection with the specified types and aggregates
-	TupleDataCollection(ClientContext &context, vector<LogicalType> types, vector<AggregateObject> aggregates,
-	                    bool align = true);
-	//! Constructs a buffer-managed tuple data collection with the specified types
-	TupleDataCollection(ClientContext &context, vector<LogicalType> types, bool align = true);
-	//! Constructs a buffer-managed tuple data collection with the specified aggregates
-	TupleDataCollection(ClientContext &context, vector<AggregateObject> aggregates, bool align = true);
+	//! Constructs a buffer-managed tuple data collection with the specified layout
+	TupleDataCollection(ClientContext &context, TupleDataLayout layout);
 	//! TODO:
 	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
 
@@ -93,9 +88,7 @@ public:
 
 private:
 	//! TODO:
-	void Initialize(ClientContext &context, vector<LogicalType> types, vector<AggregateObject> aggregates, bool align);
-	//! TODO:
-	void InitializeScatterGatherFunctions();
+	void Initialize();
 	//! TODO:
 	static TupleDataScatterFunction GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! TODO:
@@ -115,10 +108,10 @@ private:
 	void Verify() const;
 
 private:
-	//! The TupleDataAllocator
-	shared_ptr<TupleDataAllocator> allocator;
 	//! The layout of the TupleDataCollection
 	TupleDataLayout layout;
+	//! The TupleDataAllocator
+	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
 	idx_t count;
 	//! The data segments of the TupleDataCollection

@@ -31,38 +31,23 @@ struct TupleDataGatherFunction {
 	vector<TupleDataGatherFunction> child_functions;
 };
 
-TupleDataCollection::TupleDataCollection(ClientContext &context, vector<LogicalType> types,
-                                         vector<AggregateObject> aggregates, bool align) {
-	Initialize(context, std::move(types), std::move(aggregates), align);
-}
-
-TupleDataCollection::TupleDataCollection(ClientContext &context, vector<LogicalType> types, bool align)
-    : TupleDataCollection(context, std::move(types), {}, align) {
-}
-
-TupleDataCollection::TupleDataCollection(ClientContext &context, vector<AggregateObject> aggregates, bool align)
-    : TupleDataCollection(context, {}, std::move(aggregates), align) {
+TupleDataCollection::TupleDataCollection(ClientContext &context, TupleDataLayout layout_p)
+    : layout(std::move(layout_p)), allocator(make_shared<TupleDataAllocator>(context, layout)) {
+	Initialize();
 }
 
 TupleDataCollection::TupleDataCollection(shared_ptr<TupleDataAllocator> allocator) {
 	this->layout = allocator->GetLayout();
 	this->allocator = std::move(allocator);
-	this->count = 0;
-	InitializeScatterGatherFunctions();
+	Initialize();
 }
 
 TupleDataCollection::~TupleDataCollection() {
 }
 
-void TupleDataCollection::Initialize(ClientContext &context, vector<LogicalType> types,
-                                     vector<AggregateObject> aggregates, bool align) {
-	D_ASSERT(!types.empty());
-	layout.Initialize(std::move(types), std::move(aggregates), align);
-	allocator = make_shared<TupleDataAllocator>(context, layout);
+void TupleDataCollection::Initialize() {
+	D_ASSERT(!layout.GetTypes().empty());
 	this->count = 0;
-}
-
-void TupleDataCollection::InitializeScatterGatherFunctions() {
 	scatter_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		scatter_functions.emplace_back(GetScatterFunction(layout, col_idx));
