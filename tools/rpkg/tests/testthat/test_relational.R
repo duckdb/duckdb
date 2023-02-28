@@ -405,3 +405,7 @@ test_that("You can perform the window function percent rank", {
     expected_result <- data.frame(a=c(1, 1, 2, 2, 2), percent_rank=c(0.0, 0.0, 0.5, 0.5, 0.5))
     expect_equal(res, expected_result)
 })
+
+# test lead and lag
+# with and without offsets
+
