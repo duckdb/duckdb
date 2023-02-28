@@ -72,11 +72,11 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query,
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
+	                                                 bool enable_optimizer = true);
 
-	static unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query,
-	                                                     shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation>
+	GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr, bool enable_optimizer = true);
 	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
 	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -187,6 +187,10 @@ public:
 
 	py::dict FetchNumpy();
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
@@ -257,8 +261,8 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
-	void ExecuteOrThrow();
-	unique_ptr<QueryResult> ExecuteInternal();
+	void ExecuteOrThrow(bool stream_result = false);
+	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
 	shared_ptr<Relation> rel;

@@ -94,9 +94,12 @@ void PythonFilesystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr
 	Read(handle, buffer, nr_bytes);
 }
 bool PythonFilesystem::FileExists(const string &filename) {
+	return Exists(filename, "isfile");
+}
+bool PythonFilesystem::Exists(const string &filename, const char *func_name) const {
 	PythonGILWrapper gil;
 
-	return py::bool_(filesystem.attr("exists")(filename));
+	return py::bool_(filesystem.attr(func_name)(filename));
 }
 vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	PythonGILWrapper gil;
@@ -157,5 +160,46 @@ void PythonFilesystem::FileSync(FileHandle &handle) {
 	PythonGILWrapper gil;
 
 	PythonFileHandle::GetHandle(handle).attr("flush")();
+}
+bool PythonFilesystem::DirectoryExists(const string &directory) {
+	return Exists(directory, "isdir");
+}
+void PythonFilesystem::RemoveDirectory(const string &directory) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("rm")(directory, py::arg("recursive") = true);
+}
+void PythonFilesystem::CreateDirectory(const string &directory) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("mkdir")(py::str(directory));
+}
+bool PythonFilesystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                 FileOpener *opener) {
+	static py::str DIRECTORY("directory");
+
+	PythonGILWrapper gil;
+	bool nonempty = false;
+
+	for (auto item : filesystem.attr("ls")(py::str(directory))) {
+		bool is_dir = DIRECTORY.equal(item["type"]);
+		callback(py::str(item["name"]), is_dir);
+		nonempty = true;
+	}
+
+	return nonempty;
+}
+void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
+	PythonGILWrapper gil;
+
+	filesystem.attr("touch")(handle.path, py::arg("truncate") = true);
+}
+bool PythonFilesystem::IsPipe(const string &filename) {
+	return false;
+}
+idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {
+	PythonGILWrapper gil;
+
+	return py::int_(PythonFileHandle::GetHandle(handle).attr("tell")());
 }
 } // namespace duckdb

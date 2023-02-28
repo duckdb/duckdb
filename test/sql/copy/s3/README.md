@@ -29,6 +29,7 @@ Then run the test server in the back-ground using Docker. Note that Docker must 
 
 Now set up the following environment variables to enable running of the tests.
 
+This can be done either manually:
 ```bash
 export S3_TEST_SERVER_AVAILABLE=1
 export AWS_DEFAULT_REGION=eu-west-1
@@ -36,6 +37,13 @@ export AWS_ACCESS_KEY_ID=minio_duckdb_user
 export AWS_SECRET_ACCESS_KEY=minio_duckdb_user_password
 export DUCKDB_S3_ENDPOINT=duckdb-minio.com:9000  
 export DUCKDB_S3_USE_SSL=false
+```
+
+Or using the `set_s3_test_server_variables.sh` script  
+
+```bash
+# use source so it sets the environment variables in your current environment
+source scripts/set_s3_test_server_variables.sh
 ```
 
 Now you should be able to run the S3 tests using minio, e.g.:

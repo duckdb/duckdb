@@ -114,9 +114,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
-	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query);
+	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
 
-	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query);
+	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
 
 	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
 
@@ -150,6 +150,10 @@ public:
 
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);
+
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 

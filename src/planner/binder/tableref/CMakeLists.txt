@@ -5,6 +5,7 @@ add_library_unity(
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
   bind_joinref.cpp
+  bind_pivot.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
   bind_named_parameters.cpp

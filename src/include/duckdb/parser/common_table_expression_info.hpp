@@ -24,6 +24,7 @@ public:
 
 public:
 	bool Equals(const CommonTableExpressionInfo &other) const;
+	unique_ptr<CommonTableExpressionInfo> Copy();
 };
 
 } // namespace duckdb

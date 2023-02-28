@@ -123,6 +123,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000)
+	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()")
+	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
@@ -178,9 +181,11 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	      py::arg("proto"))
-	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
+	         py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
-	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::kw_only(),
+	         py::arg("enable_optimizer") = true)
 	    .def("from_substrait_json", &DuckDBPyConnection::FromSubstraitJSON,
 	         "Create a query object from a JSON protobuf plan", py::arg("json"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
@@ -332,7 +337,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto pending_query = connection->PendingQuery(std::move(statements[i]));
+			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -926,22 +931,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait", params, named_parameters)->Alias(query));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query, bool enable_optimizer) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
+	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("get_substrait_json", params, named_parameters)->Alias(query));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
@@ -1074,6 +1083,20 @@ duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 		throw InvalidInputException("No open result set");
 	}
 	return result->ToArrowTable(chunk_size);
+}
+
+py::dict DuckDBPyConnection::FetchPyTorch() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchPyTorch();
+}
+
+py::dict DuckDBPyConnection::FetchTF() {
+	if (!result) {
+		throw InvalidInputException("No open result set");
+	}
+	return result->FetchTF();
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {

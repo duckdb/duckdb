@@ -58,6 +58,9 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 		child_types.emplace_back(key_str, StructureStringToType(val, context));
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
+	if (child_types.empty()) {
+		throw InvalidInputException("Empty object in JSON structure");
+	}
 	return LogicalType::STRUCT(child_types);
 }
 
@@ -87,7 +90,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
-			throw InvalidInputException("cannot cast JSON structure to string");
+			throw InvalidInputException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
@@ -251,7 +254,10 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 
 bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target,
                                     Vector &string_vector, JSONTransformOptions &options) {
-	auto data = (string_t *)FlatVector::GetData(string_vector);
+	if (count > STANDARD_VECTOR_SIZE) {
+		string_vector.Initialize(false, count);
+	}
+	auto data = FlatVector::GetData<string_t>(string_vector);
 	auto &validity = FlatVector::Validity(string_vector);
 	validity.SetAllValid(count);
 
