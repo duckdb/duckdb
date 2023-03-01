@@ -19,7 +19,7 @@ static void SetString(Napi::Object &obj, const std::string &key, const std::stri
 Napi::Object Utils::CreateError(Napi::Env env, duckdb::PreservedError &error) {
 	auto obj = Utils::CreateError(env, error.Message());
 	if (error.Type() == duckdb::ExceptionType::HTTP) {
-		const auto &e = error.GetError().AsHTTPException();
+		const auto &e = error.GetError()->AsHTTPException();
 		obj.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, e.GetStatusCode()));
 	}
 
