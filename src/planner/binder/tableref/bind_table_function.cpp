@@ -86,7 +86,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			auto node = binder->BindNode(*se.subquery->node);
 			subquery = make_unique<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;
-			arguments.emplace_back(LogicalTypeId::TABLE);
+			arguments.emplace_back(LogicalType::TABLE);
+			// add a toxic dummy value so the offsets and lengths of arguments and parameters match
+			parameters.emplace_back(Value(LogicalType::INVALID));
 			continue;
 		}
 
@@ -238,8 +240,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
-	// cast the parameters to the type of the function
+	// check or cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i] == LogicalType::TABLE && table_function.arguments[i] != LogicalType::TABLE) {
+			// someone tries passing a table parameter to a scalar. Bad.
+			throw BinderException("Parameter #%d of table function %s cannot accept a subquery, expects %s", i + 1,
+			                      table_function.name, table_function.arguments[i].ToString());
+		}
 		if (table_function.arguments[i] != LogicalType::ANY && table_function.arguments[i] != LogicalType::TABLE &&
 		    table_function.arguments[i] != LogicalType::POINTER &&
 		    table_function.arguments[i].id() != LogicalTypeId::LIST) {

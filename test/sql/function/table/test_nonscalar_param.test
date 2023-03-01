@@ -1,0 +1,9 @@
+# name: test/sql/function/table/test_nonscalar_param.test
+# description: LTRIM/RTRIM/TRIM test
+# group: [table]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM pragma_storage_info((SELECT 42));
