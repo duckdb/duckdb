@@ -9,7 +9,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
