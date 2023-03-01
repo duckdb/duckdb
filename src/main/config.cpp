@@ -214,9 +214,71 @@ void DBConfig::SetDefaultMaxMemory() {
 	}
 }
 
+idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
+	static constexpr const char *cpu_max = "/sys/fs/cgroup/cpu.max";
+	static constexpr const char *cfs_quota = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
+	static constexpr const char *cfs_period = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
+
+	int64_t quota, period;
+	char byte_buffer[1000];
+	unique_ptr<FileHandle> handle;
+	int64_t read_bytes;
+
+	if (fs.FileExists(cpu_max)) {
+		// cgroup v2
+		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
+		handle =
+		    fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
+		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
+		byte_buffer[read_bytes] = '\0';
+		if (sscanf(byte_buffer, "%lld %lld", &quota, &period) != 2) {
+			return physical_cores;
+		}
+	} else if (fs.FileExists(cfs_quota) && fs.FileExists(cfs_period)) {
+		// cgroup v1
+		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
+
+		// Read the quota, this indicates how many microseconds the CPU can be utilized by this cgroup per period
+		handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                     FileSystem::DEFAULT_COMPRESSION);
+		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
+		byte_buffer[read_bytes] = '\0';
+		if (sscanf(byte_buffer, "%lld", &quota) != 1) {
+			return physical_cores;
+		}
+
+		// Read the time period, a cgroup can utilize the CPU up to quota microseconds every period
+		handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                     FileSystem::DEFAULT_COMPRESSION);
+		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
+		byte_buffer[read_bytes] = '\0';
+		if (sscanf(byte_buffer, "%lld", &period) != 1) {
+			return physical_cores;
+		}
+	} else {
+		// No cgroup quota
+		return physical_cores;
+	}
+	if (quota > 0 && period > 0) {
+		return std::ceil(quota / period);
+	} else {
+		return physical_cores;
+	}
+}
+
+idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
+	idx_t physical_cores = std::thread::hardware_concurrency();
+#ifdef __linux__
+	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
+	return physical_cores;
+#else
+	return physical_cores;
+#endif
+}
+
 void DBConfig::SetDefaultMaxThreads() {
 #ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = std::thread::hardware_concurrency();
+	options.maximum_threads = GetSystemMaxThreadsInternal(*file_system);
 #else
 	options.maximum_threads = 1;
 #endif
