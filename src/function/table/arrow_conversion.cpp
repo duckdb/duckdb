@@ -509,6 +509,11 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			IntervalConversionMonths(vector, array, scan_state, nested_offset, size);
 			break;
 		}
+		case ArrowDateTimeType::MONTH_DAY_NANO: {
+			FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
+			                                                               (scan_state.chunk_offset + array.offset));
+			break;
+		}
 		default:
 			throw std::runtime_error("Unsupported precision for Interval/Duration Type ");
 		}

@@ -124,22 +124,6 @@ struct ArrowScalarConverter {
 	}
 };
 
-struct ArrowIntervalConverter {
-	template <class TGT, class SRC>
-	static TGT Operation(SRC input) {
-		return Interval::GetMilli(input);
-	}
-
-	static bool SkipNulls() {
-		return true;
-	}
-
-	template <class TGT>
-	static void SetNull(TGT &value) {
-		value = 0;
-	}
-};
-
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
@@ -629,7 +613,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::INTERVAL:
-		InitializeFunctionPointers<ArrowScalarData<int64_t, interval_t, ArrowIntervalConverter>>(append_data);
+		InitializeFunctionPointers<ArrowScalarData<interval_t>>(append_data);
 		break;
 	case LogicalTypeId::STRUCT:
 		InitializeFunctionPointers<ArrowStructData>(append_data);

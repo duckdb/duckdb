@@ -32,7 +32,8 @@ enum class ArrowDateTimeType : uint8_t {
 	NANOSECONDS = 2,
 	SECONDS = 3,
 	DAYS = 4,
-	MONTHS = 5
+	MONTHS = 5,
+	MONTH_DAY_NANO = 6
 };
 
 struct ArrowConvertData {
