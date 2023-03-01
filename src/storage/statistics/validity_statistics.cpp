@@ -8,7 +8,7 @@
 namespace duckdb {
 
 ValidityStatistics::ValidityStatistics(bool has_null, bool has_no_null)
-    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY), StatisticsType::LOCAL_STATS), has_null(has_null),
+    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY)), has_null(has_null),
       has_no_null(has_no_null) {
 }
 

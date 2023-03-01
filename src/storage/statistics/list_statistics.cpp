@@ -6,11 +6,11 @@
 
 namespace duckdb {
 
-ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
+ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	InitializeBase();
 	auto &child_type = ListType::GetChildType(type);
-	child_stats = BaseStatistics::CreateEmpty(child_type, StatisticsType::LOCAL_STATS);
+	child_stats = BaseStatistics::CreateEmpty(child_type);
 }
 
 void ListStatistics::Merge(const BaseStatistics &other_p) {

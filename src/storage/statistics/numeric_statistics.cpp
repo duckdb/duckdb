@@ -14,15 +14,15 @@ template <>
 void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value) {
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p, StatisticsType stats_type)
-    : BaseStatistics(std::move(type_p), stats_type) {
+NumericStatistics::NumericStatistics(LogicalType type_p)
+    : BaseStatistics(std::move(type_p)) {
 	InitializeBase();
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p, StatisticsType stats_type)
-    : BaseStatistics(std::move(type_p), stats_type), min(std::move(min_p)), max(std::move(max_p)) {
+NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
+    : BaseStatistics(std::move(type_p)), min(std::move(min_p)), max(std::move(max_p)) {
 	InitializeBase();
 }
 
@@ -115,7 +115,7 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Copy() const {
-	auto result = make_unique<NumericStatistics>(type, min, max, stats_type);
+	auto result = make_unique<NumericStatistics>(type, min, max);
 	result->CopyBase(*this);
 	return std::move(result);
 }
@@ -229,8 +229,7 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, LogicalType type) {
 	auto min = DeserializeNumericStatsValue(type, reader);
 	auto max = DeserializeNumericStatsValue(type, reader);
-	return make_unique_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max),
-	                                                           StatisticsType::LOCAL_STATS);
+	return make_unique_base<BaseStatistics, NumericStatistics>(std::move(type), std::move(min), std::move(max));
 }
 
 string NumericStatistics::ToString() const {

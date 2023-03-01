@@ -280,7 +280,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			// merge the stats
 			auto stats_lock = stats.GetLock();
 			for (idx_t i = 0; i < types.size(); i++) {
-				current_row_group->MergeIntoStatistics(i, *stats.GetStats(i).stats);
+				current_row_group->MergeIntoStatistics(i, stats.GetStats(i).Statistics());
 			}
 		}
 		remaining -= append_count;
@@ -319,11 +319,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	state.current_row += append_count;
 	auto stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		auto type = types[col_idx].InternalType();
-		if (type == PhysicalType::LIST || type == PhysicalType::STRUCT) {
-			continue;
-		}
-		stats.GetStats(col_idx).stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 	return new_row_group;
 }
@@ -513,7 +509,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 	auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
 	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
 
-	row_group->MergeIntoStatistics(primary_column_idx, *stats.GetStats(primary_column_idx).stats);
+	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(primary_column_idx).Statistics());
 }
 
 //===--------------------------------------------------------------------===//
@@ -590,7 +586,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AddColumn(new_column, executor, default_value, default_vector);
 		// merge in the statistics
-		new_row_group->MergeIntoStatistics(new_column_idx, *new_column_stats.stats);
+		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->Next();
@@ -651,7 +647,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor,
 		                                                  scan_state.table_state.row_group_state, scan_chunk);
-		new_row_group->MergeIntoStatistics(changed_idx, *changed_stats.stats);
+		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->Next();
 	}
@@ -700,10 +696,10 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
 }
 
-void RowGroupCollection::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
+void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
 	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
 	auto stats_guard = stats.GetLock();
-	set_fun(*stats.GetStats(column_id).stats);
+	stats.GetStats(column_id).SetDistinct(std::move(distinct_stats));
 }
 
 } // namespace duckdb

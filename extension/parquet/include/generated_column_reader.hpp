@@ -31,7 +31,7 @@ public:
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
 		switch (type.id()) {
 		case LogicalTypeId::VARCHAR: {
-			auto string_stats = make_unique<StringStatistics>(type, StatisticsType::LOCAL_STATS);
+			auto string_stats = make_unique<StringStatistics>(type);
 			string string = constant.ToString();
 			string_stats->Update(string);
 			string_stats->max_string_length = string.length();

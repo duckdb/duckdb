@@ -6,14 +6,14 @@
 namespace duckdb {
 
 StructStatistics::StructStatistics(LogicalType type_p)
-    : BaseStatistics(std::move(type_p), StatisticsType::LOCAL_STATS) {
+    : BaseStatistics(std::move(type_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	InitializeBase();
 
 	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second, StatisticsType::LOCAL_STATS);
+		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second);
 	}
 }
 

@@ -26,25 +26,18 @@ class ValidityStatistics;
 class DistinctStatistics;
 struct UnifiedVectorFormat;
 
-enum StatisticsType { LOCAL_STATS = 0, GLOBAL_STATS = 1 };
-
 class BaseStatistics {
 public:
-	BaseStatistics(LogicalType type, StatisticsType stats_type);
+	BaseStatistics(LogicalType type);
 	virtual ~BaseStatistics();
 
 	//! The validity stats of the column (if any)
 	unique_ptr<BaseStatistics> validity_stats;
-	//! The approximate count distinct stats of the column (if any)
-	unique_ptr<BaseStatistics> distinct_stats;
-	idx_t distinct_count; // estimate that one may have even if distinct_stats==nullptr
-
-	//! Whether these are 'global' stats, i.e., over a whole table, or just over a segment
-	//! Some statistics are more expensive to keep, therefore we only keep them globally
-	StatisticsType stats_type;
+	// estimate that one may have even if distinct_stats==nullptr
+	idx_t distinct_count;
 
 public:
-	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type, StatisticsType stats_type);
+	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	DUCKDB_API bool CanHaveNull() const;
 	DUCKDB_API bool CanHaveNoNull() const;

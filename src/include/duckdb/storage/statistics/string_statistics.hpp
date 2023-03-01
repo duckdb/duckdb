@@ -19,7 +19,7 @@ public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
 
 public:
-	DUCKDB_API explicit StringStatistics(LogicalType type, StatisticsType stats_type);
+	DUCKDB_API explicit StringStatistics(LogicalType type);
 
 	//! The minimum value of the segment, potentially truncated
 	data_t min[MAX_STRING_MINMAX_SIZE];

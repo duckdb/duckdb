@@ -164,8 +164,7 @@ template <int64_t MIN, int64_t MAX>
 static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX),
-	                                             StatisticsType::LOCAL_STATS);
+	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
 	if (!child_stats[0]) {
 		// if there are no child stats, we don't know
 		result->validity_stats = make_unique<ValidityStatistics>(true);
@@ -199,7 +198,7 @@ struct DatePart {
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
 		auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
-		                                             Value::BIGINT(max_part), StatisticsType::LOCAL_STATS);
+		                                             Value::BIGINT(max_part));
 		if (child_stats[0]->validity_stats) {
 			result->validity_stats = child_stats[0]->validity_stats->Copy();
 		}

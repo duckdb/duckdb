@@ -70,7 +70,7 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	for (idx_t i = 0; i < column_stats.size(); i++) {
-		column_stats[i]->stats->Merge(*other.column_stats[i]->stats);
+		column_stats[i]->Merge(*other.column_stats[i]);
 	}
 }
 
@@ -80,7 +80,7 @@ void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 }
 
 void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats) {
-	column_stats[i]->stats->Merge(stats);
+	column_stats[i]->Statistics().Merge(stats);
 }
 
 ColumnStatistics &TableStatistics::GetStats(idx_t i) {
@@ -89,7 +89,11 @@ ColumnStatistics &TableStatistics::GetStats(idx_t i) {
 
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(stats_lock);
-	return column_stats[i]->stats->Copy();
+	auto result = column_stats[i]->Statistics().Copy();
+	if (column_stats[i]->HasDistinctStats()) {
+		result->distinct_count = column_stats[i]->DistinctStats().GetCount();
+	}
+	return result;
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

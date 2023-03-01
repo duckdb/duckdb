@@ -197,7 +197,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	auto added_column =
 	    ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
 	auto added_col_stats = make_shared<SegmentStatistics>(
-	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type(), StatisticsType::LOCAL_STATS));
+	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type()));
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {

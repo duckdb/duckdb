@@ -1223,9 +1223,9 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return row_groups->CopyStats(column_id);
 }
 
-void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
+void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
 	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
-	row_groups->SetStatistics(column_id, set_fun);
+	row_groups->SetDistinct(column_id, std::move(distinct_stats));
 }
 
 //===--------------------------------------------------------------------===//

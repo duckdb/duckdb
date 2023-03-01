@@ -16,7 +16,7 @@ SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics
 }
 
 void SegmentStatistics::Reset() {
-	statistics = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
+	statistics = BaseStatistics::CreateEmpty(type);
 }
 
 } // namespace duckdb

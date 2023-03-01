@@ -94,7 +94,7 @@ public:
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
-	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
+	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 private:
 	bool IsEmpty(SegmentLock &) const;

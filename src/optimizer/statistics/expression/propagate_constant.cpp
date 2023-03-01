@@ -8,12 +8,6 @@
 
 namespace duckdb {
 
-void UpdateDistinctStats(BaseStatistics &distinct_stats, const Value &input) {
-	Vector v(input);
-	auto &d_stats = (DistinctStatistics &)distinct_stats;
-	d_stats.Update(v, 1);
-}
-
 unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
 	switch (input.type().InternalType()) {
 	case PhysicalType::BOOL:
@@ -28,15 +22,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto result = make_unique<NumericStatistics>(input.type(), input, input, StatisticsType::GLOBAL_STATS);
+		auto result = make_unique<NumericStatistics>(input.type(), input, input);
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		UpdateDistinctStats(*result->distinct_stats, input);
+		result->distinct_count = 1;
 		return std::move(result);
 	}
 	case PhysicalType::VARCHAR: {
-		auto result = make_unique<StringStatistics>(input.type(), StatisticsType::GLOBAL_STATS);
+		auto result = make_unique<StringStatistics>(input.type());
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		UpdateDistinctStats(*result->distinct_stats, input);
+		result->distinct_count = 1;
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
 			result->Update(string_t(string_value));

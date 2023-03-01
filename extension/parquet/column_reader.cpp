@@ -865,7 +865,7 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
 
 unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
                                                         const std::vector<ColumnChunk> &columns) {
-	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
+	auto stats = make_unique<NumericStatistics>(type);
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	D_ASSERT(row_group_idx_p < row_groups.size());
 	idx_t row_group_offset_min = 0;
