@@ -322,6 +322,32 @@ bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 }
 
 //===--------------------------------------------------------------------===//
+// Vacuum
+//===--------------------------------------------------------------------===//
+
+void ART::SetVacuumCount() {
+	vacuum_count = prefix_segments.VacuumCount();
+	vacuum_count += leaf_segments.VacuumCount();
+	vacuum_count += leaf_nodes.VacuumCount();
+	vacuum_count += n4_nodes.VacuumCount();
+	vacuum_count += n16_nodes.VacuumCount();
+	vacuum_count += n48_nodes.VacuumCount();
+	vacuum_count += n256_nodes.VacuumCount();
+}
+
+void ART::Vacuum() {
+
+	if (!tree) {
+		return;
+	}
+
+	SetVacuumCount();
+
+	// TODO: traverse tree
+	// TODO: somewhere store how many buffers to remove from each fixed size allocator and do that at the end
+}
+
+//===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
 
@@ -982,9 +1008,25 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
-	// TODO: this is wrong, memory needs to 'move'
-
 	auto other_art = (ART *)other_index;
+
+	//  TODO: traverse other_index and add the block ID size of this index, fully deserialize the other index while
+	//  doing that
+
+	// merge their storage
+	prefix_segments.Merge(other_art->prefix_segments);
+	leaf_segments.Merge(other_art->leaf_segments);
+	leaf_nodes.Merge(other_art->leaf_nodes);
+	n4_nodes.Merge(other_art->n4_nodes);
+	n16_nodes.Merge(other_art->n16_nodes);
+	n48_nodes.Merge(other_art->n48_nodes);
+	n256_nodes.Merge(other_art->n256_nodes);
+
+	// TODO: merge the ARTs
+
+	// TODO: vacuum
+
+	// TODO: this is wrong, memory needs to 'move'
 
 	if (!this->tree) {
 		IncreaseMemorySize(other_art->memory_size);

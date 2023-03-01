@@ -74,6 +74,9 @@ public:
 	//! Initializes a new ART node
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
+	//! Vacuum the node (and its subtree)
+	static void Vacuum(ART &art, ARTNode &node);
+
 	//! Get the node
 	template <class T>
 	inline T *Get(FixedSizeAllocator &allocator) const;

@@ -12,7 +12,7 @@
 namespace duckdb {
 
 //! SwizzleablePointer uses the most significant bit as a flag. If the swizzle flag is set, the value in
-//! the SwizzablePointer is a memory address. Otherwise, the variable stores the block information
+//! the SwizzleablePointer is a memory address. Otherwise, the variable stores the block information
 //! of where the object is stored. In the latter case, we use the following 31 bits to store the block ID and
 //! the remaining 32 bits to store the offset
 class SwizzleablePointer {

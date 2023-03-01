@@ -69,6 +69,9 @@ public:
 	FixedSizeAllocator n48_nodes;
 	FixedSizeAllocator n256_nodes;
 
+	//! Used during vacuum, keeps track of the buffers that can be vacuumed (allows early aborts)
+	idx_t vacuum_count;
+
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
@@ -95,6 +98,11 @@ public:
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
+
+	//! Returns true, if there is still memory allocated that can be vacuumed
+	void SetVacuumCount();
+	//! Vacuum the ART by freeing unnecessarily allocated memory
+	void Vacuum();
 
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);

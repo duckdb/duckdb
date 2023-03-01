@@ -37,6 +37,10 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 	// of another node, and already accounted for when tracking the memory size of that node
 }
 
+void Prefix::Vacuum(ART &art) {
+	// TODO: vacuum prefix segments
+}
+
 void Prefix::Move(Prefix &other) {
 	count = other.count;
 	data = other.data;

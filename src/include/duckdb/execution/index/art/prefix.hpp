@@ -42,6 +42,9 @@ public:
 	//! Initialize a prefix from an ART key
 	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
 
+	//! Vacuum the prefix
+	void Vacuum(ART &art);
+
 	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
 	void Move(Prefix &other);
 	//! Append a prefix to this prefix

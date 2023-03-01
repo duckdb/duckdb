@@ -39,6 +39,9 @@ public:
 	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
 	                        const idx_t &count);
 
+	//! Vacuum the leaf
+	static void Vacuum(ART &art, ARTNode &node);
+
 	//! Insert a row ID into a leaf
 	void Insert(ART &art, const row_t &row_id);
 	//! Remove a row ID from a leaf

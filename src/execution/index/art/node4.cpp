@@ -36,6 +36,11 @@ Node4 *Node4::Initialize(ART &art, const ARTNode &node) {
 	return n4;
 }
 
+void Node4::Vacuum(ART &art, ARTNode &node) {
+
+	// TODO
+}
+
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);
