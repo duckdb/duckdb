@@ -59,16 +59,18 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	}
 	case PhysicalType::LIST: {
 		auto stats = make_unique<ListStatistics>(input.type());
+		auto &child_stats = stats->GetChildStats();
 		if (input.IsNull()) {
-			stats->child_stats.reset();
+			child_stats.reset();
 		} else {
 			auto &list_children = ListValue::GetChildren(input);
 			for (auto &child_element : list_children) {
 				auto child_element_stats = StatisticsFromValue(child_element);
 				if (child_element_stats) {
-					stats->child_stats->Merge(*child_element_stats);
+					child_stats->Merge(*child_element_stats);
 				} else {
-					stats->child_stats.reset();
+					child_stats.reset();
+					break;
 				}
 			}
 		}

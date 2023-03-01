@@ -223,7 +223,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 	// append the child vector
 	if (child_count > 0) {
-		child_column->Append(*stats.child_stats, state.child_appends[1], child_vector, child_count);
+		child_column->Append(*stats.GetChildStats(), state.child_appends[1], child_vector, child_count);
 	}
 }
 
@@ -318,7 +318,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
 		auto &list_stats = (ListStatistics &)*stats;
-		list_stats.child_stats = child_state->GetStatistics();
+		list_stats.GetChildStats() = child_state->GetStatistics();
 		return stats;
 	}
 

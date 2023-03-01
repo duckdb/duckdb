@@ -125,11 +125,12 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 		return nullptr;
 	}
 	auto &list_stats = (ListStatistics &)*child_stats[0];
-	if (!list_stats.child_stats || list_stats.child_stats->GetType() == LogicalTypeId::SQLNULL) {
+	auto &list_child_stats = list_stats.GetChildStats();
+	if (!list_child_stats || list_child_stats->GetType() == LogicalTypeId::SQLNULL) {
 		return nullptr;
 	}
 
-	auto child_copy = list_stats.child_stats->Copy();
+	auto child_copy = list_child_stats->Copy();
 	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy;
 }

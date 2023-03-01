@@ -215,10 +215,11 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 		return nullptr;
 	}
 	auto &list_stats = (ListStatistics &)*child_stats[0];
-	if (!list_stats.child_stats) {
+	auto &list_child_stats = list_stats.GetChildStats();
+	if (!list_child_stats) {
 		return nullptr;
 	}
-	auto child_copy = list_stats.child_stats->Copy();
+	auto child_copy = list_child_stats->Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
 	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy;

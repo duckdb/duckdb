@@ -18,8 +18,6 @@ class ListStatistics : public BaseStatistics {
 public:
 	explicit ListStatistics(LogicalType type);
 
-	unique_ptr<BaseStatistics> child_stats;
-
 public:
 	void Merge(const BaseStatistics &other) override;
 	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant) const;
@@ -30,6 +28,13 @@ public:
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;
 
 	string ToString() const override;
+
+	unique_ptr<BaseStatistics> &GetChildStats() {
+		return child_stats;
+	}
+
+private:
+	unique_ptr<BaseStatistics> child_stats;
 };
 
 } // namespace duckdb

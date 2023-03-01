@@ -50,11 +50,12 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto list_stats = make_unique<ListStatistics>(expr.return_type);
+	auto &list_child_stats = list_stats->GetChildStats();
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		if (child_stats[i]) {
-			list_stats->child_stats->Merge(*child_stats[i]);
+			list_child_stats->Merge(*child_stats[i]);
 		} else {
-			list_stats->child_stats.reset();
+			list_child_stats.reset();
 			return std::move(list_stats);
 		}
 	}
