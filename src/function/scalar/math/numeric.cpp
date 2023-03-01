@@ -132,7 +132,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	}
 	auto stats = NumericStats::Create(expr.return_type, std::move(new_min), std::move(new_max));
 	stats->CopyValidity(lstats);
-	return std::move(stats);
+	return stats;
 }
 
 template <class OP>

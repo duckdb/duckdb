@@ -60,14 +60,16 @@ struct StringStats {
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
-	DUCKDB_API static StringStatsData &GetDataUnsafe(BaseStatistics &stats);
-	DUCKDB_API static const StringStatsData &GetDataUnsafe(const BaseStatistics &stats);
-
-	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type, const string &value);
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+	                                                     const string &value);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+
+private:
+	static StringStatsData &GetDataUnsafe(BaseStatistics &stats);
+	static const StringStatsData &GetDataUnsafe(const BaseStatistics &stats);
 };
 
 } // namespace duckdb

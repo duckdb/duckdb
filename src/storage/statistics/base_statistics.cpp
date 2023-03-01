@@ -100,8 +100,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = make_unique<BaseStatistics>(type);
 	result->CopyBase(*this);
-	result->numeric_data = numeric_data;
-	result->string_data = string_data;
+	result->stats_union = stats_union;
 	return result;
 }
 

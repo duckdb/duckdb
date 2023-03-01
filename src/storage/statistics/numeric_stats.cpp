@@ -51,12 +51,12 @@ bool NumericStats::IsNumeric(const BaseStatistics &stats) {
 
 NumericStatsData &NumericStats::GetDataUnsafe(BaseStatistics &stats) {
 	D_ASSERT(NumericStats::IsNumeric(stats));
-	return stats.numeric_data;
+	return stats.stats_union.numeric_data;
 }
 
 const NumericStatsData &NumericStats::GetDataUnsafe(const BaseStatistics &stats) {
 	D_ASSERT(NumericStats::IsNumeric(stats));
-	return stats.numeric_data;
+	return stats.stats_union.numeric_data;
 }
 
 void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {

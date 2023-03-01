@@ -80,9 +80,6 @@ struct NumericStats {
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                                     const Value &constant);
 
-	DUCKDB_API static NumericStatsData &GetDataUnsafe(BaseStatistics &stats);
-	DUCKDB_API static const NumericStatsData &GetDataUnsafe(const BaseStatistics &stats);
-
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
@@ -109,6 +106,8 @@ struct NumericStats {
 	static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 
 private:
+	static NumericStatsData &GetDataUnsafe(BaseStatistics &stats);
+	static const NumericStatsData &GetDataUnsafe(const BaseStatistics &stats);
 	static Value MinOrNull(const BaseStatistics &stats);
 	static Value MaxOrNull(const BaseStatistics &stats);
 	template <class T>

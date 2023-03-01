@@ -21,7 +21,7 @@ unique_ptr<BaseStatistics> StringStats::CreateEmpty(LogicalType type) {
 }
 
 bool StringStats::IsString(const BaseStatistics &stats) {
-	switch(stats.GetType().InternalType()) {
+	switch (stats.GetType().InternalType()) {
 	case PhysicalType::VARCHAR:
 		return true;
 	default:
@@ -30,12 +30,12 @@ bool StringStats::IsString(const BaseStatistics &stats) {
 }
 StringStatsData &StringStats::GetDataUnsafe(BaseStatistics &stats) {
 	D_ASSERT(StringStats::IsString(stats));
-	return stats.string_data;
+	return stats.stats_union.string_data;
 }
 
 const StringStatsData &StringStats::GetDataUnsafe(const BaseStatistics &stats) {
 	D_ASSERT(StringStats::IsString(stats));
-	return stats.string_data;
+	return stats.stats_union.string_data;
 }
 
 bool StringStats::HasMaxStringLength(const BaseStatistics &stats) {
@@ -92,8 +92,7 @@ static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_pt
 }
 
 static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
-	idx_t value_size =
-	    size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
+	idx_t value_size = size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
 	memcpy(target, data, value_size);
 	for (idx_t i = value_size; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 		target[i] = '\0';
@@ -147,7 +146,8 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	string_data.max_string_length = MaxValue<uint32_t>(string_data.max_string_length, other_data.max_string_length);
 }
 
-FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type, const string &constant) {
+FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                const string &constant) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
@@ -203,7 +203,8 @@ string StringStats::ToString(const BaseStatistics &stats) {
 	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
 	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	                          string((const char *)string_data.min, min_len), string((const char *)string_data.max, max_len),
+	                          string((const char *)string_data.min, min_len),
+	                          string((const char *)string_data.max, max_len),
 	                          string_data.has_unicode ? "true" : "false", string_data.max_string_length);
 }
 
@@ -235,16 +236,18 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 			if (unicode == UnicodeType::UNICODE) {
 				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it "
 				                        "shouldn't.\nStatistics: %s\nVector: %s",
-				                       stats.ToString(), vector.ToString(count));
+				                        stats.ToString(), vector.ToString(count));
 			} else if (unicode == UnicodeType::INVALID) {
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
-		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.min) < 0) {
+		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
+		                          string_data.min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}
-		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.max) > 0) {
+		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
+		                          string_data.max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}
