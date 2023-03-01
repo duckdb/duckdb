@@ -15,7 +15,6 @@ StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(std::mov
 	}
 	max_string_length = 0;
 	has_unicode = false;
-	has_overflow_strings = false;
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() const {
@@ -34,7 +33,6 @@ void StringStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteBlob(max, MAX_STRING_MINMAX_SIZE);
 	writer.WriteField<bool>(has_unicode);
 	writer.WriteField<uint32_t>(max_string_length);
-	writer.WriteField<bool>(has_overflow_strings);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, LogicalType type) {
@@ -43,7 +41,6 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(FieldReader &reader, Lo
 	reader.ReadBlob(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = reader.ReadRequired<bool>();
 	stats->max_string_length = reader.ReadRequired<uint32_t>();
-	stats->has_overflow_strings = reader.ReadRequired<bool>();
 	return std::move(stats);
 }
 
@@ -112,7 +109,6 @@ void StringStatistics::Merge(const BaseStatistics &other_p) {
 	}
 	has_unicode = has_unicode || other.has_unicode;
 	max_string_length = MaxValue<uint32_t>(max_string_length, other.max_string_length);
-	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
 }
 
 FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) const {

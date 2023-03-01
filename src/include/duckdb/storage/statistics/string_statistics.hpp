@@ -28,8 +28,6 @@ public:
 	bool has_unicode;
 	//! The maximum string length in bytes
 	uint32_t max_string_length;
-	//! Whether or not the segment contains any big strings in overflow blocks
-	bool has_overflow_strings;
 
 public:
 	DUCKDB_API void Update(const string_t &value);
