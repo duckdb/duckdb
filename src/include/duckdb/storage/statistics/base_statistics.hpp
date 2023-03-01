@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -97,8 +98,11 @@ protected:
 	bool has_no_null;
 	// estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
+	// FIXME: union these together
 	//! Numeric stats data, for numeric stats
 	NumericStatsData numeric_data;
+	//! String stats data, for string stats
+	StringStatsData string_data;
 };
 
 } // namespace duckdb

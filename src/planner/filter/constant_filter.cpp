@@ -1,7 +1,6 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
-
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
 
 namespace duckdb {
 
@@ -26,7 +25,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::DOUBLE:
 		return NumericStats::CheckZonemap(stats, comparison_type, constant);
 	case PhysicalType::VARCHAR:
-		return ((StringStatistics &)stats).CheckZonemap(comparison_type, StringValue::Get(constant));
+		return StringStats::CheckZonemap(stats, comparison_type, StringValue::Get(constant));
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

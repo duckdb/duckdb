@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -485,8 +485,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.CanContainUnicode()) {
+	if (!StringStats::CanContainUnicode(*child_stats[0])) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>;
 	}
 	return nullptr;

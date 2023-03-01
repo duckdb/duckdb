@@ -7,7 +7,6 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/value.hpp"
 
-#include "duckdb/storage/statistics/string_statistics.hpp"
 #endif
 
 namespace duckdb {
@@ -232,23 +231,23 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = make_unique<StringStatistics>(type);
+		auto string_stats = StringStats::CreateEmpty(type);
 		if (parquet_stats.__isset.min) {
-			string_stats->Update(parquet_stats.min);
+			StringStats::Update(*string_stats, parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
-			string_stats->Update(parquet_stats.min_value);
+			StringStats::Update(*string_stats, parquet_stats.min_value);
 		} else {
 			return nullptr;
 		}
 		if (parquet_stats.__isset.max) {
-			string_stats->Update(parquet_stats.max);
+			StringStats::Update(*string_stats, parquet_stats.max);
 		} else if (parquet_stats.__isset.max_value) {
-			string_stats->Update(parquet_stats.max_value);
+			StringStats::Update(*string_stats, parquet_stats.max_value);
 		} else {
 			return nullptr;
 		}
-		string_stats->SetContainsUnicode();
-		string_stats->ResetMaxStringLength();
+		StringStats::SetContainsUnicode(*string_stats);
+		StringStats::ResetMaxStringLength(*string_stats);
 		row_group_stats = std::move(string_stats);
 		break;
 	}

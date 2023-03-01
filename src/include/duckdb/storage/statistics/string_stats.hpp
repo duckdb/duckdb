@@ -1,0 +1,73 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/statistics/string_stats.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+
+namespace duckdb {
+class BaseStatistics;
+class FieldWriter;
+class FieldReader;
+struct SelectionVector;
+class Vector;
+
+struct StringStatsData {
+	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
+
+	//! The minimum value of the segment, potentially truncated
+	data_t min[MAX_STRING_MINMAX_SIZE];
+	//! The maximum value of the segment, potentially truncated
+	data_t max[MAX_STRING_MINMAX_SIZE];
+	//! Whether or not the column can contain unicode characters
+	bool has_unicode;
+	//! Whether or not the maximum string length is known
+	bool has_max_string_length;
+	//! The maximum string length in bytes
+	uint32_t max_string_length;
+};
+
+struct StringStats {
+	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
+
+	//! Whether or not the statistics are string
+	DUCKDB_API static bool IsString(const BaseStatistics &stats);
+
+	//! Whether or not the statistics have a maximum string length defined
+	DUCKDB_API static bool HasMaxStringLength(const BaseStatistics &stats);
+	//! Returns the maximum string length, or throws an exception if !HasMaxStringLength()
+	DUCKDB_API static uint32_t MaxStringLength(const BaseStatistics &stats);
+	//! Whether or not the strings can contain unicode
+	DUCKDB_API static bool CanContainUnicode(const BaseStatistics &stats);
+
+	//! Resets the max string length so HasMaxStringLength() is false
+	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);
+	//! FIXME: make this part of Set on statistics
+	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
+
+	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
+	DUCKDB_API static unique_ptr<BaseStatistics> Deserialize(FieldReader &reader, LogicalType type);
+
+	DUCKDB_API static string ToString(const BaseStatistics &stats);
+
+	DUCKDB_API static StringStatsData &GetDataUnsafe(BaseStatistics &stats);
+	DUCKDB_API static const StringStatsData &GetDataUnsafe(const BaseStatistics &stats);
+
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type, const string &value);
+
+	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+};
+
+} // namespace duckdb

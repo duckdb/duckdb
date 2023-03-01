@@ -3,7 +3,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
@@ -50,6 +49,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	if (NumericStats::IsNumeric(other)) {
 		NumericStats::Merge(*this, other);
 	}
+	if (StringStats::IsString(other)) {
+		StringStats::Merge(*this, other);
+	}
 }
 
 idx_t BaseStatistics::GetDistinctCount() {
@@ -79,7 +81,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 		result = NumericStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::VARCHAR:
-		result = make_unique<StringStatistics>(std::move(type));
+		result = StringStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::STRUCT:
 		result = make_unique<StructStatistics>(std::move(type));
@@ -99,6 +101,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = make_unique<BaseStatistics>(type);
 	result->CopyBase(*this);
 	result->numeric_data = numeric_data;
+	result->string_data = string_data;
 	return result;
 }
 
@@ -165,6 +168,8 @@ void BaseStatistics::SetDistinctCount(idx_t count) {
 void BaseStatistics::Serialize(FieldWriter &writer) const {
 	if (NumericStats::IsNumeric(*this)) {
 		NumericStats::Serialize(*this, writer);
+	} else if (StringStats::IsString(*this)) {
+		StringStats::Serialize(*this, writer);
 	}
 }
 
@@ -192,7 +197,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = NumericStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(reader, std::move(type));
+		result = StringStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::STRUCT:
 		result = StructStatistics::Deserialize(reader, std::move(type));
@@ -220,12 +225,19 @@ string BaseStatistics::ToString() const {
 	                       distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
 	if (NumericStats::IsNumeric(*this)) {
 		result = NumericStats::ToString(*this) + result;
+	} else if (StringStats::IsString(*this)) {
+		result = StringStats::ToString(*this) + result;
 	}
 	return result;
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector.GetType() == this->type);
+	if (NumericStats::IsNumeric(*this)) {
+		NumericStats::Verify(*this, vector, sel, count);
+	} else if (StringStats::IsString(*this)) {
+		StringStats::Verify(*this, vector, sel, count);
+	}
 	if (has_null && has_no_null) {
 		// nothing to verify
 		return;

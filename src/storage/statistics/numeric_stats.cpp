@@ -30,7 +30,7 @@ unique_ptr<BaseStatistics> NumericStats::Create(LogicalType type, const Value &m
 }
 
 bool NumericStats::IsNumeric(const BaseStatistics &stats) {
-	switch(stats.GetType().InternalType()) {
+	switch (stats.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -59,7 +59,6 @@ const NumericStatsData &NumericStats::GetDataUnsafe(const BaseStatistics &stats)
 	return stats.numeric_data;
 }
 
-
 void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
@@ -82,7 +81,8 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type, const Value &constant) {
+FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                 const Value &constant) {
 	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
@@ -404,11 +404,13 @@ unique_ptr<BaseStatistics> NumericStats::Deserialize(FieldReader &reader, Logica
 }
 
 string NumericStats::ToString(const BaseStatistics &stats) {
-	return StringUtil::Format("[Min: %s, Max: %s]", NumericStats::MinOrNull(stats).ToString(), NumericStats::MaxOrNull(stats).ToString());
+	return StringUtil::Format("[Min: %s, Max: %s]", NumericStats::MinOrNull(stats).ToString(),
+	                          NumericStats::MaxOrNull(stats).ToString());
 }
 
 template <class T>
-void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
+                                   idx_t count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
 

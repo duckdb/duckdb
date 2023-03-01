@@ -2,8 +2,6 @@
 
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
-#include "duckdb/storage/statistics/string_statistics.hpp"
-
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
@@ -955,7 +953,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			((StringStatistics &)*stats.statistics).Update(update_data[i]);
+			StringStats::Update(*stats.statistics, update_data[i]);
 			if (!update_data[i].IsInlined()) {
 				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 			}
@@ -968,7 +966,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				((StringStatistics &)*stats.statistics).Update(update_data[i]);
+				StringStats::Update(*stats.statistics, update_data[i]);
 				if (!update_data[i].IsInlined()) {
 					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 				}

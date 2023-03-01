@@ -71,10 +71,14 @@ struct NumericStats {
 	DUCKDB_API static Value Min(const BaseStatistics &stats);
 	//! Returns the max value - throws an exception if there is no max value
 	DUCKDB_API static Value Max(const BaseStatistics &stats);
+	//! Sets the min value of the statistics
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const Value &val);
+	//! Sets the max value of the statistics
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const Value &val);
 
-	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type, const Value &constant);
+	//! Check whether or not a given comparison with a constant could possibly be satisfied by rows given the statistics
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+	                                                     const Value &constant);
 
 	DUCKDB_API static NumericStatsData &GetDataUnsafe(BaseStatistics &stats);
 	DUCKDB_API static const NumericStatsData &GetDataUnsafe(const BaseStatistics &stats);

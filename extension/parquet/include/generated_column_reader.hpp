@@ -31,10 +31,10 @@ public:
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
 		switch (type.id()) {
 		case LogicalTypeId::VARCHAR: {
-			auto string_stats = make_unique<StringStatistics>(type);
+			auto string_stats = StringStats::CreateEmpty(type);
 			string string = constant.ToString();
-			string_stats->Update(string);
-			return std::move(string_stats);
+			StringStats::Update(*string_stats, string);
+			return string_stats;
 		}
 		default:
 			return nullptr;

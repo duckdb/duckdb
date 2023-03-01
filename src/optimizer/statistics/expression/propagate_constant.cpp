@@ -2,7 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
@@ -29,11 +29,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		break;
 	}
 	case PhysicalType::VARCHAR: {
-		auto stats = make_unique<StringStatistics>(input.type());
+		auto stats = StringStats::CreateEmpty(input.type());
 		stats->SetDistinctCount(1);
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
-			stats->Update(string_t(string_value));
+			StringStats::Update(*stats, string_t(string_value));
 		}
 		result = std::move(stats);
 		break;
