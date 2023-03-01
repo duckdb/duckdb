@@ -42,7 +42,7 @@ class BaseStatistics {
 
 public:
 	BaseStatistics(LogicalType type);
-	virtual ~BaseStatistics();
+	~BaseStatistics();
 
 public:
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
@@ -52,7 +52,7 @@ public:
 
 	void SetDistinctCount(idx_t distinct_count);
 
-	virtual bool IsConstant() const;
+	bool IsConstant() const;
 
 	const LogicalType &GetType() const {
 		return type;
@@ -69,23 +69,23 @@ public:
 		has_no_null = true;
 	}
 
-	virtual void Merge(const BaseStatistics &other);
+	void Merge(const BaseStatistics &other);
 
-	virtual unique_ptr<BaseStatistics> Copy() const;
+	unique_ptr<BaseStatistics> Copy() const;
 	void CopyBase(const BaseStatistics &orig);
 
-	virtual void Serialize(Serializer &serializer) const;
-	virtual void Serialize(FieldWriter &writer) const;
+	void Serialize(Serializer &serializer) const;
+	void Serialize(FieldWriter &writer) const;
 
-	virtual idx_t GetDistinctCount();
+	idx_t GetDistinctCount();
 
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 
 	//! Verify that a vector does not violate the statistics
-	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
 	void Verify(Vector &vector, idx_t count) const;
 
-	virtual string ToString() const;
+	string ToString() const;
 
 protected:
 	void InitializeBase();

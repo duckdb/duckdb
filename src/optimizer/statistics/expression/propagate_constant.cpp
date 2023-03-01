@@ -58,10 +58,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::LIST: {
 		auto stats = ListStats::CreateEmpty(input.type());
 		auto &child_stats = ListStats::GetChildStats(*stats);
-		auto &list_children = ListValue::GetChildren(input);
-		for (auto &child_element : list_children) {
-			auto child_element_stats = StatisticsFromValue(child_element);
-			child_stats->Merge(*child_element_stats);
+		if (input.IsNull()) {
+			child_stats.reset();
+		} else {
+			auto &list_children = ListValue::GetChildren(input);
+			for (auto &child_element : list_children) {
+				auto child_element_stats = StatisticsFromValue(child_element);
+				child_stats->Merge(*child_element_stats);
+			}
 		}
 		result = std::move(stats);
 		break;

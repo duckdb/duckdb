@@ -9,7 +9,7 @@ unique_ptr<BaseStatistics> StructStats::CreateEmpty(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = make_unique<BaseStatistics>(std::move(type));
 	result->InitializeBase();
-	for(auto &entry : child_types) {
+	for (auto &entry : child_types) {
 		result->child_stats.push_back(BaseStatistics::CreateEmpty(entry.second));
 	}
 	return result;
@@ -59,7 +59,7 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 
 void StructStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	auto &child_stats = StructStats::GetChildStats(stats);
-	for(auto &child_stat : child_stats) {
+	for (auto &child_stat : child_stats) {
 		writer.WriteOptional(child_stat);
 	}
 }
@@ -68,7 +68,7 @@ unique_ptr<BaseStatistics> StructStats::Deserialize(FieldReader &reader, Logical
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = make_unique<BaseStatistics>(std::move(type));
-	for(auto &entry : child_types) {
+	for (auto &entry : child_types) {
 		result->child_stats.push_back(reader.ReadOptional<BaseStatistics>(nullptr, entry.second));
 	}
 	return result;
