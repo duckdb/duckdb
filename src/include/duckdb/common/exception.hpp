@@ -79,6 +79,7 @@ enum class ExceptionType {
 	DEPENDENCY = 37,             // dependency
 	HTTP = 38
 };
+class HTTPException;
 
 class Exception : public std::exception {
 public:
@@ -97,6 +98,7 @@ public:
 	virtual std::shared_ptr<Exception> Copy() const {
 		return make_shared<Exception>(type, raw_message_);
 	}
+	DUCKDB_API HTTPException& AsHTTPException() const;
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
