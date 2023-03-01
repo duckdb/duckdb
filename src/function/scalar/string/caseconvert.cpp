@@ -157,7 +157,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 		return nullptr;
 	}
 	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!sstats.CanContainUnicode()) {
 		expr.function.function = CaseConvertFunctionASCII<IS_UPPER>;
 	}
 	return nullptr;

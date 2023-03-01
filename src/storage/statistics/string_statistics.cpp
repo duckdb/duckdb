@@ -28,6 +28,21 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() const {
 	return std::move(result);
 }
 
+bool StringStatistics::HasMaxStringLength() const {
+	return has_max_string_length;
+}
+
+uint32_t StringStatistics::MaxStringLength() const {
+	if (!HasMaxStringLength()) {
+		throw InternalException("MaxStringLength called on statistics that does not have a max string length");
+	}
+	return max_string_length;
+}
+
+bool StringStatistics::CanContainUnicode() const {
+	return has_unicode;
+}
+
 void StringStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteBlob(min, MAX_STRING_MINMAX_SIZE);
 	writer.WriteBlob(max, MAX_STRING_MINMAX_SIZE);

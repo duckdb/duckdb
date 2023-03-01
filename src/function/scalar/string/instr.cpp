@@ -47,7 +47,7 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Fu
 	}
 	// for strpos, we only care if the FIRST string has unicode or not
 	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!sstats.CanContainUnicode()) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator>;
 	}
 	return nullptr;

@@ -312,7 +312,7 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	}
 	// we only care about the stats of the first child (i.e. the string)
 	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!sstats.CanContainUnicode()) {
 		expr.function.function = SubstringFunctionASCII;
 	}
 	return nullptr;

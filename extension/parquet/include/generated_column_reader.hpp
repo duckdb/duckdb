@@ -34,7 +34,6 @@ public:
 			auto string_stats = make_unique<StringStatistics>(type);
 			string string = constant.ToString();
 			string_stats->Update(string);
-			string_stats->max_string_length = string.length();
 			return std::move(string_stats);
 		}
 		default:

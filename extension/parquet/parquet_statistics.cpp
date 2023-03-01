@@ -243,8 +243,8 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		} else {
 			return nullptr;
 		}
-		string_stats->has_unicode = true; // we dont know better
-		string_stats->max_string_length = NumericLimits<uint32_t>::Maximum();
+		string_stats->SetContainsUnicode();
+		string_stats->ResetMaxStringLength();
 		row_group_stats = std::move(string_stats);
 		break;
 	}

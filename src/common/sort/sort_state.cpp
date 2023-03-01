@@ -66,9 +66,9 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
 		} else if (physical_type == PhysicalType::VARCHAR) {
 			idx_t size_before = col_size;
-			if (stats.back()) {
+			if (stats.back() && ((StringStatistics &)*stats.back()).HasMaxStringLength()) {
 				auto &str_stats = (StringStatistics &)*stats.back();
-				col_size += str_stats.max_string_length;
+				col_size += str_stats.MaxStringLength();
 				if (col_size > 12) {
 					col_size = 12;
 				} else {
@@ -95,9 +95,9 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			if (bytes_to_fill == 0) {
 				break;
 			}
-			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx]) {
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx] && ((StringStatistics &)*stats[col_idx]).HasMaxStringLength()) {
 				auto &str_stats = (StringStatistics &)*stats[col_idx];
-				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
+				idx_t diff = str_stats.MaxStringLength() - prefix_lengths[col_idx];
 				if (diff > 0) {
 					// Increase all sizes accordingly
 					idx_t increase = MinValue(bytes_to_fill, diff);

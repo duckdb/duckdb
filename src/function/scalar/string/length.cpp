@@ -82,7 +82,7 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 		return nullptr;
 	}
 	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!sstats.CanContainUnicode()) {
 		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>;
 	}
 	return nullptr;
