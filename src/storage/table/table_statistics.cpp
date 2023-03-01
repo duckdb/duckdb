@@ -88,7 +88,7 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(stats_lock);
 	auto result = column_stats[i]->Statistics().Copy();
 	if (column_stats[i]->HasDistinctStats()) {
-		result->distinct_count = column_stats[i]->DistinctStats().GetCount();
+		result->SetDistinctCount(column_stats[i]->DistinctStats().GetCount());
 	}
 	return result;
 }

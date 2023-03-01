@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type) : distinct_count(0), type(std::move(type)) {
+BaseStatistics::BaseStatistics(LogicalType type) : type(std::move(type)), distinct_count(0) {
 }
 
 BaseStatistics::~BaseStatistics() {
@@ -112,6 +112,10 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 	ValidityStatistics(CanHaveNull(), CanHaveNoNull()).Serialize(writer);
 	Serialize(writer);
 	writer.Finalize();
+}
+
+void BaseStatistics::SetDistinctCount(idx_t count) {
+	this->distinct_count = count;
 }
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {

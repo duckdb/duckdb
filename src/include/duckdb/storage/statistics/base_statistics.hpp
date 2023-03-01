@@ -33,8 +33,6 @@ public:
 
 	//! The validity stats of the column (if any)
 	unique_ptr<BaseStatistics> validity_stats;
-	// estimate that one may have even if distinct_stats==nullptr
-	idx_t distinct_count;
 
 public:
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
@@ -42,7 +40,7 @@ public:
 	DUCKDB_API bool CanHaveNull() const;
 	DUCKDB_API bool CanHaveNoNull() const;
 
-	void UpdateDistinctStatistics(Vector &v, idx_t count);
+	void SetDistinctCount(idx_t distinct_count);
 
 	virtual bool IsConstant() const {
 		return false;
@@ -75,6 +73,8 @@ protected:
 
 	//! The type of the logical segment
 	LogicalType type;
+	// estimate that one may have even if distinct_stats==nullptr
+	idx_t distinct_count;
 };
 
 } // namespace duckdb

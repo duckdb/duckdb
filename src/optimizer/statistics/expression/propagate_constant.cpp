@@ -24,13 +24,13 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		result->distinct_count = 1;
+		result->SetDistinctCount(1);
 		return std::move(result);
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
 		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		result->distinct_count = 1;
+		result->SetDistinctCount(1);
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
 			result->Update(string_t(string_value));
