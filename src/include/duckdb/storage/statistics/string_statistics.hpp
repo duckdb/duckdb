@@ -20,11 +20,6 @@ public:
 public:
 	DUCKDB_API explicit StringStatistics(LogicalType type);
 
-	//! The minimum value of the segment, potentially truncated
-	data_t min[MAX_STRING_MINMAX_SIZE];
-	//! The maximum value of the segment, potentially truncated
-	data_t max[MAX_STRING_MINMAX_SIZE];
-
 public:
 	DUCKDB_API void Update(const string_t &value);
 	DUCKDB_API void Merge(const BaseStatistics &other) override;
@@ -55,6 +50,10 @@ public:
 	string ToString() const override;
 
 private:
+	//! The minimum value of the segment, potentially truncated
+	data_t min[MAX_STRING_MINMAX_SIZE];
+	//! The maximum value of the segment, potentially truncated
+	data_t max[MAX_STRING_MINMAX_SIZE];
 	//! Whether or not the column can contain unicode characters
 	bool has_unicode;
 	//! Whether or not the maximum string length is known
