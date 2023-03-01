@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
 
 namespace duckdb {
 
@@ -111,8 +110,8 @@ static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, Functi
 		return nullptr;
 	}
 
-	auto &left_stats = (ListStatistics &)*child_stats[0];
-	auto &right_stats = (ListStatistics &)*child_stats[1];
+	auto &left_stats = *child_stats[0];
+	auto &right_stats = *child_stats[1];
 
 	auto stats = left_stats.Copy();
 	stats->Merge(right_stats);

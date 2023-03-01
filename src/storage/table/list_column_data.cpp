@@ -1,5 +1,5 @@
 #include "duckdb/storage/table/list_column_data.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
@@ -162,10 +162,8 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append_state));
 }
 
-void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
-	auto &stats = (ListStatistics &)stats_p;
-
 	UnifiedVectorFormat list_data;
 	vector.ToUnifiedFormat(count, list_data);
 	auto &list_validity = list_data.validity;
@@ -223,7 +221,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 	// append the child vector
 	if (child_count > 0) {
-		child_column->Append(*stats.GetChildStats(), state.child_appends[1], child_vector, child_count);
+		child_column->Append(*ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
 	}
 }
 
@@ -308,7 +306,7 @@ void ListColumnData::CommitDropColumn() {
 struct ListColumnCheckpointState : public ColumnCheckpointState {
 	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = make_unique<ListStatistics>(column_data.type);
+		global_stats = ListStats::CreateEmpty(column_data.type);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -317,8 +315,7 @@ struct ListColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
-		auto &list_stats = (ListStatistics &)*stats;
-		list_stats.GetChildStats() = child_state->GetStatistics();
+		ListStats::GetChildStats(*stats) = child_state->GetStatistics();
 		return stats;
 	}
 

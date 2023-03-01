@@ -7,7 +7,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -214,8 +214,7 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &list_stats = (ListStatistics &)*child_stats[0];
-	auto &list_child_stats = list_stats.GetChildStats();
+	auto &list_child_stats = ListStats::GetChildStats(*child_stats[0]);
 	if (!list_child_stats) {
 		return nullptr;
 	}

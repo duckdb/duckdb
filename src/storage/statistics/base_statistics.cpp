@@ -2,7 +2,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
@@ -52,6 +52,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	if (StringStats::IsString(other)) {
 		StringStats::Merge(*this, other);
 	}
+	if (ListStats::IsList(other)) {
+		ListStats::Merge(*this, other);
+	}
 }
 
 idx_t BaseStatistics::GetDistinctCount() {
@@ -87,7 +90,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 		result = make_unique<StructStatistics>(std::move(type));
 		break;
 	case PhysicalType::LIST:
-		result = make_unique<ListStatistics>(std::move(type));
+		result = ListStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
 	default:
@@ -101,6 +104,9 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = make_unique<BaseStatistics>(type);
 	result->CopyBase(*this);
 	result->stats_union = stats_union;
+	for (auto &stats : child_stats) {
+		result->child_stats.push_back(stats ? stats->Copy() : nullptr);
+	}
 	return result;
 }
 
@@ -169,6 +175,8 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 		NumericStats::Serialize(*this, writer);
 	} else if (StringStats::IsString(*this)) {
 		StringStats::Serialize(*this, writer);
+	} else if (ListStats::IsList(*this)) {
+		ListStats::Serialize(*this, writer);
 	}
 }
 
@@ -202,7 +210,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = StructStatistics::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::LIST:
-		result = ListStatistics::Deserialize(reader, std::move(type));
+		result = ListStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
 		result = make_unique<BaseStatistics>(std::move(type));
@@ -226,6 +234,8 @@ string BaseStatistics::ToString() const {
 		result = NumericStats::ToString(*this) + result;
 	} else if (StringStats::IsString(*this)) {
 		result = StringStats::ToString(*this) + result;
+	} else if (ListStats::IsList(*this)) {
+		result = ListStats::ToString(*this) + result;
 	}
 	return result;
 }
@@ -236,6 +246,8 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		NumericStats::Verify(*this, vector, sel, count);
 	} else if (StringStats::IsString(*this)) {
 		StringStats::Verify(*this, vector, sel, count);
+	} else if (ListStats::IsList(*this)) {
+		ListStats::Verify(*this, vector, sel, count);
 	}
 	if (has_null && has_no_null) {
 		// nothing to verify

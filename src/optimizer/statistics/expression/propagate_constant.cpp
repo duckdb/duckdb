@@ -1,8 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
-
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
@@ -57,8 +56,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		break;
 	}
 	case PhysicalType::LIST: {
-		auto stats = make_unique<ListStatistics>(input.type());
-		auto &child_stats = stats->GetChildStats();
+		auto stats = ListStats::CreateEmpty(input.type());
+		auto &child_stats = ListStats::GetChildStats(*stats);
 		if (input.IsNull()) {
 			child_stats.reset();
 		} else {

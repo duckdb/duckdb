@@ -98,12 +98,15 @@ protected:
 	bool has_no_null;
 	// estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
+	//! Numeric and String stats
 	union {
 		//! Numeric stats data, for numeric stats
 		NumericStatsData numeric_data;
 		//! String stats data, for string stats
 		StringStatsData string_data;
 	} stats_union;
+	//! Child stats (for LIST and STRUCT)
+	vector<unique_ptr<BaseStatistics>> child_stats;
 };
 
 } // namespace duckdb
