@@ -136,10 +136,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			auto bound_order = make_unique<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
-			if (order.orders[0].expression->type == ExpressionType::STAR) {
+			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
 				// ORDER BY ALL
 				// replace the order list with the maximum order by count
-				D_ASSERT(order.orders.size() == 1);
 				auto order_type = order.orders[0].type;
 				auto null_order = order.orders[0].null_order;
 

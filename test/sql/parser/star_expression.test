@@ -29,12 +29,32 @@ SELECT * FROM integers GROUP BY COLUMNS(*)
 not supported
 
 statement error
+SELECT * FROM integers GROUP BY * + 42
+----
+not supported
+
+statement error
 SELECT * FROM integers GROUP BY i HAVING * > 42
 ----
 not supported
 
 statement error
 SELECT * FROM integers GROUP BY i HAVING COLUMNS(*)>42
+----
+not supported
+
+statement error
+SELECT * FROM integers ORDER BY *, *
+----
+not supported
+
+statement error
+SELECT * FROM integers ORDER BY * + 42
+----
+not supported
+
+statement error
+SELECT * FROM integers ORDER BY * + 42
 ----
 not supported
 
