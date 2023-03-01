@@ -95,7 +95,8 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			if (bytes_to_fill == 0) {
 				break;
 			}
-			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx] && ((StringStatistics &)*stats[col_idx]).HasMaxStringLength()) {
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx] &&
+			    ((StringStatistics &)*stats[col_idx]).HasMaxStringLength()) {
 				auto &str_stats = (StringStatistics &)*stats[col_idx];
 				idx_t diff = str_stats.MaxStringLength() - prefix_lengths[col_idx];
 				if (diff > 0) {

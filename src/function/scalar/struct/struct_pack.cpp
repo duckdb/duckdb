@@ -62,9 +62,9 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStati
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
-	D_ASSERT(child_stats.size() == struct_stats->child_stats.size());
-	for (idx_t i = 0; i < struct_stats->child_stats.size(); i++) {
-		struct_stats->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+	auto &struct_child_stats = struct_stats->GetChildStats();
+	for (idx_t i = 0; i < struct_child_stats.size(); i++) {
+		struct_child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
 	return std::move(struct_stats);
 }

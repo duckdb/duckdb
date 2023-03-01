@@ -87,14 +87,15 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	auto &existing_struct_stats = (StructStatistics &)*child_stats[0];
 	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
 
-	for (idx_t i = 0; i < existing_struct_stats.child_stats.size(); i++) {
-		new_struct_stats->child_stats[i] =
-		    existing_struct_stats.child_stats[i] ? existing_struct_stats.child_stats[i]->Copy() : nullptr;
+	auto &existing_stats = existing_struct_stats.GetChildStats();
+	auto &new_stats = new_struct_stats->GetChildStats();
+	for (idx_t i = 0; i < existing_stats.size(); i++) {
+		new_stats[i] = existing_stats[i] ? existing_stats[i]->Copy() : nullptr;
 	}
 
-	auto offset = new_struct_stats->child_stats.size() - child_stats.size();
+	auto offset = new_stats.size() - child_stats.size();
 	for (idx_t i = 1; i < child_stats.size(); i++) {
-		new_struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		new_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
 	return std::move(new_struct_stats);
 }

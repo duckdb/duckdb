@@ -18,8 +18,6 @@ class StructStatistics : public BaseStatistics {
 public:
 	explicit StructStatistics(LogicalType type);
 
-	vector<unique_ptr<BaseStatistics>> child_stats;
-
 public:
 	void Merge(const BaseStatistics &other) override;
 	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant) const;
@@ -30,6 +28,22 @@ public:
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;
 
 	string ToString() const override;
+
+	BaseStatistics &GetChildStats(idx_t i) {
+		if (i >= child_stats.size() || !child_stats[i]) {
+			throw InternalException("Calling StructStatistics::GetChildStats but there are no stats for this index");
+		}
+		return *child_stats[i];
+	}
+	void SetChildStats(idx_t i, unique_ptr<BaseStatistics> stats) {
+		child_stats[i] = std::move(stats);
+	}
+	vector<unique_ptr<BaseStatistics>> &GetChildStats() {
+		return child_stats;
+	}
+
+private:
+	vector<unique_ptr<BaseStatistics>> child_stats;
 };
 
 } // namespace duckdb

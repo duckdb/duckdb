@@ -41,15 +41,17 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	}
 	case PhysicalType::STRUCT: {
 		auto stats = make_unique<StructStatistics>(input.type());
+		auto &child_stats = stats->GetChildStats();
 		if (input.IsNull()) {
-			for (auto &child_stat : stats->child_stats) {
-				child_stat.reset();
+			auto &child_types = StructType::GetChildTypes(input.type());
+			for (idx_t i = 0; i < child_stats.size(); i++) {
+				child_stats[i] = StatisticsFromValue(Value(child_types[i].second));
 			}
 		} else {
 			auto &struct_children = StructValue::GetChildren(input);
-			D_ASSERT(stats->child_stats.size() == struct_children.size());
-			for (idx_t i = 0; i < stats->child_stats.size(); i++) {
-				stats->child_stats[i] = StatisticsFromValue(struct_children[i]);
+			D_ASSERT(child_stats.size() == struct_children.size());
+			for (idx_t i = 0; i < child_stats.size(); i++) {
+				child_stats[i] = StatisticsFromValue(struct_children[i]);
 			}
 		}
 		result = std::move(stats);

@@ -132,7 +132,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	auto &struct_stats = (StructStatistics &)stats;
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(*struct_stats.child_stats[i], state.child_appends[i + 1], *child_entries[i], count);
+		sub_columns[i]->Append(struct_stats.GetChildStats(i), state.child_appends[i + 1], *child_entries[i], count);
 	}
 }
 
@@ -199,7 +199,7 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
-			struct_stats.child_stats[i] = std::move(child_stats);
+			struct_stats.SetChildStats(i, std::move(child_stats));
 		}
 	}
 	return stats;
@@ -242,10 +242,8 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = make_unique<StructStatistics>(column_data.type);
-		D_ASSERT(stats->child_stats.size() == child_states.size());
 		for (idx_t i = 0; i < child_states.size(); i++) {
-			stats->child_stats[i] = child_states[i]->GetStatistics();
-			D_ASSERT(stats->child_stats[i]);
+			stats->SetChildStats(i, child_states[i]->GetStatistics());
 		}
 		return std::move(stats);
 	}
