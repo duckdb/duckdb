@@ -89,12 +89,8 @@ WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_func
 }
 
 unique_ptr<QueryNode> WindowRelation::GetQueryNode() {
-	//	select j, i, sum(i) over (partition by j) from a order by 1,2
-	// select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 	auto result = make_unique<SelectNode>();
 	ExpressionType window_type = WindowToExpressionType(window_function);
-	// WINDOW_ROW_NUMBER, WINDOW_FIRST_VALUE, WINDOW_LAST_VALUE, WINDOW_NTH_VALUE, WINDOW_RANK, WINDOW_RANK_DENSE,
-	// WINDOW_PERCENT_RANK, WINDOW_CUME_DIST, WINDOW_LEAD, WINDOW_LAG, WINDOW_NTILE
 	auto window_expr = make_unique<WindowExpression>(window_type, "", "", window_function);
 
 	for (auto &child : children) {
@@ -155,7 +151,7 @@ string WindowRelation::ToString(idx_t depth) {
 
 string WindowRelation::GetAlias() {
 	// set the alias, otherwise you end up with a really long alias name.
-	return "WINDOW_ALIAS";
+	return alias;
 }
 
 } // namespace duckdb
