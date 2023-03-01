@@ -103,3 +103,9 @@ SELECT * FROM left_table
 NATURAL SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table;
 ----
 42	1	1
+
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.a = 84)
+----
+43	1	1
+42	1	1
