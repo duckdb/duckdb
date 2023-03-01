@@ -57,6 +57,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
+	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result.emplace_back(table_idx, i);
 	}
@@ -84,6 +85,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
+			D_ASSERT(index < bindings.size());
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
@@ -167,7 +169,8 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 	}
 	has_estimated_cardinality = true;
-	return max_cardinality;
+	estimated_cardinality = max_cardinality;
+	return estimated_cardinality;
 }
 
 void LogicalOperator::Print() {
@@ -340,6 +343,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_DETACH:
+		throw SerializationException("Logical Detach does not support serialization");
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(state, reader);
 		break;

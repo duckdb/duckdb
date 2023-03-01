@@ -90,6 +90,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((LogicalPlanStatement &)statement);
 	case StatementType::ATTACH_STATEMENT:
 		return Bind((AttachStatement &)statement);
+	case StatementType::DETACH_STATEMENT:
+		return Bind((DetachStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -168,8 +170,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
+	case TableReferenceType::PIVOT:
+		result = Bind((PivotRef &)ref);
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unknown table ref type");
 	}
 	result->sample = std::move(ref.sample);
@@ -201,6 +207,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause

@@ -15,7 +15,7 @@ namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
 public:
-	explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
+	DUCKDB_API explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
 
 	//! The subquery
 	unique_ptr<SelectStatement> subquery;

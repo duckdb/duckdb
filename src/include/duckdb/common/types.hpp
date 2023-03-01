@@ -275,7 +275,6 @@ enum class LogicalTypeId : uint8_t {
 
 	HUGEINT = 50,
 	POINTER = 51,
-	// HASH = 52, // deprecated, uses UBIGINT instead
 	VALIDITY = 53,
 	UUID = 54,
 
@@ -333,7 +332,7 @@ struct LogicalType {
 	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
-		type_info_ = std::move(other.type_info_);
+		std::swap(type_info_, other.type_info_);
 		return *this;
 	}
 

@@ -121,6 +121,10 @@ select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(
 statement error
 SELECT percentile_disc(CAST('NaN' AS REAL)) WITHIN GROUP (ORDER BY 1);
 
+# Empty list is also not allowed
+statement error
+SELECT percentile_disc([]) WITHIN GROUP (ORDER BY LAST);
+
 # Wrong number of arguments for MODE
 statement error
 select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);

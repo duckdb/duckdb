@@ -57,8 +57,8 @@ class external_pointer {
 
   external_pointer(SEXP data) : data_(valid_type(data)) {}
 
-  external_pointer(pointer p, bool use_deleter = true, bool finalize_on_exit = true)
-      : data_(safe[R_MakeExternalPtr]((void*)p, R_NilValue, R_NilValue)) {
+  external_pointer(pointer p, bool use_deleter = true, bool finalize_on_exit = true, SEXP prot = R_NilValue)
+      : data_(safe[R_MakeExternalPtr]((void*)p, R_NilValue, prot)) {
     if (use_deleter) {
       R_RegisterCFinalizerEx(data_, r_deleter, static_cast<r_bool>(finalize_on_exit));
     }

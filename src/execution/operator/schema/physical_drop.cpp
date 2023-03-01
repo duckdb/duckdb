@@ -38,11 +38,6 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 		}
 		break;
 	}
-	case CatalogType::DATABASE_ENTRY: {
-		auto &db_manager = DatabaseManager::Get(context.client);
-		db_manager.DetachDatabase(context.client, info->name, info->if_exists);
-		break;
-	}
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, info.get());

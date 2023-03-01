@@ -27,8 +27,10 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(std::move(other.type)), parent(parent), updates(std::move(other.updates)),
-      version(parent ? parent->version + 1 : 0) {
+      type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
+	if (other.updates) {
+		updates = make_unique<UpdateSegment>(*other.updates, *this);
+	}
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -464,8 +466,11 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 		column_info.segment_start = segment->start;
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function->type);
-		column_info.segment_stats =
-		    segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats");
+		if (!segment->stats.statistics || type.id() == LogicalTypeId::LIST) {
+			column_info.segment_stats = string("No Stats");
+		} else {
+			column_info.segment_stats = segment->stats.statistics->ToString();
+		}
 		column_info.has_updates = updates ? true : false;
 		// persistent
 		// block_id

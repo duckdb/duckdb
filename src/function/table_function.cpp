@@ -35,4 +35,23 @@ TableFunction::TableFunction()
       filter_pushdown(false), filter_prune(false) {
 }
 
+bool TableFunction::Equal(const TableFunction &rhs) const {
+	// number of types
+	if (this->arguments.size() != rhs.arguments.size()) {
+		return false;
+	}
+	// argument types
+	for (idx_t i = 0; i < this->arguments.size(); ++i) {
+		if (this->arguments[i] != rhs.arguments[i]) {
+			return false;
+		}
+	}
+	// varargs
+	if (this->varargs != rhs.varargs) {
+		return false;
+	}
+
+	return true; // they are equal
+}
+
 } // namespace duckdb

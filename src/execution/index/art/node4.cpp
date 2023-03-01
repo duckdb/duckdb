@@ -101,7 +101,7 @@ void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child
 	} else {
 		// node is full, grow to Node16
 		auto new_node = Node16::New();
-		art.memory_size += new_node->MemorySize(art, false);
+		art.IncreaseMemorySize(new_node->MemorySize(art, false));
 		new_node->count = n->count;
 		new_node->prefix = std::move(node->prefix);
 
@@ -112,8 +112,7 @@ void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child
 		}
 		n->count = 0;
 
-		D_ASSERT(art.memory_size >= node->MemorySize(art, false));
-		art.memory_size -= node->MemorySize(art, false);
+		art.DecreaseMemorySize(node->MemorySize(art, false));
 		Node::Delete(node);
 		node = new_node;
 		Node16::InsertChild(art, node, key_byte, new_child);
@@ -129,8 +128,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 	// adjust the ART size
 	if (n->ChildIsInMemory(pos)) {
 		auto child = n->GetChild(art, pos);
-		D_ASSERT(art.memory_size >= child->MemorySize(art, true));
-		art.memory_size -= child->MemorySize(art, true);
+		art.DecreaseMemorySize(child->MemorySize(art, true));
 	}
 
 	// erase the child and decrease the count
@@ -158,8 +156,7 @@ void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
 		// ensure that when deleting the node, we do not delete the child (because we move it)
 		n->children[0] = nullptr;
 
-		D_ASSERT(art.memory_size >= n->MemorySize(art, false));
-		art.memory_size -= n->MemorySize(art, false);
+		art.DecreaseMemorySize(n->MemorySize(art, false));
 		Node::Delete(node);
 		node = child_ref;
 	}

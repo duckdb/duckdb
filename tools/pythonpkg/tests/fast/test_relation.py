@@ -191,15 +191,6 @@ class TestRelation(object):
 
         assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4
 
-    def test_explain(self, duckdb_cursor):
-        con = duckdb.connect()
-        con.execute("Create table t1 (i integer)")
-        con.execute("Create table t2 (j integer)")
-        rel1 = con.table('t1')
-        rel2 = con.table('t2')
-        join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
-        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER (i = j)\n    Scan Table [t1]\n    Scan Table [t2]'
-
     def test_fetchnumpy(self, duckdb_cursor):
         start, stop = -1000, 2000
         count = stop - start

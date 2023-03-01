@@ -64,6 +64,8 @@ struct ColumnScanState {
 	//! We initialize one SegmentScanState per segment, however, if scanning a DataChunk requires us to scan over more
 	//! than one Segment, we need to keep the scan states of the previous segments around
 	vector<unique_ptr<SegmentScanState>> previous_states;
+	//! The last read offset in the child state (used for LIST columns only)
+	idx_t last_offset = 0;
 
 public:
 	//! Move the scan state forward by "count" rows (including all child states)

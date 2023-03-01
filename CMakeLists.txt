@@ -16,6 +16,8 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (CMAKE_VERSION VERSION_LESS "3.1")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else ()
@@ -274,7 +276,7 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
         TRUE)
 option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        FALSE)
+        TRUE)
 
 
 set(JEMALLOC_DEFAULT_BUILD FALSE)
@@ -307,6 +309,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
+option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
@@ -372,6 +375,11 @@ endif()
 
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
+endif()
+
+
+if(ALTERNATIVE_VERIFY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
 if(DEBUG_MOVE)
@@ -754,7 +762,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   if(WIN32 AND NOT MSVC)
     return()
   endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -774,7 +781,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if(${IGNORE_WARNINGS} GREATER_EQUAL 0)
+  if(${IGNORE_WARNINGS} GREATER -1)
     disable_target_warnings(${TARGET_NAME})
   endif()
   # loadable extension binaries can be built two ways:
@@ -819,10 +826,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
           ".duckdb_extension")
 
   if(MSVC)
-    if (NOT EXTENSION_STATIC_BUILD)
-      target_link_libraries(${TARGET_NAME} delayimp)
-    endif()
-
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -830,21 +833,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
-
-  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
-            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-            "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-    # This is only strictly required in non-Visual-Studio builds like Ninja:
-    target_link_libraries(${TARGET_NAME}
-            delayimp)
-endif()
-
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)

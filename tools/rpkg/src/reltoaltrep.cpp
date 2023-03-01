@@ -224,7 +224,8 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
-	auto row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, rel);
+
+	cpp11::sexp row_names_sexp = R_new_altrep(RelToAltrep::rownames_class, ptr, rel);
 	install_new_attrib(data_frame, R_RowNamesSymbol, row_names_sexp);
 	vector<string> names;
 	for (auto &col : drel->Columns()) {
