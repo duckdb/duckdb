@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -61,12 +61,12 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
-	auto &struct_child_stats = struct_stats->GetChildStats();
+	auto struct_stats = StructStats::CreateEmpty(expr.return_type);
+	auto &struct_child_stats = StructStats::GetChildStats(*struct_stats);
 	for (idx_t i = 0; i < struct_child_stats.size(); i++) {
-		struct_child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		StructStats::SetChildStats(*struct_stats, i, child_stats[i] ? child_stats[i]->Copy() : nullptr);
 	}
-	return std::move(struct_stats);
+	return struct_stats;
 }
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {

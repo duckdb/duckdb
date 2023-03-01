@@ -2,8 +2,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	if (ListStats::IsList(other)) {
 		ListStats::Merge(*this, other);
 	}
+	if (StructStats::IsStruct(other)) {
+		StructStats::Merge(*this, other);
+	}
 }
 
 idx_t BaseStatistics::GetDistinctCount() {
@@ -87,7 +91,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 		result = StringStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::STRUCT:
-		result = make_unique<StructStatistics>(std::move(type));
+		result = StructStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::LIST:
 		result = ListStats::CreateEmpty(std::move(type));
@@ -207,7 +211,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = StringStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::STRUCT:
-		result = StructStatistics::Deserialize(reader, std::move(type));
+		result = StructStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::LIST:
 		result = ListStats::Deserialize(reader, std::move(type));
@@ -236,6 +240,8 @@ string BaseStatistics::ToString() const {
 		result = StringStats::ToString(*this) + result;
 	} else if (ListStats::IsList(*this)) {
 		result = ListStats::ToString(*this) + result;
+	} else if (StructStats::IsStruct(*this)) {
+		result = StructStats::ToString(*this) + result;
 	}
 	return result;
 }
@@ -248,6 +254,8 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		StringStats::Verify(*this, vector, sel, count);
 	} else if (ListStats::IsList(*this)) {
 		ListStats::Verify(*this, vector, sel, count);
+	} else if (StructStats::IsStruct(*this)) {
+		StructStats::Verify(*this, vector, sel, count);
 	}
 	if (has_null && has_no_null) {
 		// nothing to verify

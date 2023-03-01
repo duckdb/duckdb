@@ -1,5 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
@@ -129,10 +129,10 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
 
-	auto &struct_stats = (StructStatistics &)stats;
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(struct_stats.GetChildStats(i), state.child_appends[i + 1], *child_entries[i], count);
+		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
+		                       count);
 	}
 }
 
@@ -191,15 +191,14 @@ void StructColumnData::UpdateColumn(TransactionData transaction, const vector<co
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
 	auto stats = BaseStatistics::CreateEmpty(type);
-	auto &struct_stats = (StructStatistics &)*stats;
 	auto validity_stats = validity.GetUpdateStatistics();
 	if (validity_stats) {
-		struct_stats.Merge(*validity_stats);
+		stats->Merge(*validity_stats);
 	}
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
-			struct_stats.SetChildStats(i, std::move(child_stats));
+			StructStats::SetChildStats(*stats, i, std::move(child_stats));
 		}
 	}
 	return stats;
@@ -233,7 +232,7 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
 	                            PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = make_unique<StructStatistics>(column_data.type);
+		global_stats = StructStats::CreateEmpty(column_data.type);
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -241,11 +240,11 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = make_unique<StructStatistics>(column_data.type);
+		auto stats = StructStats::CreateEmpty(column_data.type);
 		for (idx_t i = 0; i < child_states.size(); i++) {
-			stats->SetChildStats(i, child_states[i]->GetStatistics());
+			StructStats::SetChildStats(*stats, i, child_states[i]->GetStatistics());
 		}
-		return std::move(stats);
+		return stats;
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer) override {

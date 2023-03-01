@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -84,20 +84,19 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	if (child_stats.empty() || !child_stats[0]) {
 		return nullptr;
 	}
-	auto &existing_struct_stats = (StructStatistics &)*child_stats[0];
-	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
+	auto new_struct_stats = StructStats::CreateEmpty(expr.return_type);
 
-	auto &existing_stats = existing_struct_stats.GetChildStats();
-	auto &new_stats = new_struct_stats->GetChildStats();
+	auto &existing_stats = StructStats::GetChildStats(*child_stats[0]);
+	auto &new_stats = StructStats::GetChildStats(*new_struct_stats);
 	for (idx_t i = 0; i < existing_stats.size(); i++) {
-		new_stats[i] = existing_stats[i] ? existing_stats[i]->Copy() : nullptr;
+		StructStats::SetChildStats(*new_struct_stats, i, existing_stats[i]->Copy());
 	}
 
 	auto offset = new_stats.size() - child_stats.size();
 	for (idx_t i = 1; i < child_stats.size(); i++) {
-		new_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		StructStats::SetChildStats(*new_struct_stats, offset + i, child_stats[i] ? child_stats[i]->Copy() : nullptr);
 	}
-	return std::move(new_struct_stats);
+	return new_struct_stats;
 }
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {

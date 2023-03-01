@@ -3,7 +3,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -105,9 +105,9 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &struct_stats = (StructStatistics &)*child_stats[0];
+
 	auto &info = (StructExtractBindData &)*bind_data;
-	auto &struct_child_stats = struct_stats.GetChildStats();
+	auto &struct_child_stats = StructStats::GetChildStats(*child_stats[0]);
 	if (info.index >= struct_child_stats.size() || !struct_child_stats[info.index]) {
 		return nullptr;
 	}

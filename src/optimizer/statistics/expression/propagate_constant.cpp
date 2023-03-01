@@ -2,7 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
@@ -38,18 +38,18 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		break;
 	}
 	case PhysicalType::STRUCT: {
-		auto stats = make_unique<StructStatistics>(input.type());
-		auto &child_stats = stats->GetChildStats();
+		auto stats = StructStats::CreateEmpty(input.type());
+		auto &child_stats = StructStats::GetChildStats(*stats);
 		if (input.IsNull()) {
 			auto &child_types = StructType::GetChildTypes(input.type());
 			for (idx_t i = 0; i < child_stats.size(); i++) {
-				child_stats[i] = StatisticsFromValue(Value(child_types[i].second));
+				StructStats::SetChildStats(*stats, i, StatisticsFromValue(Value(child_types[i].second)));
 			}
 		} else {
 			auto &struct_children = StructValue::GetChildren(input);
 			D_ASSERT(child_stats.size() == struct_children.size());
 			for (idx_t i = 0; i < child_stats.size(); i++) {
-				child_stats[i] = StatisticsFromValue(struct_children[i]);
+				StructStats::SetChildStats(*stats, i, StatisticsFromValue(struct_children[i]));
 			}
 		}
 		result = std::move(stats);
@@ -58,25 +58,20 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::LIST: {
 		auto stats = ListStats::CreateEmpty(input.type());
 		auto &child_stats = ListStats::GetChildStats(*stats);
-		if (input.IsNull()) {
-			child_stats.reset();
-		} else {
-			auto &list_children = ListValue::GetChildren(input);
-			for (auto &child_element : list_children) {
-				auto child_element_stats = StatisticsFromValue(child_element);
-				if (child_element_stats) {
-					child_stats->Merge(*child_element_stats);
-				} else {
-					child_stats.reset();
-					break;
-				}
-			}
+		auto &list_children = ListValue::GetChildren(input);
+		for (auto &child_element : list_children) {
+			auto child_element_stats = StatisticsFromValue(child_element);
+			child_stats->Merge(*child_element_stats);
 		}
 		result = std::move(stats);
 		break;
 	}
-	default:
-		return nullptr;
+	default: {
+		auto stats = make_unique<BaseStatistics>(input.type());
+		stats->SetDistinctCount(1);
+		result = std::move(stats);
+		break;
+	}
 	}
 	if (input.IsNull()) {
 		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
