@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
@@ -19,9 +18,9 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	group_minima.reserve(group_stats.size());
 	for (auto &stats : group_stats) {
 		D_ASSERT(stats);
-		auto &nstats = (NumericStatistics &)*stats;
-		D_ASSERT(nstats.HasMin());
-		group_minima.push_back(nstats.Min());
+		auto &nstats = *stats;
+		D_ASSERT(NumericStats::HasMin(nstats));
+		group_minima.push_back(NumericStats::Min(nstats));
 	}
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);

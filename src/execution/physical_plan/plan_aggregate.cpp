@@ -9,7 +9,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 namespace duckdb {
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
@@ -50,12 +50,12 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			// for small types we can just set the stats to [type_min, type_max]
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				stats =
+				    NumericStats::Create(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
 				break;
 			case PhysicalType::INT16:
-				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				stats =
+				    NumericStats::Create(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -64,9 +64,9 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			// we had no stats before, so we have no clue if there are null values or not
 			stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		}
-		auto &nstats = (NumericStatistics &)*stats;
+		auto &nstats = *stats;
 
-		if (!nstats.HasMin() || !nstats.HasMax()) {
+		if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
 			return false;
 		}
 		// we have a min and a max value for the stats: use that to figure out how many bits we have
@@ -75,17 +75,20 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		int64_t range;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(nstats.Max().GetValueUnsafe<int8_t>()) - int64_t(nstats.Min().GetValueUnsafe<int8_t>());
+			range = int64_t(NumericStats::Max(nstats).GetValueUnsafe<int8_t>()) -
+			        int64_t(NumericStats::Min(nstats).GetValueUnsafe<int8_t>());
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(nstats.Max().GetValueUnsafe<int16_t>()) - int64_t(nstats.Min().GetValueUnsafe<int16_t>());
+			range = int64_t(NumericStats::Max(nstats).GetValueUnsafe<int16_t>()) -
+			        int64_t(NumericStats::Min(nstats).GetValueUnsafe<int16_t>());
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(nstats.Max().GetValueUnsafe<int32_t>()) - int64_t(nstats.Min().GetValueUnsafe<int32_t>());
+			range = int64_t(NumericStats::Max(nstats).GetValueUnsafe<int32_t>()) -
+			        int64_t(NumericStats::Min(nstats).GetValueUnsafe<int32_t>());
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(nstats.Max().GetValueUnsafe<int64_t>(),
-			                                    nstats.Min().GetValueUnsafe<int64_t>(), range)) {
+			if (!TrySubtractOperator::Operation(NumericStats::Max(nstats).GetValueUnsafe<int64_t>(),
+			                                    NumericStats::Min(nstats).GetValueUnsafe<int64_t>(), range)) {
 				return false;
 			}
 			break;

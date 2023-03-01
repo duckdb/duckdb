@@ -13,6 +13,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -22,7 +23,6 @@ class Deserializer;
 class FieldWriter;
 class FieldReader;
 class Vector;
-class DistinctStatistics;
 struct UnifiedVectorFormat;
 
 enum class StatsInfo : uint8_t {
@@ -34,6 +34,11 @@ enum class StatsInfo : uint8_t {
 };
 
 class BaseStatistics {
+	friend struct NumericStats;
+	friend struct StringStats;
+	friend struct StructStats;
+	friend struct ListStats;
+
 public:
 	BaseStatistics(LogicalType type);
 	virtual ~BaseStatistics();
@@ -92,6 +97,8 @@ protected:
 	bool has_no_null;
 	// estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
+	//! Numeric stats data, for numeric stats
+	NumericStatsData numeric_data;
 };
 
 } // namespace duckdb

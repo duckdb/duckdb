@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
@@ -23,7 +22,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto stats = make_unique<NumericStatistics>(input.type(), input, input);
+		auto stats = NumericStats::Create(input.type(), input, input);
 		stats->Set(input.IsNull() ? StatsInfo::CAN_HAVE_NULL_VALUES : StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		stats->SetDistinctCount(1);
 		result = std::move(stats);

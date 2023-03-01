@@ -10,7 +10,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
@@ -100,12 +100,13 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 
 	// and when the build range is smaller than the threshold
-	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	if (!stats_build->HasMin() || !stats_build->HasMax()) {
+	auto &stats_build = *op.join_stats[0].get(); // lhs stats
+	if (!NumericStats::HasMin(stats_build) || !NumericStats::HasMax(stats_build)) {
 		return;
 	}
 	int64_t min_value, max_value;
-	if (!ExtractNumericValue(stats_build->Min(), min_value) || !ExtractNumericValue(stats_build->Max(), max_value)) {
+	if (!ExtractNumericValue(NumericStats::Min(stats_build), min_value) ||
+	    !ExtractNumericValue(NumericStats::Max(stats_build), max_value)) {
 		return;
 	}
 	int64_t build_range;
@@ -114,20 +115,22 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 
 	// Fill join_stats for invisible join
-	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
+	auto &stats_probe = *op.join_stats[1].get(); // rhs stats
 
 	// The max size our build must have to run the perfect HJ
 	const idx_t MAX_BUILD_SIZE = 1000000;
-	join_state.probe_min = stats_probe->Min();
-	join_state.probe_max = stats_probe->Max();
-	join_state.build_min = stats_build->Min();
-	join_state.build_max = stats_build->Max();
+	join_state.probe_min = NumericStats::Min(stats_probe);
+	join_state.probe_max = NumericStats::Max(stats_probe);
+	join_state.build_min = NumericStats::Min(stats_build);
+	join_state.build_max = NumericStats::Max(stats_build);
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->Max().IsNull() || stats_probe->Min().IsNull()) {
+	if (join_state.build_range > MAX_BUILD_SIZE || NumericStats::Max(stats_probe).IsNull() ||
+	    NumericStats::Min(stats_probe).IsNull()) {
 		return;
 	}
-	if (stats_build->Min() <= stats_probe->Min() && stats_probe->Max() <= stats_build->Max()) {
+	if (NumericStats::Min(stats_build) <= NumericStats::Min(stats_probe) &&
+	    NumericStats::Max(stats_probe) <= NumericStats::Max(stats_build)) {
 		join_state.is_probe_in_domain = true;
 	}
 	join_state.is_build_small = true;

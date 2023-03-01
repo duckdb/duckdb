@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/statistics/string_statistics.hpp"
 
 #include "duckdb/storage/table/column_data.hpp"
@@ -932,7 +932,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStatistics::Update<T>(stats, update_data[i]);
+			NumericStats::Update<T>(*stats.statistics, update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -942,7 +942,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStatistics::Update<T>(stats, update_data[i]);
+				NumericStats::Update<T>(*stats.statistics, update_data[i]);
 			}
 		}
 		return not_null_count;

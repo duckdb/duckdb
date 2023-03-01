@@ -6,7 +6,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #endif
 
@@ -18,27 +18,31 @@ using duckdb_parquet::format::Type;
 static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
                                                      const duckdb_parquet::format::SchemaElement &schema_ele,
                                                      const duckdb_parquet::format::Statistics &parquet_stats) {
-	auto stats = make_unique<NumericStatistics>(type);
+	auto stats = NumericStats::CreateEmpty(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.
 	if (parquet_stats.__isset.min) {
-		stats->SetMin(ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type));
+		NumericStats::SetMin(
+		    *stats, ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type));
 	} else if (parquet_stats.__isset.min_value) {
-		stats->SetMin(
+		NumericStats::SetMin(
+		    *stats,
 		    ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type));
 	} else {
-		stats->SetMin(Value(type));
+		NumericStats::SetMin(*stats, Value(type));
 	}
 	if (parquet_stats.__isset.max) {
-		stats->SetMax(ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type));
+		NumericStats::SetMax(
+		    *stats, ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type));
 	} else if (parquet_stats.__isset.max_value) {
-		stats->SetMax(
+		NumericStats::SetMax(
+		    *stats,
 		    ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type));
 	} else {
-		stats->SetMax(Value(type));
+		NumericStats::SetMax(*stats, Value(type));
 	}
-	return std::move(stats);
+	return stats;
 }
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,

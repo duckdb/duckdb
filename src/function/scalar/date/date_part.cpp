@@ -9,7 +9,7 @@
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
@@ -164,9 +164,9 @@ template <int64_t MIN, int64_t MAX>
 static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
+	auto result = NumericStats::Create(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
 	result->CopyValidity(child_stats[0].get());
-	return std::move(result);
+	return result;
 }
 
 struct DatePart {
@@ -176,13 +176,13 @@ struct DatePart {
 		if (!child_stats[0]) {
 			return nullptr;
 		}
-		auto &nstats = (NumericStatistics &)*child_stats[0];
-		if (!nstats.HasMin() || !nstats.HasMax()) {
+		auto &nstats = *child_stats[0];
+		if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound
-		auto min = nstats.Min().GetValueUnsafe<T>();
-		auto max = nstats.Max().GetValueUnsafe<T>();
+		auto min = NumericStats::Min(nstats).GetValueUnsafe<T>();
+		auto max = NumericStats::Max(nstats).GetValueUnsafe<T>();
 		if (min > max) {
 			return nullptr;
 		}
@@ -192,8 +192,7 @@ struct DatePart {
 		}
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
-		auto result =
-		    make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
+		auto result = NumericStats::Create(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
 		result->CopyValidity(child_stats[0].get());
 		return std::move(result);
 	}

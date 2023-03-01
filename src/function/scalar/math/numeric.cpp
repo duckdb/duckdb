@@ -8,7 +8,6 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include <cmath>
 #include <errno.h>
@@ -80,22 +79,22 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &lstats = (NumericStatistics &)*child_stats[0];
+	auto &lstats = *child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (lstats.HasMin() && lstats.HasMax()) {
+	if (NumericStats::HasMin(lstats) && NumericStats::HasMax(lstats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
-			potential_overflow = lstats.Min().GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
 			break;
 		case PhysicalType::INT16:
-			potential_overflow = lstats.Min().GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
 			break;
 		case PhysicalType::INT32:
-			potential_overflow = lstats.Min().GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
 			break;
 		case PhysicalType::INT64:
-			potential_overflow = lstats.Min().GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
 			break;
 		default:
 			return nullptr;
@@ -108,8 +107,8 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		// no potential overflow
 
 		// compute stats
-		auto current_min = lstats.Min().GetValue<int64_t>();
-		auto current_max = lstats.Max().GetValue<int64_t>();
+		auto current_min = NumericStats::Min(lstats).GetValue<int64_t>();
+		auto current_max = NumericStats::Max(lstats).GetValue<int64_t>();
 
 		int64_t min_val, max_val;
 
@@ -131,7 +130,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		new_max = Value::Numeric(expr.return_type, max_val);
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max));
+	auto stats = NumericStats::Create(expr.return_type, std::move(new_min), std::move(new_max));
 	stats->CopyValidity(lstats);
 	return std::move(stats);
 }

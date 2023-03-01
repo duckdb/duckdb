@@ -20,7 +20,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #endif
 
 using namespace duckdb;
@@ -226,14 +225,14 @@ static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const
 	if (bind_data.table_name == "mytable") {
 		if (column_id == 0) {
 			// i: 1, 2, 3, 4, 5
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5));
+			return NumericStats::Create(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5));
 		} else if (column_id == 1) {
 			// j: 2, 3, 4, 5, 6
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6));
+			return NumericStats::Create(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6));
 		}
 	} else if (bind_data.table_name == "myothertable") {
 		// k: 1, 10, 20
-		return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20));
+		return NumericStats::Create(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20));
 	}
 	return nullptr;
 }

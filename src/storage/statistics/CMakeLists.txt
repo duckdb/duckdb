@@ -5,7 +5,7 @@ add_library_unity(
   column_statistics.cpp
   distinct_statistics.cpp
   list_statistics.cpp
-  numeric_statistics.cpp
+  numeric_stats.cpp
   segment_statistics.cpp
   string_statistics.cpp
   struct_statistics.cpp)

@@ -3,7 +3,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 
@@ -39,22 +38,18 @@ bool BaseStatistics::IsConstant() const {
 		}
 		return false;
 	}
-	return false;
-}
-
-void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatistics> &other) {
-	if (other) {
-		if (orig) {
-			orig->Merge(*other);
-		} else {
-			orig = other->Copy();
-		}
+	if (NumericStats::IsNumeric(*this)) {
+		return NumericStats::IsConstant(*this);
 	}
+	return false;
 }
 
 void BaseStatistics::Merge(const BaseStatistics &other) {
 	has_null = has_null || other.has_null;
 	has_no_null = has_no_null || other.has_no_null;
+	if (NumericStats::IsNumeric(other)) {
+		NumericStats::Merge(*this, other);
+	}
 }
 
 idx_t BaseStatistics::GetDistinctCount() {
@@ -81,7 +76,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = make_unique<NumericStatistics>(std::move(type));
+		result = NumericStats::CreateEmpty(std::move(type));
 		break;
 	case PhysicalType::VARCHAR:
 		result = make_unique<StringStatistics>(std::move(type));
@@ -103,6 +98,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = make_unique<BaseStatistics>(type);
 	result->CopyBase(*this);
+	result->numeric_data = numeric_data;
 	return result;
 }
 
@@ -167,6 +163,9 @@ void BaseStatistics::SetDistinctCount(idx_t count) {
 }
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {
+	if (NumericStats::IsNumeric(*this)) {
+		NumericStats::Serialize(*this, writer);
+	}
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
@@ -190,7 +189,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStatistics::Deserialize(reader, std::move(type));
+		result = NumericStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::VARCHAR:
 		result = StringStatistics::Deserialize(reader, std::move(type));
@@ -216,8 +215,13 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 string BaseStatistics::ToString() const {
 	auto has_n = has_null ? "true" : "false";
 	auto has_n_n = has_no_null ? "true" : "false";
-	return StringUtil::Format("%s%s", StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n),
-	                          distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
+	string result =
+	    StringUtil::Format("%s%s", StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n),
+	                       distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
+	if (NumericStats::IsNumeric(*this)) {
+		result = NumericStats::ToString(*this) + result;
+	}
+	return result;
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {

@@ -1,28 +1,25 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
-static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_p,
+static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
-	auto &input = (NumericStatistics &)*input_p;
-
-	if (!input.HasMin() || !input.HasMax()) {
+	if (!NumericStats::HasMin(input) || !NumericStats::HasMax(input)) {
 		return nullptr;
 	}
-	Value min = input.Min();
-	Value max = input.Max();
+	Value min = NumericStats::Min(input);
+	Value max = NumericStats::Max(input);
 	if (!min.DefaultTryCastAs(target) || !max.DefaultTryCastAs(target)) {
 		// overflow in cast: bailout
 		return nullptr;
 	}
-	auto stats = make_unique<NumericStatistics>(target, std::move(min), std::move(max));
-	stats->CopyBase(*input_p);
-	return std::move(stats);
+	auto result = NumericStats::Create(target, min, max);
+	result->CopyBase(input);
+	return result;
 }
 
-static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, const LogicalType &target) {
+static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics &input, const LogicalType &target) {
 	switch (target.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -52,7 +49,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result_stats = StatisticsNumericCastSwitch(child_stats.get(), cast.return_type);
+		result_stats = StatisticsNumericCastSwitch(*child_stats, cast.return_type);
 		break;
 	default:
 		return nullptr;

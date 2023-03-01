@@ -1,7 +1,6 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -31,10 +30,10 @@ void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t 
 
 template <class T>
 void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
+	auto &nstats = *segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
-	auto constant_value = nstats.Min().GetValueUnsafe<T>();
+	auto constant_value = NumericStats::Min(nstats).GetValueUnsafe<T>();
 	for (idx_t i = 0; i < count; i++) {
 		data[start_idx + i] = constant_value;
 	}
@@ -69,10 +68,10 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 
 template <class T>
 void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
+	auto &nstats = *segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
-	data[0] = nstats.Min().GetValueUnsafe<T>();
+	data[0] = NumericStats::Min(nstats).GetValueUnsafe<T>();
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }
 

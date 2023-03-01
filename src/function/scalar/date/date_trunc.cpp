@@ -8,7 +8,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
@@ -593,13 +592,13 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 	if (!child_stats[1]) {
 		return nullptr;
 	}
-	auto &nstats = (NumericStatistics &)*child_stats[1];
-	if (!nstats.HasMin() || !nstats.HasMax()) {
+	auto &nstats = *child_stats[1];
+	if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
-	auto min = nstats.Min().GetValueUnsafe<TA>();
-	auto max = nstats.Max().GetValueUnsafe<TA>();
+	auto min = NumericStats::Min(nstats).GetValueUnsafe<TA>();
+	auto max = NumericStats::Max(nstats).GetValueUnsafe<TA>();
 	if (min > max) {
 		return nullptr;
 	}
@@ -610,7 +609,7 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 
 	auto min_value = Value::CreateValue(min_part);
 	auto max_value = Value::CreateValue(max_part);
-	auto result = make_unique<NumericStatistics>(min_value.type(), min_value, max_value);
+	auto result = NumericStats::Create(min_value.type(), min_value, max_value);
 	result->CopyValidity(child_stats[0].get());
 	return std::move(result);
 }

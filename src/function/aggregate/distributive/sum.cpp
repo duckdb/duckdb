@@ -2,7 +2,6 @@
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
 
@@ -78,8 +77,8 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
                                              FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
                                              NodeStatistics *node_stats) {
 	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
-		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
-		if (!numeric_stats.HasMin() || !numeric_stats.HasMax()) {
+		auto &numeric_stats = *child_stats[0];
+		if (!NumericStats::HasMin(numeric_stats) || !NumericStats::HasMax(numeric_stats)) {
 			return nullptr;
 		}
 		auto internal_type = numeric_stats.GetType().InternalType();
@@ -87,12 +86,12 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		hugeint_t max_positive;
 		switch (internal_type) {
 		case PhysicalType::INT32:
-			max_negative = numeric_stats.Min().GetValueUnsafe<int32_t>();
-			max_positive = numeric_stats.Max().GetValueUnsafe<int32_t>();
+			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
+			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
 			break;
 		case PhysicalType::INT64:
-			max_negative = numeric_stats.Min().GetValueUnsafe<int64_t>();
-			max_positive = numeric_stats.Max().GetValueUnsafe<int64_t>();
+			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
+			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
 			break;
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");

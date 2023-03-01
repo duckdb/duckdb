@@ -865,7 +865,7 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
 
 unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
                                                         const std::vector<ColumnChunk> &columns) {
-	auto stats = make_unique<NumericStatistics>(type);
+	auto stats = NumericStats::CreateEmpty(type);
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	D_ASSERT(row_group_idx_p < row_groups.size());
 	idx_t row_group_offset_min = 0;
@@ -873,11 +873,11 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 		row_group_offset_min += row_groups[i].num_rows;
 	}
 
-	stats->SetMin(Value::BIGINT(row_group_offset_min));
-	stats->SetMax(Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
+	NumericStats::SetMin(*stats, Value::BIGINT(row_group_offset_min));
+	NumericStats::SetMax(*stats, Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
 
 	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
-	return std::move(stats);
+	return stats;
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,

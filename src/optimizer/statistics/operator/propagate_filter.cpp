@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -48,8 +48,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	auto &numeric_stats = (NumericStatistics &)stats;
-	if (!numeric_stats.HasMin() || !numeric_stats.HasMax()) {
+	if (!NumericStats::HasMin(stats) || !NumericStats::HasMax(stats)) {
 		// no stats available: skip this
 		return;
 	}
@@ -58,19 +57,19 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		// X < constant OR X <= constant
 		// max becomes the constant
-		numeric_stats.SetMax(constant);
+		NumericStats::SetMax(stats, constant);
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// X > constant OR X >= constant
 		// min becomes the constant
-		numeric_stats.SetMin(constant);
+		NumericStats::SetMin(stats, constant);
 		break;
 	case ExpressionType::COMPARE_EQUAL:
 		// X = constant
 		// both min and max become the constant
-		numeric_stats.SetMin(constant);
-		numeric_stats.SetMax(constant);
+		NumericStats::SetMin(stats, constant);
+		NumericStats::SetMax(stats, constant);
 		break;
 	default:
 		break;
@@ -89,9 +88,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	auto &left_stats = (NumericStatistics &)lstats;
-	auto &right_stats = (NumericStatistics &)rstats;
-	if (!left_stats.HasMin() || !left_stats.HasMax() || !right_stats.HasMin() || !right_stats.HasMax()) {
+	if (!NumericStats::HasMin(lstats) || !NumericStats::HasMax(lstats) || !NumericStats::HasMin(rstats) ||
+	    !NumericStats::HasMax(rstats)) {
 		// no stats available: skip this
 		return;
 	}
@@ -104,14 +102,14 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 
 		// we know that left.max is AT MOST equal to right.max
 		// because any value in left that is BIGGER than right.max will not pass the filter
-		if (left_stats.Max() > right_stats.Max()) {
-			left_stats.SetMax(right_stats.Max());
+		if (NumericStats::Max(lstats) > NumericStats::Max(rstats)) {
+			NumericStats::SetMax(lstats, NumericStats::Max(rstats));
 		}
 
 		// we also know that right.min is AT MOST equal to left.min
 		// because any value in right that is SMALLER than left.min will not pass the filter
-		if (right_stats.Min() < left_stats.Min()) {
-			right_stats.SetMin(left_stats.Min());
+		if (NumericStats::Min(rstats) < NumericStats::Min(lstats)) {
+			NumericStats::SetMin(rstats, NumericStats::Min(lstats));
 		}
 		// so in our example, the bounds get updated as follows:
 		// left: [-50, 100], right: [-50, 100]
@@ -121,11 +119,11 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// LEFT > RIGHT OR LEFT >= RIGHT
 		// we know that every value of left is bigger (or equal to) every value in right
 		// this is essentially the inverse of the less than (or equal to) scenario
-		if (right_stats.Max() > left_stats.Max()) {
-			right_stats.SetMax(left_stats.Max());
+		if (NumericStats::Max(rstats) > NumericStats::Max(lstats)) {
+			NumericStats::SetMax(rstats, NumericStats::Max(lstats));
 		}
-		if (left_stats.Min() < right_stats.Min()) {
-			left_stats.SetMin(right_stats.Min());
+		if (NumericStats::Min(lstats) < NumericStats::Min(rstats)) {
+			NumericStats::SetMin(lstats, NumericStats::Min(rstats));
 		}
 		break;
 	case ExpressionType::COMPARE_EQUAL:
@@ -135,16 +133,16 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// so if we have e.g. left = [-50, 250] and right = [-100, 100]
 		// the tighest bounds are [-50, 100]
 		// select the highest min
-		if (left_stats.Min() > right_stats.Min()) {
-			right_stats.SetMin(left_stats.Min());
+		if (NumericStats::Min(lstats) > NumericStats::Min(rstats)) {
+			NumericStats::SetMin(rstats, NumericStats::Min(lstats));
 		} else {
-			left_stats.SetMin(right_stats.Min());
+			NumericStats::SetMin(lstats, NumericStats::Min(rstats));
 		}
 		// select the lowest max
-		if (left_stats.Max() < right_stats.Max()) {
-			right_stats.SetMax(left_stats.Max());
+		if (NumericStats::Max(lstats) < NumericStats::Max(rstats)) {
+			NumericStats::SetMax(rstats, NumericStats::Max(lstats));
 		} else {
-			left_stats.SetMax(right_stats.Max());
+			NumericStats::SetMax(lstats, NumericStats::Max(rstats));
 		}
 		break;
 	default:
