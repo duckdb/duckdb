@@ -109,7 +109,7 @@ COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
 statement error
 SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 ----
-IO Error: Unable to connect to URL "http://test-bucket-public.
+HTTP Error: Unable to connect to URL "http://test-bucket-public.
 
 # Connection error
 statement error
