@@ -16,13 +16,15 @@ void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entr
 
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p)) {
 	InitializeBase();
-	min = Value::MaximumValue(type);
-	max = Value::MinimumValue(type);
+	SetMin(Value::MaximumValue(type));
+	SetMax(Value::MinimumValue(type));
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
-    : BaseStatistics(std::move(type_p)), min(std::move(min_p)), max(std::move(max_p)) {
+NumericStatistics::NumericStatistics(LogicalType type_p, const Value &min_p, const Value &max_p)
+    : BaseStatistics(std::move(type_p)) {
 	InitializeBase();
+	SetMin(min_p);
+	SetMax(max_p);
 }
 
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
@@ -31,15 +33,21 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 		return;
 	}
 	auto &other = (const NumericStatistics &)other_p;
-	if (other.min.IsNull() || min.IsNull()) {
-		min = Value(type);
-	} else if (other.min < min) {
-		min = other.min;
+	if (other.HasMin() && HasMin()) {
+		auto other_min = other.Min();
+		if (other_min < Min()) {
+			SetMin(other_min);
+		}
+	} else {
+		SetMin(Value());
 	}
-	if (other.max.IsNull() || max.IsNull()) {
-		max = Value(type);
-	} else if (other.max > max) {
-		max = other.max;
+	if (other.HasMax() && HasMax()) {
+		auto other_max = other.Max();
+		if (other_max > Max()) {
+			SetMax(other_max);
+		}
+	} else {
+		SetMax(Value());
 	}
 }
 
@@ -47,22 +55,24 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (min.IsNull() || max.IsNull()) {
+	if (!HasMin() || !HasMax()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	auto min_value = Min();
+	auto max_value = Max();
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (constant == min && constant == max) {
+		if (constant == min_value && constant == max_value) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (constant >= min && constant <= max) {
+		} else if (constant >= min_value && constant <= max_value) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (constant < min || constant > max) {
+		if (constant < min_value || constant > max_value) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min == max && min == constant) {
+		} else if (min_value == max_value && min_value == constant) {
 			// corner case of a cluster with one numeric equal to the target constant
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
@@ -71,9 +81,9 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		// X >= C
 		// this can be true only if max(X) >= C
 		// if min(X) >= C, then this is always true
-		if (min >= constant) {
+		if (min_value >= constant) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max >= constant) {
+		} else if (max_value >= constant) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -82,9 +92,9 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		// X > C
 		// this can be true only if max(X) > C
 		// if min(X) > C, then this is always true
-		if (min > constant) {
+		if (min_value > constant) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max > constant) {
+		} else if (max_value > constant) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -93,9 +103,9 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		// X <= C
 		// this can be true only if min(X) <= C
 		// if max(X) <= C, then this is always true
-		if (max <= constant) {
+		if (max_value <= constant) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min <= constant) {
+		} else if (min_value <= constant) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -104,9 +114,9 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 		// X < C
 		// this can be true only if min(X) < C
 		// if max(X) < C, then this is always true
-		if (max < constant) {
+		if (max_value < constant) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min < constant) {
+		} else if (min_value < constant) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -117,21 +127,136 @@ FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_
 }
 
 unique_ptr<BaseStatistics> NumericStatistics::Copy() const {
-	auto result = make_unique<NumericStatistics>(type, min, max);
+	auto result = make_unique<NumericStatistics>(GetType(), MinOrNull(), MaxOrNull());
 	result->CopyBase(*this);
 	return std::move(result);
 }
 
 bool NumericStatistics::IsConstant() const {
-	return max <= min;
+	return Max() <= Min();
 }
 
-void NumericStatistics::SetMin(Value min) {
-	this->min = std::move(min);
+void NumericStatistics::SetValueInternal(const Value &input, NumericValueUnion &val, bool &has_val) {
+	if (input.IsNull()) {
+		has_val = false;
+		return;
+	}
+	if (input.type().InternalType() != GetType().InternalType()) {
+		throw InternalException("SetMin or SetMax called with Value that does not match statistics' column value");
+	}
+	has_val = true;
+	switch (GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		val.value_.boolean = BooleanValue::Get(input);
+		break;
+	case PhysicalType::INT8:
+		val.value_.tinyint = TinyIntValue::Get(input);
+		break;
+	case PhysicalType::INT16:
+		val.value_.smallint = SmallIntValue::Get(input);
+		break;
+	case PhysicalType::INT32:
+		val.value_.integer = IntegerValue::Get(input);
+		break;
+	case PhysicalType::INT64:
+		val.value_.bigint = BigIntValue::Get(input);
+		break;
+	case PhysicalType::UINT8:
+		val.value_.utinyint = UTinyIntValue::Get(input);
+		break;
+	case PhysicalType::UINT16:
+		val.value_.usmallint = USmallIntValue::Get(input);
+		break;
+	case PhysicalType::UINT32:
+		val.value_.uinteger = UIntegerValue::Get(input);
+		break;
+	case PhysicalType::UINT64:
+		val.value_.ubigint = UBigIntValue::Get(input);
+		break;
+	case PhysicalType::INT128:
+		val.value_.hugeint = HugeIntValue::Get(input);
+		break;
+	case PhysicalType::FLOAT:
+		val.value_.float_ = FloatValue::Get(input);
+		break;
+	case PhysicalType::DOUBLE:
+		val.value_.double_ = DoubleValue::Get(input);
+		break;
+	default:
+		throw InternalException("Unsupported type for NumericStatistics::SetValueInternal");
+	}
 }
 
-void NumericStatistics::SetMax(Value max) {
-	this->max = std::move(max);
+void NumericStatistics::SetMin(const Value &new_min) {
+	SetValueInternal(new_min, this->min, this->has_min);
+}
+
+void NumericStatistics::SetMax(const Value &new_max) {
+	SetValueInternal(new_max, this->max, this->has_max);
+}
+
+Value NumericValueUnionToValueInternal(const LogicalType &type, const NumericValueUnion &val) {
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+		return Value::BOOLEAN(val.value_.boolean);
+	case PhysicalType::INT8:
+		return Value::TINYINT(val.value_.tinyint);
+	case PhysicalType::INT16:
+		return Value::SMALLINT(val.value_.smallint);
+	case PhysicalType::INT32:
+		return Value::INTEGER(val.value_.integer);
+	case PhysicalType::INT64:
+		return Value::BIGINT(val.value_.bigint);
+	case PhysicalType::UINT8:
+		return Value::UTINYINT(val.value_.utinyint);
+	case PhysicalType::UINT16:
+		return Value::USMALLINT(val.value_.usmallint);
+	case PhysicalType::UINT32:
+		return Value::UINTEGER(val.value_.uinteger);
+	case PhysicalType::UINT64:
+		return Value::UBIGINT(val.value_.ubigint);
+	case PhysicalType::INT128:
+		return Value::HUGEINT(val.value_.hugeint);
+	case PhysicalType::FLOAT:
+		return Value::FLOAT(val.value_.float_);
+	case PhysicalType::DOUBLE:
+		return Value::DOUBLE(val.value_.double_);
+	default:
+		throw InternalException("Unsupported type for NumericValueUnionToValue");
+	}
+}
+
+Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion &val) {
+	Value result = NumericValueUnionToValueInternal(type, val);
+	result.GetTypeMutable() = type;
+	return result;
+}
+
+Value NumericStatistics::Min() const {
+	if (!HasMin()) {
+		throw InternalException("Min() called on statistics that does not have min");
+	}
+	return NumericValueUnionToValue(GetType(), min);
+}
+Value NumericStatistics::Max() const {
+	if (!HasMax()) {
+		throw InternalException("Max() called on statistics that does not have max");
+	}
+	return NumericValueUnionToValue(GetType(), max);
+}
+
+Value NumericStatistics::MinOrNull() const {
+	if (!HasMin()) {
+		return Value(GetType());
+	}
+	return Min();
+}
+
+Value NumericStatistics::MaxOrNull() const {
+	if (!HasMax()) {
+		return Value(GetType());
+	}
+	return Max();
 }
 
 void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
@@ -182,8 +307,8 @@ void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
 }
 
 void NumericStatistics::Serialize(FieldWriter &writer) const {
-	SerializeNumericStatsValue(min, writer);
-	SerializeNumericStatsValue(max, writer);
+	SerializeNumericStatsValue(MinOrNull(), writer);
+	SerializeNumericStatsValue(MaxOrNull(), writer);
 }
 
 Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader) {
@@ -243,7 +368,8 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(FieldReader &reader, L
 }
 
 string NumericStatistics::ToString() const {
-	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(), BaseStatistics::ToString());
+	return StringUtil::Format("[Min: %s, Max: %s]%s", MinOrNull().ToString(), MaxOrNull().ToString(),
+	                          BaseStatistics::ToString());
 }
 
 template <class T>
@@ -252,17 +378,19 @@ void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &s
 	vector.ToUnifiedFormat(count, vdata);
 
 	auto data = (T *)vdata.data;
+	auto min_value = MinOrNull();
+	auto max_value = MaxOrNull();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto index = vdata.sel->get_index(idx);
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
-		if (!min.IsNull() && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min_value.IsNull() && LessThan::Operation(data[index], min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		} // LCOV_EXCL_STOP
-		if (!max.IsNull() && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
+		if (!max_value.IsNull() && GreaterThan::Operation(data[index], max_value.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}
@@ -311,6 +439,61 @@ void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
 	}
+}
+
+template <>
+int8_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.tinyint;
+}
+
+template <>
+int16_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.smallint;
+}
+
+template <>
+int32_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.integer;
+}
+
+template <>
+int64_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.bigint;
+}
+
+template <>
+hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.hugeint;
+}
+
+template <>
+uint8_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.utinyint;
+}
+
+template <>
+uint16_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.usmallint;
+}
+
+template <>
+uint32_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.uinteger;
+}
+
+template <>
+uint64_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.ubigint;
+}
+
+template <>
+float &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.float_;
+}
+
+template <>
+double &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.double_;
 }
 
 } // namespace duckdb
