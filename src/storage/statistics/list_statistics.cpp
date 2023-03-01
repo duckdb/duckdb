@@ -15,6 +15,9 @@ ListStatistics::ListStatistics(LogicalType type_p) : BaseStatistics(std::move(ty
 
 void ListStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
+	if (other_p.GetType().id() == LogicalTypeId::VALIDITY) {
+		return;
+	}
 
 	auto &other = (const ListStatistics &)other_p;
 	if (child_stats && other.child_stats) {

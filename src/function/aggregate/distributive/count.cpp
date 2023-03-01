@@ -2,7 +2,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 

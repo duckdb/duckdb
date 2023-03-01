@@ -100,6 +100,9 @@ void StringStatistics::Update(const string_t &value) {
 
 void StringStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
+	if (other_p.GetType().id() == LogicalTypeId::VALIDITY) {
+		return;
+	}
 	auto &other = (const StringStatistics &)other_p;
 	if (StringValueComparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
 		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);

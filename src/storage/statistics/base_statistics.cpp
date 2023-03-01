@@ -7,7 +7,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -18,25 +17,30 @@ BaseStatistics::~BaseStatistics() {
 }
 
 void BaseStatistics::InitializeBase() {
-	validity_stats = make_unique<ValidityStatistics>(false);
+	has_null = false;
+	has_no_null = true;
 }
 
 bool BaseStatistics::CanHaveNull() const {
-	if (!validity_stats) {
-		// we don't know
-		// solid maybe
-		return true;
-	}
-	return ((ValidityStatistics &)*validity_stats).has_null;
+	return has_null;
 }
 
 bool BaseStatistics::CanHaveNoNull() const {
-	if (!validity_stats) {
-		// we don't know
-		// solid maybe
-		return true;
+	return has_no_null;
+}
+
+bool BaseStatistics::IsConstant() const {
+	if (type.id() == LogicalTypeId::VALIDITY) {
+		// validity mask
+		if (CanHaveNull() && !CanHaveNoNull()) {
+			return true;
+		}
+		if (!CanHaveNull() && CanHaveNoNull()) {
+			return true;
+		}
+		return false;
 	}
-	return ((ValidityStatistics &)*validity_stats).has_no_null;
+	return false;
 }
 
 void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatistics> &other) {
@@ -50,8 +54,8 @@ void MergeInternal(unique_ptr<BaseStatistics> &orig, const unique_ptr<BaseStatis
 }
 
 void BaseStatistics::Merge(const BaseStatistics &other) {
-	D_ASSERT(type == other.type);
-	MergeInternal(validity_stats, other.validity_stats);
+	has_null = has_null || other.has_null;
+	has_no_null = has_no_null || other.has_no_null;
 }
 
 idx_t BaseStatistics::GetDistinctCount() {
@@ -62,7 +66,10 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		return make_unique<ValidityStatistics>(false, false);
+		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
+		result->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		result->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+		return result;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -100,16 +107,58 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	return result;
 }
 
-void BaseStatistics::CopyBase(const BaseStatistics &orig) {
-	if (orig.validity_stats) {
-		validity_stats = orig.validity_stats->Copy();
+void BaseStatistics::CopyBase(const BaseStatistics &other) {
+	has_null = other.has_null;
+	has_no_null = other.has_no_null;
+	distinct_count = other.distinct_count;
+}
+
+void BaseStatistics::Set(StatsInfo info) {
+	switch (info) {
+	case StatsInfo::CAN_HAVE_NULL_VALUES:
+		has_null = true;
+		break;
+	case StatsInfo::CANNOT_HAVE_NULL_VALUES:
+		has_null = false;
+		break;
+	case StatsInfo::CAN_HAVE_VALID_VALUES:
+		has_no_null = true;
+		break;
+	case StatsInfo::CANNOT_HAVE_VALID_VALUES:
+		has_no_null = false;
+		break;
+	case StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES:
+		has_null = true;
+		has_no_null = true;
+		break;
+	default:
+		throw InternalException("Unrecognized StatsInfo for BaseStatistics::Set");
 	}
-	distinct_count = orig.distinct_count;
+}
+
+void BaseStatistics::CombineValidity(BaseStatistics &left, BaseStatistics &right) {
+	has_null = left.has_null || right.has_null;
+	has_no_null = left.has_no_null || right.has_no_null;
+}
+
+void BaseStatistics::CopyValidity(BaseStatistics &stats) {
+	has_null = stats.has_null;
+	has_no_null = stats.has_no_null;
+}
+
+void BaseStatistics::CopyValidity(BaseStatistics *stats) {
+	if (!stats) {
+		has_null = true;
+		has_no_null = true;
+		return;
+	}
+	CopyValidity(*stats);
 }
 
 void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	ValidityStatistics(CanHaveNull(), CanHaveNoNull()).Serialize(writer);
+	writer.WriteField<bool>(has_null);
+	writer.WriteField<bool>(has_no_null);
 	Serialize(writer);
 	writer.Finalize();
 }
@@ -123,11 +172,12 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	FieldReader reader(source);
-	auto validity_stats = ValidityStatistics::Deserialize(reader);
+	bool has_null = reader.ReadRequired<bool>();
+	bool has_no_null = reader.ReadRequired<bool>();
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = ValidityStatistics::Deserialize(reader);
+		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -158,23 +208,41 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	if (type.InternalType() != PhysicalType::BIT) {
-		result->validity_stats = std::move(validity_stats);
-	}
-
+	result->has_null = has_null;
+	result->has_no_null = has_no_null;
 	reader.Finalize();
 	return result;
 }
 
 string BaseStatistics::ToString() const {
-	return StringUtil::Format("%s%s", validity_stats ? validity_stats->ToString() : "",
+	auto has_n = has_null ? "true" : "false";
+	auto has_n_n = has_no_null ? "true" : "false";
+	return StringUtil::Format("%s%s", StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n),
 	                          distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector.GetType() == this->type);
-	if (validity_stats) {
-		validity_stats->Verify(vector, sel, count);
+	if (has_null && has_no_null) {
+		// nothing to verify
+		return;
+	}
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
+		bool row_is_valid = vdata.validity.RowIsValid(index);
+		if (row_is_valid && !has_no_null) {
+			throw InternalException(
+			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
+			    vector.ToString(count));
+		}
+		if (!row_is_valid && !has_null) {
+			throw InternalException(
+			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
+			    vector.ToString(count));
+		}
 	}
 }
 

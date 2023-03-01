@@ -27,6 +27,9 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
+	if (other_p.GetType().id() == LogicalTypeId::VALIDITY) {
+		return;
+	}
 	auto &other = (const NumericStatistics &)other_p;
 	if (other.min.IsNull() || min.IsNull()) {
 		min = Value(type);

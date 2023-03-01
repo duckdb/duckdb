@@ -3,7 +3,7 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
@@ -911,11 +911,11 @@ unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
-	auto &validity = (ValidityStatistics &)*stats.statistics;
-	if (!mask.AllValid() && !validity.has_null) {
+	auto &validity = *stats.statistics;
+	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				validity.has_null = true;
+				validity.SetHasNull();
 				break;
 			}
 		}

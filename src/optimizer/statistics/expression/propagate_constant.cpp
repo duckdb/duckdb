@@ -9,6 +9,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
+	unique_ptr<BaseStatistics> result;
 	switch (input.type().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
@@ -22,58 +23,67 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto result = make_unique<NumericStatistics>(input.type(), input, input);
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		result->SetDistinctCount(1);
-		return std::move(result);
+		auto stats = make_unique<NumericStatistics>(input.type(), input, input);
+		stats->Set(input.IsNull() ? StatsInfo::CAN_HAVE_NULL_VALUES : StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		stats->SetDistinctCount(1);
+		result = std::move(stats);
+		break;
 	}
 	case PhysicalType::VARCHAR: {
-		auto result = make_unique<StringStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
-		result->SetDistinctCount(1);
+		auto stats = make_unique<StringStatistics>(input.type());
+		stats->SetDistinctCount(1);
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
-			result->Update(string_t(string_value));
+			stats->Update(string_t(string_value));
 		}
-		return std::move(result);
+		result = std::move(stats);
+		break;
 	}
 	case PhysicalType::STRUCT: {
-		auto result = make_unique<StructStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto stats = make_unique<StructStatistics>(input.type());
 		if (input.IsNull()) {
-			for (auto &child_stat : result->child_stats) {
+			for (auto &child_stat : stats->child_stats) {
 				child_stat.reset();
 			}
 		} else {
 			auto &struct_children = StructValue::GetChildren(input);
-			D_ASSERT(result->child_stats.size() == struct_children.size());
-			for (idx_t i = 0; i < result->child_stats.size(); i++) {
-				result->child_stats[i] = StatisticsFromValue(struct_children[i]);
+			D_ASSERT(stats->child_stats.size() == struct_children.size());
+			for (idx_t i = 0; i < stats->child_stats.size(); i++) {
+				stats->child_stats[i] = StatisticsFromValue(struct_children[i]);
 			}
 		}
-		return std::move(result);
+		result = std::move(stats);
+		break;
 	}
 	case PhysicalType::LIST: {
-		auto result = make_unique<ListStatistics>(input.type());
-		result->validity_stats = make_unique<ValidityStatistics>(input.IsNull(), !input.IsNull());
+		auto stats = make_unique<ListStatistics>(input.type());
 		if (input.IsNull()) {
-			result->child_stats.reset();
+			stats->child_stats.reset();
 		} else {
 			auto &list_children = ListValue::GetChildren(input);
 			for (auto &child_element : list_children) {
 				auto child_element_stats = StatisticsFromValue(child_element);
 				if (child_element_stats) {
-					result->child_stats->Merge(*child_element_stats);
+					stats->child_stats->Merge(*child_element_stats);
 				} else {
-					result->child_stats.reset();
+					stats->child_stats.reset();
 				}
 			}
 		}
-		return std::move(result);
+		result = std::move(stats);
+		break;
 	}
 	default:
 		return nullptr;
 	}
+	if (input.IsNull()) {
+		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		result->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	} else {
+		result->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		result->Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	}
+	return result;
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConstantExpression &constant,

@@ -35,14 +35,14 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 	if (entry == statistics_map.end()) {
 		return;
 	}
-	entry->second->validity_stats = make_unique<ValidityStatistics>(false);
+	entry->second->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
                                                   const Value &constant) {
 	// regular comparisons removes all null values
 	if (!IsCompareDistinct(comparison_type)) {
-		stats.validity_stats = make_unique<ValidityStatistics>(false);
+		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
 	if (!stats.GetType().IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
@@ -81,8 +81,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
                                                   ExpressionType comparison_type) {
 	// regular comparisons removes all null values
 	if (!IsCompareDistinct(comparison_type)) {
-		lstats.validity_stats = make_unique<ValidityStatistics>(false);
-		rstats.validity_stats = make_unique<ValidityStatistics>(false);
+		lstats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		rstats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
 	D_ASSERT(lstats.GetType() == rstats.GetType());
 	if (!lstats.GetType().IsNumeric()) {

@@ -22,17 +22,21 @@ class Deserializer;
 class FieldWriter;
 class FieldReader;
 class Vector;
-class ValidityStatistics;
 class DistinctStatistics;
 struct UnifiedVectorFormat;
+
+enum class StatsInfo : uint8_t {
+	CAN_HAVE_NULL_VALUES = 0,
+	CANNOT_HAVE_NULL_VALUES = 1,
+	CAN_HAVE_VALID_VALUES = 2,
+	CANNOT_HAVE_VALID_VALUES = 3,
+	CAN_HAVE_NULL_AND_VALID_VALUES = 4
+};
 
 class BaseStatistics {
 public:
 	BaseStatistics(LogicalType type);
 	virtual ~BaseStatistics();
-
-	//! The validity stats of the column (if any)
-	unique_ptr<BaseStatistics> validity_stats;
 
 public:
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
@@ -42,12 +46,21 @@ public:
 
 	void SetDistinctCount(idx_t distinct_count);
 
-	virtual bool IsConstant() const {
-		return false;
+	virtual bool IsConstant() const;
+
+	const LogicalType &GetType() const {
+		return type;
 	}
 
-	const LogicalType &GetType() {
-		return type;
+	void Set(StatsInfo info);
+	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
+	void CopyValidity(BaseStatistics &stats);
+	void CopyValidity(BaseStatistics *stats);
+	inline void SetHasNull() {
+		has_null = true;
+	}
+	inline void SetHasNoNull() {
+		has_no_null = true;
 	}
 
 	virtual void Merge(const BaseStatistics &other);
@@ -73,6 +86,10 @@ protected:
 
 	//! The type of the logical segment
 	LogicalType type;
+	//! Whether or not the segment can contain NULL values
+	bool has_null;
+	//! Whether or not the segment can contain values that are not null
+	bool has_no_null;
 	// estimate that one may have even if distinct_stats==nullptr
 	idx_t distinct_count;
 };

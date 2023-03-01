@@ -18,6 +18,9 @@ StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(std::mov
 
 void StructStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
+	if (other_p.GetType().id() == LogicalTypeId::VALIDITY) {
+		return;
+	}
 
 	auto &other = (const StructStatistics &)other_p;
 	D_ASSERT(other.child_stats.size() == child_stats.size());

@@ -127,7 +127,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	vector.Flatten(count);
 
 	// append the null values
-	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
+	validity.Append(stats, state.child_appends[0], vector, count);
 
 	auto &struct_stats = (StructStatistics &)stats;
 	auto &child_entries = StructVector::GetEntries(vector);
@@ -192,7 +192,10 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
 	auto stats = BaseStatistics::CreateEmpty(type);
 	auto &struct_stats = (StructStatistics &)*stats;
-	stats->validity_stats = validity.GetUpdateStatistics();
+	auto validity_stats = validity.GetUpdateStatistics();
+	if (validity_stats) {
+		struct_stats.Merge(*validity_stats);
+	}
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
@@ -240,7 +243,6 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = make_unique<StructStatistics>(column_data.type);
 		D_ASSERT(stats->child_stats.size() == child_states.size());
-		stats->validity_stats = validity_state->GetStatistics();
 		for (idx_t i = 0; i < child_states.size(); i++) {
 			stats->child_stats[i] = child_states[i]->GetStatistics();
 			D_ASSERT(stats->child_stats[i]);

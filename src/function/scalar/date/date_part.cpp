@@ -165,12 +165,7 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
-	if (!child_stats[0]) {
-		// if there are no child stats, we don't know
-		result->validity_stats = make_unique<ValidityStatistics>(true);
-	} else if (child_stats[0]->validity_stats) {
-		result->validity_stats = child_stats[0]->validity_stats->Copy();
-	}
+	result->CopyValidity(child_stats[0].get());
 	return std::move(result);
 }
 
@@ -199,9 +194,7 @@ struct DatePart {
 		auto max_part = OP::template Operation<T, int64_t>(max);
 		auto result =
 		    make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
-		if (child_stats[0]->validity_stats) {
-			result->validity_stats = child_stats[0]->validity_stats->Copy();
-		}
+		result->CopyValidity(child_stats[0].get());
 		return std::move(result);
 	}
 

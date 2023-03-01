@@ -10,7 +10,6 @@
 
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 

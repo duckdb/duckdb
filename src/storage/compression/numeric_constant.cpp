@@ -2,7 +2,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -20,8 +20,8 @@ unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
 // Scan Partial
 //===--------------------------------------------------------------------===//
 void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
-	if (validity.has_null) {
+	auto &stats = *segment.stats.statistics;
+	if (stats.CanHaveNull()) {
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
@@ -55,8 +55,8 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 // Scan base data
 //===--------------------------------------------------------------------===//
 void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
-	if (validity.has_null) {
+	auto &stats = *segment.stats.statistics;
+	if (stats.CanHaveNull()) {
 		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);

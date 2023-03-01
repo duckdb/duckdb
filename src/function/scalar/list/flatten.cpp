@@ -130,7 +130,7 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 	}
 
 	auto child_copy = list_stats.child_stats->Copy();
-	child_copy->validity_stats = make_unique<ValidityStatistics>(true);
+	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy;
 }
 

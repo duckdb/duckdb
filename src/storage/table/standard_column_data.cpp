@@ -91,8 +91,7 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
                                     idx_t count) {
 	ColumnData::AppendData(stats, state, vdata, count);
-
-	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);
+	validity.AppendData(stats, state.child_appends[0], vdata, count);
 }
 
 void StandardColumnData::RevertAppend(row_t start_row) {
@@ -138,7 +137,9 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	if (!stats) {
 		stats = BaseStatistics::CreateEmpty(type);
 	}
-	stats->validity_stats = std::move(validity_stats);
+	if (validity_stats) {
+		stats->Merge(*validity_stats);
+	}
 	return stats;
 }
 
@@ -169,7 +170,6 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
-		global_stats->validity_stats = validity_state->GetStatistics();
 		return std::move(global_stats);
 	}
 

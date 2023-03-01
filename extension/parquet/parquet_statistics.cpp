@@ -254,21 +254,17 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	} // end of type switch
 
 	// null count is generic
-	if (row_group_stats) {
-		if (column_chunk.meta_data.type == duckdb_parquet::format::Type::FLOAT ||
-		    column_chunk.meta_data.type == duckdb_parquet::format::Type::DOUBLE) {
-			// floats/doubles can have infinity, which can become NULL
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
-		} else if (parquet_stats.__isset.null_count) {
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(parquet_stats.null_count != 0);
-		} else {
-			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
-		}
-	} else {
+	if (!row_group_stats) {
 		// if stats are missing from any row group we know squat
 		return nullptr;
 	}
-
+	row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+	if (column_chunk.meta_data.type != duckdb_parquet::format::Type::FLOAT &&
+	    column_chunk.meta_data.type != duckdb_parquet::format::Type::DOUBLE) {
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+	}
 	return row_group_stats;
 }
 
