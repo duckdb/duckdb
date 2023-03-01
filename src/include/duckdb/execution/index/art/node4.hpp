@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
@@ -24,6 +25,8 @@ public:
 	ARTNode children[ARTNode::NODE_4_CAPACITY];
 
 public:
+	//! Free the node (and its subtree)
+	static void Free(ART &art, ARTNode &node);
 	//! Initializes all the fields of the node
 	static Node4 *Initialize(ART &art, const ARTNode &node);
 
@@ -31,8 +34,6 @@ public:
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
 	static void DeleteChild(ART &art, ARTNode &node, idx_t pos);
-	//! Delete the ART node and all possible child nodes
-	static void Delete(ART &art, ARTNode &node);
 
 	//! Replace a child node at pos
 	void ReplaceChild(const idx_t &pos, ARTNode &child);

@@ -70,8 +70,8 @@ void Iterator::FindMinimum(ARTNode &node) {
 	}
 
 	// found the minimum
-	if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
-		last_leaf = art->leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+	if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
+		last_leaf = node.Get<Leaf>(art->leaf_nodes);
 		return;
 	}
 
@@ -87,7 +87,7 @@ void Iterator::FindMinimum(ARTNode &node) {
 }
 
 void Iterator::PushKey(ARTNode &cur_node, uint16_t pos) {
-	if (cur_node.GetARTNodeType() != ARTNodeType::NLeaf) {
+	if (cur_node.DecodeARTNodeType() != ARTNodeType::NLeaf) {
 		cur_key.Push(cur_node.GetKeyByte(*art, pos));
 	}
 }
@@ -129,7 +129,7 @@ void Iterator::PopNode() {
 bool Iterator::Next() {
 	if (!nodes.empty()) {
 		auto cur_node = nodes.top().node;
-		if (cur_node.GetARTNodeType() == ARTNodeType::NLeaf) {
+		if (cur_node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
 			// Pop Leaf (We must pop the prefix size + the key to the node (unless we are popping the root)
 			PopNode();
 		}
@@ -140,9 +140,9 @@ bool Iterator::Next() {
 		// cur_node
 		auto &top = nodes.top();
 		ARTNode node = top.node;
-		if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+		if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
 			// found a leaf: move to next node
-			last_leaf = art->leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+			last_leaf = node.Get<Leaf>(art->leaf_nodes);
 			return true;
 		}
 		// find next node
@@ -184,7 +184,7 @@ bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
 
 		// greater case: find leftmost leaf node directly
 		if (!equal) {
-			while (node.GetARTNodeType() != ARTNodeType::NLeaf) {
+			while (node.DecodeARTNodeType() != ARTNodeType::NLeaf) {
 				auto min_pos = node.GetMinPos(*art);
 				PushKey(node, min_pos);
 				nodes.push(IteratorEntry(node, min_pos));
@@ -201,9 +201,9 @@ bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
 			}
 		}
 
-		if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+		if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
 			// found a leaf node: check if it is bigger or equal than the current key
-			last_leaf = art->leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+			last_leaf = node.Get<Leaf>(art->leaf_nodes);
 
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key

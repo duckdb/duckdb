@@ -6,23 +6,42 @@
 
 namespace duckdb {
 
+void Node256::Free(ART &art, ARTNode &node) {
+
+	D_ASSERT(node);
+	D_ASSERT(!node.IsSwizzled());
+
+	auto n256 = node.Get<Node256>(art.n256_nodes);
+
+	// free all children
+	if (n256->count) {
+		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+			if (n256->children[i]) {
+				ARTNode::Free(art, n256->children[i]);
+			}
+		}
+	}
+
+	art.DecreaseMemorySize(sizeof(Node256));
+}
+
 Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
-	auto node256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
+	auto n256 = node.Get<Node256>(art.n256_nodes);
 	art.IncreaseMemorySize(sizeof(Node256));
 
-	node256->count = 0;
-	node256->prefix.Initialize();
+	n256->count = 0;
+	n256->prefix.Initialize();
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		node256->children[i] = ARTNode();
+		n256->children[i] = ARTNode();
 	}
-	return node256;
+	return n256;
 }
 
 void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
+	auto n256 = node.Get<Node256>(art.n256_nodes);
 
 	n256->count++;
 	n256->children[byte] = child;
@@ -32,16 +51,16 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
+	auto n256 = node.Get<Node256>(art.n256_nodes);
 
-	// erase the child and decrease the count
-	ARTNode::Delete(art, n256->children[pos]);
+	// free the child and decrease the count
+	ARTNode::Free(art, n256->children[pos]);
 	n256->count--;
 
 	// shrink node to Node48
 	if (n256->count <= ARTNode::NODE_256_SHRINK_THRESHOLD) {
 
-		ARTNode new_n48_node(art, ARTNodeType::N48);
+		auto new_n48_node = ARTNode::New(art, ARTNodeType::N48);
 		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->prefix.Move(n256->prefix);
@@ -54,28 +73,10 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 			}
 		}
 
-		art.DecreaseMemorySize(sizeof(Node256));
-		art.n256_nodes.FreePosition(node.GetPointer());
+		n256->count = 0;
+		ARTNode::Free(art, node);
 		node = new_n48_node;
 	}
-}
-
-void Node256::Delete(ART &art, ARTNode &node) {
-
-	D_ASSERT(node);
-	D_ASSERT(!node.IsSwizzled());
-
-	auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(node.GetPointer());
-
-	// delete all children
-	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		if (n256->children[i]) {
-			ARTNode::Delete(art, n256->children[i]);
-		}
-	}
-
-	art.DecreaseMemorySize(sizeof(Node256));
-	art.n256_nodes.FreePosition(node.GetPointer());
 }
 
 void Node256::ReplaceChild(const idx_t &pos, ARTNode &child) {

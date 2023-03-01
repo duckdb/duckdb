@@ -4,27 +4,16 @@ namespace duckdb {
 FixedSizeAllocator::FixedSizeAllocator(idx_t alloc_size) : alloc_size(alloc_size) {
 	positions_per_buffer = Storage::BLOCK_ALLOC_SIZE / alloc_size;
 }
+
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
 		Allocator().FreeData(buffer, Storage::BLOCK_ALLOC_SIZE);
 	}
 }
 
-template <class T>
-T *FixedSizeAllocator::GetDataAtPosition(idx_t position) {
+idx_t FixedSizeAllocator::New() {
 
-	// TODO: first 4 bits of position hold the node type, remove/set 0
-
-	auto bytes = position * alloc_size;
-	auto buffer_idx = bytes % Storage::BLOCK_ALLOC_SIZE;
-	D_ASSERT(buffer_idx < buffers.size());
-	auto offset = bytes - buffer_idx * Storage::BLOCK_ALLOC_SIZE;
-	D_ASSERT(offset < Storage::BLOCK_ALLOC_SIZE);
-	return (T *)(buffers[buffer_idx] + offset);
-}
-idx_t FixedSizeAllocator::GetPosition() {
-
-	// allocate a new buffer and add all available positions to the free_list
+	// allocate a new buffer and add all available positions to the free list
 	if (free_list.empty()) {
 		auto buffer = Allocator().AllocateData(Storage::BLOCK_ALLOC_SIZE);
 		auto start = buffers.size() * positions_per_buffer;
@@ -40,8 +29,19 @@ idx_t FixedSizeAllocator::GetPosition() {
 	free_list.pop_back();
 	return position;
 }
-void FixedSizeAllocator::FreePosition(const idx_t position) {
+
+void FixedSizeAllocator::Free(const idx_t &position) {
 	free_list.push_back(position);
+}
+
+template <class T>
+T *FixedSizeAllocator::Get(const idx_t &position) const {
+	auto bytes = position * alloc_size;
+	auto buffer_idx = bytes % Storage::BLOCK_ALLOC_SIZE;
+	D_ASSERT(buffer_idx < buffers.size());
+	auto offset = bytes - buffer_idx * Storage::BLOCK_ALLOC_SIZE;
+	D_ASSERT(offset < Storage::BLOCK_ALLOC_SIZE);
+	return (T *)(buffers[buffer_idx] + offset);
 }
 
 } // namespace duckdb

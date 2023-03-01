@@ -5,7 +5,7 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Constructors
+// Constructors / Destructors
 //===--------------------------------------------------------------------===//
 
 ARTNode::ARTNode() : SwizzleablePointer() {
@@ -14,49 +14,115 @@ ARTNode::ARTNode() : SwizzleablePointer() {
 ARTNode::ARTNode(MetaBlockReader &reader) : SwizzleablePointer(reader) {
 }
 
-ARTNode::ARTNode(ART &art, const ARTNodeType &type) {
+ARTNode ARTNode::New(ART &art, const ARTNodeType &type) {
+
+	ARTNode node;
+
 	switch (type) {
 	case ARTNodeType::NLeaf:
-		pointer = art.leaf_nodes.GetPosition();
+		node.pointer = art.leaf_nodes.New();
 		break;
 	case ARTNodeType::N4:
-		pointer = art.n4_nodes.GetPosition();
+		node.pointer = art.n4_nodes.New();
 		break;
 	case ARTNodeType::N16:
-		pointer = art.n16_nodes.GetPosition();
+		node.pointer = art.n16_nodes.New();
 		break;
 	case ARTNodeType::N48:
-		pointer = art.n48_nodes.GetPosition();
+		node.pointer = art.n48_nodes.New();
 		break;
 	case ARTNodeType::N256:
-		pointer = art.n256_nodes.GetPosition();
+		node.pointer = art.n256_nodes.New();
 		break;
 	default:
 		throw InternalException("Invalid node type for ARTNode constructor.");
 	}
+
+	node.EncodeARTNodeType(type);
+	return node;
+}
+
+void ARTNode::Free(ART &art, ARTNode &node) {
+
+	// recursively free all nodes that are in-memory, and skip swizzled nodes
+	D_ASSERT(node);
+
+	if (!node.IsSwizzled()) {
+		auto position = node.pointer & 0x0fffffff;
+		switch (node.DecodeARTNodeType()) {
+		case ARTNodeType::NLeaf:
+			Leaf::Free(art, node);
+			return art.leaf_nodes.Free(position);
+		case ARTNodeType::N4:
+			Node4::Free(art, node);
+			return art.n4_nodes.Free(position);
+		case ARTNodeType::N16:
+			Node16::Free(art, node);
+			return art.n16_nodes.Free(position);
+		case ARTNodeType::N48:
+			Node48::Free(art, node);
+			return art.n48_nodes.Free(position);
+		case ARTNodeType::N256:
+			Node256::Free(art, node);
+			return art.n256_nodes.Free(position);
+		default:
+			throw InternalException("Invalid node type for Delete.");
+		}
+	}
+	node = ARTNode();
 }
 
 void ARTNode::Initialize(ART &art, ARTNode &node, const ARTNodeType &type) {
+
+	node = ARTNode::New(art, type);
+
 	switch (type) {
 	case ARTNodeType::N4:
-		node.pointer = art.n4_nodes.GetPosition();
 		Node4::Initialize(art, node);
 		break;
 	case ARTNodeType::N16:
-		node.pointer = art.n16_nodes.GetPosition();
 		Node16::Initialize(art, node);
 		break;
 	case ARTNodeType::N48:
-		node.pointer = art.n48_nodes.GetPosition();
 		Node48::Initialize(art, node);
 		break;
 	case ARTNodeType::N256:
-		node.pointer = art.n256_nodes.GetPosition();
 		Node256::Initialize(art, node);
 		break;
 	default:
 		throw InternalException("Invalid node type for Initialize.");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Get
+//===--------------------------------------------------------------------===//
+
+template <class T>
+T *ARTNode::Get(FixedSizeAllocator &allocator) const {
+	return allocator.Get<T>(pointer & 0x0fffffff);
+}
+
+//===--------------------------------------------------------------------===//
+// Encoding / Decoding the node type
+//===--------------------------------------------------------------------===//
+
+void ARTNode::EncodeARTNodeType(const ARTNodeType &type) {
+
+	// left shift the type by 7 bytes
+	auto type_64_bit = (idx_t)type;
+	type_64_bit <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
+
+	// ensure that we do not overwrite any bits
+	D_ASSERT(pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8) == 0);
+	pointer &= type_64_bit;
+}
+
+ARTNodeType ARTNode::DecodeARTNodeType() const {
+
+	// right shift by 7 bytes
+	auto type = pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
+	return ARTNodeType(type);
 }
 
 //===--------------------------------------------------------------------===//
@@ -67,21 +133,21 @@ void ARTNode::ReplaceChild(ART &art, const idx_t &pos, ARTNode &child) {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->ReplaceChild(pos, child);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->ReplaceChild(pos, child);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->ReplaceChild(pos, child);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->ReplaceChild(pos, child);
 	}
 	default:
@@ -91,7 +157,7 @@ void ARTNode::ReplaceChild(ART &art, const idx_t &pos, ARTNode &child) {
 
 void ARTNode::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
-	switch (node.GetARTNodeType()) {
+	switch (node.DecodeARTNodeType()) {
 	case ARTNodeType::N4:
 		return Node4::InsertChild(art, node, byte, child);
 	case ARTNodeType::N16:
@@ -111,7 +177,7 @@ void ARTNode::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 
 void ARTNode::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
-	switch (node.GetARTNodeType()) {
+	switch (node.DecodeARTNodeType()) {
 	case ARTNodeType::N4:
 		return Node4::DeleteChild(art, node, pos);
 	case ARTNodeType::N16:
@@ -125,35 +191,6 @@ void ARTNode::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	}
 }
 
-void ARTNode::Delete(ART &art, ARTNode &node) {
-
-	// recursively free all nodes that are in-memory, and skip swizzled nodes
-	D_ASSERT(node);
-
-	if (!node.IsSwizzled()) {
-		switch (node.GetARTNodeType()) {
-		case ARTNodeType::NLeaf:
-			Leaf::Delete(art, node);
-			break;
-		case ARTNodeType::N4:
-			Node4::Delete(art, node);
-			break;
-		case ARTNodeType::N16:
-			Node16::Delete(art, node);
-			break;
-		case ARTNodeType::N48:
-			Node48::Delete(art, node);
-			break;
-		case ARTNodeType::N256:
-			Node256::Delete(art, node);
-			break;
-		default:
-			throw InternalException("Invalid node type for Delete.");
-		}
-	}
-	node = ARTNode();
-}
-
 //===--------------------------------------------------------------------===//
 // Get functions
 //===--------------------------------------------------------------------===//
@@ -163,24 +200,24 @@ ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) const {
 	D_ASSERT(!IsSwizzled());
 	ARTNode node;
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		node = n4->GetChild(pos);
 		break;
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		node = n16->GetChild(pos);
 		break;
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		node = n48->GetChild(pos);
 		break;
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		node = n256->GetChild(pos);
 		break;
 	}
@@ -200,21 +237,21 @@ uint8_t ARTNode::GetKeyByte(ART &art, const idx_t &pos) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetKeyByte(pos);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetKeyByte(pos);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetKeyByte(pos);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetKeyByte(pos);
 	}
 	default:
@@ -226,21 +263,21 @@ idx_t ARTNode::GetChildPos(ART &art, const uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetChildPos(byte);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetChildPos(byte);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetChildPos(byte);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetChildPos(byte);
 	}
 	default:
@@ -252,21 +289,21 @@ idx_t ARTNode::GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &incl
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetChildPosGreaterEqual(byte, inclusive);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetChildPosGreaterEqual(byte, inclusive);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetChildPosGreaterEqual(byte, inclusive);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetChildPosGreaterEqual(byte, inclusive);
 	}
 	default:
@@ -278,21 +315,21 @@ idx_t ARTNode::GetMinPos(ART &art) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetMinPos();
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetMinPos();
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetMinPos();
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetMinPos();
 	}
 	default:
@@ -304,21 +341,21 @@ idx_t ARTNode::GetNextPos(ART &art, idx_t pos) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetNextPos(pos);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetNextPos(pos);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetNextPos(pos);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetNextPos(pos);
 	}
 	default:
@@ -330,21 +367,21 @@ idx_t ARTNode::GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->GetNextPosAndByte(pos, byte);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->GetNextPosAndByte(pos, byte);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->GetNextPosAndByte(pos, byte);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->GetNextPosAndByte(pos, byte);
 	}
 	default:
@@ -358,7 +395,7 @@ idx_t ARTNode::GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) const {
 
 BlockPointer ARTNode::Serialize(ART &art, MetaBlockWriter &writer) {
 
-	if (!GetPointer()) {
+	if (!*this) {
 		return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
 
@@ -367,25 +404,25 @@ BlockPointer ARTNode::Serialize(ART &art, MetaBlockWriter &writer) {
 		Deserialize(art, block.block_id, block.offset);
 	}
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::NLeaf: {
-		auto leaf = art.leaf_segments.GetDataAtPosition<Leaf>(GetPointer());
+		auto leaf = Get<Leaf>(art.leaf_nodes);
 		return leaf->Serialize(art, writer);
 	}
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->Serialize(art, writer);
 	}
 	case ARTNodeType::N16: {
-		auto n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
+		auto n16 = Get<Node16>(art.n16_nodes);
 		return n16->Serialize(art, writer);
 	}
 	case ARTNodeType::N48: {
-		auto n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
+		auto n48 = Get<Node48>(art.n48_nodes);
 		return n48->Serialize(art, writer);
 	}
 	case ARTNodeType::N256: {
-		auto n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
+		auto n256 = Get<Node256>(art.n256_nodes);
 		return n256->Serialize(art, writer);
 	}
 	default:
@@ -400,28 +437,28 @@ void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 
 	auto node_type_byte = reader.Read<uint8_t>();
 	ARTNodeType node_type((ARTNodeType)(node_type_byte));
-	*this = ARTNode(art, node_type);
+	*this = ARTNode::New(art, node_type);
 
 	switch (node_type) {
 	case ARTNodeType::NLeaf: {
-		auto new_leaf = art.leaf_nodes.GetDataAtPosition<Leaf>(GetPointer());
-		return new_leaf->Deserialize(art, reader);
+		auto leaf = Get<Leaf>(art.leaf_nodes);
+		return leaf->Deserialize(art, reader);
 	}
 	case ARTNodeType::N4: {
-		auto new_n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
-		return new_n4->Deserialize(art, reader);
+		auto n4 = Get<Node4>(art.n4_nodes);
+		return n4->Deserialize(art, reader);
 	}
 	case ARTNodeType::N16: {
-		auto new_n16 = art.n16_nodes.GetDataAtPosition<Node16>(GetPointer());
-		return new_n16->Deserialize(art, reader);
+		auto n16 = Get<Node16>(art.n16_nodes);
+		return n16->Deserialize(art, reader);
 	}
 	case ARTNodeType::N48: {
-		auto new_n48 = art.n48_nodes.GetDataAtPosition<Node48>(GetPointer());
-		return new_n48->Deserialize(art, reader);
+		auto n48 = Get<Node48>(art.n48_nodes);
+		return n48->Deserialize(art, reader);
 	}
 	case ARTNodeType::N256: {
-		auto new_n256 = art.n256_nodes.GetDataAtPosition<Node256>(GetPointer());
-		return new_n256->Deserialize(art, reader);
+		auto n256 = Get<Node256>(art.n256_nodes);
+		return n256->Deserialize(art, reader);
 	}
 	default:
 		throw InternalException("Invalid node type for Deserialize.");
@@ -436,8 +473,8 @@ string ARTNode::ToString(ART &art) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	if (GetARTNodeType() == ARTNodeType::NLeaf) {
-		auto leaf = art.leaf_nodes.GetDataAtPosition<Leaf>(GetPointer());
+	if (DecodeARTNodeType() == ARTNodeType::NLeaf) {
+		auto leaf = Get<Leaf>(art.leaf_nodes);
 		return leaf->ToString(art);
 	}
 
@@ -457,7 +494,7 @@ idx_t ARTNode::GetCapacity() const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::N4:
 		return ARTNode::NODE_4_CAPACITY;
 	case ARTNodeType::N16:
@@ -475,24 +512,20 @@ Prefix *ARTNode::GetPrefix(ART &art) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	switch (GetARTNodeType()) {
+	switch (DecodeARTNodeType()) {
 	case ARTNodeType::NLeaf:
-		return &art.leaf_nodes.GetDataAtPosition<Leaf>(GetPointer())->prefix;
+		return &Get<Leaf>(art.leaf_nodes)->prefix;
 	case ARTNodeType::N4:
-		return &art.n4_nodes.GetDataAtPosition<Node4>(GetPointer())->prefix;
+		return &Get<Node4>(art.n4_nodes)->prefix;
 	case ARTNodeType::N16:
-		return &art.n16_nodes.GetDataAtPosition<Node16>(GetPointer())->prefix;
+		return &Get<Node16>(art.n16_nodes)->prefix;
 	case ARTNodeType::N48:
-		return &art.n48_nodes.GetDataAtPosition<Node48>(GetPointer())->prefix;
+		return &Get<Node48>(art.n48_nodes)->prefix;
 	case ARTNodeType::N256:
-		return &art.n256_nodes.GetDataAtPosition<Node256>(GetPointer())->prefix;
+		return &Get<Node256>(art.n256_nodes)->prefix;
 	default:
 		throw InternalException("Invalid node type for GetPrefix.");
 	}
-}
-
-ARTNodeType ARTNode::GetARTNodeType() const {
-	// TODO
 }
 
 ARTNodeType ARTNode::GetARTNodeTypeByCount(const idx_t &count) {
@@ -714,10 +747,10 @@ idx_t ARTNode::MemorySize(ART &art, const bool &recurse) {
 	}
 
 	// get the memory size of the node itself
-	auto type = GetARTNodeType();
+	auto type = DecodeARTNodeType();
 	switch (type) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->MemorySize() + memory_size_children;
 	}
 	case ARTNodeType::N16:
@@ -738,10 +771,10 @@ bool ARTNode::ChildIsInMemory(ART &art, const idx_t &pos) {
 
 	D_ASSERT(!IsSwizzled());
 
-	auto type = GetARTNodeType();
+	auto type = DecodeARTNodeType();
 	switch (type) {
 	case ARTNodeType::N4: {
-		auto n4 = art.n4_nodes.GetDataAtPosition<Node4>(GetPointer());
+		auto n4 = Get<Node4>(art.n4_nodes);
 		return n4->ChildIsInMemory(pos);
 	}
 	case ARTNodeType::N16:

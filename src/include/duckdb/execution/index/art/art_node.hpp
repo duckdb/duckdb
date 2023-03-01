@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -41,9 +42,8 @@ struct ParentsOfARTNodes {
 };
 
 //! The ARTNode is the swizzleable pointer class of the ART index.
-//! If the ARTNode pointer is not swizzled, then the [leftmost - 1, leftmost - 3] bits
-//! identify the ARTNodeType. The remaining bits are the position in the respective
-//! ART buffer.
+//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.
+//! The remaining bytes are the position in the respective ART buffer.
 class ARTNode : public SwizzleablePointer {
 public:
 	// constants (this allows testing performance with different ART node sizes)
@@ -67,21 +67,28 @@ public:
 	ARTNode();
 	//! Constructs a swizzled pointer from a block ID and an offset
 	explicit ARTNode(MetaBlockReader &reader);
-	//! Constructs an ARTNode pointing to a position in the ART buffers
-	ARTNode(ART &art, const ARTNodeType &type);
-
+	//! Get a new pointer to a node, might cause a new buffer allocation
+	static ARTNode New(ART &art, const ARTNodeType &type);
+	//! Free the node (and its subtree)
+	static void Free(ART &art, ARTNode &node);
 	//! Initializes a new ART node
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
+	//! Get the node
+	template <class T>
+	inline T *Get(FixedSizeAllocator &allocator) const;
+
+	//! Set the leftmost byte to contain the node type
+	void EncodeARTNodeType(const ARTNodeType &type);
+	//! Retrieve the node type from the leftmost byte
+	ARTNodeType DecodeARTNodeType() const;
+
+	//! Replace a child node at pos
+	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
 	static void DeleteChild(ART &art, ARTNode &node, idx_t pos);
-	//! Delete the ART node and all possible child nodes
-	static void Delete(ART &art, ARTNode &node);
-
-	//! Replace a child node at pos
-	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
 	ARTNode GetChild(ART &art, const idx_t &pos) const;
@@ -113,8 +120,6 @@ public:
 	idx_t GetCapacity() const;
 	//! Returns a pointer to the prefix of a node
 	Prefix *GetPrefix(ART &art) const;
-	//! Returns the type stored in the [leftmost - 1, leftmost - 3] bits of the ART node pointer
-	ARTNodeType GetARTNodeType() const;
 	//! Returns the matching node type for a given count
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 

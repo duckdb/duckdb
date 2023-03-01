@@ -30,14 +30,14 @@ public:
 	} row_ids;
 
 public:
+	//! Free the leaf
+	static void Free(ART &art, ARTNode &node);
+
 	//! Initializes a leaf holding one row ID and a prefix starting at depth
 	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id);
 	//! Initializes a leaf holding n_row_ids row IDs and a prefix starting at depth
 	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
 	                        const idx_t &count);
-
-	//! Delete the ART node
-	static void Delete(ART &art, ARTNode &node);
 
 	//! Insert a row ID into a leaf
 	void Insert(ART &art, const row_t &row_id);
@@ -49,7 +49,7 @@ public:
 	//! Get the row ID at pos
 	uint8_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
-	idx_t FindRowID(ART &art, idx_t &position, const row_t &row_id) const;
+	idx_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
 
 	//! Returns the string representation of a leaf
 	string ToString(ART &art);

@@ -277,7 +277,7 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, ARTNode &node, KeySe
 			return false;
 		}
 
-		node = ARTNode(art, ARTNodeType::NLeaf);
+		node = ARTNode::New(art, ARTNodeType::NLeaf);
 		if (single_row_id) {
 			Leaf::Initialize(art, node, start_key, prefix_start, row_ids[key_section.start]);
 		} else {
@@ -413,15 +413,15 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = ARTNode(*this, ARTNodeType::NLeaf);
+		node = ARTNode::New(*this, ARTNodeType::NLeaf);
 		Leaf::Initialize(*this, node, key, depth, row_id);
 		return true;
 	}
 
 	auto node_prefix = node.GetPrefix(*this);
-	if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
+	if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
 		// add a row ID to a leaf, if they have the same key
-		auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+		auto leaf = node.Get<Leaf>(leaf_nodes);
 		uint32_t new_prefix_length = 0;
 
 		// FIXME: this code (if and while) can be optimized, less branching, see Construct
@@ -438,14 +438,14 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		}
 
 		// replace leaf with Node4 and store both leaves in it
-		ARTNode new_n4_node(*this, ARTNodeType::N4);
+		auto new_n4_node = ARTNode::New(*this, ARTNodeType::N4);
 		auto new_n4 = Node4::Initialize(*this, new_n4_node);
 		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
 
 		auto key_byte = node_prefix->Reduce(*this, new_prefix_length);
 		Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
-		ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+		auto leaf_node = ARTNode::New(*this, ARTNodeType::NLeaf);
 		Leaf::Initialize(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
 		Node4::InsertChild(*this, new_n4_node, key[depth + new_prefix_length], leaf_node);
 
@@ -460,14 +460,14 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		if (mismatch_position != node_prefix->count) {
 
 			// prefix differs, create new node
-			ARTNode new_n4_node(*this, ARTNodeType::N4);
+			auto new_n4_node = ARTNode::New(*this, ARTNodeType::N4);
 			auto new_n4 = Node4::Initialize(*this, new_n4_node);
 			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
 			auto key_byte = node_prefix->Reduce(*this, mismatch_position);
 			Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
-			ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+			auto leaf_node = ARTNode::New(*this, ARTNodeType::NLeaf);
 			Leaf::Initialize(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
 			Node4::InsertChild(*this, new_n4_node, key[depth + mismatch_position], leaf_node);
 
@@ -488,7 +488,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	}
 
 	// insert at position
-	ARTNode leaf_node(*this, ARTNodeType::NLeaf);
+	auto leaf_node = ARTNode::New(*this, ARTNodeType::NLeaf);
 	Leaf::Initialize(*this, leaf_node, key, depth + 1, row_id);
 	ARTNode::InsertChild(*this, node, key[depth], leaf_node);
 	return true;
@@ -543,13 +543,12 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 	}
 
 	// delete a row ID from a leaf
-	if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
-		auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+	if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
+		auto leaf = node.Get<Leaf>(leaf_nodes);
 		leaf->Remove(*this, row_id);
 
 		if (leaf->count == 0) {
-			DecreaseMemorySize(sizeof(Leaf));
-			leaf_nodes.FreePosition(node.GetPointer());
+			ARTNode::Free(*this, node);
 			node = ARTNode();
 		}
 		return;
@@ -569,9 +568,9 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 		auto child = node.GetChild(*this, position);
 		D_ASSERT(child);
 
-		if (child.GetARTNodeType() == ARTNodeType::NLeaf) {
+		if (child.DecodeARTNodeType() == ARTNodeType::NLeaf) {
 			// leaf found, remove entry
-			auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(child.GetPointer());
+			auto leaf = child.Get<Leaf>(leaf_nodes);
 			leaf->Remove(*this, row_id);
 
 			if (leaf->count == 0) {
@@ -664,8 +663,8 @@ void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 Leaf *ART::Lookup(ARTNode &node, const Key &key, idx_t depth) {
 
 	while (node) {
-		if (node.GetARTNodeType() == ARTNodeType::NLeaf) {
-			auto leaf = leaf_nodes.GetDataAtPosition<Leaf>(node.GetPointer());
+		if (node.DecodeARTNodeType() == ARTNodeType::NLeaf) {
+			auto leaf = node.Get<Leaf>(leaf_nodes);
 
 			// check if leaf contains key
 			for (idx_t i = 0; i < leaf->prefix.count; i++) {
@@ -969,7 +968,7 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	// TODO: track old vs. new memory size
 	if (tree) {
-		serialized_data_pointer = tree->Serialize(*this, writer);
+		serialized_data_pointer = tree.Serialize(*this, writer);
 	} else {
 		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
@@ -983,16 +982,18 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
+	// TODO: this is wrong, memory needs to 'move'
+
 	auto other_art = (ART *)other_index;
 
 	if (!this->tree) {
 		IncreaseMemorySize(other_art->memory_size);
 		tree = other_art->tree;
-		other_art->tree = nullptr;
+		other_art->tree = ARTNode();
 		return true;
 	}
 
-	return Node::MergeARTs(this, other_art);
+	return ARTNode::MergeARTs(this, other_art);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1001,16 +1002,17 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 string ART::ToString() {
 	if (tree) {
-		return tree->ToString(*this);
+		return tree.ToString(*this);
 	}
 	return "[empty]";
 }
 
 void ART::Verify() {
 #ifdef DEBUG
+	// TODO: this is wrong, allocators always allocate block size
 	idx_t current_mem_size = 0;
 	if (tree) {
-		current_mem_size = tree->MemorySize(*this, true);
+		current_mem_size = tree.MemorySize(*this, true);
 	}
 	if (memory_size != current_mem_size) {
 		throw InternalException("Memory_size value (%d) does not match actual memory size (%d).", memory_size,

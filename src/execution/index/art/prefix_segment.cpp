@@ -1,12 +1,14 @@
 #include "duckdb/execution/index/art/prefix_segment.hpp"
 
+#include "duckdb/execution/index/art/art_node.hpp"
+
 namespace duckdb {
 
 PrefixSegment::PrefixSegment() : next(0) {
 }
 
 PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
-	auto segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(position);
+	auto segment = art.prefix_segments.Get<PrefixSegment>(position);
 	art.IncreaseMemorySize(sizeof(PrefixSegment));
 
 	segment->next = DConstants::INVALID_INDEX;
@@ -20,7 +22,7 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &b
 
 	// we need a new segment
 	if (pos == 0 && count != 0) {
-		auto new_position = art.prefix_segments.GetPosition();
+		auto new_position = art.prefix_segments.New();
 		next = new_position;
 		segment = PrefixSegment::Initialize(art, new_position);
 	}
@@ -34,7 +36,7 @@ PrefixSegment *PrefixSegment::GetTail(ART &art) {
 	auto segment = this;
 	auto position = next;
 	while (next != DConstants::INVALID_INDEX) {
-		segment = art.prefix_segments.GetDataAtPosition<PrefixSegment>(position);
+		segment = art.prefix_segments.Get<PrefixSegment>(position);
 		position = segment->next;
 	}
 	return segment;

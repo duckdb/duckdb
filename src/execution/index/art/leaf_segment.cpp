@@ -1,9 +1,11 @@
 #include "duckdb/execution/index/art/leaf_segment.hpp"
 
+#include "duckdb/execution/index/art/art_node.hpp"
+
 namespace duckdb {
 
 LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
-	auto segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+	auto segment = art.leaf_segments.Get<LeafSegment>(position);
 	art.IncreaseMemorySize(sizeof(LeafSegment));
 
 	segment->next = DConstants::INVALID_INDEX;
@@ -17,7 +19,7 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id)
 
 	// we need a new segment
 	if (pos == 0 && count != 0) {
-		auto new_position = art.leaf_segments.GetPosition();
+		auto new_position = art.leaf_segments.New();
 		next = new_position;
 		segment = LeafSegment::Initialize(art, new_position);
 	}
@@ -31,7 +33,7 @@ LeafSegment *LeafSegment::GetTail(ART &art) {
 	auto segment = this;
 	auto position = next;
 	while (next != DConstants::INVALID_INDEX) {
-		segment = art.leaf_segments.GetDataAtPosition<LeafSegment>(position);
+		segment = art.leaf_segments.Get<LeafSegment>(position);
 		position = segment->next;
 	}
 	return segment;

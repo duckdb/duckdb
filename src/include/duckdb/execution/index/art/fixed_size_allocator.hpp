@@ -15,16 +15,16 @@ namespace duckdb {
 
 class FixedSizeAllocator {
 public:
-	FixedSizeAllocator(idx_t alloc_size);
+	explicit FixedSizeAllocator(idx_t alloc_size);
 	~FixedSizeAllocator();
 
+	//! Get a new position to data, might cause a new buffer allocation
+	idx_t New();
+	//! Free the data at position, i.e., add the position to the free list
+	void Free(const idx_t &position);
 	//! Get the data at position
 	template <class T>
-	T *GetDataAtPosition(const idx_t position);
-	//! Get a new position to data, might cause a new buffer allocation
-	idx_t GetPosition();
-	//! Free the data at position, i.e., add the position to the free list
-	void FreePosition(const idx_t position);
+	T *Get(const idx_t &position) const;
 
 private:
 	vector<data_ptr_t> buffers;
