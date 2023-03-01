@@ -168,6 +168,7 @@ public:
 
 	static bool IsPandasDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
+	static size_t IsAcceptedNumpyObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 

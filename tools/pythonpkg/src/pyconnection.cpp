@@ -1119,6 +1119,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	auto entry = dict[table_name];
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
+	size_t numpytype; // Identify the type of accepted numpy objects.
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		string name = "df_" + GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -1143,7 +1144,32 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, config);
-	} else {
+	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) > 0) {
+                string name = "np_" + GenerateRandomName();
+                py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
+                if (numpytype == 1) {
+                        // numpy array with shape (n, )
+                        data["column0"] = entry;
+                } else if (numpytype == 2 || numpytype == 3) {
+                        // numpy array with shape (n_rows, n_cols) or list of numpy arrays of shape (n,)
+                        size_t idx = 0;
+                        for(auto item : py::array(entry)) {
+                                data[("column" + std::to_string(idx)).c_str()] = item;
+                                idx++;
+                        }
+                } else if (numpytype == 4) {
+			// {"key": np.array}
+                        data = py::cast<py::dict>(entry);
+                } else {
+                        throw InvalidInputException("Invalid type of known numpy obj");
+                }
+                auto new_df = py::module_::import("pandas").attr("DataFrame").attr("from_dict")(data);
+                children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
+                table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
+                table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
+                                                                                      make_unique<RegisteredObject>(new_df));
+
+        } else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
@@ -1313,6 +1339,54 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.pandas().DataFrame.IsInstance(object);
+}
+
+size_t DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &object) {
+	// Instead of returning a bool, we return a size_t integer
+	// 	to indicate the type of an accepted numpy object.
+        if (!ModuleIsLoaded<NumpyCacheItem>()) {
+                return false;
+        }
+        auto &import_cache = *DuckDBPyConnection::ImportCache();
+        if (import_cache.numpy().ndarray.IsInstance(object)) {
+                auto len = py::len((py::cast<py::array>(object)).attr("shape"));
+                if (len > 2)
+                        return 0;
+                return len;
+        } else if (py::isinstance<py::dict>(object)) {
+		int dim = -1;
+                for (auto item : py::cast<py::dict>(object)) {
+                        if(import_cache.numpy().ndarray.IsInstance(item.second) &&
+                                        py::len((py::cast<py::array>(item.second)).attr("shape")) == 1) {
+				if (dim == -1) {
+					dim = ((py::cast<py::array>(item.second)).attr("shape").attr("__getitem__")(0)).cast<int>();
+				} else if (dim != ((py::cast<py::array>(item.second)).attr("shape").attr("__getitem__")(0)).cast<int>()) {
+					return 0;
+				}
+                                continue;
+                        } else {
+                                return 0;
+                        }
+                }
+                return 4;
+        } else if (py::isinstance<py::list>(object)) {
+		int dim = -1;
+                for (auto item : py::cast<py::list>(object)) {
+                        if(import_cache.numpy().ndarray.IsInstance(item) &&
+                                        py::len((py::cast<py::array>(item)).attr("shape")) == 1) {
+				if (dim == -1) {
+					dim = ((py::cast<py::array>(item)).attr("shape").attr("__getitem__")(0)).cast<int>();
+                                } else if (dim != ((py::cast<py::array>(item)).attr("shape").attr("__getitem__")(0)).cast<int>()) {
+                                        return 0;
+                                }
+                                continue;
+                        } else {
+                                return 0;
+                        }
+                }
+                return 3;
+        }
+        return 0;
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
