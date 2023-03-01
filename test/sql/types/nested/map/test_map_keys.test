@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/map/map_keys.test
+# name: test/sql/types/nested/map/test_map_keys.test
 # group: [map]
 
 statement ok
