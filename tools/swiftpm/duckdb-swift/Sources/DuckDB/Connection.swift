@@ -32,7 +32,7 @@ public final class Connection {
   public init(database: Database) throws {
     self.database = database
     let status = database.withCDatabase { duckdb_connect($0, ptr) }
-    guard status == .success else { throw DatabaseError.failedToOpenConnection }
+    guard status == .success else { throw DatabaseError.connectionFailedToInitialize }
   }
 
   deinit {
@@ -49,7 +49,7 @@ public final class Connection {
       duckdb_query(ptr.pointee, queryStrPtr, nil)
     }
     guard status == .success else {
-      throw DatabaseError.queryError(reason: nil)
+      throw DatabaseError.connectionQueryError(reason: nil)
     }
   }
   

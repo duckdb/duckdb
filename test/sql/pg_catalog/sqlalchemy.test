@@ -354,6 +354,7 @@ FROM pg_catalog.pg_type t
 		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
 		LEFT JOIN pg_catalog.pg_enum e ON t.oid = e.enumtypid
 WHERE t.typtype = 'e'
+ORDER BY e.enumsortorder
 ----
 greeting	true	main	hi
 greeting	true	main	bonjour

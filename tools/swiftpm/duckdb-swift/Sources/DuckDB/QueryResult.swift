@@ -29,7 +29,6 @@ public final class QueryResult {
   
   public var chunkCount: DBInt { duckdb_result_chunk_count(ptr.pointee) }
   public var columnCount: DBInt { duckdb_column_count(ptr) }
-  public var rowsChanged: DBInt { duckdb_rows_changed(ptr) }
   
   lazy private (set) var rowCount = {
     guard chunkCount > 0 else { return DBInt(0) }
@@ -45,7 +44,15 @@ public final class QueryResult {
     }
     guard status == .success else {
       let error = duckdb_result_error(ptr).map(String.init(cString:))
-      throw DatabaseError.queryError(reason: error)
+      throw DatabaseError.connectionQueryError(reason: error)
+    }
+  }
+  
+  init(prepared: PreparedStatement) throws {
+    let status = prepared.withCPreparedStatement { duckdb_execute_prepared($0, ptr) }
+    guard status == .success else {
+      let error = duckdb_result_error(ptr).map(String.init(cString:))
+      throw DatabaseError.preparedStatementQueryError(reason: error)
     }
   }
   
@@ -366,13 +373,13 @@ private extension QueryResult {
 extension QueryResult: CustomDebugStringConvertible {
   
   public var debugDescription: String {
+    let summary = "chunks: \(chunkCount); rows: \(rowCount); columns: \(columnCount); layout:"
     var columns = [String]()
-    let summary = "chunks: \(chunkCount), rows changed: \(rowsChanged), columns: \(columnCount)"
     for i in 0..<columnCount {
       let name = columnName(at: i)
       let type = columnDataType(at: i).description.uppercased()
       columns.append("\t\(name) \(type)")
     }
-    return "\(Self.self): \(summary) (\n\(columns.joined(separator: ",\n"))\n)"
+    return "<\(Self.self): { \(summary) (\n\(columns.joined(separator: ",\n"))\n);>"
   }
 }
