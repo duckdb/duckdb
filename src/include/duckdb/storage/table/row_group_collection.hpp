@@ -78,7 +78,7 @@ public:
 	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates);
 
-	void Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
@@ -93,6 +93,7 @@ public:
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
+	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 

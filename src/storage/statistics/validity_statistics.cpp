@@ -8,8 +8,7 @@
 namespace duckdb {
 
 ValidityStatistics::ValidityStatistics(bool has_null, bool has_no_null)
-    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY)), has_null(has_null),
-      has_no_null(has_no_null) {
+    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY)), has_null(has_null), has_no_null(has_no_null) {
 }
 
 unique_ptr<BaseStatistics> ValidityStatistics::Combine(const unique_ptr<BaseStatistics> &lstats,

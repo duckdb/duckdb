@@ -14,8 +14,7 @@ template <>
 void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value) {
 }
 
-NumericStatistics::NumericStatistics(LogicalType type_p)
-    : BaseStatistics(std::move(type_p)) {
+NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p)) {
 	InitializeBase();
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);

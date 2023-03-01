@@ -7,8 +7,7 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(LogicalType type_p)
-    : BaseStatistics(std::move(type_p)) {
+StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(std::move(type_p)) {
 	InitializeBase();
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;

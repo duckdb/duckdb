@@ -196,8 +196,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	// construct a new column data for the new column
 	auto added_column =
 	    ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
-	auto added_col_stats = make_shared<SegmentStatistics>(
-	    new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type()));
+	auto added_col_stats =
+	    make_shared<SegmentStatistics>(new_column.Type(), BaseStatistics::CreateEmpty(new_column.Type()));
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
@@ -718,7 +718,7 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
 	vector<CompressionType> compression_types;
@@ -728,7 +728,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, vector<unique_ptr<B
 	}
 	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-		global_stats[column_idx]->Merge(*result.statistics[column_idx]);
+		global_stats.GetStats(column_idx).Statistics().Merge(*result.statistics[column_idx]);
 	}
 	row_group_pointer.statistics = std::move(result.statistics);
 

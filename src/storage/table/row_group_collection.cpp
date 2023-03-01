@@ -515,7 +515,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	for (auto row_group = (RowGroup *)row_groups->GetRootSegment(); row_group;
 	     row_group = (RowGroup *)row_group->Next()) {
 		auto rowg_writer = writer.GetRowGroupWriter(*row_group);
@@ -692,6 +692,10 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 //===--------------------------------------------------------------------===//
 // Statistics
 //===--------------------------------------------------------------------===//
+void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
+	stats.CopyStats(other_stats);
+}
+
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
 }

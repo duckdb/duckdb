@@ -7,14 +7,11 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics()
-    : log(make_unique<HyperLogLog>()),
-      sample_count(0), total_count(0) {
+DistinctStatistics::DistinctStatistics() : log(make_unique<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : log(std::move(log)),
-      sample_count(sample_count), total_count(total_count) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {

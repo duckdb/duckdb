@@ -6,10 +6,7 @@ namespace duckdb {
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
 	D_ASSERT(Empty());
 
-	column_stats.reserve(data.column_stats.size());
-	for (auto &stats : data.column_stats) {
-		column_stats.push_back(make_shared<ColumnStatistics>(std::move(stats)));
-	}
+	column_stats = std::move(data.table_stats.column_stats);
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -94,6 +91,25 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 		result->distinct_count = column_stats[i]->DistinctStats().GetCount();
 	}
 	return result;
+}
+
+void TableStatistics::CopyStats(TableStatistics &other) {
+	for (auto &stats : column_stats) {
+		other.column_stats.push_back(stats->Copy());
+	}
+}
+
+void TableStatistics::Serialize(Serializer &serializer) {
+	for (auto &stats : column_stats) {
+		stats->Serialize(serializer);
+	}
+}
+
+void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
+	for (auto &col : columns.Physical()) {
+		auto stats = ColumnStatistics::Deserialize(source, col.GetType());
+		column_stats.push_back(std::move(stats));
+	}
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

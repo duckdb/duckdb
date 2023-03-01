@@ -8,6 +8,9 @@ ColumnStatistics::ColumnStatistics(unique_ptr<BaseStatistics> stats_p) : stats(s
 		distinct_stats = make_unique<DistinctStatistics>();
 	}
 }
+ColumnStatistics::ColumnStatistics(unique_ptr<BaseStatistics> stats_p, unique_ptr<DistinctStatistics> distinct_stats_p)
+    : stats(std::move(stats_p)), distinct_stats(std::move(distinct_stats_p)) {
+}
 
 shared_ptr<ColumnStatistics> ColumnStatistics::CreateEmptyStats(const LogicalType &type) {
 	auto col_stats = BaseStatistics::CreateEmpty(type);
@@ -39,8 +42,8 @@ DistinctStatistics &ColumnStatistics::DistinctStats() {
 	return *distinct_stats;
 }
 
-void ColumnStatistics::SetDistinct(unique_ptr<DistinctStatistics> distinct_stats) {
-	this->distinct_stats = std::move(distinct_stats);
+void ColumnStatistics::SetDistinct(unique_ptr<DistinctStatistics> distinct) {
+	this->distinct_stats = std::move(distinct);
 }
 
 void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
@@ -49,6 +52,20 @@ void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 	}
 	auto &d_stats = (DistinctStatistics &)*distinct_stats;
 	d_stats.Update(v, count);
+}
+
+shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
+	return make_shared<ColumnStatistics>(stats->Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
+}
+void ColumnStatistics::Serialize(Serializer &serializer) const {
+	stats->Serialize(serializer);
+	serializer.WriteOptional(distinct_stats);
+}
+
+shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &source, const LogicalType &type) {
+	auto stats = BaseStatistics::Deserialize(source, type);
+	auto distinct_stats = source.ReadOptional<DistinctStatistics>();
+	return make_shared<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
 }
 
 } // namespace duckdb

@@ -197,8 +197,8 @@ struct DatePart {
 		}
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
-		auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
-		                                             Value::BIGINT(max_part));
+		auto result =
+		    make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
 		if (child_stats[0]->validity_stats) {
 			result->validity_stats = child_stats[0]->validity_stats->Copy();
 		}
