@@ -83,19 +83,19 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	auto &lstats = (NumericStatistics &)*child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!lstats.min.IsNull() && !lstats.max.IsNull()) {
+	if (lstats.HasMin() && lstats.HasMax()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
-			potential_overflow = lstats.min.GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
+			potential_overflow = lstats.Min().GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
 			break;
 		case PhysicalType::INT16:
-			potential_overflow = lstats.min.GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
+			potential_overflow = lstats.Min().GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
 			break;
 		case PhysicalType::INT32:
-			potential_overflow = lstats.min.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
+			potential_overflow = lstats.Min().GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
 			break;
 		case PhysicalType::INT64:
-			potential_overflow = lstats.min.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
+			potential_overflow = lstats.Min().GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
 			break;
 		default:
 			return nullptr;
@@ -108,8 +108,8 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		// no potential overflow
 
 		// compute stats
-		auto current_min = lstats.min.GetValue<int64_t>();
-		auto current_max = lstats.max.GetValue<int64_t>();
+		auto current_min = lstats.Min().GetValue<int64_t>();
+		auto current_max = lstats.Max().GetValue<int64_t>();
 
 		int64_t min_val, max_val;
 

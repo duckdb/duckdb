@@ -177,12 +177,12 @@ struct DatePart {
 			return nullptr;
 		}
 		auto &nstats = (NumericStatistics &)*child_stats[0];
-		if (nstats.min.IsNull() || nstats.max.IsNull()) {
+		if (!nstats.HasMin() || !nstats.HasMax()) {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound
-		auto min = nstats.min.GetValueUnsafe<T>();
-		auto max = nstats.max.GetValueUnsafe<T>();
+		auto min = nstats.Min().GetValueUnsafe<T>();
+		auto max = nstats.Max().GetValueUnsafe<T>();
 		if (min > max) {
 			return nullptr;
 		}

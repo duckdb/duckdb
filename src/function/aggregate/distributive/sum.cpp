@@ -79,20 +79,20 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
                                              NodeStatistics *node_stats) {
 	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
 		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
-		if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
+		if (!numeric_stats.HasMin() || !numeric_stats.HasMax()) {
 			return nullptr;
 		}
-		auto internal_type = numeric_stats.min.type().InternalType();
+		auto internal_type = numeric_stats.GetType().InternalType();
 		hugeint_t max_negative;
 		hugeint_t max_positive;
 		switch (internal_type) {
 		case PhysicalType::INT32:
-			max_negative = numeric_stats.min.GetValueUnsafe<int32_t>();
-			max_positive = numeric_stats.max.GetValueUnsafe<int32_t>();
+			max_negative = numeric_stats.Min().GetValueUnsafe<int32_t>();
+			max_positive = numeric_stats.Max().GetValueUnsafe<int32_t>();
 			break;
 		case PhysicalType::INT64:
-			max_negative = numeric_stats.min.GetValueUnsafe<int64_t>();
-			max_positive = numeric_stats.max.GetValueUnsafe<int64_t>();
+			max_negative = numeric_stats.Min().GetValueUnsafe<int64_t>();
+			max_positive = numeric_stats.Max().GetValueUnsafe<int64_t>();
 			break;
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");

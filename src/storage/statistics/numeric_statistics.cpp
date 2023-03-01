@@ -126,6 +126,14 @@ bool NumericStatistics::IsConstant() const {
 	return max <= min;
 }
 
+void NumericStatistics::SetMin(Value min) {
+	this->min = std::move(min);
+}
+
+void NumericStatistics::SetMax(Value max) {
+	this->max = std::move(max);
+}
+
 void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
 	writer.WriteField<bool>(val.IsNull());
 	if (val.IsNull()) {

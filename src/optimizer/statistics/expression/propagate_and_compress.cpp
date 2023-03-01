@@ -46,12 +46,12 @@ bool GetCastType(hugeint_t range, LogicalType &cast_type) {
 template <class T>
 unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	// Compute range
-	if (num_stats.min.IsNull() || num_stats.max.IsNull()) {
+	if (!num_stats.HasMin() || !num_stats.HasMax()) {
 		return expr;
 	}
 
-	auto signed_min_val = num_stats.min.GetValue<T>();
-	auto signed_max_val = num_stats.max.GetValue<T>();
+	auto signed_min_val = num_stats.Min().GetValue<T>();
+	auto signed_max_val = num_stats.Max().GetValue<T>();
 	if (signed_max_val < signed_min_val) {
 		return expr;
 	}

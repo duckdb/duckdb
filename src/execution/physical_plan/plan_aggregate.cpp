@@ -66,7 +66,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 		auto &nstats = (NumericStatistics &)*stats;
 
-		if (nstats.min.IsNull() || nstats.max.IsNull()) {
+		if (!nstats.HasMin() || !nstats.HasMax()) {
 			return false;
 		}
 		// we have a min and a max value for the stats: use that to figure out how many bits we have
@@ -75,17 +75,17 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		int64_t range;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(nstats.max.GetValueUnsafe<int8_t>()) - int64_t(nstats.min.GetValueUnsafe<int8_t>());
+			range = int64_t(nstats.Max().GetValueUnsafe<int8_t>()) - int64_t(nstats.Min().GetValueUnsafe<int8_t>());
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(nstats.max.GetValueUnsafe<int16_t>()) - int64_t(nstats.min.GetValueUnsafe<int16_t>());
+			range = int64_t(nstats.Max().GetValueUnsafe<int16_t>()) - int64_t(nstats.Min().GetValueUnsafe<int16_t>());
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(nstats.max.GetValueUnsafe<int32_t>()) - int64_t(nstats.min.GetValueUnsafe<int32_t>());
+			range = int64_t(nstats.Max().GetValueUnsafe<int32_t>()) - int64_t(nstats.Min().GetValueUnsafe<int32_t>());
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(nstats.max.GetValueUnsafe<int64_t>(),
-			                                    nstats.min.GetValueUnsafe<int64_t>(), range)) {
+			if (!TrySubtractOperator::Operation(nstats.Max().GetValueUnsafe<int64_t>(),
+			                                    nstats.Min().GetValueUnsafe<int64_t>(), range)) {
 				return false;
 			}
 			break;

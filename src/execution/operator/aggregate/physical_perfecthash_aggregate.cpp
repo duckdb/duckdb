@@ -20,8 +20,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	for (auto &stats : group_stats) {
 		D_ASSERT(stats);
 		auto &nstats = (NumericStatistics &)*stats;
-		D_ASSERT(!nstats.min.IsNull());
-		group_minima.push_back(std::move(nstats.min));
+		D_ASSERT(nstats.HasMin());
+		group_minima.push_back(nstats.Min());
 	}
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);

@@ -873,8 +873,8 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 		row_group_offset_min += row_groups[i].num_rows;
 	}
 
-	stats->min = Value::BIGINT(row_group_offset_min);
-	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
+	stats->SetMin(Value::BIGINT(row_group_offset_min));
+	stats->SetMax(Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
 
 	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
 	return std::move(stats);

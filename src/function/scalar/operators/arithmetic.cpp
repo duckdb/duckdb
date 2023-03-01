@@ -82,11 +82,11 @@ struct AddPropagateStatistics {
 	                      Value &new_max) {
 		T min, max;
 		// new min is min+min
-		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), min)) {
+		if (!OP::Operation(lstats.Min().GetValueUnsafe<T>(), rstats.Min().GetValueUnsafe<T>(), min)) {
 			return true;
 		}
 		// new max is max+max
-		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), max)) {
+		if (!OP::Operation(lstats.Max().GetValueUnsafe<T>(), rstats.Max().GetValueUnsafe<T>(), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -100,10 +100,10 @@ struct SubtractPropagateStatistics {
 	static bool Operation(LogicalType type, NumericStatistics &lstats, NumericStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
 		T min, max;
-		if (!OP::Operation(lstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>(), min)) {
+		if (!OP::Operation(lstats.Min().GetValueUnsafe<T>(), rstats.Max().GetValueUnsafe<T>(), min)) {
 			return true;
 		}
-		if (!OP::Operation(lstats.max.GetValueUnsafe<T>(), rstats.min.GetValueUnsafe<T>(), max)) {
+		if (!OP::Operation(lstats.Max().GetValueUnsafe<T>(), rstats.Min().GetValueUnsafe<T>(), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -143,7 +143,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	auto &rstats = (NumericStatistics &)*child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!lstats.min.IsNull() && !lstats.max.IsNull() && !rstats.min.IsNull() && !rstats.max.IsNull()) {
+	if (lstats.HasMin() && lstats.HasMax() && rstats.HasMin() && rstats.HasMax()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -491,8 +491,8 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 struct NegatePropagateStatistics {
 	template <class T>
 	static bool Operation(LogicalType type, NumericStatistics &istats, Value &new_min, Value &new_max) {
-		auto max_value = istats.max.GetValueUnsafe<T>();
-		auto min_value = istats.min.GetValueUnsafe<T>();
+		auto max_value = istats.Max().GetValueUnsafe<T>();
+		auto min_value = istats.Min().GetValueUnsafe<T>();
 		if (!NegateOperator::CanNegate<T>(min_value) || !NegateOperator::CanNegate<T>(max_value)) {
 			return true;
 		}
@@ -515,7 +515,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	auto &istats = (NumericStatistics &)*child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!istats.min.IsNull() && !istats.max.IsNull()) {
+	if (istats.HasMin() && istats.HasMax()) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -667,8 +667,8 @@ struct MultiplyPropagateStatistics {
 		// etc
 		// rather than doing all this switcheroo we just multiply all combinations of lmin/lmax with rmin/rmax
 		// and check what the minimum/maximum value is
-		T lvals[] {lstats.min.GetValueUnsafe<T>(), lstats.max.GetValueUnsafe<T>()};
-		T rvals[] {rstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>()};
+		T lvals[] {lstats.Min().GetValueUnsafe<T>(), lstats.Max().GetValueUnsafe<T>()};
+		T rvals[] {rstats.Min().GetValueUnsafe<T>(), rstats.Max().GetValueUnsafe<T>()};
 		T min = NumericLimits<T>::Maximum();
 		T max = NumericLimits<T>::Minimum();
 		// multiplications

@@ -28,7 +28,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	}
 	auto &lstats = (NumericStatistics &)left;
 	auto &rstats = (NumericStatistics &)right;
-	if (lstats.min.IsNull() || lstats.max.IsNull() || rstats.min.IsNull() || rstats.max.IsNull()) {
+	if (!lstats.HasMin() || !lstats.HasMax() || !rstats.HasMin() || !rstats.HasMax()) {
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -38,52 +38,52 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
 		// l = r, if l.min > r.max or r.min > l.max equality is not possible
-		if (lstats.min > rstats.max || rstats.min > lstats.max) {
+		if (lstats.Min() > rstats.Max() || rstats.Min() > lstats.Max()) {
 			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		} else {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	case ExpressionType::COMPARE_GREATERTHAN:
 		// l > r
-		if (lstats.min > rstats.max) {
+		if (lstats.Min() > rstats.Max()) {
 			// if l.min > r.max, it is always true ONLY if neither side contains nulls
 			return has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 		// if r.min is bigger or equal to l.max, the filter is always false
-		if (rstats.min >= lstats.max) {
+		if (rstats.Min() >= lstats.Max()) {
 			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// l >= r
-		if (lstats.min >= rstats.max) {
+		if (lstats.Min() >= rstats.Max()) {
 			// if l.min >= r.max, it is always true ONLY if neither side contains nulls
 			return has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 		// if r.min > l.max, the filter is always false
-		if (rstats.min > lstats.max) {
+		if (rstats.Min() > lstats.Max()) {
 			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_LESSTHAN:
 		// l < r
-		if (lstats.max < rstats.min) {
+		if (lstats.Max() < rstats.Min()) {
 			// if l.max < r.min, it is always true ONLY if neither side contains nulls
 			return has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 		// if l.min >= rstats.max, the filter is always false
-		if (lstats.min >= rstats.max) {
+		if (lstats.Min() >= rstats.Max()) {
 			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		// l <= r
-		if (lstats.max <= rstats.min) {
+		if (lstats.Max() <= rstats.Min()) {
 			// if l.max <= r.min, it is always true ONLY if neither side contains nulls
 			return has_null ? FilterPropagateResult::FILTER_TRUE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 		// if l.min > rstats.max, the filter is always false
-		if (lstats.min > rstats.max) {
+		if (lstats.Min() > rstats.Max()) {
 			return has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

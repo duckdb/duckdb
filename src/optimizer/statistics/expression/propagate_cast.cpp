@@ -8,7 +8,11 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
                                                                          const LogicalType &target) {
 	auto &input = (NumericStatistics &)*input_p;
 
-	Value min = input.min, max = input.max;
+	if (!input.HasMin() || !input.HasMax()) {
+		return nullptr;
+	}
+	Value min = input.Min();
+	Value max = input.Max();
 	if (!min.DefaultTryCastAs(target) || !max.DefaultTryCastAs(target)) {
 		// overflow in cast: bailout
 		return nullptr;

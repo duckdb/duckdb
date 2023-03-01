@@ -101,11 +101,11 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// and when the build range is smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	if (stats_build->min.IsNull() || stats_build->max.IsNull()) {
+	if (!stats_build->HasMin() || !stats_build->HasMax()) {
 		return;
 	}
 	int64_t min_value, max_value;
-	if (!ExtractNumericValue(stats_build->min, min_value) || !ExtractNumericValue(stats_build->max, max_value)) {
+	if (!ExtractNumericValue(stats_build->Min(), min_value) || !ExtractNumericValue(stats_build->Max(), max_value)) {
 		return;
 	}
 	int64_t build_range;
@@ -118,16 +118,16 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// The max size our build must have to run the perfect HJ
 	const idx_t MAX_BUILD_SIZE = 1000000;
-	join_state.probe_min = stats_probe->min;
-	join_state.probe_max = stats_probe->max;
-	join_state.build_min = stats_build->min;
-	join_state.build_max = stats_build->max;
+	join_state.probe_min = stats_probe->Min();
+	join_state.probe_max = stats_probe->Max();
+	join_state.build_min = stats_build->Min();
+	join_state.build_max = stats_build->Max();
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.IsNull() || stats_probe->min.IsNull()) {
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->Max().IsNull() || stats_probe->Min().IsNull()) {
 		return;
 	}
-	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
+	if (stats_build->Min() <= stats_probe->Min() && stats_probe->Max() <= stats_build->Max()) {
 		join_state.is_probe_in_domain = true;
 	}
 	join_state.is_build_small = true;

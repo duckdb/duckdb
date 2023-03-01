@@ -49,7 +49,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		return;
 	}
 	auto &numeric_stats = (NumericStatistics &)stats;
-	if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
+	if (!numeric_stats.HasMin() || !numeric_stats.HasMax()) {
 		// no stats available: skip this
 		return;
 	}
@@ -58,19 +58,19 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		// X < constant OR X <= constant
 		// max becomes the constant
-		numeric_stats.max = constant;
+		numeric_stats.SetMax(constant);
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		// X > constant OR X >= constant
 		// min becomes the constant
-		numeric_stats.min = constant;
+		numeric_stats.SetMin(constant);
 		break;
 	case ExpressionType::COMPARE_EQUAL:
 		// X = constant
 		// both min and max become the constant
-		numeric_stats.min = constant;
-		numeric_stats.max = constant;
+		numeric_stats.SetMin(constant);
+		numeric_stats.SetMax(constant);
 		break;
 	default:
 		break;
@@ -91,7 +91,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 	auto &left_stats = (NumericStatistics &)lstats;
 	auto &right_stats = (NumericStatistics &)rstats;
-	if (left_stats.min.IsNull() || left_stats.max.IsNull() || right_stats.min.IsNull() || right_stats.max.IsNull()) {
+	if (!left_stats.HasMin() || !left_stats.HasMax() || !right_stats.HasMin() || !right_stats.HasMax()) {
 		// no stats available: skip this
 		return;
 	}
@@ -104,14 +104,14 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 
 		// we know that left.max is AT MOST equal to right.max
 		// because any value in left that is BIGGER than right.max will not pass the filter
-		if (left_stats.max > right_stats.max) {
-			left_stats.max = right_stats.max;
+		if (left_stats.Max() > right_stats.Max()) {
+			left_stats.SetMax(right_stats.Max());
 		}
 
 		// we also know that right.min is AT MOST equal to left.min
 		// because any value in right that is SMALLER than left.min will not pass the filter
-		if (right_stats.min < left_stats.min) {
-			right_stats.min = left_stats.min;
+		if (right_stats.Min() < left_stats.Min()) {
+			right_stats.SetMin(left_stats.Min());
 		}
 		// so in our example, the bounds get updated as follows:
 		// left: [-50, 100], right: [-50, 100]
@@ -121,11 +121,11 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// LEFT > RIGHT OR LEFT >= RIGHT
 		// we know that every value of left is bigger (or equal to) every value in right
 		// this is essentially the inverse of the less than (or equal to) scenario
-		if (right_stats.max > left_stats.max) {
-			right_stats.max = left_stats.max;
+		if (right_stats.Max() > left_stats.Max()) {
+			right_stats.SetMax(left_stats.Max());
 		}
-		if (left_stats.min < right_stats.min) {
-			left_stats.min = right_stats.min;
+		if (left_stats.Min() < right_stats.Min()) {
+			left_stats.SetMin(right_stats.Min());
 		}
 		break;
 	case ExpressionType::COMPARE_EQUAL:
@@ -135,16 +135,16 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// so if we have e.g. left = [-50, 250] and right = [-100, 100]
 		// the tighest bounds are [-50, 100]
 		// select the highest min
-		if (left_stats.min > right_stats.min) {
-			right_stats.min = left_stats.min;
+		if (left_stats.Min() > right_stats.Min()) {
+			right_stats.SetMin(left_stats.Min());
 		} else {
-			left_stats.min = right_stats.min;
+			left_stats.SetMin(right_stats.Min());
 		}
 		// select the lowest max
-		if (left_stats.max < right_stats.max) {
-			right_stats.max = left_stats.max;
+		if (left_stats.Max() < right_stats.Max()) {
+			right_stats.SetMax(left_stats.Max());
 		} else {
-			left_stats.max = right_stats.max;
+			left_stats.SetMax(right_stats.Max());
 		}
 		break;
 	default:

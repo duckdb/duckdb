@@ -25,15 +25,31 @@ public:
 	DUCKDB_API explicit NumericStatistics(LogicalType type);
 	DUCKDB_API NumericStatistics(LogicalType type, Value min, Value max);
 
-	//! The minimum value of the segment
-	Value min;
-	//! The maximum value of the segment
-	Value max;
-
 public:
 	DUCKDB_API void Merge(const BaseStatistics &other) override;
 
 	DUCKDB_API bool IsConstant() const override;
+
+	bool HasMin() const {
+		return !min.IsNull();
+	}
+	bool HasMax() const {
+		return !max.IsNull();
+	}
+	Value Min() {
+		if (!HasMin()) {
+			throw InternalException("Min() called on statistics that does not have min");
+		}
+		return min;
+	}
+	Value Max() {
+		if (!HasMax()) {
+			throw InternalException("Max() called on statistics that does not have max");
+		}
+		return max;
+	}
+	void SetMin(Value min);
+	void SetMax(Value max);
 
 	DUCKDB_API FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant) const;
 
@@ -43,6 +59,12 @@ public:
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const override;
 
 	string ToString() const override;
+
+private:
+	//! The minimum value of the segment
+	Value min;
+	//! The maximum value of the segment
+	Value max;
 
 private:
 	template <class T>
