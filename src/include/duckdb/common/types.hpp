@@ -313,7 +313,7 @@ struct LogicalType {
 	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
-		type_info_ = std::move(other.type_info_);
+		std::swap(type_info_, other.type_info_);
 		return *this;
 	}
 
