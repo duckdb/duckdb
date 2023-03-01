@@ -58,6 +58,7 @@ export interface _DuckDbError extends Error {
 export interface HttpError extends _DuckDbError {
   errorType: 'HTTP';
   statusCode: number;
+  response: string;
 }
 
 export type DuckDbError = HttpError | _DuckDbError;
