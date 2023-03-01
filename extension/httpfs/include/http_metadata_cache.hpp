@@ -17,6 +17,7 @@ namespace duckdb {
 struct HTTPMetadataCacheEntry {
 	idx_t length;
 	time_t last_modified;
+	std::shared_ptr<char> data;
 };
 
 // Simple cache with a max age for an entry to be valid

@@ -33,9 +33,13 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t retries = DEFAULT_RETRIES;
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
+	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
+	}
+	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value)) {
+		force_download = value.GetValue<bool>();
 	}
 	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
 		retries = value.GetValue<uint64_t>();
@@ -47,7 +51,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		retry_backoff = value.GetValue<float>();
 	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff};
+	return {timeout, retries, retry_wait_ms, retry_backoff, force_download};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -251,7 +255,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfs.stats->total_bytes_received += data_length;
 			    }
 			    if (!hfs.data) {
-				    hfs.data = unique_ptr<char[]>(new char[data_length]);
+				    hfs.data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
 				    hfs.length = data_length;
 				    hfs.capacity = data_length;
 				    memcpy(hfs.data.get(), data, data_length);
@@ -360,6 +364,13 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &hfh = (HTTPFileHandle &)handle;
+
+	if (hfh.data) {
+		memcpy(buffer, hfh.data.get() + location, nr_bytes);
+		hfh.file_offset = location + nr_bytes;
+		return;
+	}
+
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
 
@@ -382,44 +393,37 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		hfh.buffer_idx = 0;
 		hfh.file_offset = location;
 	}
+	while (to_read > 0) {
+		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
+		if (buffer_read_len > 0) {
+			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
+			memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
 
-	if (!hfh.range_read) {
-		GetRequest(hfh, hfh.path, {});
-		return;
-	} else {
-		while (to_read > 0) {
-			auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
-			if (buffer_read_len > 0) {
-				D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
-				memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
+			buffer_offset += buffer_read_len;
+			to_read -= buffer_read_len;
 
-				buffer_offset += buffer_read_len;
-				to_read -= buffer_read_len;
+			hfh.buffer_idx += buffer_read_len;
+			hfh.buffer_available -= buffer_read_len;
+			hfh.file_offset += buffer_read_len;
+		}
 
-				hfh.buffer_idx += buffer_read_len;
-				hfh.buffer_available -= buffer_read_len;
-				hfh.file_offset += buffer_read_len;
-			}
+		if (to_read > 0 && hfh.buffer_available == 0) {
+			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
 
-			if (to_read > 0 && hfh.buffer_available == 0) {
-				auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
-
-				// Bypass buffer if we read more than buffer size
-				if (to_read > new_buffer_available) {
-					GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset,
-					                to_read);
-					hfh.buffer_available = 0;
-					hfh.buffer_idx = 0;
-					hfh.file_offset += to_read;
-					break;
-				} else {
-					GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
-					                new_buffer_available);
-					hfh.buffer_available = new_buffer_available;
-					hfh.buffer_idx = 0;
-					hfh.buffer_start = hfh.file_offset;
-					hfh.buffer_end = hfh.buffer_start + new_buffer_available;
-				}
+			// Bypass buffer if we read more than buffer size
+			if (to_read > new_buffer_available) {
+				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset, to_read);
+				hfh.buffer_available = 0;
+				hfh.buffer_idx = 0;
+				hfh.file_offset += to_read;
+				break;
+			} else {
+				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
+				                new_buffer_available);
+				hfh.buffer_available = new_buffer_available;
+				hfh.buffer_idx = 0;
+				hfh.buffer_start = hfh.file_offset;
+				hfh.buffer_end = hfh.buffer_start + new_buffer_available;
 			}
 		}
 	}
@@ -427,22 +431,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &hfh = (HTTPFileHandle &)handle;
-	if (hfh.range_read) {
-		idx_t max_read = hfh.length - hfh.file_offset;
-		nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
-		Read(handle, buffer, nr_bytes, hfh.file_offset);
-	} else {
-		if (!hfh.data) {
-			Read(handle, buffer, nr_bytes, hfh.file_offset);
-		}
-		if (hfh.file_offset < hfh.length) {
-			nr_bytes = MinValue<idx_t>(hfh.length - hfh.file_offset, nr_bytes);
-			memcpy(buffer, hfh.data.get() + hfh.file_offset, nr_bytes);
-			hfh.file_offset += nr_bytes;
-		} else {
-			return 0;
-		}
-	}
+	idx_t max_read = hfh.length - hfh.file_offset;
+	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+	Read(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
 }
 
@@ -538,6 +529,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			if (flags & FileFlags::FILE_FLAGS_READ) {
 				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 			}
+			data = value.data;
 			return;
 		}
 
@@ -582,9 +574,9 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (length == 0) {
+	if (length == 0 || http_params.force_download) {
 		// Try to fully download the file first
-		range_read = false;
+		hfs.GetRequest(*this, path, {});
 	}
 
 	if (!res->headers["Last-Modified"].empty()) {
@@ -602,7 +594,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	if (should_write_cache) {
-		current_cache->Insert(path, {length, last_modified});
+		current_cache->Insert(path, {length, last_modified, data});
 	}
 }
 

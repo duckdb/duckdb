@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/test_parquet_force_download.test
+# description: Test Force download
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+require tpch
+
+statement ok
+SET force_download=true;
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+statement ok
+SET force_download=false;
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 3.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+1000
