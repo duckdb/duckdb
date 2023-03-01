@@ -496,8 +496,10 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				auto range_find = range_res->headers["Content-Range"].find("/");
 
-				D_ASSERT(range_find != std::string::npos);
-				D_ASSERT(range_res->headers["Content-Range"].size() >= range_find + 1);
+				if (range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1) {
+					throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s)",
+					                  range_res->headers["Content-Range"]);
+				}
 
 				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
 				if (range_length == "*") {
