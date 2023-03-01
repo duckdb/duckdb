@@ -10,7 +10,7 @@ PRAGMA enable_verification
 # intervals are saved with ms precision -> truncate microsecond precision to milisecond
 statement ok
 CREATE TABLE all_types AS
-SELECT * REPLACE (
+SELECT * EXCLUDE (bit) REPLACE (
 	case when extract(month from interval) <> 0 then interval '1 month 1 day 12:13:34.123' else interval end AS interval
 )
 FROM test_all_types();
@@ -22,8 +22,7 @@ COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
 # hugeint is stored as double -> we have to cast
 query I nosort alltypes
 SELECT * REPLACE (
-	hugeint::DOUBLE AS hugeint,
-	bit::BLOB as bit
+	hugeint::DOUBLE AS hugeint
 )
 FROM all_types
 ----

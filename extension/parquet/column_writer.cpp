@@ -1266,10 +1266,6 @@ public:
 			if (validity.RowIsValid(vector_index)) {
 				run_length++;
 				auto &value = strings[vector_index];
-
-				if (vector.GetType().id() == LogicalTypeId::BIT) {
-					value = string_t(value.GetDataUnsafe() + 1, value.GetSize() - 1); // skip first byte of bitstring
-				}
 				// If the value did not yet exist in the dictionary we add it to the StringHeap
 				auto found = !value.IsInlined() && state.dictionary.find(value) == state.dictionary.end()
 				                 ? state.dictionary.insert(string_map_t<uint32_t>::value_type(
@@ -1344,13 +1340,8 @@ public:
 					continue;
 				}
 				stats.Update(ptr[r]);
-				if (input_column.GetType().id() == LogicalTypeId::BIT) {
-					temp_writer.Write<uint32_t>(ptr[r].GetSize() - 1);
-					temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe() + 1, ptr[r].GetSize() - 1);
-				} else {
-					temp_writer.Write<uint32_t>(ptr[r].GetSize());
-					temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
-				}
+				temp_writer.Write<uint32_t>(ptr[r].GetSize());
+				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 			}
 		}
 	}
@@ -1421,9 +1412,6 @@ public:
 			return (state.key_bit_width + 7) / 8;
 		} else {
 			auto strings = FlatVector::GetData<string_t>(vector);
-			if (vector.GetType().id() == LogicalTypeId::BIT) {
-				return strings[index].GetSize() - 1;
-			}
 			return strings[index].GetSize();
 		}
 	}
@@ -2006,7 +1994,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			                                             max_define, can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
+	// case LogicalTypeId::BIT:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                       can_have_nulls);
