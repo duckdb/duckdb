@@ -59,14 +59,14 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function, std::string window_alias,
                                vector<unique_ptr<ParsedExpression>> children_,
                                vector<unique_ptr<ParsedExpression>> partitions_, shared_ptr<OrderRelation> order_,
-                               unique_ptr<ParsedExpression> filter_expr, std::string window_boundary_start,
+                               unique_ptr<ParsedExpression> filter_expr_, std::string window_boundary_start,
                                std::string window_boundary_end, unique_ptr<ParsedExpression> start_expr,
                                unique_ptr<ParsedExpression> end_expr, unique_ptr<ParsedExpression> offset_expr,
                                unique_ptr<ParsedExpression> default_expr)
-    : Relation(rel->context, RelationType::WINDOW_RELATION), alias(window_alias), window_function(window_function), from_table(rel),
-      start(StringToWindowBoundary(window_boundary_start)), end(StringToWindowBoundary(window_boundary_end)),
-      start_expr(std::move(start_expr)), end_expr(std::move(end_expr)), offset_expr(std::move(offset_expr)),
-      default_expr(std::move(default_expr)) {
+    : Relation(rel->context, RelationType::WINDOW_RELATION), alias(window_alias), window_function(window_function),
+      from_table(rel), start(StringToWindowBoundary(window_boundary_start)),
+      end(StringToWindowBoundary(window_boundary_end)), start_expr(std::move(start_expr)),
+      end_expr(std::move(end_expr)), offset_expr(std::move(offset_expr)), default_expr(std::move(default_expr)) {
 
 	for (auto &child : children_) {
 		children.push_back(std::move(child));
@@ -80,8 +80,10 @@ WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_func
 			orders.push_back(OrderByNode(actual_order.type, actual_order.null_order, actual_order.expression->Copy()));
 		}
 	}
-
-	filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
+	filter_expr = nullptr;
+	if (filter_expr_) {
+		filter_expr = filter_expr_ ? filter_expr_->Copy() : nullptr;
+	}
 
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }

@@ -294,18 +294,6 @@ test_that("rel aggregate with groups and aggregate function works", {
    expect_equal(rel_df, expected_result)
 })
 
-# test_that("Window function works", {
-#     # select j, i, sum(i) over () from a order by 1,2
-#     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:2, 2, 1:4)))
-#     aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
-#     #                    DF          GROUP BY CLAUSE        aggregation function.
-#     res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
-#     window_rel <- duckdb:::rel_window("aggregation_function", "partitions", "bounds")
-# #     widow_rel <- duckdb:::rel_window(window_function, table, order by clause);
-#     rel_df <- duckdb:::rel_to_altrep(test_df_a)
-#     #tibble(a = c(1:2, 2, 1:4)) |> mutate(dupe_id = row_number(), count = n(), .by = a)
-# })
-
 test_that("Window sum function works", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
@@ -319,19 +307,129 @@ test_that("Window sum function works", {
     expect_equal(res, expected_result)
 })
 
-# we don't support window average yet it looks like
-# test_that("Window avg function works", {
-# #     select j, i, sum(i) over (partition by j) from a order by 1,2
-#     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-#     sum <- list(duckdb:::expr_reference("a"))
-#     partitions <- list(duckdb:::expr_reference("b"))
-#     window_function <- duckdb:::rel_window(rel=rel_a, window_function="avg", window_alias="a_avg", children=sum, partitions=partitions)
-#     sum2 <- list(duckdb:::expr_reference("a", window_function))
-#     order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
-#     expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), a_avg=c(1.5, 1.5, 3.5, 3.5, 5.5, 5.5, 7.5, 7.5))
-#     res <- duckdb:::rel_to_altrep(order_over_window)
-#     expect_equal(res, expected_result)
-# })
+test_that("Window count function works", {
+#     select a, b, count(b) over (partition by a) from a order by a
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    count <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="count", window_alias="count", children=count, partitions=partitions)
+    a_ref <- list(duckdb:::expr_reference("a", window_function))
+    window_order_by_a <- duckdb:::rapi_rel_order(window_function, a_ref)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), count=c(2, 2, 2, 2, 2, 2, 2, 2))
+    res = duckdb:::rel_to_altrep(window_order_by_a)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window avg function works", {
+#     select a, b, avg(b) over (partition by a) from a order by a
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    avg <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="avg", window_alias="a_avg", children=avg, partitions=partitions)
+    a_ref <- list(duckdb:::expr_reference("a", window_function))
+    window_order_by_a <- duckdb:::rapi_rel_order(window_function, a_ref)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), a_avg=c(1.5, 1.5, 3.5, 3.5, 5.5, 5.5, 7.5, 7.5))
+    res <- duckdb:::rel_to_altrep(window_order_by_a)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window avg with a filter expression and partition works", {
+#   select a, b, avg(a) FILTER (WHERE x % 2 = 0) over (partition by b)
+    DBI::dbExecute(con, "CREATE OR REPLACE MACRO mod(a, b) as a % b")
+    DBI::dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) as a = b")
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    avg <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    mod_function <- duckdb:::expr_function("mod", list(duckdb:::expr_reference("a"), duckdb:::expr_constant(2)))
+    zero <- duckdb:::expr_constant(0)
+    filter_expr <- list(duckdb:::rel_filter(rel_a, list(duckdb:::expr_function("eq", list(zero, mod_function)))))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="avg", window_alias="a_avg", children=avg, partitions=partitions, filter_expr=filter_expr)
+    a_ref <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, a_ref)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), a_avg=c(2, 2, 4, 4, 6, 6, 8, 8))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window sum with order by and bounds works", {
+#    select a, b, SUM(a) OVER (ORDER BY a ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
+#   add the current row and the previous row
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    sum <- list(duckdb:::expr_reference("a"))
+    order_by_a <- list(duckdb:::rapi_rel_order(rel_a, list(duckdb:::expr_reference("a"))))
+    window_function <- duckdb:::rel_window(rel=rel_a,
+                                window_function="sum",
+                                window_alias="window_res",
+                                orders=order_by_a,
+                                children=sum,
+                                window_boundary_start="expr_preceding_rows",
+                                window_boundary_end="current_row_rows",
+                                start_expr=list(duckdb:::expr_constant(1)))
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), window_res=c(1, 3, 5, 7, 9, 11, 13, 15))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window sum with Parition, order, and window boundaries works", {
+#     SUM(x) OVER (ORDER BY rowid ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
+    partitions <- list(duckdb:::expr_reference("b"))
+    sum <- list(duckdb:::expr_reference("a"))
+    order_by_a <- list(duckdb:::rapi_rel_order(rel_a, list(duckdb:::expr_reference("a"))))
+    window_function <- duckdb:::rel_window(rel=rel_a,
+                                window_function="sum",
+                                window_alias="window_res",
+                                orders=order_by_a,
+                                partitions=partitions,
+                                children=sum,
+                                window_boundary_start="expr_preceding_rows",
+                                window_boundary_end="current_row_rows",
+                                start_expr=list(duckdb:::expr_constant(3)))
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2), window_res=c(1, 3, 6, 10, 5, 11, 18, 26))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window lag function works as expected", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lag <- list(duckdb:::expr_reference("a"))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="lag", window_alias="prev_a", children=lag, offset=list(duckdb:::expr_constant(1)))
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), prev_a=c(NA, 1, 2, 3, 4, 5, 6, 7))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window lead function works as expected", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lead <- list(duckdb:::expr_reference("a"))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="lead", window_alias="next_a", children=lead, offset=list(duckdb:::expr_constant(1)))
+    sum2 <- list(duckdb:::expr_reference("a", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4), next_a=c(2, 3, 4, 5, 6, 7, 8, NA))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window function with string aggregate works", {
+#   select j, s, string_agg(s, '|') over (partition by b) from a order by j, s;
+    rel_a <- duckdb:::rel_from_df(con, data.frame(r=c(1, 2, 3, 4), a=c("hello", "Big", "world", "42"),b=c(1, 1, 2, 2)))
+    str_agg <- list(duckdb:::expr_reference("a"))
+    partitions <- list(duckdb:::expr_reference("b"))
+    window_function <- duckdb:::rel_window(rel=rel_a, window_function="string_agg", window_alias="str_concat", children=str_agg, partitions=partitions)
+    sum2 <- list(duckdb:::expr_reference("r", window_function))
+    order_over_window <- duckdb:::rapi_rel_order(window_function, sum2)
+    expected_result <- data.frame(r=c(1:4),a=c("hello", "Big", "world", "42"), b=c(1, 1, 2, 2), str_concat=c("hello,Big", "hello,Big", "world,42", "world,42"))
+    res <- duckdb:::rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
 
 test_that("You can project from a window function", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
@@ -406,6 +504,5 @@ test_that("You can perform the window function percent rank", {
     expect_equal(res, expected_result)
 })
 
-# test lead and lag
 # with and without offsets
 

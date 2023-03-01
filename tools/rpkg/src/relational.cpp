@@ -178,12 +178,11 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
-                                                     std::string window_alias,
-                                                     list children, list partitions, list orders,
-                                                     std::string window_boundary_start, std::string window_boundary_end,
-                                                     list filter_expressions,
-                                                     list start_exprs, list end_exprs,
-                                                     list offset_exprs, list default_exprs) {
+                                                     std::string window_alias, list children, list partitions,
+                                                     list orders, std::string window_boundary_start,
+                                                     std::string window_boundary_end, list filter_expressions,
+                                                     list start_exprs, list end_exprs, list offset_exprs,
+                                                     list default_exprs) {
 	auto children_ = vector<unique_ptr<ParsedExpression>>();
 	auto partitions_ = vector<unique_ptr<ParsedExpression>>();
 	auto orders_ = shared_ptr<OrderRelation>();
@@ -203,30 +202,33 @@ external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	}
 
 	unique_ptr<ParsedExpression> filter_expr_ = nullptr;
-	for (duckdb::expr_extptr_t filter_expression : filter_expressions) {
-		filter_expr_ = filter_expression ? filter_expression->Copy() : nullptr;
+	for (duckdb::rel_extptr_t filter_expression : filter_expressions) {
+		if (filter_expression->rel && filter_expression->rel->type == RelationType::FILTER_RELATION) {
+			auto f_relation = std::dynamic_pointer_cast<FilterRelation>(filter_expression->rel);
+			filter_expr_ = f_relation->condition->Copy();
+		}
 	}
 	unique_ptr<ParsedExpression> start_expr_ = nullptr;
-	for (duckdb::expr_extptr_t start_expr: start_exprs) {
-		 start_expr_ = start_expr ? start_expr->Copy() : nullptr;
+	for (duckdb::expr_extptr_t start_expr : start_exprs) {
+		start_expr_ = start_expr ? start_expr->Copy() : nullptr;
 	}
 	unique_ptr<ParsedExpression> end_expr_ = nullptr;
-	for (duckdb::expr_extptr_t end_expr: end_exprs) {
-		 end_expr_ = end_expr ? end_expr->Copy() : nullptr;
+	for (duckdb::expr_extptr_t end_expr : end_exprs) {
+		end_expr_ = end_expr ? end_expr->Copy() : nullptr;
 	}
 	unique_ptr<ParsedExpression> offset_expr_ = nullptr;
-	for (duckdb::expr_extptr_t offset_expr: offset_exprs) {
-		 offset_expr_ = offset_expr ? offset_expr->Copy() : nullptr;
+	for (duckdb::expr_extptr_t offset_expr : offset_exprs) {
+		offset_expr_ = offset_expr ? offset_expr->Copy() : nullptr;
 	}
 	unique_ptr<ParsedExpression> default_expr_ = nullptr;
-	for (duckdb::expr_extptr_t default_expr: default_exprs) {
-		 default_expr_ = default_expr ? default_expr->Copy() : nullptr;
+	for (duckdb::expr_extptr_t default_expr : default_exprs) {
+		default_expr_ = default_expr ? default_expr->Copy() : nullptr;
 	}
 
-	auto res = std::make_shared<WindowRelation>(rel->rel, window_function, window_alias, std::move(children_), std::move(partitions_),
-	                                            std::move(orders_), std::move(filter_expr_), window_boundary_start,
-	                                            window_boundary_end, std::move(start_expr_), std::move(end_expr_),
-	                                            std::move(offset_expr_), std::move(default_expr_));
+	auto res = std::make_shared<WindowRelation>(
+	    rel->rel, window_function, window_alias, std::move(children_), std::move(partitions_), std::move(orders_),
+	    std::move(filter_expr_), window_boundary_start, window_boundary_end, std::move(start_expr_),
+	    std::move(end_expr_), std::move(offset_expr_), std::move(default_expr_));
 	return make_external<RelationWrapper>("duckdb_relation", res);
 }
 

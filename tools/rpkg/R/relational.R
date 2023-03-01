@@ -157,12 +157,7 @@ rel_order <- rapi_rel_order
 #' @return the now aggregated `duckdb_relation` object
 #' @noRd
 #' @examples
-#' con <- DBI::dbConnect(duckdb())
-#' rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-#' partition <- list(duckdb:::expr_reference("b"))
-#' window_function <- duckdb:::rel_window_aggregation(rel_a, partition)
-#' res = duckdb:::rel_to_altrep(window_function)
-window_functions <- c("sum", "rank", "rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
+window_functions <- c("sum", "avg", "count", "median", "min", "string_agg", "max", "rank", "rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
 window_boundaries <- c("unbounded_preceding", "unbounded_following", "current_row_range", "current_row_rows", "expr_following_rows", "expr_preceding_rows", "expre_following_rows", "expr_preceding_range", "expr_following_range")
 
 rel_window <-function(rel=rel, window_function = "sum",
@@ -175,10 +170,10 @@ rel_window <-function(rel=rel, window_function = "sum",
                             window_boundary_end = "current_row_range",
                             start_expr = list(),
                             end_expr = list(),
-                            offset = list(),
+                            offset_expr = list(),
                             default_expr = list()) {
 
-  rel_window_mandatory_args(rel, window_function, window_alias, children, partitions, orders, filter_expression, window_boundary_start, window_boundary_end, start_expr, end_expr, offset, default_expr)
+  rel_window_mandatory_args(rel, window_function, window_alias, children, partitions, orders, filter_expression, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 rel_window_mandatory_args <-function(rel,
@@ -192,7 +187,7 @@ rel_window_mandatory_args <-function(rel,
   window_boundary_end = window_boundaries,
   start_expr = list(),
   end_expr = list(),
-  offset = list(),
+  offset_expr = list(),
   default_expr = list()) {
 
     window_function <- match.arg(window_function)
@@ -210,7 +205,7 @@ rel_window_mandatory_args <-function(rel,
                                 filter_expression,
                                 start_expr,
                                 end_expr,
-                                offset,
+                                offset_expr,
                                 default_expr)
 }
 
