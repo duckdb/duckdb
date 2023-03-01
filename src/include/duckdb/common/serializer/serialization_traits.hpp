@@ -1,5 +1,8 @@
 #pragma once
 #include <type_traits>
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -50,6 +53,17 @@ struct is_unordered_map : std::false_type {};
 template <typename T, typename ...Args>
 struct is_unordered_map<typename std::unordered_map<T, Args...>> : std::true_type {
 	typedef T inner_type;
+};
+
+template <typename T>
+struct is_unique_ptr : std::false_type
+{};
+
+template <typename T, typename D>
+struct is_unique_ptr<typename std::unique_ptr<T, D>> : std::true_type
+{
+	typedef T inner_type;
+	typedef D deleter_type;
 };
 
 }

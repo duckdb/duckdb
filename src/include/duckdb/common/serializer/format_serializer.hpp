@@ -10,11 +10,12 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/serializer/serialization_traits.hpp"
 
 namespace duckdb {
 
@@ -48,12 +49,12 @@ public:
 
 	// Serialize an enum
 	template <class T>
-	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value,
-	                                                                          const char *(*to_string)(T)) {
+	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value) {
 		WriteTag(tag);
 		if (serialize_enum_as_string) {
-			// Use the provided tostring function
-			WriteValue(to_string(value));
+			// Use the enum serializer to lookup tostring function
+			auto str = EnumSerializer::EnumToString(value);
+			WriteValue(str);
 		} else {
 			// Use the underlying type
 			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));

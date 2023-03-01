@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
-
+#include "duckdb/common/serializer/enum_serializer.hpp"
 namespace duckdb {
 
 SubqueryExpression::SubqueryExpression()
@@ -72,7 +72,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
-const char *ToString(SubqueryType value) {
+template <> const char* EnumSerializer::EnumToString(SubqueryType value) {
 	switch (value) {
 	case SubqueryType::INVALID:
 		return "INVALID";
@@ -85,13 +85,30 @@ const char *ToString(SubqueryType value) {
 	case SubqueryType::ANY:
 		return "ANY";
 	default:
-		throw NotImplementedException("ToString not implemented for enum value");
+		throw NotImplementedException("EnumToString not implemented for enum value");
 	}
 }
 
+template <> SubqueryType EnumSerializer::StringToEnum(const char* value) {
+	if (strcmp(value, "INVALID") == 0) {
+		return SubqueryType::INVALID;
+	} else if (strcmp(value, "SCALAR") == 0) {
+		return SubqueryType::SCALAR;
+	} else if (strcmp(value, "EXISTS") == 0) {
+		return SubqueryType::EXISTS;
+	} else if (strcmp(value, "NOT_EXISTS") == 0) {
+		return SubqueryType::NOT_EXISTS;
+	} else if (strcmp(value, "ANY") == 0) {
+		return SubqueryType::ANY;
+	} else {
+		throw NotImplementedException("StringToEnum not implemented for enum value");
+	}
+}
+
+
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery_type", subquery_type, duckdb::ToString);
+	serializer.WriteProperty("subquery_type", subquery_type);
 	serializer.WriteOptionalProperty("child", child);
 	serializer.WriteProperty("comparison_type", comparison_type, duckdb::ExpressionTypeToString);
 }

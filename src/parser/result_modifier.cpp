@@ -1,21 +1,96 @@
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 
 namespace duckdb {
 
-const char *ToString(ResultModifierType value) {
+template<> const char* EnumSerializer::EnumToString(OrderType value) {
 	switch (value) {
-	case LIMIT_MODIFIER:
+	case OrderType::INVALID:
+		return "INVALID";
+	case OrderType::ORDER_DEFAULT:
+		return "ORDER_DEFAULT";
+	case OrderType::ASCENDING:
+		return "ASCENDING";
+	case OrderType::DESCENDING:
+		return "DESCENDING";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
+	}
+}
+
+template<> OrderType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "INVALID") == 0) {
+		return OrderType::INVALID;
+	} else if(strcmp(value, "ORDER_DEFAULT") == 0) {
+		return OrderType::ORDER_DEFAULT;
+	} else if(strcmp(value, "ASCENDING") == 0) {
+		return OrderType::ASCENDING;
+	} else if(strcmp(value, "DESCENDING") == 0) {
+		return OrderType::DESCENDING;
+	} else {
+		throw NotImplementedException("FromString not implemented for enum value");
+	}
+}
+
+template<> const char* EnumSerializer::EnumToString(OrderByNullType value) {
+	switch (value) {
+	case OrderByNullType::INVALID:
+		return "INVALID";
+	case OrderByNullType::ORDER_DEFAULT:
+		return "ORDER_DEFAULT";
+	case OrderByNullType::NULLS_FIRST:
+		return "NULLS_FIRST";
+	case OrderByNullType::NULLS_LAST:
+		return "NULLS_LAST";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
+	}
+}
+
+template<> OrderByNullType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "INVALID") == 0) {
+		return OrderByNullType::INVALID;
+	} else if(strcmp(value, "ORDER_DEFAULT") == 0) {
+		return OrderByNullType::ORDER_DEFAULT;
+	} else if(strcmp(value, "NULLS_FIRST") == 0) {
+		return OrderByNullType::NULLS_FIRST;
+	} else if(strcmp(value, "NULLS_LAST") == 0) {
+		return OrderByNullType::NULLS_LAST;
+	} else {
+		throw NotImplementedException("FromString not implemented for enum value");
+	}
+}
+
+template<>
+const char *EnumSerializer::EnumToString(ResultModifierType value) {
+	switch (value) {
+	case ResultModifierType::LIMIT_MODIFIER:
 		return "LIMIT_MODIFIER";
-	case ORDER_MODIFIER:
+	case ResultModifierType::ORDER_MODIFIER:
 		return "ORDER_MODIFIER";
-	case DISTINCT_MODIFIER:
+	case ResultModifierType::DISTINCT_MODIFIER:
 		return "DISTINCT_MODIFIER";
-	case LIMIT_PERCENT_MODIFIER:
+	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
 		return "LIMIT_PERCENT_MODIFIER";
 	default:
 		throw NotImplementedException("ToString not implemented for enum value");
+	}
+}
+
+template<>
+ResultModifierType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "LIMIT_MODIFIER") == 0) {
+		return ResultModifierType::LIMIT_MODIFIER;
+	} else if (strcmp(value, "ORDER_MODIFIER") == 0) {
+		return ResultModifierType::ORDER_MODIFIER;
+	} else if (strcmp(value, "DISTINCT_MODIFIER") == 0) {
+		return ResultModifierType::DISTINCT_MODIFIER;
+	} else if (strcmp(value, "LIMIT_PERCENT_MODIFIER") == 0) {
+		return ResultModifierType::LIMIT_PERCENT_MODIFIER;
+	} else {
+		throw NotImplementedException("FromString not implement for enum value");
 	}
 }
 
@@ -34,7 +109,30 @@ void ResultModifier::Serialize(Serializer &serializer) const {
 }
 
 void ResultModifier::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("type", type);
+}
+
+std::unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<ResultModifierType>("type");
+
+	unique_ptr<ResultModifier> result;
+	switch (type) {
+	case ResultModifierType::LIMIT_MODIFIER:
+		result = LimitModifier::FormatDeserialize(deserializer);
+		break;
+	case ResultModifierType::ORDER_MODIFIER:
+		result = OrderModifier::FormatDeserialize(deserializer);
+		break;
+	case ResultModifierType::DISTINCT_MODIFIER:
+		result = DistinctModifier::FormatDeserialize(deserializer);
+		break;
+	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
+		result = LimitPercentModifier::FormatDeserialize(deserializer);
+		break;
+	default:
+		throw InternalException("Unrecognized ResultModifierType for Deserialization");
+	}
+	return result;
 }
 
 unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
@@ -98,6 +196,10 @@ void LimitModifier::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteOptionalProperty("offset", offset);
 }
 
+unique_ptr<ResultModifier> LimitModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	throw NotImplementedException("err");
+}
+
 unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<LimitModifier>();
 	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -131,6 +233,11 @@ void DistinctModifier::Serialize(FieldWriter &writer) const {
 void DistinctModifier::FormatSerialize(duckdb::FormatSerializer &serializer) const {
 	ResultModifier::FormatSerialize(serializer);
 	serializer.WriteProperty("distinct_on_targets", distinct_on_targets);
+}
+
+unique_ptr<ResultModifier> DistinctModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto mod = make_unique<DistinctModifier>();
+	throw NotImplementedException("");
 }
 
 unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader) {
@@ -201,9 +308,13 @@ void OrderByNode::Serialize(Serializer &serializer) const {
 }
 
 void OrderByNode::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type, duckdb::ToString);
-	serializer.WriteProperty("null_order", null_order, duckdb::ToString);
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("null_order", null_order);
 	serializer.WriteProperty("expression", expression);
+}
+
+OrderByNode OrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	throw NotImplementedException("err");
 }
 
 OrderByNode OrderByNode::Deserialize(Deserializer &source) {
@@ -223,6 +334,10 @@ void OrderModifier::FormatSerialize(FormatSerializer &serializer) const {
 	ResultModifier::FormatSerialize(serializer);
 	serializer.WriteProperty("orders", orders);
 }
+unique_ptr<ResultModifier> OrderModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	throw NotImplementedException("err");
+}
+
 
 unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<OrderModifier>();
@@ -271,6 +386,11 @@ unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader
 	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
 	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr);
 	return std::move(mod);
+}
+
+unique_ptr<ResultModifier> LimitPercentModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto mod = make_unique<LimitPercentModifier>();
+	throw NotImplementedException("err");
 }
 
 } // namespace duckdb

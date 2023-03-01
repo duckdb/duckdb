@@ -13,12 +13,13 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 class FieldWriter;
 class FieldReader;
 
-enum ResultModifierType : uint8_t {
+enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,
 	ORDER_MODIFIER = 2,
 	DISTINCT_MODIFIER = 3,
@@ -26,6 +27,7 @@ enum ResultModifierType : uint8_t {
 };
 
 const char *ToString(ResultModifierType value);
+ResultModifierType ResultModifierFromString(const char* value);
 
 //! A ResultModifier
 class ResultModifier {
@@ -51,6 +53,7 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 //! Single node in ORDER BY statement
@@ -72,6 +75,7 @@ public:
 	static OrderByNode Deserialize(Deserializer &source);
 
 	void FormatSerialize(FormatSerializer &serializer) const;
+	static OrderByNode FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class LimitModifier : public ResultModifier {
@@ -91,6 +95,7 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class OrderModifier : public ResultModifier {
@@ -108,6 +113,7 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class DistinctModifier : public ResultModifier {
@@ -125,6 +131,7 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -144,6 +151,7 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -5,21 +5,34 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
-
+#include "duckdb/common/serializer/enum_serializer.hpp"
 namespace duckdb {
 
-const char *ToString(QueryNodeType value) {
+template<> const char* EnumSerializer::EnumToString(QueryNodeType value) {
 	switch (value) {
-	case SELECT_NODE:
+	case QueryNodeType::SELECT_NODE:
 		return "SELECT_NODE";
-	case SET_OPERATION_NODE:
+	case QueryNodeType::SET_OPERATION_NODE:
 		return "SET_OPERATION_NODE";
-	case BOUND_SUBQUERY_NODE:
+	case QueryNodeType::BOUND_SUBQUERY_NODE:
 		return "BOUND_SUBQUERY_NODE";
-	case RECURSIVE_CTE_NODE:
+	case QueryNodeType::RECURSIVE_CTE_NODE:
 		return "RECURSIVE_CTE_NODE";
 	default:
-		throw NotImplementedException("ToString not implemented for enum value");
+		throw NotImplementedException("EnumToString not implemented for enum value");
+	}
+}
+template<> QueryNodeType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "SELECT_NODE") == 0) {
+		return QueryNodeType::SELECT_NODE;
+	} else if (strcmp(value, "SET_OPERATION_NODE") == 0) {
+		return QueryNodeType::SET_OPERATION_NODE;
+	} else if (strcmp(value, "BOUND_SUBQUERY_NODE") == 0) {
+		return QueryNodeType::BOUND_SUBQUERY_NODE;
+	} else if (strcmp(value, "RECURSIVE_CTE_NODE") == 0) {
+		return QueryNodeType::RECURSIVE_CTE_NODE;
+	} else {
+		throw NotImplementedException("StringToEnum not implemented for string value");
 	}
 }
 
@@ -175,7 +188,6 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.WriteSerializableList(modifiers);
 	// cte_map
 
-
 	writer.WriteField<uint32_t>((uint32_t)cte_map.map.size());
 	auto &serializer = writer.GetSerializer();
 	for (auto &cte : cte_map.map) {
@@ -190,13 +202,15 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 
 // Children should call the base method before their own.
 void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("type", type);
 	serializer.WriteProperty("modifiers", modifiers);
 	serializer.WriteProperty("cte_map", cte_map);
 }
 
 unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
 	unique_ptr<QueryNode> result;
+
+	result->modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
 
 	return result;
 }

@@ -68,4 +68,4 @@ public:
 	void WriteValue(bool value) final;
 };
 
-}
+} // namespace duckdb

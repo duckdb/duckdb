@@ -14,35 +14,7 @@
 namespace duckdb {
 
 enum class OrderType : uint8_t { INVALID = 0, ORDER_DEFAULT = 1, ASCENDING = 2, DESCENDING = 3 };
-inline const char *ToString(OrderType value) {
-	switch (value) {
-	case OrderType::INVALID:
-		return "INVALID";
-	case OrderType::ORDER_DEFAULT:
-		return "ORDER_DEFAULT";
-	case OrderType::ASCENDING:
-		return "ASCENDING";
-	case OrderType::DESCENDING:
-		return "DESCENDING";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
 
 enum class OrderByNullType : uint8_t { INVALID = 0, ORDER_DEFAULT = 1, NULLS_FIRST = 2, NULLS_LAST = 3 };
-inline const char *ToString(OrderByNullType value) {
-	switch (value) {
-	case OrderByNullType::INVALID:
-		return "INVALID";
-	case OrderByNullType::ORDER_DEFAULT:
-		return "ORDER_DEFAULT";
-	case OrderByNullType::NULLS_FIRST:
-		return "NULLS_FIRST";
-	case OrderByNullType::NULLS_LAST:
-		return "NULLS_LAST";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
 
 } // namespace duckdb

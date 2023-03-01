@@ -1,6 +1,7 @@
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
 
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 

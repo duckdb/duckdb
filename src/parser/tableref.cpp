@@ -4,6 +4,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 
 namespace duckdb {
 
@@ -52,7 +53,8 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-const char *ToString(TableReferenceType value) {
+template<>
+const char *EnumSerializer::EnumToString(TableReferenceType value) {
 	switch (value) {
 	case TableReferenceType::INVALID:
 		return "INVALID";
@@ -75,8 +77,31 @@ const char *ToString(TableReferenceType value) {
 	}
 }
 
+template<>
+TableReferenceType EnumSerializer::StringToEnum(const char *value) {
+	if(strcmp(value, "INVALID") == 0) {
+		return TableReferenceType::INVALID;
+	} else if(strcmp(value, "BASE_TABLE") == 0) {
+		return TableReferenceType::BASE_TABLE;
+	} else if(strcmp(value, "SUBQUERY") == 0) {
+		return TableReferenceType::SUBQUERY;
+	} else if(strcmp(value, "JOIN") == 0) {
+		return TableReferenceType::JOIN;
+	} else if(strcmp(value, "TABLE_FUNCTION") == 0) {
+		return TableReferenceType::TABLE_FUNCTION;
+	} else if(strcmp(value, "EXPRESSION_LIST") == 0) {
+		return TableReferenceType::EXPRESSION_LIST;
+	} else if(strcmp(value, "CTE") == 0) {
+		return TableReferenceType::CTE;
+	} else if(strcmp(value, "EMPTY") == 0) {
+		return TableReferenceType::EMPTY;
+	} else {
+		throw NotImplementedException("FromString not implemented for enum value");
+	}
+}
+
 void TableRef::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("type", type);
 	serializer.WriteProperty("alias", alias);
 	serializer.WriteOptionalProperty("sample", sample);
 }

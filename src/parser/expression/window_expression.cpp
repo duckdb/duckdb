@@ -139,7 +139,8 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 }
 
-const char *ToString(WindowBoundary value) {
+
+template<> const char* EnumSerializer::EnumToString(WindowBoundary value) {
 	switch (value) {
 	case WindowBoundary::INVALID:
 		return "INVALID";
@@ -164,6 +165,30 @@ const char *ToString(WindowBoundary value) {
 	}
 }
 
+template<> WindowBoundary EnumSerializer::StringToEnum(const char *value) {
+	if(strcmp(value, "INVALID") == 0) {
+		return WindowBoundary::INVALID;
+	} else if (strcmp(value, "UNBOUNDED_PRECEDING") == 0) {
+		return WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (strcmp(value, "UNBOUNDED_FOLLOWING") == 0) {
+		return WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (strcmp(value, "CURRENT_ROW_RANGE") == 0) {
+		return WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (strcmp(value, "CURRENT_ROW_ROWS") == 0) {
+		return WindowBoundary::CURRENT_ROW_ROWS;
+	} else if (strcmp(value, "EXPR_PRECEDING_ROWS") == 0) {
+		return WindowBoundary::EXPR_PRECEDING_ROWS;
+	} else if (strcmp(value, "EXPR_FOLLOWING_ROWS") == 0) {
+		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+	} else if (strcmp(value, "EXPR_PRECEDING_RANGE") == 0) {
+		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	} else if (strcmp(value, "EXPR_FOLLOWING_RANGE") == 0) {
+		return WindowBoundary::EXPR_FOLLOWING_RANGE;
+	} else {
+		throw NotImplementedException("FromString not implemented for enum value");
+	}
+}
+
 void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("function_name", function_name);
@@ -171,8 +196,8 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("children", children);
 	serializer.WriteProperty("partitions", partitions);
 	serializer.WriteProperty("orders", orders);
-	serializer.WriteProperty("start", start, duckdb::ToString);
-	serializer.WriteProperty("end", end, duckdb::ToString);
+	serializer.WriteProperty("start", start);
+	serializer.WriteProperty("end", end);
 	serializer.WriteOptionalProperty("start_expr", start_expr);
 	serializer.WriteOptionalProperty("end_expr", end_expr);
 	serializer.WriteOptionalProperty("offset_expr", offset_expr);

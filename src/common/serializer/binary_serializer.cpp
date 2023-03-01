@@ -9,8 +9,12 @@ void BinarySerializer::WriteTag(const char *tag) {
 	// We ignore the tag, but record that we wrote a field at the current depth
 	GetCurrent().AddField();
 }
-void BinarySerializer::WriteNull() {
-	GetCurrent().Write<ptrdiff_t>(0); // ??
+
+//===--------------------------------------------------------------------===//
+// Nested types
+//===--------------------------------------------------------------------===//
+void BinarySerializer::BeginWriteOptional(bool present) {
+	GetCurrent().Write(present);
 }
 
 void BinarySerializer::BeginWriteList(idx_t count) {
@@ -26,6 +30,12 @@ void BinarySerializer::BeginWriteObject() {
 	stack.emplace_back();
 }
 
+void BinarySerializer::EndWriteList(idx_t count) {
+}
+
+void BinarySerializer::EndWriteMap(idx_t count) {
+}
+
 void BinarySerializer::EndWriteObject() {
 
 	// Pop the current object
@@ -37,6 +47,13 @@ void BinarySerializer::EndWriteObject() {
 	outer.Write<uint32_t>(inner.field_count);
 	outer.Write<uint64_t>(inner.writer->blob.size);
 	outer.writer->WriteData(inner.writer->blob.data.get(), inner.writer->blob.size);
+}
+
+//===--------------------------------------------------------------------===//
+// Primitive types
+//===--------------------------------------------------------------------===//
+void BinarySerializer::WriteNull() {
+	GetCurrent().Write<ptrdiff_t>(0); // ??
 }
 
 void BinarySerializer::WriteValue(uint8_t value) {

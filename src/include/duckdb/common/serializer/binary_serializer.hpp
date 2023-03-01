@@ -3,13 +3,13 @@
 
 namespace duckdb {
 class BinarySerializer : public FormatSerializer {
-
 public:
 	explicit BinarySerializer(unique_ptr<BufferedSerializer> serializer) {
 		stack.emplace_back(std::move(serializer));
 	}
 	vector<const char*> trace;
 
+	BinaryData GetData();
 
 protected:
 	struct BinarySerializerState {
@@ -33,32 +33,39 @@ protected:
 	BinarySerializerState& GetCurrent() { return stack.back(); };
 
 
-	void WriteTag(const char* tag) override;
+	void WriteTag(const char* tag) final;
 
-	void BeginWriteList(idx_t count) override;
-	void BeginWriteMap(idx_t count) override;
-	void BeginWriteObject() override;
-	void EndWriteObject() override;
+	//===--------------------------------------------------------------------===//
+	// Nested Types Hooks
+	//===--------------------------------------------------------------------===//
+	void BeginWriteOptional(bool present) final;
+	void BeginWriteList(idx_t count) final;
+	void EndWriteList(idx_t count) final;
+	void BeginWriteMap(idx_t count) final;
+	void EndWriteMap(idx_t count) final;
+	void BeginWriteObject() final;
+	void EndWriteObject() final;
 
-	void WriteNull() override;
-	void WriteValue(uint8_t value) override;
-	void WriteValue(int8_t value) override;
-	void WriteValue(const string &value) override;
-	void WriteValue(const string_t value) override;
-	void WriteValue(const char *value) override;
-	void WriteValue(uint64_t value) override;
-	void WriteValue(uint16_t value) override;
-	void WriteValue(int16_t value) override;
-	void WriteValue(uint32_t value) override;
-	void WriteValue(int32_t value) override;
-	void WriteValue(int64_t value) override;
-	void WriteValue(hugeint_t value) override;
-	void WriteValue(float value) override;
-	void WriteValue(double value) override;
-	void WriteValue(interval_t value) override;
-	void WriteValue(bool value) override;
-public:
-	BinaryData GetData();
+	//===--------------------------------------------------------------------===//
+	// Primitive Types
+	//===--------------------------------------------------------------------===//
+	void WriteNull() final;
+	void WriteValue(uint8_t value) final;
+	void WriteValue(int8_t value) final;
+	void WriteValue(const string &value) final;
+	void WriteValue(const string_t value) final;
+	void WriteValue(const char *value) final;
+	void WriteValue(uint64_t value) final;
+	void WriteValue(uint16_t value) final;
+	void WriteValue(int16_t value) final;
+	void WriteValue(uint32_t value) final;
+	void WriteValue(int32_t value) final;
+	void WriteValue(int64_t value) final;
+	void WriteValue(hugeint_t value) final;
+	void WriteValue(float value) final;
+	void WriteValue(double value) final;
+	void WriteValue(interval_t value) final;
+	void WriteValue(bool value) final;
 };
 
 } // namespace duckdb

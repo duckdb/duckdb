@@ -1,6 +1,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 
 namespace duckdb {
 
@@ -81,7 +82,7 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-const char *ToString(SetOperationType value) {
+template<> const char* EnumSerializer::EnumToString(SetOperationType value) {
 	switch (value) {
 	case SetOperationType::NONE:
 		return "NONE";
@@ -94,13 +95,29 @@ const char *ToString(SetOperationType value) {
 	case SetOperationType::UNION_BY_NAME:
 		return "UNION_BY_NAME";
 	default:
-		throw NotImplementedException("ToString not implemented for enum value");
+		throw NotImplementedException("EnumToString not implemented for enum value");
+	}
+}
+
+template<> SetOperationType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "NONE") == 0) {
+		return SetOperationType::NONE;
+	} else if (strcmp(value, "UNION") == 0) {
+		return SetOperationType::UNION;
+	} else if (strcmp(value, "EXCEPT") == 0) {
+		return SetOperationType::EXCEPT;
+	} else if (strcmp(value, "INTERSECT") == 0) {
+		return SetOperationType::INTERSECT;
+	} else if (strcmp(value, "UNION_BY_NAME") == 0) {
+		return SetOperationType::UNION_BY_NAME;
+	} else {
+		throw NotImplementedException("StringToEnum not implemented for enum value");
 	}
 }
 
 void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("set_op_type", setop_type, duckdb::ToString);
+	serializer.WriteProperty("set_op_type", setop_type);
 	serializer.WriteProperty("left", *left);
 	serializer.WriteProperty("right", *right);
 }

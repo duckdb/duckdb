@@ -9,6 +9,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -829,7 +830,7 @@ enum class ExtraTypeInfoType : uint8_t {
 	USER_TYPE_INFO = 7,
 	AGGREGATE_STATE_TYPE_INFO = 8
 };
-const char *ToString(ExtraTypeInfoType value) {
+template<> const char* EnumSerializer::EnumToString(ExtraTypeInfoType value) {
 	switch (value) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return "INVALID_TYPE_INFO";
@@ -853,6 +854,30 @@ const char *ToString(ExtraTypeInfoType value) {
 		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
+template<> ExtraTypeInfoType EnumSerializer::StringToEnum(const char* value) {
+	if (strcmp(value, "INVALID_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::INVALID_TYPE_INFO;
+	} else if(strcmp(value, "GENERIC_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::GENERIC_TYPE_INFO;
+	} else if(strcmp(value, "DECIMAL_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::DECIMAL_TYPE_INFO;
+	} else if(strcmp(value, "STRING_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::STRING_TYPE_INFO;
+	} else if(strcmp(value, "LIST_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::LIST_TYPE_INFO;
+	} else if(strcmp(value, "STRUCT_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::STRUCT_TYPE_INFO;
+	} else if(strcmp(value, "ENUM_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::USER_TYPE_INFO;
+	} else if(strcmp(value, "USER_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::USER_TYPE_INFO;
+	} else if(strcmp(value, "AGGREGATE_STATE_TYPE_INFO") == 0) {
+		return ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO;
+	} else {
+		throw NotImplementedException("FromString not implemented for enum value");
+	}
+}
+
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -1561,7 +1586,7 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	}
 }
 void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type, duckdb::ToString);
+	serializer.WriteProperty("type", type);
 	serializer.WriteProperty("alias", alias);
 }
 

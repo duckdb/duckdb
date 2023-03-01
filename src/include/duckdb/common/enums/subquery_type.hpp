@@ -22,6 +22,5 @@ enum class SubqueryType : uint8_t {
 	NOT_EXISTS = 3, // NOT EXISTS(SELECT...)
 	ANY = 4,        // x = ANY(SELECT...) OR x IN (SELECT...)
 };
-const char *ToString(SubqueryType value);
 
 } // namespace duckdb

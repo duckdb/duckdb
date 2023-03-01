@@ -26,6 +26,4 @@ enum class TableReferenceType : uint8_t {
 	EMPTY = 8            // placeholder for empty FROM
 };
 
-const char *ToString(TableReferenceType value);
-
 } // namespace duckdb

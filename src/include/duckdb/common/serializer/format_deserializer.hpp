@@ -53,12 +53,21 @@ public:
 		return ReadUnsignedInt32();
 	}
 
-	// Structural types
-	// Deserialize anything implementing a Deserialize static method
+	// Deserialize a Enum
 	template<typename T>
-	typename std::enable_if<has_deserialize_v<T>(), unique_ptr<T>>::type
+	typename std::enable_if<std::is_enum<T>::value, T>::type
 	Read() {
-		return T::FormatDeserialize(*this);
+		auto str = ReadString();
+		return EnumSerializer::StringToEnum<T>(str.c_str());
+	}
+
+	// Structural types
+	// Deserialize anything implementing a "FormatDeserialize -> unique_ptr<T>" static method
+	template<typename T>
+	typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<typename is_unique_ptr<T>::inner_type>::value, T>::type
+	Read() {
+		using inner = typename is_unique_ptr<T>::inner_type;
+		return inner::FormatDeserialize(*this);
 	}
 
 	// Deserialize a vector
@@ -70,7 +79,7 @@ public:
 		vector<inner> items(size);
 		for(idx_t i = 0; i < size; i++) {
 			auto item = Read<inner>();
-			items.push_back(item);
+			items.push_back(std::move(item));
 		}
 		EndReadList();
 		return items;
