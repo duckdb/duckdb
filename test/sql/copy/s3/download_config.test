@@ -121,4 +121,4 @@ IO Error: Connection error for HTTP HEAD to 'http://test-bucket-public.
 statement error
 SELECT * FROM parquet_scan('s3://this-aint-no-bucket/no-path/no-file');
 ----
-IO Error: Unable to connect to URL "http://
+HTTP Error: Unable to connect to URL "http://
