@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"

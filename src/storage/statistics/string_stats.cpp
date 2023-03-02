@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
