@@ -15,8 +15,8 @@ namespace duckdb {
 
 class ColumnStatistics {
 public:
-	explicit ColumnStatistics(unique_ptr<BaseStatistics> stats_p);
-	ColumnStatistics(unique_ptr<BaseStatistics> stats_p, unique_ptr<DistinctStatistics> distinct_stats_p);
+	explicit ColumnStatistics(BaseStatistics stats_p);
+	ColumnStatistics(BaseStatistics stats_p, unique_ptr<DistinctStatistics> distinct_stats_p);
 
 public:
 	static shared_ptr<ColumnStatistics> CreateEmptyStats(const LogicalType &type);
@@ -36,7 +36,7 @@ public:
 	static shared_ptr<ColumnStatistics> Deserialize(Deserializer &source, const LogicalType &type);
 
 private:
-	unique_ptr<BaseStatistics> stats;
+	BaseStatistics stats;
 	//! The approximate count distinct stats of the column
 	unique_ptr<DistinctStatistics> distinct_stats;
 };

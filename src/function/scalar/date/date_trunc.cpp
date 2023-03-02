@@ -613,7 +613,7 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 	NumericStats::SetMin(*result, min_value);
 	NumericStats::SetMax(*result, max_value);
 	result->CopyValidity(child_stats[0].get());
-	return std::move(result);
+	return result;
 }
 
 template <class TA, class TR, class OP>
