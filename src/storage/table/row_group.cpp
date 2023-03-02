@@ -177,7 +177,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
 			row_group->columns.push_back(std::move(column_data));
-			row_group->stats.push_back(std::move(altered_col_stats));
+			row_group->stats.push_back(std::move(altered_col_stats)); // NOLINT: false positive
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(columns[i]);

@@ -305,7 +305,7 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &source, LogicalType typ
 	FieldReader reader(source);
 	bool has_null = reader.ReadRequired<bool>();
 	bool has_no_null = reader.ReadRequired<bool>();
-	auto result = DeserializeType(reader, type);
+	auto result = DeserializeType(reader, std::move(type));
 	result.has_null = has_null;
 	result.has_no_null = has_no_null;
 	reader.Finalize();
