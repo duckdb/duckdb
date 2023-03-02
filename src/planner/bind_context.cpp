@@ -425,6 +425,7 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (bindings.find(alias) != bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
+//	Printer::Print("Adding binding for alias " + alias + " for binding of table " + to_string(binding->index) + " sizeof(names)=" + to_string(binding->names.size()));
 	bindings_list.emplace_back(alias, binding.get());
 	bindings[alias] = std::move(binding);
 }

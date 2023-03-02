@@ -153,21 +153,31 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			return_names[i] = "C" + to_string(i);
 		}
 	}
-	auto get = make_unique<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
-	get->parameters = parameters;
-	get->named_parameters = named_parameters;
-	get->input_table_types = input_table_types;
-	get->input_table_names = input_table_names;
-	if (table_function.in_out_function && !table_function.projection_pushdown) {
-		get->column_ids.reserve(return_types.size());
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->column_ids.push_back(i);
+
+	unique_ptr<LogicalOperator> ret;
+	if (table_function.bind_replace) {
+		auto custom_plan = table_function.bind_replace(context, bind_data.get(), bind_context, *this);
+		ret = std::move(custom_plan);
+	} else {
+		auto get = make_unique<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
+		get->parameters = parameters;
+		get->named_parameters = named_parameters;
+		get->input_table_types = input_table_types;
+		get->input_table_names = input_table_names;
+		if (table_function.in_out_function && !table_function.projection_pushdown) {
+			get->column_ids.reserve(return_types.size());
+			for (idx_t i = 0; i < return_types.size(); i++) {
+				get->column_ids.push_back(i);
+			}
 		}
+		// now add the table function to the bind context so its columns can be bound
+		bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
+		                              get->GetTable());
+
+		ret = std::move(get);
 	}
-	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-	                              get->GetTable());
-	return std::move(get);
+
+	return ret;
 }
 
 unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
