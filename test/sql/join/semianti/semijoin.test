@@ -36,7 +36,6 @@ SELECT * FROM left_table SEMI JOIN right_table ON ([left_table.a, left_table.b] 
 42	1	1
 
 # right table can be a subquery
-
 query III
 SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table where b = 1) buzz ON left_table.a = buzz.foo
 ----
@@ -61,13 +60,13 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a)
 42	1	5
 42	1	5
 
-# a table that is the result of a join can also be semi joined on
 query I
 CREATE TABLE other (a INTEGER, b INTEGER);
 
 statement ok
 INSERT INTO other VALUES (42, 1), (43, 1);
 
+# a table that is the result of a join can also be semi joined on
 query III
 SELECT * FROM left_table
 SEMI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table
@@ -79,19 +78,16 @@ ON left_table.a = joined_right_table.a;
 42	1	5
 42	1	5
 
-# clean up
 statement ok
 DELETE FROM left_table where c=5;
 
 # USING COLUMNS also works
-
 query III
 SELECT * FROM left_table SEMI JOIN right_table USING (a);
 ----
 42	1	1
 
 # natural semi join also works
-
 query III
 SELECT * FROM left_table NATURAL SEMI JOIN right_table;
 ----
@@ -123,6 +119,7 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a)
 statement ok
 INSERT INTO right_table VALUES (1, 42);
 
+# complex condition resulting in an any join
 query III
 SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
 ----

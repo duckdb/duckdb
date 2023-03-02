@@ -17,7 +17,7 @@ CREATE TABLE right_table (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO right_table VALUES(42, 1);
 
-# * expression expands all of the left table
+# STAR expression expands only the left table
 query III
 SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a;
 ----
@@ -36,7 +36,6 @@ SELECT * FROM left_table ANTI JOIN right_table ON ([left_table.a, left_table.b] 
 43	1	1
 
 # right table can be a subquery
-
 query III
 SELECT * FROM left_table ANTI JOIN (SELECT a as foo from right_table where b = 1) buzz ON left_table.a = buzz.foo
 ----
@@ -48,10 +47,10 @@ SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a W
 ----
 Binder Error
 
-# left results are not deduplicated
 statement ok
 INSERT INTO left_table VALUES (43, 1, 5), (43, 1, 5), (43, 1, 5), (43, 1, 5);
 
+# left results are not deduplicated
 query III
 SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a);
 ----
@@ -61,13 +60,13 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a)
 43	1	5
 43	1	5
 
-# a table that is the result of a join can also be semi joined on
 query I
 CREATE TABLE other (a INTEGER, b INTEGER);
 
 statement ok
 INSERT INTO other VALUES (42, 1), (43, 1);
 
+# a table that is the result of a join can also be semi joined on
 query III
 SELECT * FROM left_table
 ANTI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table
@@ -79,25 +78,21 @@ ON left_table.a = joined_right_table.a;
 43	1	5
 43	1	5
 
-# clean up
 statement ok
 DELETE FROM left_table where c=5;
 
 # USING COLUMNS also works
-
 query III
 SELECT * FROM left_table ANTI JOIN right_table USING (a);
 ----
 43	1	1
 
-# natural anti join also works
-
+# natural anti join works
 query III
 SELECT * FROM left_table NATURAL ANTI JOIN right_table;
 ----
 43	1	1
 
-# also with subqueries
 query III
 SELECT * FROM left_table
 NATURAL ANTI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table;
@@ -118,6 +113,7 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a > right_table.a)
 ----
 42	1	1
 
+# complex condition resulting in an any join
 query III
 SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
 ----
