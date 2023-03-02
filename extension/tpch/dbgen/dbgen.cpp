@@ -19,7 +19,7 @@
 #include "dbgen/dsstypes.h"
 
 #include <cassert>
-#include <iostream>
+#include <cmath>
 #include <mutex>
 
 using namespace duckdb;
