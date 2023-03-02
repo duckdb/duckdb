@@ -1265,7 +1265,7 @@ public:
 
 			if (validity.RowIsValid(vector_index)) {
 				run_length++;
-				auto &value = strings[vector_index];
+				const auto &value = strings[vector_index];
 				// If the value did not yet exist in the dictionary we add it to the StringHeap
 				auto found = !value.IsInlined() && state.dictionary.find(value) == state.dictionary.end()
 				                 ? state.dictionary.insert(string_map_t<uint32_t>::value_type(
@@ -1994,7 +1994,6 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			                                             max_define, can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
-	// case LogicalTypeId::BIT:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                       can_have_nulls);

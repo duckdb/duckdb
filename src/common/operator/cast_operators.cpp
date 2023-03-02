@@ -1475,6 +1475,7 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	if (!Bit::TryGetBitStringSize(input, result_size, error_message)) {
 		return false;
 	}
+
 	result = StringVector::EmptyString(result_vector, result_size);
 	Bit::ToBit(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
