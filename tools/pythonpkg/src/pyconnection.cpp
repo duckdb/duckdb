@@ -1150,24 +1150,30 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
                 if (numpytype == 1) {
                         // numpy array with shape (n, )
                         data["column0"] = entry;
-                } else if (numpytype == 2 || numpytype == 3) {
-                        // numpy array with shape (n_rows, n_cols) or list of numpy arrays of shape (n,)
+                } else if (numpytype == 2) {
+                        // numpy array with shape (n_rows, n_cols)
                         size_t idx = 0;
-                        for(auto item : py::array(entry)) {
+                        for(auto item : py::cast<py::array>(entry)) {
                                 data[("column" + std::to_string(idx)).c_str()] = item;
                                 idx++;
                         }
-                } else if (numpytype == 4) {
+                } else if (numpytype == 3) {
+			// list of numpy arrays of shape (n,)
+			size_t idx = 0;
+                        for(auto item : py::cast<py::list>(entry)) {
+                                data[("column" + std::to_string(idx)).c_str()] = item;
+                                idx++;
+                        }
+		} else if (numpytype == 4) {
 			// {"key": np.array}
                         data = py::cast<py::dict>(entry);
                 } else {
                         throw InvalidInputException("Invalid type of known numpy obj");
                 }
-                auto new_df = py::module_::import("pandas").attr("DataFrame").attr("from_dict")(data);
-                children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
+                children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
                 table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
                 table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
-                                                                                      make_unique<RegisteredObject>(new_df));
+                                                                                      make_unique<RegisteredObject>(data));
 
         } else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));

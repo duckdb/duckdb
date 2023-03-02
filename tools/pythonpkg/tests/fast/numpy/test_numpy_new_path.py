@@ -22,3 +22,11 @@ class TestScanNumpy(object):
         z = {"z": np.array([1,2,3]), "x": np.array([4,5,6])}
         res = duckdb.sql("select * from z").fetchall()
         assert res == [(1, 4), (2, 5), (3, 6)]
+
+        z = np.array(["zzz", "xxx"])
+        res = duckdb.sql("select * from z").fetchall()
+        assert res == [('zzz',), ('xxx',)]
+
+        z = [np.array(["zzz", "xxx"]), np.array([1,2])]
+        res = duckdb.sql("select * from z").fetchall()
+        assert res == [('zzz', 1), ('xxx', 2)]

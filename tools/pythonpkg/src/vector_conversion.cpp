@@ -410,6 +410,57 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 }
 
+void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &bind_columns,
+                                  vector<LogicalType> &return_types, vector<string> &names) {
+	auto df_columns = py::list(df.attr("keys")());
+	auto df_types = py::list();
+	for(auto item : py::cast<py::dict>(df)) {
+		if (string(py::str(item.second.attr("dtype").attr("char"))) == "U") {
+			df_types.attr("append")(py::str("string"));
+			continue;
+		}
+		df_types.attr("append")(item.second.attr("dtype"));
+	}
+	auto get_fun = df.attr("__getitem__");
+	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
+                throw InvalidInputException("Need a DataFrame with at least one column");
+        }
+	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
+		LogicalType duckdb_col_type;
+                PandasColumnBindData bind_data;
+
+                names.emplace_back(py::str(df_columns[col_idx]));
+                bind_data.pandas_type = ConvertPandasType(df_types[col_idx]);
+
+		auto column = get_fun(df_columns[col_idx]);
+
+		if (bind_data.pandas_type == PandasType::FLOAT_16) {
+			bind_data.numpy_col = py::array(column.attr("astype")("float32"));
+			bind_data.pandas_type = PandasType::FLOAT_32;
+			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
+		} else if (bind_data.pandas_type == PandasType::OBJECT && 
+				string(py::str(df_types[col_idx])) == "string") {
+			bind_data.numpy_col = py::array(column.attr("astype")("object_"));
+                        bind_data.pandas_type = PandasType::OBJECT;
+		} else {
+			bind_data.numpy_col = column;
+			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
+		}
+
+		if (bind_data.pandas_type == PandasType::OBJECT) {
+			PandasAnalyzer analyzer(config);
+			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
+				duckdb_col_type = analyzer.AnalyzedType();
+			}
+		}
+
+		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
+		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
+		return_types.push_back(duckdb_col_type);
+		bind_columns.push_back(std::move(bind_data));
+	}
+}
+
 void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
 	// This performs a shallow copy that allows us to rename the dataframe

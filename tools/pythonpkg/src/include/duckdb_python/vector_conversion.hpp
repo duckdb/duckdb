@@ -42,6 +42,9 @@ public:
 
 	static void BindPandas(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &out,
 	                       vector<LogicalType> &return_types, vector<string> &names);
+
+	static void BindNumpy(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &out,
+                               vector<LogicalType> &return_types, vector<string> &names);
 };
 
 } // namespace duckdb
