@@ -18,11 +18,15 @@ BaseStatistics::BaseStatistics(LogicalType type) {
 void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
 	stats.distinct_count = 0;
 	stats.type = std::move(type);
-	if (ListStats::IsList(stats)) {
+	switch (GetStatsType(stats.type)) {
+	case StatisticsType::LIST_STATS:
 		ListStats::Construct(stats);
-	}
-	if (StructStats::IsStruct(stats)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		StructStats::Construct(stats);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -46,6 +50,38 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 	stats_union = other.stats_union;
 	std::swap(child_stats, other.child_stats);
 	return *this;
+}
+
+StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		return StatisticsType::NUMERIC_STATS;
+	case PhysicalType::VARCHAR:
+		return StatisticsType::STRING_STATS;
+	case PhysicalType::STRUCT:
+		return StatisticsType::STRUCT_STATS;
+	case PhysicalType::LIST:
+		return StatisticsType::LIST_STATS;
+	case PhysicalType::BIT:
+	case PhysicalType::INTERVAL:
+	default:
+		return StatisticsType::BASE_STATS;
+	}
+}
+
+StatisticsType BaseStatistics::GetStatsType() const {
+	return GetStatsType(GetType());
 }
 
 void BaseStatistics::InitializeUnknown() {
@@ -77,8 +113,11 @@ bool BaseStatistics::IsConstant() const {
 		}
 		return false;
 	}
-	if (NumericStats::IsNumeric(*this)) {
+	switch (GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::IsConstant(*this);
+	default:
+		break;
 	}
 	return false;
 }
@@ -86,17 +125,21 @@ bool BaseStatistics::IsConstant() const {
 void BaseStatistics::Merge(const BaseStatistics &other) {
 	has_null = has_null || other.has_null;
 	has_no_null = has_no_null || other.has_no_null;
-	if (NumericStats::IsNumeric(other)) {
+	switch (GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
 		NumericStats::Merge(*this, other);
-	}
-	if (StringStats::IsString(other)) {
+		break;
+	case StatisticsType::STRING_STATS:
 		StringStats::Merge(*this, other);
-	}
-	if (ListStats::IsList(other)) {
+		break;
+	case StatisticsType::LIST_STATS:
 		ListStats::Merge(*this, other);
-	}
-	if (StructStats::IsStruct(other)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		StructStats::Merge(*this, other);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -105,56 +148,30 @@ idx_t BaseStatistics::GetDistinctCount() {
 }
 
 BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
+	switch (GetStatsType(type)) {
+	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::CreateUnknown(std::move(type));
-	case PhysicalType::VARCHAR:
+	case StatisticsType::STRING_STATS:
 		return StringStats::CreateUnknown(std::move(type));
-	case PhysicalType::STRUCT:
-		return StructStats::CreateUnknown(std::move(type));
-	case PhysicalType::LIST:
+	case StatisticsType::LIST_STATS:
 		return ListStats::CreateUnknown(std::move(type));
-	case PhysicalType::BIT:
-	case PhysicalType::INTERVAL:
+	case StatisticsType::STRUCT_STATS:
+		return StructStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
 }
 
 BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
+	switch (GetStatsType(type)) {
+	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::CreateEmpty(std::move(type));
-	case PhysicalType::VARCHAR:
+	case StatisticsType::STRING_STATS:
 		return StringStats::CreateEmpty(std::move(type));
-	case PhysicalType::STRUCT:
-		return StructStats::CreateEmpty(std::move(type));
-	case PhysicalType::LIST:
+	case StatisticsType::LIST_STATS:
 		return ListStats::CreateEmpty(std::move(type));
-	case PhysicalType::BIT:
-	case PhysicalType::INTERVAL:
+	case StatisticsType::STRUCT_STATS:
+		return StructStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -176,10 +193,15 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	D_ASSERT(GetType() == other.GetType());
 	CopyBase(other);
 	stats_union = other.stats_union;
-	if (ListStats::IsList(*this)) {
+	switch (GetStatsType()) {
+	case StatisticsType::LIST_STATS:
 		ListStats::Copy(*this, other);
-	} else if (StructStats::IsStruct(*this)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		StructStats::Copy(*this, other);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -247,43 +269,35 @@ void BaseStatistics::SetDistinctCount(idx_t count) {
 }
 
 void BaseStatistics::Serialize(FieldWriter &writer) const {
-	if (NumericStats::IsNumeric(*this)) {
+	switch (GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
 		NumericStats::Serialize(*this, writer);
-	} else if (StringStats::IsString(*this)) {
+		break;
+	case StatisticsType::STRING_STATS:
 		StringStats::Serialize(*this, writer);
-	} else if (ListStats::IsList(*this)) {
+		break;
+	case StatisticsType::LIST_STATS:
 		ListStats::Serialize(*this, writer);
-	} else if (StructStats::IsStruct(*this)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		StructStats::Serialize(*this, writer);
+		break;
+	default:
+		break;
 	}
 }
 BaseStatistics BaseStatistics::DeserializeType(FieldReader &reader, LogicalType type) {
-	switch (type.InternalType()) {
-	case PhysicalType::BIT:
-		return BaseStatistics(LogicalTypeId::VALIDITY);
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
+	switch (GetStatsType(type)) {
+	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::Deserialize(reader, std::move(type));
-	case PhysicalType::VARCHAR:
+	case StatisticsType::STRING_STATS:
 		return StringStats::Deserialize(reader, std::move(type));
-	case PhysicalType::STRUCT:
-		return StructStats::Deserialize(reader, std::move(type));
-	case PhysicalType::LIST:
+	case StatisticsType::LIST_STATS:
 		return ListStats::Deserialize(reader, std::move(type));
-	case PhysicalType::INTERVAL:
-		return BaseStatistics(std::move(type));
+	case StatisticsType::STRUCT_STATS:
+		return StructStats::Deserialize(reader, std::move(type));
 	default:
-		throw InternalException("Unimplemented type for statistics deserialization");
+		return BaseStatistics(std::move(type));
 	}
 }
 
@@ -304,28 +318,42 @@ string BaseStatistics::ToString() const {
 	string result =
 	    StringUtil::Format("%s%s", StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n),
 	                       distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
-	if (NumericStats::IsNumeric(*this)) {
+	switch (GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
 		result = NumericStats::ToString(*this) + result;
-	} else if (StringStats::IsString(*this)) {
+		break;
+	case StatisticsType::STRING_STATS:
 		result = StringStats::ToString(*this) + result;
-	} else if (ListStats::IsList(*this)) {
+		break;
+	case StatisticsType::LIST_STATS:
 		result = ListStats::ToString(*this) + result;
-	} else if (StructStats::IsStruct(*this)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		result = StructStats::ToString(*this) + result;
+		break;
+	default:
+		break;
 	}
 	return result;
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector.GetType() == this->type);
-	if (NumericStats::IsNumeric(*this)) {
+	switch (GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
 		NumericStats::Verify(*this, vector, sel, count);
-	} else if (StringStats::IsString(*this)) {
+		break;
+	case StatisticsType::STRING_STATS:
 		StringStats::Verify(*this, vector, sel, count);
-	} else if (ListStats::IsList(*this)) {
+		break;
+	case StatisticsType::LIST_STATS:
 		ListStats::Verify(*this, vector, sel, count);
-	} else if (StructStats::IsStruct(*this)) {
+		break;
+	case StatisticsType::STRUCT_STATS:
 		StructStats::Verify(*this, vector, sel, count);
+		break;
+	default:
+		break;
 	}
 	if (has_null && has_no_null) {
 		// nothing to verify
@@ -356,25 +384,14 @@ void BaseStatistics::Verify(Vector &vector, idx_t count) const {
 }
 
 BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
-	switch (input.type().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE: {
+	switch (GetStatsType(input.type())) {
+	case StatisticsType::NUMERIC_STATS: {
 		auto result = NumericStats::CreateEmpty(input.type());
 		NumericStats::SetMin(result, input);
 		NumericStats::SetMax(result, input);
 		return result;
 	}
-	case PhysicalType::VARCHAR: {
+	case StatisticsType::STRING_STATS: {
 		auto result = StringStats::CreateEmpty(input.type());
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
@@ -382,7 +399,18 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		}
 		return result;
 	}
-	case PhysicalType::STRUCT: {
+	case StatisticsType::LIST_STATS: {
+		auto result = ListStats::CreateEmpty(input.type());
+		auto &child_stats = ListStats::GetChildStats(result);
+		if (!input.IsNull()) {
+			auto &list_children = ListValue::GetChildren(input);
+			for (auto &child_element : list_children) {
+				child_stats.Merge(FromConstant(child_element));
+			}
+		}
+		return result;
+	}
+	case StatisticsType::STRUCT_STATS: {
 		auto result = StructStats::CreateEmpty(input.type());
 		auto &child_types = StructType::GetChildTypes(input.type());
 		if (input.IsNull()) {
@@ -397,20 +425,8 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		}
 		return result;
 	}
-	case PhysicalType::LIST: {
-		auto result = ListStats::CreateEmpty(input.type());
-		auto &child_stats = ListStats::GetChildStats(result);
-		if (!input.IsNull()) {
-			auto &list_children = ListValue::GetChildren(input);
-			for (auto &child_element : list_children) {
-				child_stats.Merge(FromConstant(child_element));
-			}
-		}
-		return result;
-	}
-	default: {
+	default:
 		return BaseStatistics(input.type());
-	}
 	}
 }
 

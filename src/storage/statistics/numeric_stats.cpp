@@ -29,33 +29,13 @@ BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	return result;
 }
 
-bool NumericStats::IsNumeric(const BaseStatistics &stats) {
-	switch (stats.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return true;
-	default:
-		return false;
-	}
-}
-
 NumericStatsData &NumericStats::GetDataUnsafe(BaseStatistics &stats) {
-	D_ASSERT(NumericStats::IsNumeric(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::NUMERIC_STATS);
 	return stats.stats_union.numeric_data;
 }
 
 const NumericStatsData &NumericStats::GetDataUnsafe(const BaseStatistics &stats) {
-	D_ASSERT(NumericStats::IsNumeric(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::NUMERIC_STATS);
 	return stats.stats_union.numeric_data;
 }
 
@@ -63,6 +43,7 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
+	D_ASSERT(stats.GetType() == other.GetType());
 	if (NumericStats::HasMin(other) && NumericStats::HasMin(stats)) {
 		auto other_min = NumericStats::Min(other);
 		if (other_min < NumericStats::Min(stats)) {

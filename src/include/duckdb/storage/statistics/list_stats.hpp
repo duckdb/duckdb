@@ -24,9 +24,6 @@ struct ListStats {
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
-	//! Whether or not the statistics are for a list
-	DUCKDB_API static bool IsList(const BaseStatistics &stats);
-
 	DUCKDB_API static const BaseStatistics &GetChildStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetChildStats(BaseStatistics &stats);
 	DUCKDB_API static void SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);

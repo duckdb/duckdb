@@ -35,21 +35,13 @@ BaseStatistics StringStats::CreateEmpty(LogicalType type) {
 	return result;
 }
 
-bool StringStats::IsString(const BaseStatistics &stats) {
-	switch (stats.GetType().InternalType()) {
-	case PhysicalType::VARCHAR:
-		return true;
-	default:
-		return false;
-	}
-}
 StringStatsData &StringStats::GetDataUnsafe(BaseStatistics &stats) {
-	D_ASSERT(StringStats::IsString(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRING_STATS);
 	return stats.stats_union.string_data;
 }
 
 const StringStatsData &StringStats::GetDataUnsafe(const BaseStatistics &stats) {
-	D_ASSERT(StringStats::IsString(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRING_STATS);
 	return stats.stats_union.string_data;
 }
 

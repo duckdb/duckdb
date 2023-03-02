@@ -34,10 +34,12 @@ BaseStatistics StructStats::CreateEmpty(LogicalType type) {
 }
 
 const BaseStatistics *StructStats::GetChildStats(const BaseStatistics &stats) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
 	return stats.child_stats.get();
 }
 
 const BaseStatistics &StructStats::GetChildStats(const BaseStatistics &stats, idx_t i) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
 	if (i >= StructType::GetChildCount(stats.GetType())) {
 		throw InternalException("Calling StructStats::GetChildStats but there are no stats for this index");
 	}
@@ -45,6 +47,7 @@ const BaseStatistics &StructStats::GetChildStats(const BaseStatistics &stats, id
 }
 
 BaseStatistics &StructStats::GetChildStats(BaseStatistics &stats, idx_t i) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
 	if (i >= StructType::GetChildCount(stats.GetType())) {
 		throw InternalException("Calling StructStats::GetChildStats but there are no stats for this index");
 	}
@@ -52,11 +55,13 @@ BaseStatistics &StructStats::GetChildStats(BaseStatistics &stats, idx_t i) {
 }
 
 void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, const BaseStatistics &new_stats) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
 	D_ASSERT(i < StructType::GetChildCount(stats.GetType()));
 	stats.child_stats[i].Copy(new_stats);
 }
 
 void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats) {
+	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
 	if (!new_stats) {
 		StructStats::SetChildStats(stats, i,
 		                           BaseStatistics::CreateUnknown(StructType::GetChildType(stats.GetType(), i)));
@@ -70,10 +75,6 @@ void StructStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	for (idx_t i = 0; i < count; i++) {
 		stats.child_stats[i].Copy(other.child_stats[i]);
 	}
-}
-
-bool StructStats::IsStruct(const BaseStatistics &stats) {
-	return stats.GetType().InternalType() == PhysicalType::STRUCT;
 }
 
 void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {

@@ -62,8 +62,6 @@ struct NumericStats {
 	//! Empty statistics - i.e. "min = MaxValue<type>, max = MinValue<type>"
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
-	//! Whether or not the statistics are numeric
-	DUCKDB_API static bool IsNumeric(const BaseStatistics &stats);
 	//! Returns true if the stats has a constant value
 	DUCKDB_API static bool IsConstant(const BaseStatistics &stats);
 	//! Returns true if the stats has a min value defined

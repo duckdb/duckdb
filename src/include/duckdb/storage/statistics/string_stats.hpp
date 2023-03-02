@@ -42,10 +42,6 @@ struct StringStats {
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	//! Empty statistics - i.e. "has_unicode" is false, "max_string_length" is 0, "min" is \xFF, max is \x00
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
-
-	//! Whether or not the statistics are string
-	DUCKDB_API static bool IsString(const BaseStatistics &stats);
-
 	//! Whether or not the statistics have a maximum string length defined
 	DUCKDB_API static bool HasMaxStringLength(const BaseStatistics &stats);
 	//! Returns the maximum string length, or throws an exception if !HasMaxStringLength()

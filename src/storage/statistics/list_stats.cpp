@@ -33,12 +33,12 @@ void ListStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 const BaseStatistics &ListStats::GetChildStats(const BaseStatistics &stats) {
-	D_ASSERT(ListStats::IsList(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
 BaseStatistics &ListStats::GetChildStats(BaseStatistics &stats) {
-	D_ASSERT(ListStats::IsList(stats));
+	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
@@ -49,10 +49,6 @@ void ListStats::SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> 
 	} else {
 		stats.child_stats[0].Copy(*new_stats);
 	}
-}
-
-bool ListStats::IsList(const BaseStatistics &stats) {
-	return stats.GetType().InternalType() == PhysicalType::LIST;
 }
 
 void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {

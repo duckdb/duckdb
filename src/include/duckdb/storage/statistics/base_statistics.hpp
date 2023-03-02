@@ -34,6 +34,8 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
+enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS };
+
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
@@ -57,6 +59,9 @@ public:
 	//! Creates statistics for an empty database, i.e. "has_null" is false, "has_no_null" is false, etc
 	//! This is used when incrementally constructing statistics by constantly adding new values
 	static BaseStatistics CreateEmpty(LogicalType type);
+
+	DUCKDB_API StatisticsType GetStatsType() const;
+	DUCKDB_API static StatisticsType GetStatsType(const LogicalType &type);
 
 	DUCKDB_API bool CanHaveNull() const;
 	DUCKDB_API bool CanHaveNoNull() const;
