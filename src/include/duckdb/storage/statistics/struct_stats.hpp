@@ -19,6 +19,7 @@ struct SelectionVector;
 class Vector;
 
 struct StructStats {
+	DUCKDB_API static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
 	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	//! Whether or not the statistics are for a list

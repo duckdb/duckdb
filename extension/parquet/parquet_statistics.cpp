@@ -17,7 +17,7 @@ using duckdb_parquet::format::Type;
 static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
                                                      const duckdb_parquet::format::SchemaElement &schema_ele,
                                                      const duckdb_parquet::format::Statistics &parquet_stats) {
-	auto stats = NumericStats::CreateEmpty(type);
+	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.

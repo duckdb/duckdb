@@ -14,7 +14,12 @@ BaseStatistics::BaseStatistics(LogicalType type) : type(std::move(type)), distin
 BaseStatistics::~BaseStatistics() {
 }
 
-void BaseStatistics::InitializeBase() {
+void BaseStatistics::InitializeUnknown() {
+	has_null = true;
+	has_no_null = true;
+}
+
+void BaseStatistics::InitializeEmpty() {
 	has_null = false;
 	has_no_null = true;
 }
@@ -65,6 +70,44 @@ idx_t BaseStatistics::GetDistinctCount() {
 	return distinct_count;
 }
 
+unique_ptr<BaseStatistics> BaseStatistics::CreateUnknown(LogicalType type) {
+	unique_ptr<BaseStatistics> result;
+	switch (type.InternalType()) {
+	case PhysicalType::BIT:
+		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
+		result->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+		return result;
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		result = NumericStats::CreateUnknown(std::move(type));
+		break;
+	case PhysicalType::VARCHAR:
+		result = StringStats::CreateUnknown(std::move(type));
+		break;
+	case PhysicalType::STRUCT:
+		result = StructStats::CreateUnknown(std::move(type));
+		break;
+	case PhysicalType::LIST:
+		result = ListStats::CreateUnknown(std::move(type));
+		break;
+	case PhysicalType::INTERVAL:
+	default:
+		result = make_unique<BaseStatistics>(std::move(type));
+	}
+	result->InitializeUnknown();
+	return result;
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
@@ -100,7 +143,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	default:
 		result = make_unique<BaseStatistics>(std::move(type));
 	}
-	result->InitializeBase();
+	result->InitializeEmpty();
 	return result;
 }
 

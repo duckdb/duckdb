@@ -180,7 +180,9 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		}
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
-	auto result = NumericStats::Create(expr.return_type, std::move(new_min), std::move(new_max));
+	auto result = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(*result, new_min);
+	NumericStats::SetMax(*result, new_max);
 	result->CombineValidity(lstats, rstats);
 	return result;
 }
@@ -545,7 +547,9 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 		new_min = Value(expr.return_type);
 		new_max = Value(expr.return_type);
 	}
-	auto stats = NumericStats::Create(expr.return_type, std::move(new_min), std::move(new_max));
+	auto stats = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(*stats, new_min);
+	NumericStats::SetMax(*stats, new_max);
 	stats->CopyValidity(istats);
 	return stats;
 }

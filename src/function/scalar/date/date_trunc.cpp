@@ -609,7 +609,9 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 
 	auto min_value = Value::CreateValue(min_part);
 	auto max_value = Value::CreateValue(max_part);
-	auto result = NumericStats::Create(min_value.type(), min_value, max_value);
+	auto result = NumericStats::CreateEmpty(min_value.type());
+	NumericStats::SetMin(*result, min_value);
+	NumericStats::SetMax(*result, max_value);
 	result->CopyValidity(child_stats[0].get());
 	return std::move(result);
 }

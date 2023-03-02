@@ -84,7 +84,7 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	if (child_stats.empty() || !child_stats[0]) {
 		return nullptr;
 	}
-	auto new_struct_stats = StructStats::CreateEmpty(expr.return_type);
+	auto new_struct_stats = StructStats::CreateUnknown(expr.return_type);
 
 	auto &existing_stats = StructStats::GetChildStats(*child_stats[0]);
 	auto &new_stats = StructStats::GetChildStats(*new_struct_stats);

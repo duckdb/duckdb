@@ -21,7 +21,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
-		auto stats = NumericStats::Create(input.type(), input, input);
+		auto stats = NumericStats::CreateEmpty(input.type());
+		NumericStats::SetMin(*stats, input);
+		NumericStats::SetMax(*stats, input);
 		stats->Set(input.IsNull() ? StatsInfo::CAN_HAVE_NULL_VALUES : StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		stats->SetDistinctCount(1);
 		result = std::move(stats);

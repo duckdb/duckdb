@@ -5,10 +5,20 @@
 
 namespace duckdb {
 
+unique_ptr<BaseStatistics> StructStats::CreateUnknown(LogicalType type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	auto result = make_unique<BaseStatistics>(std::move(type));
+	result->InitializeUnknown();
+	for (auto &entry : child_types) {
+		result->child_stats.push_back(BaseStatistics::CreateUnknown(entry.second));
+	}
+	return result;
+}
+
 unique_ptr<BaseStatistics> StructStats::CreateEmpty(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = make_unique<BaseStatistics>(std::move(type));
-	result->InitializeBase();
+	result->InitializeEmpty();
 	for (auto &entry : child_types) {
 		result->child_stats.push_back(BaseStatistics::CreateEmpty(entry.second));
 	}

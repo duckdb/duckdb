@@ -50,17 +50,16 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			// for small types we can just set the stats to [type_min, type_max]
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
-				stats =
-				    NumericStats::Create(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
-				break;
 			case PhysicalType::INT16:
-				stats =
-				    NumericStats::Create(group_type, Value::MinimumValue(group_type), Value::MaximumValue(group_type));
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
 				return false;
 			}
+			stats = NumericStats::CreateUnknown(group_type);
+			NumericStats::SetMin(*stats, Value::MinimumValue(group_type));
+			NumericStats::SetMax(*stats, Value::MaximumValue(group_type));
+
 			// we had no stats before, so we have no clue if there are null values or not
 			stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		}

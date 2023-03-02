@@ -7,15 +7,30 @@
 
 namespace duckdb {
 
+unique_ptr<BaseStatistics> StringStats::CreateUnknown(LogicalType type) {
+	auto result = make_unique<BaseStatistics>(std::move(type));
+	result->InitializeUnknown();
+	auto &string_data = StringStats::GetDataUnsafe(*result);
+	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+		string_data.min[i] = 0;
+		string_data.max[i] = 0xFF;
+	}
+	string_data.max_string_length = 0;
+	string_data.has_max_string_length = false;
+	string_data.has_unicode = true;
+	return result;
+}
+
 unique_ptr<BaseStatistics> StringStats::CreateEmpty(LogicalType type) {
 	auto result = make_unique<BaseStatistics>(std::move(type));
-	result->InitializeBase();
+	result->InitializeEmpty();
 	auto &string_data = StringStats::GetDataUnsafe(*result);
 	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 		string_data.min[i] = 0xFF;
 		string_data.max[i] = 0;
 	}
 	string_data.max_string_length = 0;
+	string_data.has_max_string_length = true;
 	string_data.has_unicode = false;
 	return result;
 }

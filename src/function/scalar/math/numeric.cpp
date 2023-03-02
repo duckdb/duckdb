@@ -130,7 +130,9 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		new_max = Value::Numeric(expr.return_type, max_val);
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
-	auto stats = NumericStats::Create(expr.return_type, std::move(new_min), std::move(new_max));
+	auto stats = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(*stats, new_min);
+	NumericStats::SetMax(*stats, new_max);
 	stats->CopyValidity(lstats);
 	return stats;
 }

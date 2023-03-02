@@ -13,19 +13,19 @@ template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value) {
 }
 
-unique_ptr<BaseStatistics> NumericStats::CreateEmpty(LogicalType type) {
+unique_ptr<BaseStatistics> NumericStats::CreateUnknown(LogicalType type) {
 	auto result = make_unique<BaseStatistics>(std::move(type));
-	result->InitializeBase();
-	SetMin(*result, Value::MaximumValue(result->GetType()));
-	SetMax(*result, Value::MinimumValue(result->GetType()));
+	result->InitializeUnknown();
+	SetMin(*result, Value(type));
+	SetMax(*result, Value(type));
 	return result;
 }
 
-unique_ptr<BaseStatistics> NumericStats::Create(LogicalType type, const Value &min, const Value &max) {
+unique_ptr<BaseStatistics> NumericStats::CreateEmpty(LogicalType type) {
 	auto result = make_unique<BaseStatistics>(std::move(type));
-	result->InitializeBase();
-	SetMin(*result, min);
-	SetMax(*result, max);
+	result->InitializeEmpty();
+	SetMin(*result, Value::MaximumValue(result->GetType()));
+	SetMax(*result, Value::MinimumValue(result->GetType()));
 	return result;
 }
 
@@ -400,7 +400,10 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 unique_ptr<BaseStatistics> NumericStats::Deserialize(FieldReader &reader, LogicalType type) {
 	auto min = DeserializeNumericStatsValue(type, reader);
 	auto max = DeserializeNumericStatsValue(type, reader);
-	return NumericStats::Create(std::move(type), min, max);
+	auto result = NumericStats::CreateEmpty(std::move(type));
+	NumericStats::SetMin(*result, min);
+	NumericStats::SetMax(*result, max);
+	return result;
 }
 
 string NumericStats::ToString(const BaseStatistics &stats) {

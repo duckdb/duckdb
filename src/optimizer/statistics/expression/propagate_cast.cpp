@@ -14,8 +14,10 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 		// overflow in cast: bailout
 		return nullptr;
 	}
-	auto result = NumericStats::Create(target, min, max);
+	auto result = NumericStats::CreateEmpty(target);
 	result->CopyBase(input);
+	NumericStats::SetMin(*result, min);
+	NumericStats::SetMax(*result, max);
 	return result;
 }
 

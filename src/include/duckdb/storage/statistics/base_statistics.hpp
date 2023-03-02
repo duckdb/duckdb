@@ -45,6 +45,12 @@ public:
 	~BaseStatistics();
 
 public:
+	//! Creates a set of statistics for data that is unknown, i.e. "has_null" is true, "has_no_null" is true, etc
+	//! This can be used in case nothing is known about the data - or can be used as a baseline when only a few things
+	//! are known
+	static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
+	//! Creates statistics for an empty database, i.e. "has_null" is false, "has_no_null" is false, etc
+	//! This is used when incrementally constructing statistics by constantly adding new values
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	DUCKDB_API bool CanHaveNull() const;
@@ -88,7 +94,8 @@ public:
 	string ToString() const;
 
 protected:
-	void InitializeBase();
+	void InitializeUnknown();
+	void InitializeEmpty();
 
 	//! The type of the logical segment
 	LogicalType type;
