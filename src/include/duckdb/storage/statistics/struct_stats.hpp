@@ -19,13 +19,14 @@ struct SelectionVector;
 class Vector;
 
 struct StructStats {
+	DUCKDB_API static void Construct(BaseStatistics &stats);
 	DUCKDB_API static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
 	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	//! Whether or not the statistics are for a list
 	DUCKDB_API static bool IsStruct(const BaseStatistics &stats);
 
-	DUCKDB_API static const vector<unique_ptr<BaseStatistics>> &GetChildStats(const BaseStatistics &stats);
+	DUCKDB_API static const BaseStatistics *GetChildStats(const BaseStatistics &stats);
 	DUCKDB_API static const BaseStatistics &GetChildStats(const BaseStatistics &stats, idx_t i);
 	DUCKDB_API static BaseStatistics &GetChildStats(BaseStatistics &stats, idx_t i);
 	DUCKDB_API static void SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats);
@@ -36,6 +37,7 @@ struct StructStats {
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
+	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 };
 

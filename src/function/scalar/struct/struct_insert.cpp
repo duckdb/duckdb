@@ -86,13 +86,13 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	}
 	auto new_struct_stats = StructStats::CreateUnknown(expr.return_type);
 
-	auto &existing_stats = StructStats::GetChildStats(*child_stats[0]);
-	auto &new_stats = StructStats::GetChildStats(*new_struct_stats);
-	for (idx_t i = 0; i < existing_stats.size(); i++) {
-		StructStats::SetChildStats(*new_struct_stats, i, existing_stats[i]->Copy());
+	auto existing_count = StructType::GetChildCount(child_stats[0]->GetType());
+	auto existing_stats = StructStats::GetChildStats(*child_stats[0]);
+	for (idx_t i = 0; i < existing_count; i++) {
+		StructStats::SetChildStats(*new_struct_stats, i, existing_stats[i].Copy());
 	}
-
-	auto offset = new_stats.size() - child_stats.size();
+	auto new_count = StructType::GetChildCount(expr.return_type);
+	auto offset = new_count - child_stats.size();
 	for (idx_t i = 1; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(*new_struct_stats, offset + i, child_stats[i] ? child_stats[i]->Copy() : nullptr);
 	}

@@ -217,16 +217,14 @@ string StringStats::ToString(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
 	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
-	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	                          string((const char *)string_data.min, min_len),
-	                          string((const char *)string_data.max, max_len),
-	                          string_data.has_unicode ? "true" : "false", string_data.max_string_length);
+	return StringUtil::Format(
+	    "[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]", string((const char *)string_data.min, min_len),
+	    string((const char *)string_data.max, max_len), string_data.has_unicode ? "true" : "false",
+	    string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
 }
 
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	string_t min_string((const char *)string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
-	string_t max_string((const char *)string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
@@ -241,7 +239,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 		auto data = value.GetDataUnsafe();
 		auto len = value.GetSize();
 		// LCOV_EXCL_START
-		if (len > string_data.max_string_length) {
+		if (string_data.has_max_string_length && len > string_data.max_string_length) {
 			throw InternalException(
 			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
 			    stats.ToString(), vector.ToString(count));

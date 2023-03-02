@@ -85,6 +85,7 @@ public:
 	void Copy(const BaseStatistics &other);
 
 	unique_ptr<BaseStatistics> Copy() const;
+	unique_ptr<BaseStatistics> ToUnique() const;
 	BaseStatistics CopyRegular() const;
 	void CopyBase(const BaseStatistics &orig);
 
@@ -104,9 +105,11 @@ public:
 	static unique_ptr<BaseStatistics> FromConstant(const Value &input);
 
 private:
+	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
 
 	static unique_ptr<BaseStatistics> Construct(LogicalType type);
+	static void Construct(BaseStatistics &stats, LogicalType type);
 
 	void InitializeUnknown();
 	void InitializeEmpty();
@@ -128,7 +131,7 @@ private:
 		StringStatsData string_data;
 	} stats_union;
 	//! Child stats (for LIST and STRUCT)
-	vector<unique_ptr<BaseStatistics>> child_stats;
+	unique_ptr<BaseStatistics[]> child_stats;
 };
 
 } // namespace duckdb

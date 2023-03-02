@@ -5,11 +5,16 @@
 
 namespace duckdb {
 
+void ListStats::Construct(BaseStatistics &stats) {
+	stats.child_stats = unique_ptr<BaseStatistics[]>(new BaseStatistics[1]);
+	BaseStatistics::Construct(stats.child_stats[0], ListType::GetChildType(stats.GetType()));
+}
+
 unique_ptr<BaseStatistics> ListStats::CreateUnknown(LogicalType type) {
 	auto &child_type = ListType::GetChildType(type);
 	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeUnknown();
-	result->child_stats.push_back(BaseStatistics::CreateUnknown(child_type));
+	result->child_stats[0].Copy(*BaseStatistics::CreateUnknown(child_type));
 	return result;
 }
 
@@ -17,19 +22,33 @@ unique_ptr<BaseStatistics> ListStats::CreateEmpty(LogicalType type) {
 	auto &child_type = ListType::GetChildType(type);
 	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeEmpty();
-	result->child_stats.push_back(BaseStatistics::CreateEmpty(child_type));
+	result->child_stats[0].Copy(*BaseStatistics::CreateEmpty(child_type));
 	return result;
 }
 
-const unique_ptr<BaseStatistics> &ListStats::GetChildStats(const BaseStatistics &stats) {
+void ListStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
+	D_ASSERT(stats.child_stats);
+	D_ASSERT(other.child_stats);
+	stats.child_stats[0].Copy(other.child_stats[0]);
+}
+
+const BaseStatistics &ListStats::GetChildStats(const BaseStatistics &stats) {
 	D_ASSERT(ListStats::IsList(stats));
-	D_ASSERT(stats.child_stats.size() == 1);
+	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
-unique_ptr<BaseStatistics> &ListStats::GetChildStats(BaseStatistics &stats) {
+BaseStatistics &ListStats::GetChildStats(BaseStatistics &stats) {
 	D_ASSERT(ListStats::IsList(stats));
-	D_ASSERT(stats.child_stats.size() == 1);
+	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
+}
+
+void ListStats::SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats) {
+	if (!new_stats) {
+		stats.child_stats[0].Copy(*BaseStatistics::CreateUnknown(ListType::GetChildType(stats.GetType())));
+	} else {
+		stats.child_stats[0].Copy(*new_stats);
+	}
 }
 
 bool ListStats::IsList(const BaseStatistics &stats) {
@@ -43,36 +62,29 @@ void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 
 	auto &child_stats = ListStats::GetChildStats(stats);
 	auto &other_child_stats = ListStats::GetChildStats(other);
-	if (child_stats && other_child_stats) {
-		child_stats->Merge(*other_child_stats);
-	} else {
-		child_stats.reset();
-	}
+	child_stats.Merge(other_child_stats);
 }
 
 void ListStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	writer.WriteOptional(child_stats);
+	writer.WriteSerializable(child_stats);
 }
 
 unique_ptr<BaseStatistics> ListStats::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	auto result = BaseStatistics::Construct(std::move(type));
-	result->child_stats.push_back(reader.ReadOptional<BaseStatistics>(nullptr, child_type));
+	result->child_stats[0].Copy(*reader.ReadRequiredSerializable<BaseStatistics>(child_type));
 	return result;
 }
 
 string ListStats::ToString(const BaseStatistics &stats) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	return StringUtil::Format("[%s]", child_stats ? child_stats->ToString() : "No Stats");
+	return StringUtil::Format("[%s]", child_stats.ToString());
 }
 
 void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	if (!child_stats) {
-		return;
-	}
 	auto &child_entry = ListVector::GetEntry(vector);
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
@@ -102,7 +114,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 		}
 	}
 
-	child_stats->Verify(child_entry, list_sel, list_count);
+	child_stats.Verify(child_entry, list_sel, list_count);
 }
 
 } // namespace duckdb

@@ -221,7 +221,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 	// append the child vector
 	if (child_count > 0) {
-		child_column->Append(*ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
+		child_column->Append(ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
 	}
 }
 
@@ -315,7 +315,7 @@ struct ListColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
-		ListStats::GetChildStats(*stats) = child_state->GetStatistics();
+		ListStats::SetChildStats(*stats, child_state->GetStatistics());
 		return stats;
 	}
 

@@ -8,7 +8,22 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type) : type(std::move(type)), distinct_count(0) {
+BaseStatistics::BaseStatistics() : type(LogicalType::INVALID) {
+}
+
+BaseStatistics::BaseStatistics(LogicalType type) {
+	Construct(*this, std::move(type));
+}
+
+void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
+	stats.distinct_count = 0;
+	stats.type = std::move(type);
+	if (ListStats::IsList(stats)) {
+		ListStats::Construct(stats);
+	}
+	if (StructStats::IsStruct(stats)) {
+		StructStats::Construct(stats);
+	}
 }
 
 BaseStatistics::~BaseStatistics() {
@@ -171,10 +186,13 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 }
 
 void BaseStatistics::Copy(const BaseStatistics &other) {
+	D_ASSERT(GetType() == other.GetType());
 	CopyBase(other);
 	stats_union = other.stats_union;
-	for (auto &stats : other.child_stats) {
-		child_stats.push_back(stats ? stats->Copy() : nullptr);
+	if (ListStats::IsList(*this)) {
+		ListStats::Copy(*this, other);
+	} else if (StructStats::IsStruct(*this)) {
+		StructStats::Copy(*this, other);
 	}
 }
 
@@ -182,8 +200,10 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = BaseStatistics::Construct(type);
 	result->CopyBase(*this);
 	result->stats_union = stats_union;
-	for (auto &stats : child_stats) {
-		result->child_stats.push_back(stats ? stats->Copy() : nullptr);
+	if (ListStats::IsList(*this)) {
+		ListStats::Copy(*result, *this);
+	} else if (StructStats::IsStruct(*this)) {
+		StructStats::Copy(*result, *this);
 	}
 	return result;
 }
@@ -192,10 +212,16 @@ BaseStatistics BaseStatistics::CopyRegular() const {
 	BaseStatistics result(type);
 	result.CopyBase(*this);
 	result.stats_union = stats_union;
-	for (auto &stats : child_stats) {
-		result.child_stats.push_back(stats ? stats->Copy() : nullptr);
+	if (ListStats::IsList(*this)) {
+		ListStats::Copy(result, *this);
+	} else if (StructStats::IsStruct(*this)) {
+		StructStats::Copy(result, *this);
 	}
 	return result;
+}
+
+unique_ptr<BaseStatistics> BaseStatistics::ToUnique() const {
+	return Copy();
 }
 
 void BaseStatistics::CopyBase(const BaseStatistics &other) {
@@ -401,16 +427,14 @@ unique_ptr<BaseStatistics> BaseStatistics::FromConstant(const Value &input) {
 	}
 	case PhysicalType::STRUCT: {
 		result = StructStats::CreateEmpty(input.type());
-		auto &child_stats = StructStats::GetChildStats(*result);
+		auto &child_types = StructType::GetChildTypes(input.type());
 		if (input.IsNull()) {
-			auto &child_types = StructType::GetChildTypes(input.type());
-			for (idx_t i = 0; i < child_stats.size(); i++) {
+			for (idx_t i = 0; i < child_types.size(); i++) {
 				StructStats::SetChildStats(*result, i, FromConstant(Value(child_types[i].second)));
 			}
 		} else {
 			auto &struct_children = StructValue::GetChildren(input);
-			D_ASSERT(child_stats.size() == struct_children.size());
-			for (idx_t i = 0; i < child_stats.size(); i++) {
+			for (idx_t i = 0; i < child_types.size(); i++) {
 				StructStats::SetChildStats(*result, i, FromConstant(struct_children[i]));
 			}
 		}
@@ -419,13 +443,11 @@ unique_ptr<BaseStatistics> BaseStatistics::FromConstant(const Value &input) {
 	case PhysicalType::LIST: {
 		result = ListStats::CreateEmpty(input.type());
 		auto &child_stats = ListStats::GetChildStats(*result);
-		if (input.IsNull()) {
-			child_stats.reset();
-		} else {
+		if (!input.IsNull()) {
 			auto &list_children = ListValue::GetChildren(input);
 			for (auto &child_element : list_children) {
 				auto child_element_stats = FromConstant(child_element);
-				child_stats->Merge(*child_element_stats);
+				child_stats.Merge(*child_element_stats);
 			}
 		}
 		break;
