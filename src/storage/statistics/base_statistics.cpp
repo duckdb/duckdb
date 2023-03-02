@@ -181,6 +181,8 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 		StringStats::Serialize(*this, writer);
 	} else if (ListStats::IsList(*this)) {
 		ListStats::Serialize(*this, writer);
+	} else if (StructStats::IsStruct(*this)) {
+		StructStats::Serialize(*this, writer);
 	}
 }
 
