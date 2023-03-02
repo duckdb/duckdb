@@ -94,7 +94,7 @@ public:
 
 	idx_t GetDistinctCount();
 
-	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
+	static BaseStatistics Deserialize(Deserializer &source, LogicalType type);
 
 	//! Verify that a vector does not violate the statistics
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
@@ -113,6 +113,8 @@ private:
 
 	void InitializeUnknown();
 	void InitializeEmpty();
+
+	static BaseStatistics DeserializeType(FieldReader &reader, LogicalType type);
 
 private:
 	//! The type of the logical segment

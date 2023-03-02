@@ -65,7 +65,7 @@ void ColumnStatistics::Serialize(Serializer &serializer) const {
 shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &source, const LogicalType &type) {
 	auto stats = BaseStatistics::Deserialize(source, type);
 	auto distinct_stats = source.ReadOptional<DistinctStatistics>();
-	return make_shared<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
+	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
 }
 
 } // namespace duckdb

@@ -830,8 +830,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnLis
 
 	auto &source = reader.GetSource();
 	for (auto &col : columns.Physical()) {
-		auto stats = BaseStatistics::Deserialize(source, col.Type());
-		result.statistics.push_back(stats->CopyRegular());
+		result.statistics.push_back(BaseStatistics::Deserialize(source, col.Type()));
 	}
 	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
 		BlockPointer pointer;

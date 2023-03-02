@@ -70,12 +70,12 @@ void ListStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	writer.WriteSerializable(child_stats);
 }
 
-unique_ptr<BaseStatistics> ListStats::Deserialize(FieldReader &reader, LogicalType type) {
+BaseStatistics ListStats::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	auto result = BaseStatistics::Construct(std::move(type));
-	result->child_stats[0].Copy(*reader.ReadRequiredSerializable<BaseStatistics>(child_type));
-	return result;
+	result->child_stats[0].Copy(reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_type));
+	return result->CopyRegular();
 }
 
 string ListStats::ToString(const BaseStatistics &stats) {

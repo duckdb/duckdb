@@ -421,7 +421,7 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		auto compression_type = source.Read<CompressionType>();
 		auto stats = BaseStatistics::Deserialize(source, type);
 
-		DataPointer data_pointer(std::move(*stats));
+		DataPointer data_pointer(std::move(stats));
 		data_pointer.row_start = row_start;
 		data_pointer.tuple_count = tuple_count;
 		data_pointer.block_pointer.block_id = block_pointer_block_id;

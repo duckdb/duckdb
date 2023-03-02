@@ -90,14 +90,15 @@ void StructStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	}
 }
 
-unique_ptr<BaseStatistics> StructStats::Deserialize(FieldReader &reader, LogicalType type) {
+BaseStatistics StructStats::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	auto result = BaseStatistics::Construct(std::move(type));
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		result->child_stats[i].Copy(*reader.ReadRequiredSerializable<BaseStatistics>(child_types[i].second));
+		result->child_stats[i].Copy(
+		    reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_types[i].second));
 	}
-	return result;
+	return result->CopyRegular();
 }
 
 string StructStats::ToString(const BaseStatistics &stats) {

@@ -85,7 +85,7 @@ struct NumericStats {
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
-	DUCKDB_API static unique_ptr<BaseStatistics> Deserialize(FieldReader &reader, LogicalType type);
+	DUCKDB_API static BaseStatistics Deserialize(FieldReader &reader, LogicalType type);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

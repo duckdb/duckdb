@@ -295,16 +295,10 @@ void BaseStatistics::Serialize(FieldWriter &writer) const {
 		StructStats::Serialize(*this, writer);
 	}
 }
-
-unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	FieldReader reader(source);
-	bool has_null = reader.ReadRequired<bool>();
-	bool has_no_null = reader.ReadRequired<bool>();
-	unique_ptr<BaseStatistics> result;
+BaseStatistics BaseStatistics::DeserializeType(FieldReader &reader, LogicalType type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = BaseStatistics::Construct(LogicalTypeId::VALIDITY);
-		break;
+		return BaseStatistics(LogicalTypeId::VALIDITY);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -317,25 +311,27 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStats::Deserialize(reader, std::move(type));
-		break;
+		return NumericStats::Deserialize(reader, std::move(type));
 	case PhysicalType::VARCHAR:
-		result = StringStats::Deserialize(reader, std::move(type));
-		break;
+		return StringStats::Deserialize(reader, std::move(type));
 	case PhysicalType::STRUCT:
-		result = StructStats::Deserialize(reader, std::move(type));
-		break;
+		return StructStats::Deserialize(reader, std::move(type));
 	case PhysicalType::LIST:
-		result = ListStats::Deserialize(reader, std::move(type));
-		break;
+		return ListStats::Deserialize(reader, std::move(type));
 	case PhysicalType::INTERVAL:
-		result = BaseStatistics::Construct(std::move(type));
-		break;
+		return BaseStatistics(std::move(type));
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->has_null = has_null;
-	result->has_no_null = has_no_null;
+}
+
+BaseStatistics BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
+	FieldReader reader(source);
+	bool has_null = reader.ReadRequired<bool>();
+	bool has_no_null = reader.ReadRequired<bool>();
+	auto result = DeserializeType(reader, type);
+	result.has_null = has_null;
+	result.has_no_null = has_no_null;
 	reader.Finalize();
 	return result;
 }
