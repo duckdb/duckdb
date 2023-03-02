@@ -669,6 +669,15 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 	return HTTPFileSystem::HeadRequest(handle, http_url, headers);
 }
 
+unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string s3_url, HeaderMap header_map) {
+	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto parsed_s3_url = S3UrlParse(s3_url, auth_params);
+	string http_url = parsed_s3_url.GetHTTPUrl(auth_params);
+	auto headers =
+	    create_s3_header(parsed_s3_url.path, "", parsed_s3_url.host, "s3", "GET", auth_params, "", "", "", "");
+	return HTTPFileSystem::GetRequest(handle, http_url, headers);
+}
+
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;

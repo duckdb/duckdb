@@ -266,11 +266,12 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    }
 				    // Gotta eat your beans
 				    if (new_capacity != hfs.capacity) {
-					    auto new_hfs_data = unique_ptr<char[]>(new char[new_capacity]);
+					    auto new_hfs_data =
+					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
 					    // copy the old data
 					    memcpy(new_hfs_data.get(), hfs.data.get(), hfs.length);
 					    hfs.capacity = new_capacity;
-					    hfs.data = move(new_hfs_data);
+					    hfs.data = new_hfs_data;
 				    }
 				    // We can just copy stuff
 				    memcpy(hfs.data.get() + hfs.length, data, data_length);

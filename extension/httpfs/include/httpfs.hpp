@@ -105,7 +105,7 @@ public:
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
 	// Get Request without a range (i.e., downloads full file)
-	unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map);
+	virtual unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Post Request that can handle variable sized responses without a content-length header (needed for s3 multipart)
 	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,

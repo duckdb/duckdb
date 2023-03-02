@@ -170,6 +170,7 @@ public:
 
 public:
 	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string s3_url, HeaderMap header_map) override;
+	unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map) override;
 	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
 	                                            idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
 	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string s3_url, HeaderMap header_map,

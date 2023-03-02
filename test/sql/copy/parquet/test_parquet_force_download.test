@@ -33,3 +33,56 @@ query I
 SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
 ----
 1000
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# Require that these environment variables are also set
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+statement ok
+SET force_download=true;
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+
+statement ok
+COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 10);
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+1000
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+
+statement ok
+SET force_download=false;
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+1000
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 3.*
