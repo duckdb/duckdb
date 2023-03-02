@@ -62,9 +62,7 @@ struct BitStringAggOperation {
 				    "The range between min and max value (%s <-> %s) is too large for bitstring aggregation",
 				    NumericHelper::ToString(state->min), NumericHelper::ToString(state->max));
 			}
-			idx_t len = bit_range % 8 ? (bit_range / 8) + 1 : bit_range / 8;
-			len++;
-
+			idx_t len = Bit::ComputeBitstringLen(bit_range);
 			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], len) : string_t(len);
 			Bit::SetEmptyBitString(target, bit_range);
 
@@ -170,7 +168,7 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
                                                    vector<unique_ptr<BaseStatistics>> &child_stats,
                                                    NodeStatistics *node_stats) {
 
-	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
+	if (child_stats[0]) {
 		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
 		if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
 			return nullptr;

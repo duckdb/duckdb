@@ -20,8 +20,7 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    idx_t len;
 		    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
 
-		    len = n % 8 ? (n / 8) + 1 : n / 8;
-		    len++;
+		    len = Bit::ComputeBitstringLen(n);
 		    string_t target = StringVector::EmptyString(result, len);
 
 		    Bit::BitString(input, n, target);
