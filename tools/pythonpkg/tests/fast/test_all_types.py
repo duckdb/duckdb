@@ -4,7 +4,6 @@ import numpy as np
 import datetime
 import math
 from decimal import Decimal
-import pyarrow
 from uuid import UUID
 
 def get_all_types():
@@ -39,6 +38,10 @@ def recursive_equality(o1, o2):
 
 class TestAllTypes(object):
     def test_fetchall(self, duckdb_cursor):
+        try:
+            import pyarrow
+        except:
+            return
         conn = duckdb.connect()
         # We replace these values since the extreme ranges are not supported in native-python.
         replacement_values = {

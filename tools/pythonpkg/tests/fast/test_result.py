@@ -1,6 +1,5 @@
 import duckdb
 import pytest
-import pyarrow
 import datetime
 class TestPythonResult(object):
 
@@ -42,6 +41,10 @@ class TestPythonResult(object):
         assert rel.execute().fetchall() == [(datetime.datetime(2008, 1, 1, 0, 0, 11), datetime.datetime(2008, 1, 1, 0, 0, 1, 794000), datetime.datetime(2008, 1, 1, 0, 0, 1, 989260), datetime.datetime(2008, 1, 1, 0, 0, 1, 899268))]
 
     def test_result_interval(self):
+        try:
+            import pyarrow
+        except:
+            return
         connection = duckdb.connect()
         cursor = connection.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS intervals (ivals INTERVAL)')
