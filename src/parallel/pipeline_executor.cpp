@@ -114,52 +114,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-// Pull a single DataChunk from the pipeline by flushing any operators holding cached output
-void PipelineExecutor::FlushCachingOperatorsPull(DataChunk &result) {
-	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-	idx_t op_idx = start_idx;
-	while (op_idx < pipeline.operators.size()) {
-		if (!pipeline.operators[op_idx]->RequiresFinalExecute()) {
-			op_idx++;
-			continue;
-		}
-
-		OperatorFinalizeResultType finalize_result;
-		DataChunk &curr_chunk =
-		    op_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[op_idx + 1];
-
-		if (pending_final_execute) {
-			// Still have a cached chunk from a last pull, reuse chunk
-			finalize_result = cached_final_execute_result;
-		} else {
-			// Flush the current operator
-			auto current_operator = pipeline.operators[op_idx];
-			StartOperator(current_operator);
-			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
-			                                                 *intermediate_states[op_idx]);
-			EndOperator(current_operator, &curr_chunk);
-		}
-
-		auto execute_result = Execute(curr_chunk, result, op_idx + 1);
-
-		if (execute_result == OperatorResultType::HAVE_MORE_OUTPUT) {
-			pending_final_execute = true;
-			cached_final_execute_result = finalize_result;
-		} else {
-			pending_final_execute = false;
-			if (finalize_result == OperatorFinalizeResultType::FINISHED) {
-				FinishProcessing(op_idx);
-				op_idx++;
-			}
-		}
-
-		// Some non-empty result was pulled from some caching operator, we're done for this pull
-		if (result.size() > 0) {
-			break;
-		}
-	}
-}
-
 // Push all remaining cached operator output through the pipeline
 void PipelineExecutor::FlushCachingOperatorsPush() {
 	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
@@ -223,21 +177,13 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		D_ASSERT(!pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
 		while (result.size() == 0) {
-			if (source_empty) {
-				FlushCachingOperatorsPull(result);
-				break;
-			}
-
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
-
 				if (source_chunk.size() == 0) {
-					source_empty = true;
-					continue;
+					break;
 				}
 			}
-
 			if (!pipeline.operators.empty()) {
 				auto state = Execute(source_chunk, result);
 				if (state == OperatorResultType::FINISHED) {

@@ -12,6 +12,14 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <vector>
+#include "duckdb/common/assert.hpp"
+
+namespace pybind11 {
+
+bool gil_check();
+void gil_assert();
+
+} // namespace pybind11
 
 namespace duckdb {
 #ifdef __GNUG__

@@ -424,7 +424,7 @@ string LogicalType::ToString() const {
 		auto &child_types = StructType::GetChildTypes(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += child_types[i].first + " " + child_types[i].second.ToString();
+			ret += KeywordHelper::WriteOptionallyQuoted(child_types[i].first) + " " + child_types[i].second.ToString();
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}

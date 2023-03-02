@@ -167,7 +167,8 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 	}
 	has_estimated_cardinality = true;
-	return max_cardinality;
+	estimated_cardinality = max_cardinality;
+	return estimated_cardinality;
 }
 
 void LogicalOperator::Print() {
