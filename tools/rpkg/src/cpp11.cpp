@@ -139,6 +139,13 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
+SEXP rapi_expr_window(std::string window_function, list children, list partitions, list orders, std::string window_boundary_start, std::string window_boundary_end, list filter_expressions, list start_exprs, list end_exprs, list offset_exprs, list default_exprs);
+extern "C" SEXP _duckdb_rapi_expr_window(SEXP window_function, SEXP children, SEXP partitions, SEXP orders, SEXP window_boundary_start, SEXP window_boundary_end, SEXP filter_expressions, SEXP start_exprs, SEXP end_exprs, SEXP offset_exprs, SEXP default_exprs) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_expr_window(cpp11::as_cpp<cpp11::decay_t<std::string>>(window_function), cpp11::as_cpp<cpp11::decay_t<list>>(children), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<list>>(orders), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_start), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_end), cpp11::as_cpp<cpp11::decay_t<list>>(filter_expressions), cpp11::as_cpp<cpp11::decay_t<list>>(start_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(end_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(offset_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(default_exprs)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function, std::string window_alias, list children, list partitions, list orders, std::string window_boundary_start, std::string window_boundary_end, list filter_expressions, list start_exprs, list end_exprs, list offset_exprs, list default_exprs);
 extern "C" SEXP _duckdb_rapi_rel_window_aggregation(SEXP rel, SEXP window_function, SEXP window_alias, SEXP children, SEXP partitions, SEXP orders, SEXP window_boundary_start, SEXP window_boundary_end, SEXP filter_expressions, SEXP start_exprs, SEXP end_exprs, SEXP offset_exprs, SEXP default_exprs) {
   BEGIN_CPP11
@@ -356,6 +363,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_expr_reference",         (DL_FUNC) &_duckdb_rapi_expr_reference,          2},
     {"_duckdb_rapi_expr_set_alias",         (DL_FUNC) &_duckdb_rapi_expr_set_alias,          2},
     {"_duckdb_rapi_expr_tostring",          (DL_FUNC) &_duckdb_rapi_expr_tostring,           1},
+    {"_duckdb_rapi_expr_window",            (DL_FUNC) &_duckdb_rapi_expr_window,            11},
     {"_duckdb_rapi_get_substrait",          (DL_FUNC) &_duckdb_rapi_get_substrait,           3},
     {"_duckdb_rapi_get_substrait_json",     (DL_FUNC) &_duckdb_rapi_get_substrait_json,      3},
     {"_duckdb_rapi_prepare",                (DL_FUNC) &_duckdb_rapi_prepare,                 2},

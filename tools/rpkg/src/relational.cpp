@@ -199,6 +199,62 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
+[[cpp11::register]] SEXP rapi_expr_window(std::string window_function,
+											 list children,
+                                             list partitions,
+											 list orders, std::string window_boundary_start,
+											 std::string window_boundary_end, list filter_expressions,
+											 list start_exprs, list end_exprs, list offset_exprs,
+											 list default_exprs) {
+
+	if (window_function.size() == 0) {
+		stop("expr_function: Zero length name");
+	}
+	auto window_type = WindowToExpressionType(window_function);
+	auto window_expr = make_external<WindowExpression>("duckdb_expr", window_type, "", "", window_function);
+
+	for (duckdb::rel_extptr_t order : orders) {
+		if (order && order->rel->type == RelationType::ORDER_RELATION) {
+			auto o_relation = std::dynamic_pointer_cast<OrderRelation>(order->rel);
+			for (auto &order : o_relation->orders) {
+				window_expr->orders.push_back(
+				    OrderByNode(order.type, order.null_order, order.expression->Copy()));
+			}
+		}
+	}
+
+	window_expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	window_expr->end = WindowBoundary::CURRENT_ROW_RANGE;
+	for (expr_extptr_t child : children) {
+		window_expr->children.push_back(child->Copy());
+	}
+	for (expr_extptr_t partition : partitions) {
+		window_expr->partitions.push_back(partition->Copy());
+	}
+	for (duckdb::expr_extptr_t start_expr : start_exprs) {
+		window_expr->start_expr = start_expr->Copy();
+	}
+	for (duckdb::expr_extptr_t end_expr : end_exprs) {
+		window_expr->end_expr = end_expr->Copy();
+	}
+	for (duckdb::expr_extptr_t offset_expr : offset_exprs) {
+		window_expr->offset_expr = offset_expr->Copy();
+	}
+	for (duckdb::expr_extptr_t default_expr : default_exprs) {
+		window_expr->default_expr = default_expr->Copy();
+	}
+	for (duckdb::rel_extptr_t filter_expression : filter_expressions) {
+		if (filter_expression->rel && filter_expression->rel->type == RelationType::FILTER_RELATION) {
+			auto f_relation = std::dynamic_pointer_cast<FilterRelation>(filter_expression->rel);
+			window_expr->filter_expr = f_relation->condition->Copy();
+		}
+	}
+
+	return window_expr;
+}
+
+
+
 [[cpp11::register]] SEXP rapi_rel_window_aggregation(duckdb::rel_extptr_t rel, std::string window_function,
                                                      std::string window_alias, list children, list partitions,
                                                      list orders, std::string window_boundary_start,

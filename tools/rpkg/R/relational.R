@@ -151,12 +151,33 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
+
+
+expr_window <- function(window_function="sum", children=list(), partitions=list(), orders=list(),
+				window_boundary_start="unbounded_preceding",
+				window_boundary_end="current_row_range", filter_expression = list(), start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
+	rapi_expr_window(window_function,
+	children,
+	partitions,
+	orders,
+	window_boundary_start,
+	window_boundary_end,
+	filter_expression,
+	start_expr,
+	end_expr,
+	offset_expr,
+	default_expr)
+}
+
+
 #' Lazily perform a window aggregation on a DuckDB relation object
 #' @param rel the DuckDB relation object
 #' @param paritions a list of DuckDB expressions to order by
 #' @return the now aggregated `duckdb_relation` object
 #' @noRd
 #' @examples
+#' blah 1
+#' blah 2
 window_functions <- c("sum", "avg", "count", "median", "min", "string_agg", "max", "rank", "rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
 window_boundaries <- c("unbounded_preceding", "unbounded_following", "current_row_range", "current_row_rows", "expr_following_rows", "expr_preceding_rows", "expre_following_rows", "expr_preceding_range", "expr_following_range")
 
