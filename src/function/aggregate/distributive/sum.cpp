@@ -74,10 +74,9 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 };
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
-                                             FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
-                                             NodeStatistics *node_stats) {
-	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
-		auto &numeric_stats = *child_stats[0];
+                                             AggregateStatisticsInput &input) {
+	if (input.node_stats && input.node_stats->has_max_cardinality) {
+		auto &numeric_stats = input.child_stats[0];
 		if (!NumericStats::HasMin(numeric_stats) || !NumericStats::HasMax(numeric_stats)) {
 			return nullptr;
 		}
@@ -96,8 +95,8 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");
 		}
-		auto max_sum_negative = max_negative * hugeint_t(node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * hugeint_t(node_stats->max_cardinality);
+		auto max_sum_negative = max_negative * hugeint_t(input.node_stats->max_cardinality);
+		auto max_sum_positive = max_positive * hugeint_t(input.node_stats->max_cardinality);
 		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
 		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
 			// sum can potentially exceed int64_t bounds: use hugeint sum

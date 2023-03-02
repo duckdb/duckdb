@@ -5,15 +5,20 @@ namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggregateExpression &aggr,
                                                                      unique_ptr<Expression> *expr_ptr) {
-	vector<unique_ptr<BaseStatistics>> stats;
+	vector<BaseStatistics> stats;
 	stats.reserve(aggr.children.size());
 	for (auto &child : aggr.children) {
-		stats.push_back(PropagateExpression(child));
+		auto stat = PropagateExpression(child);
+		if (!stat) {
+			stat = BaseStatistics::CreateUnknown(child->return_type);
+		}
+		stats.push_back(stat->CopyRegular());
 	}
 	if (!aggr.function.statistics) {
 		return nullptr;
 	}
-	return aggr.function.statistics(context, aggr, aggr.bind_info.get(), stats, node_stats.get());
+	AggregateStatisticsInput input(aggr.bind_info.get(), stats, node_stats.get());
+	return aggr.function.statistics(context, aggr, input);
 }
 
 } // namespace duckdb
