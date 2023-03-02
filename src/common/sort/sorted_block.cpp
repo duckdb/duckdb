@@ -70,7 +70,6 @@ void SortedData::Unswizzle() {
 		auto data_handle_p = buffer_manager.Pin(data_block->block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block->block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block->count);
-		data_block->block->SetSwizzling("SortedData::Unswizzle");
 		state.heap_blocks.push_back(std::move(heap_block));
 		state.pinned_blocks.push_back(std::move(heap_handle_p));
 	}
