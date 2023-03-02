@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -106,6 +107,15 @@ struct NumericStats {
 	}
 
 	static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+
+	template<class T>
+	static T GetMinUnsafe(const BaseStatistics &stats) {
+		return NumericStats::Min(stats).template GetValueUnsafe<T>();
+	}
+	template<class T>
+	static T GetMaxUnsafe(const BaseStatistics &stats) {
+		return NumericStats::Max(stats).template GetValueUnsafe<T>();
+	}
 
 private:
 	static NumericStatsData &GetDataUnsafe(BaseStatistics &stats);

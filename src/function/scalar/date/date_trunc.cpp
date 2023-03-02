@@ -594,8 +594,8 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &ch
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
-	auto min = NumericStats::Min(nstats).GetValueUnsafe<TA>();
-	auto max = NumericStats::Max(nstats).GetValueUnsafe<TA>();
+	auto min = NumericStats::GetMinUnsafe<TA>(nstats);
+	auto max = NumericStats::GetMaxUnsafe<TA>(nstats);
 	if (min > max) {
 		return nullptr;
 	}
