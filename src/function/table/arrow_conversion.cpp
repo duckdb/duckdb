@@ -316,8 +316,8 @@ void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	}
 }
 
-void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                              idx_t size) {
+void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                     int64_t nested_offset, idx_t size) {
 	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
 	auto src_ptr = (ArrowInterval *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset != -1) {
@@ -325,7 +325,7 @@ void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowSca
 	}
 	for (idx_t row = 0; row < size; row++) {
 		tgt_ptr[row].days = src_ptr[row].days;
-		tgt_ptr[row].micros = src_ptr[row].nanoseconds/Interval::NANOS_PER_MICRO;
+		tgt_ptr[row].micros = src_ptr[row].nanoseconds / Interval::NANOS_PER_MICRO;
 		tgt_ptr[row].months = src_ptr[row].months;
 	}
 }
