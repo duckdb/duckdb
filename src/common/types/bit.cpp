@@ -5,11 +5,11 @@
 namespace duckdb {
 
 // **** helper functions ****
-static char ComputePadding(idx_t len){
+static char ComputePadding(idx_t len) {
 	return (8 - (len % 8)) % 8;
 }
 
-idx_t Bit::ComputeBitstringLen(idx_t len){
+idx_t Bit::ComputeBitstringLen(idx_t len) {
 	len = len % 8 ? (len / 8) + 1 : len / 8;
 	return ++len; // additional first byte to store info on zero padding
 }

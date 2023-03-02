@@ -118,7 +118,6 @@ query I nosort distinct_hugeints
 SELECT COUNT(DISTINCT i) FROM hugeints
 ----
 
-
 # Overload that takes min and max as function arguments
 query I
 SELECT BITSTRING_AGG(i, -5, 30) FROM ints
@@ -158,28 +157,48 @@ SELECT BITSTRING_AGG(3)
 1
 
 query I
-SELECT BITSTRING_AGG(3, 0, 5)
+SELECT BITSTRING_AGG(2, 0, 5)
 ----
-000100
+001000
+
+# test with NULL
+statement ok
+CREATE TABLE null_table(i INT);
+
+statement ok
+INSERT INTO null_table VALUES(NULL)
+
+query I
+SELECT BITSTRING_AGG(i) FROM null_table
+----
+NULL
+
+statement ok
+INSERT INTO null_table VALUES(6), (NULL), (NULL), (NULL), (NULL)
+
+query I
+SELECT BITSTRING_AGG(i) FROM null_table
+----
+1
 
 # test on csv files - csvs do not provide column statistics
 statement ok
-COPY (SELECT i FROM ints) TO '__TEST_DIR__/bistring_agg.csv';
+COPY (SELECT i FROM ints) TO '__TEST_DIR__/bitstring_agg.csv';
 
 statement error
-SELECT BITSTRING_AGG(column0) FROM '__TEST_DIR__/bistring_agg.csv';
+SELECT BITSTRING_AGG(column0) FROM '__TEST_DIR__/bitstring_agg.csv';
 ----
 Binder Error: Could not retrieve required statistics. Alternatively, try by providing the statistics explicitly: BITSTRING_AGG(col, min, max) 
 
 query I
-SELECT BITSTRING_AGG(column0, -10, 40) FROM '__TEST_DIR__/bistring_agg.csv';
+SELECT BITSTRING_AGG(column0, -10, 40) FROM '__TEST_DIR__/bitstring_agg.csv';
 ----
 000001000000000100001100110100000100010010000000000
 
 # test incorrect usage
 statement error
 SELECT BITSTRING_AGG()
-a`z
+
 statement error
 SELECT BITSTRING_AGG(1, 3, 4, 8, 0)
 
@@ -197,3 +216,17 @@ a	100000011000000
 b	000000010001000
 c	000010000000001
 d	NULL
+
+# disable optimizer 
+statement ok
+PRAGMA disable_optimizer
+
+statement error
+SELECT BITSTRING_AGG(i) FROM ints
+----
+Binder Error: Could not retrieve required statistics. Alternatively, try by providing the statistics explicitly: BITSTRING_AGG(col, min, max) 
+
+query I
+SELECT BITSTRING_AGG(i, -5, 32) FROM ints
+----
+10000000001000011001101000001000100100

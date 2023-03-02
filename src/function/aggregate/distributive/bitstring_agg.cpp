@@ -44,6 +44,8 @@ struct BitstringAggBindData : public FunctionData {
 };
 
 struct BitStringAggOperation {
+	static constexpr const idx_t MAX_BIT_RANGE = 1000000000; // for now capped at 1 billion bits
+
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->is_set = false;
@@ -53,11 +55,16 @@ struct BitStringAggOperation {
 	static void Operation(STATE *state, AggregateInputData &data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		auto bind_agg_data = (BitstringAggBindData *)data.bind_data;
 		if (!state->is_set) {
+			if (bind_agg_data->min.IsNull() || bind_agg_data->max.IsNull()) {
+				throw BinderException(
+				    "Could not retrieve required statistics. Alternatively, try by providing the statistics "
+				    "explicitly: BITSTRING_AGG(col, min, max) ");
+			}
 			state->min = bind_agg_data->min.GetValue<INPUT_TYPE>();
 			state->max = bind_agg_data->max.GetValue<INPUT_TYPE>();
 			idx_t bit_range =
 			    GetRange(bind_agg_data->min.GetValue<INPUT_TYPE>(), bind_agg_data->max.GetValue<INPUT_TYPE>());
-			if (bit_range > 1000000000) { // for now capped at 1 billion bits
+			if (bit_range > MAX_BIT_RANGE) {
 				throw OutOfRangeException(
 				    "The range between min and max value (%s <-> %s) is too large for bitstring aggregation",
 				    NumericHelper::ToString(state->min), NumericHelper::ToString(state->max));
