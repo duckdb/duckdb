@@ -19,11 +19,13 @@ public:
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		Table.LoadAttribute("Table", cache, *this);
 		RecordBatchReader.LoadAttribute("RecordBatchReader", cache, *this);
+		MonthDayNano.LoadAttribute("MonthDayNano", cache, *this);
 	}
 
 public:
 	PythonImportCacheItem Table;
 	PythonImportCacheItem RecordBatchReader;
+	PythonImportCacheItem MonthDayNano;
 };
 
 struct ArrowDatasetCacheItem : public PythonImportCacheItem {

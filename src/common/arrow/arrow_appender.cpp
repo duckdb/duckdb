@@ -4,6 +4,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 namespace duckdb {
 
@@ -117,6 +118,25 @@ struct ArrowScalarConverter {
 
 	static bool SkipNulls() {
 		return false;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
+struct ArrowIntervalConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		ArrowInterval result;
+		result.months = input.months;
+		result.days = input.days;
+		result.nanoseconds = input.micros * Interval::NANOS_PER_MICRO;
+		return result;
+	}
+
+	static bool SkipNulls() {
+		return true;
 	}
 
 	template <class TGT>
@@ -613,7 +633,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::INTERVAL:
-		InitializeFunctionPointers<ArrowScalarData<interval_t>>(append_data);
+		InitializeFunctionPointers<ArrowScalarData<ArrowInterval, interval_t, ArrowIntervalConverter>>(append_data);
 		break;
 	case LogicalTypeId::STRUCT:
 		InitializeFunctionPointers<ArrowStructData>(append_data);

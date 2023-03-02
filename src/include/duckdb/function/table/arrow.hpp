@@ -36,6 +36,16 @@ enum class ArrowDateTimeType : uint8_t {
 	MONTH_DAY_NANO = 6
 };
 
+struct ArrowInterval {
+	int32_t months;
+	int32_t days;
+	int64_t nanoseconds;
+
+	inline bool operator==(const ArrowInterval &rhs) const {
+		return this->days == rhs.days && this->months == rhs.months && this->nanoseconds == rhs.nanoseconds;
+	}
+};
+
 struct ArrowConvertData {
 	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
 	ArrowConvertData() {};

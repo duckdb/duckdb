@@ -1,5 +1,6 @@
 import duckdb
 import os
+import datetime
 try:
     import pyarrow
     import pyarrow.parquet
@@ -100,6 +101,36 @@ class TestArrowIntegration(object):
         duckdb_conn.from_arrow(arrow_tbl).create("bigdecimal")
         result = duckdb_conn.execute('select * from bigdecimal')
         assert (result.fetchone()[0] == 9999999999999999999999999999999999)
+
+    def test_intervals_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+
+        # test for import from apache arrow
+        expected_list = [
+            pyarrow.MonthDayNano([0, 8,
+                         (datetime.timedelta(seconds=1, microseconds=1,
+                                             milliseconds=1, minutes=1,
+                                             hours=1) //
+                          datetime.timedelta(microseconds=1)) * 1000])]
+
+        data = pyarrow.array(expected_list, pyarrow.month_day_nano_interval())
+        arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.from_arrow(arrow_tbl).create("intervaltbl")
+        result = duckdb_conn.execute('select * from intervaltbl')
+
+        assert  (result.fetchone()[0] == expected_list[0])
+
+        # test for select interval from duckdb
+        result = duckdb_conn.execute('SELECT INTERVAL 1 YEAR + INTERVAL 1 DAY + INTERVAL 1 SECOND')
+        expected_value = pyarrow.MonthDayNano([12, 1, 1000000000])
+        result_value = result.fetchone()[0]
+        assert  (result_value.months == expected_value.months)
+        assert  (result_value.days == expected_value.days)
+        assert  (result_value.nanoseconds == expected_value.nanoseconds)
 
     def test_strings_roundtrip(self,duckdb_cursor):
         if not can_run:

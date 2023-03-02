@@ -403,9 +403,12 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
-		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return py::cast<py::object>(import_cache.datetime().timedelta()(
-		    py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		py::list list;
+		list.append(py::cast(interval_value.months));
+		list.append(py::cast(interval_value.days));
+		list.append(py::cast(interval_value.micros * Interval::MICROS_PER_MSEC));
+		auto arrow_interval = import_cache.arrow().lib.MonthDayNano()(std::move(list));
+		return py::cast<py::object>(arrow_interval);
 	}
 
 	default:

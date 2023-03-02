@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import pyarrow
 import datetime
 class TestPythonResult(object):
 
@@ -49,7 +50,7 @@ class TestPythonResult(object):
         rel = connection.table("intervals")
         res = rel.execute()
         assert res.description == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
-        assert res.fetchall() == [(datetime.timedelta(days=1.0),), (datetime.timedelta(seconds=2.0),), (datetime.timedelta(microseconds=1.0),)]
+        assert res.fetchall() == [(pyarrow.MonthDayNano([0, 1, 0]),), (pyarrow.MonthDayNano([0, 0, 2000000000]),), (pyarrow.MonthDayNano([0, 0, 1000]),)]
 
     def test_description_uuid(self):
         connection = duckdb.connect()
