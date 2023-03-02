@@ -108,11 +108,11 @@ struct NumericStats {
 
 	static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 
-	template<class T>
+	template <class T>
 	static T GetMinUnsafe(const BaseStatistics &stats) {
 		return NumericStats::Min(stats).template GetValueUnsafe<T>();
 	}
-	template<class T>
+	template <class T>
 	static T GetMaxUnsafe(const BaseStatistics &stats) {
 		return NumericStats::Max(stats).template GetValueUnsafe<T>();
 	}
