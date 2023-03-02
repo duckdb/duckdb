@@ -52,14 +52,14 @@ def generate_ipython(json_input):
 	from IPython.core.display import HTML
 
 	html_output = generate_html(json_input, False)
-
-	return HTML("""
-	${CSS}
-	${LIBRARIES}
+	
+	return HTML(f"""
+	HTML(f"""
+	{html_output['css']}
+	{html_output['libraries']}
 	<div class="chart" id="query-profile"></div>
-	${CHART_SCRIPT}
-	""".replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))
-
+	{html_output['chart_script']}
+	""")
 
 def generate(input_file, output_file):
 	with open_utf8(input_file, 'r') as f:
@@ -69,21 +69,21 @@ def generate(input_file, output_file):
 	print(html_output['chart_script'])
 	# finally create and write the html
 	with open_utf8(output_file, "w+") as f:
-		f.write("""<!DOCTYPE html>
+		f.write(f"""<!DOCTYPE html>
 <html>
 	<head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width">
 	<title>Query Profile Graph for Query</title>
-	${CSS}
+	{html_output['css']}
 </head>
 <body>
-	${LIBRARIES}
+	{html_output['libraries'])}
 
 	<div id="meta-info"></div>
 	<div class="chart" id="query-profile"></div>
 
-	${CHART_SCRIPT}
+	{html_output['chart_script']}
 </body>
 </html>
-""".replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))
+"""
