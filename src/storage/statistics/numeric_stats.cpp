@@ -14,7 +14,7 @@ void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_
 }
 
 unique_ptr<BaseStatistics> NumericStats::CreateUnknown(LogicalType type) {
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeUnknown();
 	SetMin(*result, Value(type));
 	SetMax(*result, Value(type));
@@ -22,7 +22,7 @@ unique_ptr<BaseStatistics> NumericStats::CreateUnknown(LogicalType type) {
 }
 
 unique_ptr<BaseStatistics> NumericStats::CreateEmpty(LogicalType type) {
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeEmpty();
 	SetMin(*result, Value::MaximumValue(result->GetType()));
 	SetMax(*result, Value::MinimumValue(result->GetType()));

@@ -8,7 +8,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StringStats::CreateUnknown(LogicalType type) {
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeUnknown();
 	auto &string_data = StringStats::GetDataUnsafe(*result);
 	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
@@ -22,7 +22,7 @@ unique_ptr<BaseStatistics> StringStats::CreateUnknown(LogicalType type) {
 }
 
 unique_ptr<BaseStatistics> StringStats::CreateEmpty(LogicalType type) {
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeEmpty();
 	auto &string_data = StringStats::GetDataUnsafe(*result);
 	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
@@ -85,7 +85,7 @@ void StringStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 }
 
 unique_ptr<BaseStatistics> StringStats::Deserialize(FieldReader &reader, LogicalType type) {
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	auto &string_data = StringStats::GetDataUnsafe(*result);
 	reader.ReadBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);

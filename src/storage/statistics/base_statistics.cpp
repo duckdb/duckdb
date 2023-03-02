@@ -70,11 +70,15 @@ idx_t BaseStatistics::GetDistinctCount() {
 	return distinct_count;
 }
 
+unique_ptr<BaseStatistics> BaseStatistics::Construct(LogicalType type) {
+	return unique_ptr<BaseStatistics>(new BaseStatistics(std::move(type)));
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::CreateUnknown(LogicalType type) {
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
+		result = BaseStatistics::Construct(LogicalTypeId::VALIDITY);
 		result->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		return result;
 	case PhysicalType::BOOL:
@@ -102,7 +106,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateUnknown(LogicalType type) {
 		break;
 	case PhysicalType::INTERVAL:
 	default:
-		result = make_unique<BaseStatistics>(std::move(type));
+		result = BaseStatistics::Construct(std::move(type));
 	}
 	result->InitializeUnknown();
 	return result;
@@ -112,7 +116,7 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
+		result = BaseStatistics::Construct(LogicalTypeId::VALIDITY);
 		result->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		result->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
 		return result;
@@ -141,14 +145,14 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 		break;
 	case PhysicalType::INTERVAL:
 	default:
-		result = make_unique<BaseStatistics>(std::move(type));
+		result = BaseStatistics::Construct(std::move(type));
 	}
 	result->InitializeEmpty();
 	return result;
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
-	auto result = make_unique<BaseStatistics>(type);
+	auto result = BaseStatistics::Construct(type);
 	result->CopyBase(*this);
 	result->stats_union = stats_union;
 	for (auto &stats : child_stats) {
@@ -236,7 +240,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
-		result = make_unique<BaseStatistics>(LogicalTypeId::VALIDITY);
+		result = BaseStatistics::Construct(LogicalTypeId::VALIDITY);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -262,7 +266,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = ListStats::Deserialize(reader, std::move(type));
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>(std::move(type));
+		result = BaseStatistics::Construct(std::move(type));
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
@@ -328,6 +332,81 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 void BaseStatistics::Verify(Vector &vector, idx_t count) const {
 	auto sel = FlatVector::IncrementalSelectionVector();
 	Verify(vector, *sel, count);
+}
+
+unique_ptr<BaseStatistics> BaseStatistics::FromConstant(const Value &input) {
+	unique_ptr<BaseStatistics> result;
+	switch (input.type().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE: {
+		result = NumericStats::CreateEmpty(input.type());
+		NumericStats::SetMin(*result, input);
+		NumericStats::SetMax(*result, input);
+		break;
+	}
+	case PhysicalType::VARCHAR: {
+		result = StringStats::CreateEmpty(input.type());
+		if (!input.IsNull()) {
+			auto &string_value = StringValue::Get(input);
+			StringStats::Update(*result, string_t(string_value));
+		}
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		result = StructStats::CreateEmpty(input.type());
+		auto &child_stats = StructStats::GetChildStats(*result);
+		if (input.IsNull()) {
+			auto &child_types = StructType::GetChildTypes(input.type());
+			for (idx_t i = 0; i < child_stats.size(); i++) {
+				StructStats::SetChildStats(*result, i, FromConstant(Value(child_types[i].second)));
+			}
+		} else {
+			auto &struct_children = StructValue::GetChildren(input);
+			D_ASSERT(child_stats.size() == struct_children.size());
+			for (idx_t i = 0; i < child_stats.size(); i++) {
+				StructStats::SetChildStats(*result, i, FromConstant(struct_children[i]));
+			}
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		result = ListStats::CreateEmpty(input.type());
+		auto &child_stats = ListStats::GetChildStats(*result);
+		if (input.IsNull()) {
+			child_stats.reset();
+		} else {
+			auto &list_children = ListValue::GetChildren(input);
+			for (auto &child_element : list_children) {
+				auto child_element_stats = FromConstant(child_element);
+				child_stats->Merge(*child_element_stats);
+			}
+		}
+		break;
+	}
+	default: {
+		result = BaseStatistics::Construct(input.type());
+		break;
+	}
+	}
+	result->SetDistinctCount(1);
+	if (input.IsNull()) {
+		result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		result->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	} else {
+		result->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		result->Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	}
+	return result;
 }
 
 } // namespace duckdb

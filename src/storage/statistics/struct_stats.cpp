@@ -7,7 +7,7 @@ namespace duckdb {
 
 unique_ptr<BaseStatistics> StructStats::CreateUnknown(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeUnknown();
 	for (auto &entry : child_types) {
 		result->child_stats.push_back(BaseStatistics::CreateUnknown(entry.second));
@@ -17,7 +17,7 @@ unique_ptr<BaseStatistics> StructStats::CreateUnknown(LogicalType type) {
 
 unique_ptr<BaseStatistics> StructStats::CreateEmpty(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	result->InitializeEmpty();
 	for (auto &entry : child_types) {
 		result->child_stats.push_back(BaseStatistics::CreateEmpty(entry.second));
@@ -77,7 +77,7 @@ void StructStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 unique_ptr<BaseStatistics> StructStats::Deserialize(FieldReader &reader, LogicalType type) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
-	auto result = make_unique<BaseStatistics>(std::move(type));
+	auto result = BaseStatistics::Construct(std::move(type));
 	for (auto &entry : child_types) {
 		result->child_stats.push_back(reader.ReadOptional<BaseStatistics>(nullptr, entry.second));
 	}

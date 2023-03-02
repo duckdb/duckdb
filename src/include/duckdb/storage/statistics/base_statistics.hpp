@@ -41,7 +41,6 @@ class BaseStatistics {
 	friend struct ListStats;
 
 public:
-	BaseStatistics(LogicalType type);
 	~BaseStatistics();
 
 public:
@@ -93,10 +92,17 @@ public:
 
 	string ToString() const;
 
-protected:
+	static unique_ptr<BaseStatistics> FromConstant(const Value &input);
+
+private:
+	explicit BaseStatistics(LogicalType type);
+
+	static unique_ptr<BaseStatistics> Construct(LogicalType type);
+
 	void InitializeUnknown();
 	void InitializeEmpty();
 
+private:
 	//! The type of the logical segment
 	LogicalType type;
 	//! Whether or not the segment can contain NULL values
