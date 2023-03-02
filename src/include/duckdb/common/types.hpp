@@ -18,6 +18,7 @@
 namespace duckdb {
 
 class FormatSerializer;
+class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
@@ -330,6 +331,7 @@ struct LogicalType {
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
 
 
 	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {

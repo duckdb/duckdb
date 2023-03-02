@@ -106,6 +106,40 @@ void TableRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteOptionalProperty("sample", sample);
 }
 
+unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<TableReferenceType>("type");
+	auto alias = deserializer.ReadProperty<string>("alias");
+	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample", nullptr);
+	unique_ptr<TableRef> result;
+
+	switch (type) {
+	case TableReferenceType::BASE_TABLE:
+		result = BaseTableRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::JOIN:
+		result = JoinRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::SUBQUERY:
+		result = SubqueryRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::TABLE_FUNCTION:
+		result = TableFunctionRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::EMPTY:
+		result = EmptyTableRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::EXPRESSION_LIST:
+		result = ExpressionListRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::CTE:
+	case TableReferenceType::INVALID:
+		throw NotImplementedException("Deserialize not implemented for type INVALID");
+	}
+	result->alias = alias;
+	result->sample = std::move(sample);
+	return result;
+}
+
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 

@@ -21,6 +21,13 @@ struct CaseCheck {
 		serializer.WriteProperty("when_expr", when_expr);
 		serializer.WriteProperty("then_expr", then_expr);
 	}
+
+	static CaseCheck&& FormatDeserialize(FormatDeserializer &deserializer) {
+		CaseCheck check;
+		check.when_expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("when_expr");
+		check.then_expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("then_expr");
+		return std::move(check);
+	}
 };
 
 //! The CaseExpression represents a CASE expression in the query
@@ -41,6 +48,7 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
 public:
 	template <class T, class BASE>

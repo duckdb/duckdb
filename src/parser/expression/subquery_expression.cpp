@@ -109,8 +109,17 @@ template <> SubqueryType EnumSerializer::StringToEnum(const char* value) {
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type);
+	serializer.WriteProperty("subquery", subquery.get());
 	serializer.WriteOptionalProperty("child", child);
-	serializer.WriteProperty("comparison_type", comparison_type, duckdb::ExpressionTypeToString);
+	serializer.WriteProperty("comparison_type", comparison_type);
 }
 
+unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto expression = make_unique<SubqueryExpression>();
+	deserializer.ReadProperty("subquery_type", expression->subquery_type);
+	deserializer.ReadProperty("subquery", expression->subquery);
+	deserializer.ReadOptionalProperty("child", expression->child);
+	deserializer.ReadProperty("comparison_type", expression->comparison_type);
+	return std::move(expression);
+}
 } // namespace duckdb

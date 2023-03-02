@@ -18,10 +18,8 @@ struct CommonTableExpressionInfo {
 	vector<string> aliases;
 	unique_ptr<SelectStatement> query;
 
-	void FormatSerialize(FormatSerializer &serializer) const {
-		serializer.WriteProperty("aliases", aliases);
-		serializer.WriteProperty("query", query);
-	}
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<CommonTableExpressionInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -105,4 +105,10 @@ void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("column_names", column_names);
 }
 
+unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto column_names = deserializer.ReadProperty<vector<string>>("column_names");
+	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	return std::move(expression);
+}
+
 } // namespace duckdb

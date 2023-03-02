@@ -55,4 +55,12 @@ void CastExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("try_cast", try_cast);
 }
 
+unique_ptr<ParsedExpression> CastExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto child = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("child");
+	auto cast_type = deserializer.ReadProperty<LogicalType>("cast_type");
+	auto try_cast = deserializer.ReadProperty<bool>("try_cast");
+	return make_unique_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
+}
+
+
 } // namespace duckdb

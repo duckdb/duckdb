@@ -233,6 +233,22 @@ void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteOptionalProperty("qualify", qualify);
 }
 
+unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<SelectNode>();
+
+	deserializer.ReadProperty("select_list", result->select_list);
+	deserializer.ReadOptionalProperty("from_table", result->from_table);
+	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
+	deserializer.ReadProperty("group_expressions", result->groups.group_expressions);
+	deserializer.ReadProperty("group_sets", result->groups.grouping_sets);
+	deserializer.ReadProperty("aggregate_handling", result->aggregate_handling);
+	deserializer.ReadOptionalProperty("having", result->having);
+	deserializer.ReadOptionalProperty("sample", result->sample);
+	deserializer.ReadOptionalProperty("qualify", result->qualify);
+
+	return result;
+}
+
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 	auto result = make_unique<SelectNode>();
 	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>();

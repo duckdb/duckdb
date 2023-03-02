@@ -48,4 +48,11 @@ void ComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("right", *right);
 }
 
+unique_ptr<ParsedExpression> ComparisonExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto left = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("left");
+	auto right = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("right");
+	return make_unique<ComparisonExpression>(type, std::move(left), std::move(right));
+}
+
+
 } // namespace duckdb

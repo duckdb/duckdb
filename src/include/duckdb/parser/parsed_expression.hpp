@@ -14,6 +14,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -62,6 +63,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

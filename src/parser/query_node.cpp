@@ -97,6 +97,12 @@ void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) con
 	serializer.WriteProperty("map", map);
 }
 
+CommonTableExpressionMap&& CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = CommonTableExpressionMap();
+	result.map = deserializer.ReadProperty<unordered_map<string, unique_ptr<CommonTableExpressionInfo>>>("map");
+	return std::move(result);
+}
+
 string QueryNode::ResultModifiersToString() const {
 	string result;
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
@@ -208,10 +214,31 @@ void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
+
+	auto type = deserializer.ReadProperty<QueryNodeType>("type");
+
 	unique_ptr<QueryNode> result;
 
-	result->modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
+	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
+	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
 
+	switch (type) {
+	case QueryNodeType::SELECT_NODE:
+		result = SelectNode::FormatDeserialize(deserializer);
+		break;
+	case QueryNodeType::SET_OPERATION_NODE:
+		result = SetOperationNode::FormatDeserialize(deserializer);
+		break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = RecursiveCTENode::FormatDeserialize(deserializer);
+		break;
+	default:
+	    throw SerializationException("Could not deserialize Query Node: unknown type!");
+	}
+
+	result->type = type;
+	result->modifiers = std::move(modifiers);
+	result->cte_map = std::move(cte_map);
 	return result;
 }
 

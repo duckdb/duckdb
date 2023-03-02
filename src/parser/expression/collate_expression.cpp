@@ -48,4 +48,9 @@ void CollateExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("collation", collation);
 }
 
+unique_ptr<ParsedExpression> CollateExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto child = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("child");
+	auto collation = deserializer.ReadProperty<string>("collation");
+	return make_unique_base<ParsedExpression, CollateExpression>(collation, std::move(child));
+
 } // namespace duckdb

@@ -137,4 +137,14 @@ void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("regex", regex);
 }
 
+unique_ptr<ParsedExpression> StarExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto result = make_unique<StarExpression>();
+	deserializer.ReadProperty("relation_name", result->relation_name);
+	deserializer.ReadProperty("exclude_list", result->exclude_list);
+	deserializer.ReadProperty("replace_list", result->replace_list);
+	deserializer.ReadProperty("columns", result->columns);
+	deserializer.ReadProperty("regex", result->regex);
+	return std::move(result);
+}
+
 } // namespace duckdb

@@ -17,6 +17,8 @@ enum class WindowBoundary : uint8_t;
 enum class SubqueryType : uint8_t;
 enum class ExpressionType : uint8_t;
 enum class ExpressionClass : uint8_t;
+enum class SampleMethod : uint8_t;
+enum class LogicalTypeId : uint8_t;
 
 struct EnumSerializer {
 	// String -> Enum
@@ -65,6 +67,12 @@ struct EnumSerializer {
 	template <>
 	ExpressionClass StringToEnum(const char* value);
 
+	template <>
+	SampleMethod StringToEnum(const char* value);
+
+	template <>
+	LogicalTypeId StringToEnum(const char* value);
+
 
 	// Enum -> String
 	template <class T>
@@ -111,6 +119,9 @@ struct EnumSerializer {
 
 	template <>
 	const char* EnumToString(ExpressionClass value);
+
+	template <>
+	const char* EnumToString(SampleMethod value);
 };
 
 }

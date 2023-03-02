@@ -52,5 +52,6 @@ public:
 	void CopyProperties(TableRef &target) const;
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &deserializer);
 };
 } // namespace duckdb

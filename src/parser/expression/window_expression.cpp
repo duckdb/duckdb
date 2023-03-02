@@ -207,6 +207,26 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("catalog", catalog);
 }
 
+unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto function_name = deserializer.ReadProperty<string>("function_name");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+
+	deserializer.ReadProperty("children", expr->children);
+	deserializer.ReadProperty("partitions", expr->partitions);
+	deserializer.ReadProperty("orders", expr->orders);
+	deserializer.ReadProperty("start", expr->start);
+	deserializer.ReadProperty("end", expr->end);
+	deserializer.ReadOptionalProperty("start_expr", expr->start_expr);
+	deserializer.ReadOptionalProperty("end_expr", expr->end_expr);
+	deserializer.ReadOptionalProperty("offset_expr", expr->offset_expr);
+	deserializer.ReadOptionalProperty("default_expr", expr->default_expr);
+	deserializer.ReadProperty("ignore_nulls", expr->ignore_nulls);
+	deserializer.ReadOptionalProperty("filter_expr", expr->filter_expr);
+	deserializer.ReadProperty("catalog", expr->catalog);
+	return std::move(expr);
+}
+
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();

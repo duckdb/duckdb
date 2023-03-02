@@ -1,10 +1,24 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 
 namespace duckdb {
 
-string SampleMethodToString(SampleMethod method) {
-	switch (method) {
+template<> SampleMethod EnumSerializer::StringToEnum(const char *value) {
+	if(strcmp(value, "System") == 0) {
+		return SampleMethod::SYSTEM_SAMPLE;
+	} else if(strcmp(value, "Bernoulli") == 0) {
+		return SampleMethod::BERNOULLI_SAMPLE;
+	} else if(strcmp(value, "Reservoir") == 0) {
+		return SampleMethod::RESERVOIR_SAMPLE;
+	} else {
+		throw NotImplementedException("Unrecognized sample method type \"%s\"", value);
+	}
+}
+
+template<> const char* EnumSerializer::EnumToString(SampleMethod value) {
+	switch (value) {
 	case SampleMethod::SYSTEM_SAMPLE:
 		return "System";
 	case SampleMethod::BERNOULLI_SAMPLE:
@@ -28,8 +42,19 @@ void SampleOptions::Serialize(Serializer &serializer) {
 void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("sample_size", sample_size);
 	serializer.WriteProperty("is_percentage", is_percentage);
-	serializer.WriteProperty("method", method, SampleMethodToString);
+	serializer.WriteProperty("method", method);
 	serializer.WriteProperty("seed", seed);
+}
+
+std::unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<SampleOptions>();
+
+	deserializer.ReadProperty("sample_size", result->sample_size);
+	deserializer.ReadProperty("is_percentage", result->is_percentage);
+	deserializer.ReadProperty("method", result->method);
+	deserializer.ReadProperty("seed", result->seed);
+
+	return result;
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
