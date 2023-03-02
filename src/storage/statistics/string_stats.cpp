@@ -85,13 +85,13 @@ void StringStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 }
 
 BaseStatistics StringStats::Deserialize(FieldReader &reader, LogicalType type) {
-	auto result = BaseStatistics::Construct(std::move(type));
-	auto &string_data = StringStats::GetDataUnsafe(*result);
+	BaseStatistics result(std::move(type));
+	auto &string_data = StringStats::GetDataUnsafe(result);
 	reader.ReadBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	string_data.has_unicode = reader.ReadRequired<bool>();
 	string_data.max_string_length = reader.ReadRequired<uint32_t>();
-	return result->CopyRegular();
+	return result;
 }
 
 static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {

@@ -400,10 +400,10 @@ Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader)
 BaseStatistics NumericStats::Deserialize(FieldReader &reader, LogicalType type) {
 	auto min = DeserializeNumericStatsValue(type, reader);
 	auto max = DeserializeNumericStatsValue(type, reader);
-	auto result = NumericStats::CreateEmpty(std::move(type));
-	NumericStats::SetMin(*result, min);
-	NumericStats::SetMax(*result, max);
-	return result->CopyRegular();
+	BaseStatistics result(std::move(type));
+	NumericStats::SetMin(result, min);
+	NumericStats::SetMax(result, max);
+	return result;
 }
 
 string NumericStats::ToString(const BaseStatistics &stats) {
