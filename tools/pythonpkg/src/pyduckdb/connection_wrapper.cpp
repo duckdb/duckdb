@@ -336,5 +336,11 @@ py::list PyConnectionWrapper::ListFilesystems(shared_ptr<DuckDBPyConnection> con
 	}
 	return conn->ListFilesystems();
 }
+bool PyConnectionWrapper::FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FileSystemIsRegistered(name);
+}
 
 } // namespace duckdb

@@ -126,5 +126,6 @@ public:
 	static void RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn);
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);
 	static py::list ListFilesystems(shared_ptr<DuckDBPyConnection> conn);
+	static bool FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn);
 };
 } // namespace duckdb

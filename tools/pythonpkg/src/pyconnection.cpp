@@ -93,6 +93,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("name"))
 	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
 	         "List registered filesystems, including builtin ones")
+	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -244,6 +246,11 @@ py::list DuckDBPyConnection::ListFilesystems() {
 		names.append(py::str(name));
 	}
 	return names;
+}
+
+bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
+	auto subsystems = database->GetFileSystem().ListSubSystems();
+	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {

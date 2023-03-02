@@ -164,6 +164,7 @@ public:
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);
 	py::list ListFilesystems();
+	bool FileSystemIsRegistered(const string &name);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

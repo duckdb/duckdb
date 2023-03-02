@@ -183,7 +183,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    .def("unregister_filesystem", &PyConnectionWrapper::UnregisterFilesystem, "Unregister a filesystem",
 	         py::arg("name"), py::arg("connection") = py::none())
 	    .def("list_filesystems", &PyConnectionWrapper::ListFilesystems,
-	         "List registered filesystems, including builtin ones", py::arg("connection") = py::none());
+	         "List registered filesystems, including builtin ones", py::arg("connection") = py::none())
+	    .def("filesystem_is_registered", &PyConnectionWrapper::FileSystemIsRegistered,
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"),
+	         py::arg("connection") = py::none());
 }
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
