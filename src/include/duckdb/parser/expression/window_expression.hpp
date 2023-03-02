@@ -25,6 +25,26 @@ enum class WindowBoundary : uint8_t {
 	EXPR_FOLLOWING_RANGE = 8
 };
 
+static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+	if (window_boundary == "unbounded_preceding") {
+		return WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_boundary == "unbounded_following") {
+		return WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_boundary == "current_row_range") {
+		return WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_boundary == "current_row_rows") {
+		return WindowBoundary::CURRENT_ROW_ROWS;
+	} else if (window_boundary == "expr_preceding_rows") {
+		return WindowBoundary::EXPR_PRECEDING_ROWS;
+	} else if (window_boundary == "expr_following_rows") {
+		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+	} else if (window_boundary == "expr_preceding_range") {
+		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	} else {
+		return WindowBoundary::EXPR_FOLLOWING_RANGE;
+	}
+}
+
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
 //! they inherit from them.
 class WindowExpression : public ParsedExpression {

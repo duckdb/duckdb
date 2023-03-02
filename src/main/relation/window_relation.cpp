@@ -9,25 +9,25 @@
 
 namespace duckdb {
 
-static WindowBoundary StringToWindowBoundary(string &window_boundary) {
-	if (window_boundary == "unbounded_preceding") {
-		return WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (window_boundary == "unbounded_following") {
-		return WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (window_boundary == "current_row_range") {
-		return WindowBoundary::CURRENT_ROW_RANGE;
-	} else if (window_boundary == "current_row_rows") {
-		return WindowBoundary::CURRENT_ROW_ROWS;
-	} else if (window_boundary == "expr_preceding_rows") {
-		return WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_boundary == "expr_following_rows") {
-		return WindowBoundary::EXPR_FOLLOWING_ROWS;
-	} else if (window_boundary == "expr_preceding_range") {
-		return WindowBoundary::EXPR_PRECEDING_RANGE;
-	} else {
-		return WindowBoundary::EXPR_FOLLOWING_RANGE;
-	}
-}
+//static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+//	if (window_boundary == "unbounded_preceding") {
+//		return WindowBoundary::UNBOUNDED_PRECEDING;
+//	} else if (window_boundary == "unbounded_following") {
+//		return WindowBoundary::UNBOUNDED_FOLLOWING;
+//	} else if (window_boundary == "current_row_range") {
+//		return WindowBoundary::CURRENT_ROW_RANGE;
+//	} else if (window_boundary == "current_row_rows") {
+//		return WindowBoundary::CURRENT_ROW_ROWS;
+//	} else if (window_boundary == "expr_preceding_rows") {
+//		return WindowBoundary::EXPR_PRECEDING_ROWS;
+//	} else if (window_boundary == "expr_following_rows") {
+//		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+//	} else if (window_boundary == "expr_preceding_range") {
+//		return WindowBoundary::EXPR_PRECEDING_RANGE;
+//	} else {
+//		return WindowBoundary::EXPR_FOLLOWING_RANGE;
+//	}
+//}
 
 WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function, std::string window_alias,
                                vector<unique_ptr<ParsedExpression>> children_,

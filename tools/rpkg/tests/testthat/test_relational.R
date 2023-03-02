@@ -312,7 +312,7 @@ test_that("Window sum expression function test works", {
 test_that("Window count function works", {
 #     select a, b, count(b) over (partition by a) from a order by a
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    count <-  duckdb:::rapi_expr_window(window_function="count", children=list(expr_reference("a")), partitions=list(expr_reference("b")), list(), "", "", list(), list(), list(), list(), list())
+    count <-  expr_window(window_function="count", children=list(expr_reference("a")), partitions=list(expr_reference("b")))
     duckdb:::expr_set_alias(count, "window_result")
     window_proj <- duckdb:::rel_project(rel_a, list(count))
     res <- rel_to_altrep(window_proj)
@@ -323,7 +323,7 @@ test_that("Window count function works", {
 test_that("Window avg function works", {
 #     select a, b, avg(b) over (partition by a) from a order by a
     rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
-    avg_window <- duckdb:::rapi_expr_window(window_function="avg", children=list(expr_reference("a")), partitions=list(expr_reference("b")), list(), "", "", list(), list(), list(), list(), list())
+    avg_window <- expr_window(window_function="avg", children=list(expr_reference("a")), partitions=list(expr_reference("b")))
     duckdb:::expr_set_alias(avg_window, "window_result")
     window_proj <- duckdb:::rel_project(rel_a, list(avg_window))
     ordered <- duckdb:::rel_order(window_proj, list(duckdb:::expr_reference("window_result")))
@@ -343,8 +343,8 @@ test_that("Window sum with Parition, order, and window boundaries works", {
                                         orders=order_by_a,
                                         window_boundary_start="expr_preceding_rows",
                                         window_boundary_end="current_row_rows",
-                                        start_expr=list(duckdb:::expr_constant(2)),
-                                        offset_expr=list(duckdb:::expr_constant(2)))
+                                        start_expr=list(duckdb:::expr_constant(2)))
+#                                         offset_expr=list(duckdb:::expr_constant(2)))
     duckdb:::expr_set_alias(sum_window, "window_result")
     window_proj <- duckdb:::rel_project(rel_a, list(expr_reference("a"), sum_window))
     proj_order <-duckdb:::rel_order(window_proj, list(expr_reference("a")))

@@ -223,8 +223,8 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		}
 	}
 
-	window_expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	window_expr->end = WindowBoundary::CURRENT_ROW_RANGE;
+	window_expr->start = StringToWindowBoundary(window_boundary_start);
+	window_expr->end = StringToWindowBoundary(window_boundary_end);
 	for (expr_extptr_t child : children) {
 		window_expr->children.push_back(child->Copy());
 	}
