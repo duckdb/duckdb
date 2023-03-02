@@ -95,10 +95,10 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	auto result = make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
-		for (auto &type : children[0]->types)  {
+		for (auto &type : children[0]->types) {
 			intermediate_types.emplace_back(type);
 		}
-		for (auto &type : children[1]->types)  {
+		for (auto &type : children[1]->types) {
 			intermediate_types.emplace_back(type);
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);
