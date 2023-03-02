@@ -295,47 +295,47 @@ Value NumericStats::MaxOrNull(const BaseStatistics &stats) {
 	return NumericStats::Max(stats);
 }
 
-void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
-	writer.WriteField<bool>(val.IsNull());
-	if (val.IsNull()) {
+void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, bool has_value, FieldWriter &writer) {
+	writer.WriteField<bool>(!has_value);
+	if (!has_value) {
 		return;
 	}
-	switch (val.type().InternalType()) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		writer.WriteField<bool>(BooleanValue::Get(val));
+		writer.WriteField<bool>(val.value_.boolean);
 		break;
 	case PhysicalType::INT8:
-		writer.WriteField<int8_t>(TinyIntValue::Get(val));
+		writer.WriteField<int8_t>(val.value_.tinyint);
 		break;
 	case PhysicalType::INT16:
-		writer.WriteField<int16_t>(SmallIntValue::Get(val));
+		writer.WriteField<int16_t>(val.value_.smallint);
 		break;
 	case PhysicalType::INT32:
-		writer.WriteField<int32_t>(IntegerValue::Get(val));
+		writer.WriteField<int32_t>(val.value_.integer);
 		break;
 	case PhysicalType::INT64:
-		writer.WriteField<int64_t>(BigIntValue::Get(val));
+		writer.WriteField<int64_t>(val.value_.bigint);
 		break;
 	case PhysicalType::UINT8:
-		writer.WriteField<int8_t>(UTinyIntValue::Get(val));
+		writer.WriteField<int8_t>(val.value_.utinyint);
 		break;
 	case PhysicalType::UINT16:
-		writer.WriteField<int16_t>(USmallIntValue::Get(val));
+		writer.WriteField<int16_t>(val.value_.usmallint);
 		break;
 	case PhysicalType::UINT32:
-		writer.WriteField<int32_t>(UIntegerValue::Get(val));
+		writer.WriteField<int32_t>(val.value_.uinteger);
 		break;
 	case PhysicalType::UINT64:
-		writer.WriteField<int64_t>(UBigIntValue::Get(val));
+		writer.WriteField<int64_t>(val.value_.ubigint);
 		break;
 	case PhysicalType::INT128:
-		writer.WriteField<hugeint_t>(HugeIntValue::Get(val));
+		writer.WriteField<hugeint_t>(val.value_.hugeint);
 		break;
 	case PhysicalType::FLOAT:
-		writer.WriteField<float>(FloatValue::Get(val));
+		writer.WriteField<float>(val.value_.float_);
 		break;
 	case PhysicalType::DOUBLE:
-		writer.WriteField<double>(DoubleValue::Get(val));
+		writer.WriteField<double>(val.value_.double_);
 		break;
 	default:
 		throw InternalException("Unsupported type for serializing numeric statistics");
@@ -343,8 +343,9 @@ void SerializeNumericStatsValue(const Value &val, FieldWriter &writer) {
 }
 
 void NumericStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
-	SerializeNumericStatsValue(NumericStats::MinOrNull(stats), writer);
-	SerializeNumericStatsValue(NumericStats::MaxOrNull(stats), writer);
+	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
+	SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, writer);
+	SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, writer);
 }
 
 void DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader, NumericValueUnion &result,
