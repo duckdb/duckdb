@@ -145,7 +145,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	}
 
 	// construct the data pointer
-	DataPointer data_pointer(segment->stats.statistics.CopyRegular());
+	DataPointer data_pointer(segment->stats.statistics.Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
 	data_pointer.row_start = row_group.start;

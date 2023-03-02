@@ -218,7 +218,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
 
 		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer(segment->stats.statistics.CopyRegular());
+		DataPointer pointer(segment->stats.statistics.Copy());
 		pointer.block_pointer.block_id = segment->GetBlockId();
 		pointer.block_pointer.offset = segment->GetBlockOffset();
 		pointer.row_start = segment->start;

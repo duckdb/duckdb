@@ -12,7 +12,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 		if (!stat) {
 			stat = BaseStatistics::CreateUnknown(child->return_type);
 		}
-		stats.push_back(stat->CopyRegular());
+		stats.push_back(stat->Copy());
 	}
 	if (!aggr.function.statistics) {
 		return nullptr;

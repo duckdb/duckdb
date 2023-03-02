@@ -29,6 +29,7 @@ struct StructStats {
 	DUCKDB_API static const BaseStatistics *GetChildStats(const BaseStatistics &stats);
 	DUCKDB_API static const BaseStatistics &GetChildStats(const BaseStatistics &stats, idx_t i);
 	DUCKDB_API static BaseStatistics &GetChildStats(BaseStatistics &stats, idx_t i);
+	DUCKDB_API static void SetChildStats(BaseStatistics &stats, idx_t i, const BaseStatistics &new_stats);
 	DUCKDB_API static void SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);

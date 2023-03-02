@@ -123,8 +123,8 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 	auto &child_stats = input.child_stats;
 	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
 	auto child_copy = list_child_stats.Copy();
-	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-	return child_copy;
+	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return child_copy.ToUnique();
 }
 
 void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {

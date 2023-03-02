@@ -903,7 +903,7 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	lock_guard<mutex> stats_guard(stats_lock);
-	return stats.statistics.Copy();
+	return stats.statistics.ToUnique();
 }
 
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,

@@ -30,7 +30,8 @@ struct AggregateInputData {
 };
 
 struct AggregateStatisticsInput {
-	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p, NodeStatistics *node_stats_p)
+	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
+	                         NodeStatistics *node_stats_p)
 	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
 	}
 

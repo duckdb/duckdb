@@ -196,32 +196,16 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	}
 }
 
-unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
-	auto result = BaseStatistics::Construct(type);
-	result->CopyBase(*this);
-	result->stats_union = stats_union;
-	if (ListStats::IsList(*this)) {
-		ListStats::Copy(*result, *this);
-	} else if (StructStats::IsStruct(*this)) {
-		StructStats::Copy(*result, *this);
-	}
-	return result;
-}
-
-BaseStatistics BaseStatistics::CopyRegular() const {
+BaseStatistics BaseStatistics::Copy() const {
 	BaseStatistics result(type);
-	result.CopyBase(*this);
-	result.stats_union = stats_union;
-	if (ListStats::IsList(*this)) {
-		ListStats::Copy(result, *this);
-	} else if (StructStats::IsStruct(*this)) {
-		StructStats::Copy(result, *this);
-	}
+	result.Copy(*this);
 	return result;
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::ToUnique() const {
-	return Copy();
+	auto result = BaseStatistics::Construct(type);
+	result->Copy(*this);
+	return result;
 }
 
 void BaseStatistics::CopyBase(const BaseStatistics &other) {
@@ -261,15 +245,6 @@ void BaseStatistics::CombineValidity(BaseStatistics &left, BaseStatistics &right
 void BaseStatistics::CopyValidity(BaseStatistics &stats) {
 	has_null = stats.has_null;
 	has_no_null = stats.has_no_null;
-}
-
-void BaseStatistics::CopyValidity(BaseStatistics *stats) {
-	if (!stats) {
-		has_null = true;
-		has_no_null = true;
-		return;
-	}
-	CopyValidity(*stats);
 }
 
 void BaseStatistics::Serialize(Serializer &serializer) const {

@@ -12,7 +12,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	aggr.group_stats.resize(aggr.groups.size());
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		auto stats = PropagateExpression(aggr.groups[group_idx]);
-		aggr.group_stats[group_idx] = stats ? stats->Copy() : nullptr;
+		aggr.group_stats[group_idx] = stats ? stats->ToUnique() : nullptr;
 		if (!stats) {
 			continue;
 		}

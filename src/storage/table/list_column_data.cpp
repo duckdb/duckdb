@@ -315,8 +315,8 @@ struct ListColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
-		ListStats::SetChildStats(*stats, child_state->GetStatistics());
-		return stats;
+		ListStats::SetChildStats(stats, child_state->GetStatistics());
+		return stats.ToUnique();
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer) override {

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 SegmentStatistics::SegmentStatistics(LogicalType type)
-    : statistics(BaseStatistics::CreateEmpty(std::move(type))->CopyRegular()) {
+    : statistics(BaseStatistics::CreateEmpty(std::move(type))->Copy()) {
 }
 
 SegmentStatistics::SegmentStatistics(BaseStatistics stats) : statistics(std::move(stats)) {

@@ -110,7 +110,7 @@ static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, Functi
 	auto &left_stats = child_stats[0];
 	auto &right_stats = child_stats[1];
 
-	auto stats = left_stats.Copy();
+	auto stats = left_stats.ToUnique();
 	stats->Merge(right_stats);
 
 	return stats;

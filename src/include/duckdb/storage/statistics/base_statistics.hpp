@@ -72,7 +72,6 @@ public:
 	void Set(StatsInfo info);
 	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
-	void CopyValidity(BaseStatistics *stats);
 	inline void SetHasNull() {
 		has_null = true;
 	}
@@ -84,9 +83,8 @@ public:
 
 	void Copy(const BaseStatistics &other);
 
-	unique_ptr<BaseStatistics> Copy() const;
+	BaseStatistics Copy() const;
 	unique_ptr<BaseStatistics> ToUnique() const;
-	BaseStatistics CopyRegular() const;
 	void CopyBase(const BaseStatistics &orig);
 
 	void Serialize(Serializer &serializer) const;

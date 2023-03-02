@@ -51,12 +51,17 @@ BaseStatistics &StructStats::GetChildStats(BaseStatistics &stats, idx_t i) {
 	return stats.child_stats[i];
 }
 
-void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats) {
+void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, const BaseStatistics &new_stats) {
 	D_ASSERT(i < StructType::GetChildCount(stats.GetType()));
+	stats.child_stats[i].Copy(new_stats);
+}
+
+void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats) {
 	if (!new_stats) {
-		stats.child_stats[i].Copy(*BaseStatistics::CreateUnknown(StructType::GetChildType(stats.GetType(), i)));
+		StructStats::SetChildStats(stats, i,
+		                           *BaseStatistics::CreateUnknown(StructType::GetChildType(stats.GetType(), i)));
 	} else {
-		stats.child_stats[i].Copy(*new_stats);
+		StructStats::SetChildStats(stats, i, *new_stats);
 	}
 }
 

@@ -48,7 +48,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 		buffer_manager.Allocate(segment_size, false, &block);
 	}
 	return make_unique<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function,
-	                                  BaseStatistics::CreateEmpty(type)->CopyRegular(), INVALID_BLOCK, 0, segment_size);
+	                                  BaseStatistics::CreateEmpty(type)->Copy(), INVALID_BLOCK, 0, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {

@@ -181,7 +181,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(columns[i]);
-			row_group->stats.emplace_back(stats[i].statistics.CopyRegular());
+			row_group->stats.emplace_back(stats[i].statistics.Copy());
 		}
 	}
 	row_group->Verify();
@@ -218,7 +218,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	for (auto &stat : stats) {
-		row_group->stats.emplace_back(stat.statistics.CopyRegular());
+		row_group->stats.emplace_back(stat.statistics.Copy());
 	}
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
@@ -237,7 +237,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	for (auto &stat : stats) {
-		row_group->stats.emplace_back(stat.statistics.CopyRegular());
+		row_group->stats.emplace_back(stat.statistics.Copy());
 	}
 	// now remove the column
 	row_group->columns.erase(row_group->columns.begin() + removed_column);
@@ -673,7 +673,7 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
-	return stats[column_idx].statistics.Copy();
+	return stats[column_idx].statistics.ToUnique();
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
@@ -713,7 +713,7 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
-		result.statistics.push_back(stats->CopyRegular());
+		result.statistics.push_back(stats->Copy());
 		result.states.push_back(std::move(checkpoint_state));
 	}
 	D_ASSERT(result.states.size() == result.statistics.size());
