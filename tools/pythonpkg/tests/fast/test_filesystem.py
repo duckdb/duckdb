@@ -83,6 +83,7 @@ class TestPythonFilesystem:
         duckdb_cursor = require('httpfs')
         assert duckdb_cursor.filesystem_is_registered('S3FileSystem') == True
         duckdb_cursor.unregister_filesystem('S3FileSystem')
+        assert duckdb_cursor.filesystem_is_registered('S3FileSystem') == False
 
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
         class ExtendedMemoryFileSystem(MemoryFileSystem):
