@@ -53,7 +53,7 @@ UpdateSegment::~UpdateSegment() {
 }
 
 void UpdateSegment::ClearUpdates() {
-	stats.statistics.Copy(*BaseStatistics::CreateEmpty(stats.statistics.GetType()));
+	stats.statistics.Copy(BaseStatistics::CreateEmpty(stats.statistics.GetType()));
 	root.reset();
 	heap.Destroy();
 }

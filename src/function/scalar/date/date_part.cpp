@@ -165,10 +165,10 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseS
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
 	auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
-	result->CopyValidity(child_stats[0]);
-	NumericStats::SetMin(*result, Value::BIGINT(MIN));
-	NumericStats::SetMax(*result, Value::BIGINT(MAX));
-	return result;
+	result.CopyValidity(child_stats[0]);
+	NumericStats::SetMin(result, Value::BIGINT(MIN));
+	NumericStats::SetMax(result, Value::BIGINT(MAX));
+	return result.ToUnique();
 }
 
 struct DatePart {
@@ -192,10 +192,10 @@ struct DatePart {
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
 		auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
-		NumericStats::SetMin(*result, Value::BIGINT(min_part));
-		NumericStats::SetMax(*result, Value::BIGINT(max_part));
-		result->CopyValidity(child_stats[0]);
-		return result;
+		NumericStats::SetMin(result, Value::BIGINT(min_part));
+		NumericStats::SetMax(result, Value::BIGINT(max_part));
+		result.CopyValidity(child_stats[0]);
+		return result.ToUnique();
 	}
 
 	template <typename OP>

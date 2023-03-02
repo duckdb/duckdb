@@ -7,7 +7,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value &input) {
-	return BaseStatistics::FromConstant(input);
+	return BaseStatistics::FromConstant(input).ToUnique();
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConstantExpression &constant,

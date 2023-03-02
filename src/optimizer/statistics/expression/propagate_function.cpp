@@ -10,9 +10,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	for (idx_t i = 0; i < func.children.size(); i++) {
 		auto stat = PropagateExpression(func.children[i]);
 		if (!stat) {
-			stat = BaseStatistics::CreateUnknown(func.children[i]->return_type);
+			stats.push_back(BaseStatistics::CreateUnknown(func.children[i]->return_type));
+		} else {
+			stats.push_back(stat->Copy());
 		}
-		stats.push_back(stat->Copy());
 	}
 	if (!func.function.statistics) {
 		return nullptr;

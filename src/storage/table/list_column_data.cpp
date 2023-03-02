@@ -306,7 +306,7 @@ void ListColumnData::CommitDropColumn() {
 struct ListColumnCheckpointState : public ColumnCheckpointState {
 	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = ListStats::CreateEmpty(column_data.type);
+		global_stats = ListStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;

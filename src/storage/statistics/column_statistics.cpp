@@ -13,8 +13,7 @@ ColumnStatistics::ColumnStatistics(BaseStatistics stats_p, unique_ptr<DistinctSt
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::CreateEmptyStats(const LogicalType &type) {
-	auto col_stats = BaseStatistics::CreateEmpty(type);
-	return make_shared<ColumnStatistics>(col_stats->Copy());
+	return make_shared<ColumnStatistics>(BaseStatistics::CreateEmpty(type));
 }
 
 void ColumnStatistics::Merge(ColumnStatistics &other) {

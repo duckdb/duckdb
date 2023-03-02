@@ -128,10 +128,10 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
 	auto stats = NumericStats::CreateEmpty(expr.return_type);
-	NumericStats::SetMin(*stats, new_min);
-	NumericStats::SetMax(*stats, new_max);
-	stats->CopyValidity(lstats);
-	return stats;
+	NumericStats::SetMin(stats, new_min);
+	NumericStats::SetMax(stats, new_max);
+	stats.CopyValidity(lstats);
+	return stats.ToUnique();
 }
 
 template <class OP>

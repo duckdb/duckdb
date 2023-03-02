@@ -193,15 +193,15 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	auto stats = BaseStatistics::CreateEmpty(type);
 	auto validity_stats = validity.GetUpdateStatistics();
 	if (validity_stats) {
-		stats->Merge(*validity_stats);
+		stats.Merge(*validity_stats);
 	}
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto child_stats = sub_columns[i]->GetUpdateStatistics();
 		if (child_stats) {
-			StructStats::SetChildStats(*stats, i, std::move(child_stats));
+			StructStats::SetChildStats(stats, i, std::move(child_stats));
 		}
 	}
-	return stats;
+	return stats.ToUnique();
 }
 
 void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
@@ -232,7 +232,7 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
 	                            PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
-		global_stats = StructStats::CreateEmpty(column_data.type);
+		global_stats = StructStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -242,9 +242,9 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = StructStats::CreateEmpty(column_data.type);
 		for (idx_t i = 0; i < child_states.size(); i++) {
-			StructStats::SetChildStats(*stats, i, child_states[i]->GetStatistics());
+			StructStats::SetChildStats(stats, i, child_states[i]->GetStatistics());
 		}
-		return stats;
+		return stats.ToUnique();
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer) override {

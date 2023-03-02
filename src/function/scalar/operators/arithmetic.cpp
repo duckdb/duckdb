@@ -178,10 +178,10 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
 	auto result = NumericStats::CreateEmpty(expr.return_type);
-	NumericStats::SetMin(*result, new_min);
-	NumericStats::SetMax(*result, new_max);
-	result->CombineValidity(lstats, rstats);
-	return result;
+	NumericStats::SetMin(result, new_min);
+	NumericStats::SetMax(result, new_max);
+	result.CombineValidity(lstats, rstats);
+	return result.ToUnique();
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
@@ -542,10 +542,10 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 		new_max = Value(expr.return_type);
 	}
 	auto stats = NumericStats::CreateEmpty(expr.return_type);
-	NumericStats::SetMin(*stats, new_min);
-	NumericStats::SetMax(*stats, new_max);
-	stats->CopyValidity(istats);
-	return stats;
+	NumericStats::SetMin(stats, new_min);
+	NumericStats::SetMax(stats, new_max);
+	stats.CopyValidity(istats);
+	return stats.ToUnique();
 }
 
 ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {

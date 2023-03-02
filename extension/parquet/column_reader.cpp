@@ -873,10 +873,10 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 		row_group_offset_min += row_groups[i].num_rows;
 	}
 
-	NumericStats::SetMin(*stats, Value::BIGINT(row_group_offset_min));
-	NumericStats::SetMax(*stats, Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
-	stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
-	return stats;
+	NumericStats::SetMin(stats, Value::BIGINT(row_group_offset_min));
+	NumericStats::SetMax(stats, Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
+	stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+	return stats.ToUnique();
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,

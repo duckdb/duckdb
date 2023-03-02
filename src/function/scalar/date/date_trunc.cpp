@@ -607,10 +607,10 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &ch
 	auto min_value = Value::CreateValue(min_part);
 	auto max_value = Value::CreateValue(max_part);
 	auto result = NumericStats::CreateEmpty(min_value.type());
-	NumericStats::SetMin(*result, min_value);
-	NumericStats::SetMax(*result, max_value);
-	result->CopyValidity(child_stats[0]);
-	return result;
+	NumericStats::SetMin(result, min_value);
+	NumericStats::SetMax(result, max_value);
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
 }
 
 template <class TA, class TR, class OP>

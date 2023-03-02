@@ -15,10 +15,10 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 		return nullptr;
 	}
 	auto result = NumericStats::CreateEmpty(target);
-	result->CopyBase(input);
-	NumericStats::SetMin(*result, min);
-	NumericStats::SetMax(*result, max);
-	return result;
+	result.CopyBase(input);
+	NumericStats::SetMin(result, min);
+	NumericStats::SetMax(result, max);
+	return result.ToUnique();
 }
 
 static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics &input, const LogicalType &target) {

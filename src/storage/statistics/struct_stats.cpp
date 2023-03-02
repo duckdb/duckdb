@@ -13,22 +13,22 @@ void StructStats::Construct(BaseStatistics &stats) {
 	}
 }
 
-unique_ptr<BaseStatistics> StructStats::CreateUnknown(LogicalType type) {
+BaseStatistics StructStats::CreateUnknown(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	auto result = BaseStatistics::Construct(std::move(type));
-	result->InitializeUnknown();
+	BaseStatistics result(std::move(type));
+	result.InitializeUnknown();
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		result->child_stats[i].Copy(*BaseStatistics::CreateUnknown(child_types[i].second));
+		result.child_stats[i].Copy(BaseStatistics::CreateUnknown(child_types[i].second));
 	}
 	return result;
 }
 
-unique_ptr<BaseStatistics> StructStats::CreateEmpty(LogicalType type) {
+BaseStatistics StructStats::CreateEmpty(LogicalType type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	auto result = BaseStatistics::Construct(std::move(type));
-	result->InitializeEmpty();
+	BaseStatistics result(std::move(type));
+	result.InitializeEmpty();
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		result->child_stats[i].Copy(*BaseStatistics::CreateEmpty(child_types[i].second));
+		result.child_stats[i].Copy(BaseStatistics::CreateEmpty(child_types[i].second));
 	}
 	return result;
 }
@@ -59,7 +59,7 @@ void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, const BaseStatis
 void StructStats::SetChildStats(BaseStatistics &stats, idx_t i, unique_ptr<BaseStatistics> new_stats) {
 	if (!new_stats) {
 		StructStats::SetChildStats(stats, i,
-		                           *BaseStatistics::CreateUnknown(StructType::GetChildType(stats.GetType(), i)));
+		                           BaseStatistics::CreateUnknown(StructType::GetChildType(stats.GetType(), i)));
 	} else {
 		StructStats::SetChildStats(stats, i, *new_stats);
 	}

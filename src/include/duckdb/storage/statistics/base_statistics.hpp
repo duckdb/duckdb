@@ -53,10 +53,10 @@ public:
 	//! Creates a set of statistics for data that is unknown, i.e. "has_null" is true, "has_no_null" is true, etc
 	//! This can be used in case nothing is known about the data - or can be used as a baseline when only a few things
 	//! are known
-	static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
+	static BaseStatistics CreateUnknown(LogicalType type);
 	//! Creates statistics for an empty database, i.e. "has_null" is false, "has_no_null" is false, etc
 	//! This is used when incrementally constructing statistics by constantly adding new values
-	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
+	static BaseStatistics CreateEmpty(LogicalType type);
 
 	DUCKDB_API bool CanHaveNull() const;
 	DUCKDB_API bool CanHaveNoNull() const;
@@ -100,19 +100,21 @@ public:
 
 	string ToString() const;
 
-	static unique_ptr<BaseStatistics> FromConstant(const Value &input);
+	static BaseStatistics FromConstant(const Value &input);
 
 private:
 	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
 
-	static unique_ptr<BaseStatistics> Construct(LogicalType type);
 	static void Construct(BaseStatistics &stats, LogicalType type);
 
 	void InitializeUnknown();
 	void InitializeEmpty();
 
+	static BaseStatistics CreateUnknownType(LogicalType type);
+	static BaseStatistics CreateEmptyType(LogicalType type);
 	static BaseStatistics DeserializeType(FieldReader &reader, LogicalType type);
+	static BaseStatistics FromConstantType(const Value &input);
 
 private:
 	//! The type of the logical segment

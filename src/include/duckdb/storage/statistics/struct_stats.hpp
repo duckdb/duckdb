@@ -20,8 +20,8 @@ class Vector;
 
 struct StructStats {
 	DUCKDB_API static void Construct(BaseStatistics &stats);
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
 	//! Whether or not the statistics are for a list
 	DUCKDB_API static bool IsStruct(const BaseStatistics &stats);

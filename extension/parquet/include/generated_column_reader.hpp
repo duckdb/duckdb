@@ -29,7 +29,7 @@ public:
 	           Vector &result) override;
 
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
-		return BaseStatistics::FromConstant(constant);
+		return BaseStatistics::FromConstant(constant).ToUnique();
 	};
 
 	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,

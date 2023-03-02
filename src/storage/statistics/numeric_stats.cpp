@@ -13,19 +13,19 @@ template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value) {
 }
 
-unique_ptr<BaseStatistics> NumericStats::CreateUnknown(LogicalType type) {
-	auto result = BaseStatistics::Construct(std::move(type));
-	result->InitializeUnknown();
-	SetMin(*result, Value(type));
-	SetMax(*result, Value(type));
+BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
+	BaseStatistics result(std::move(type));
+	result.InitializeUnknown();
+	SetMin(result, Value(result.GetType()));
+	SetMax(result, Value(result.GetType()));
 	return result;
 }
 
-unique_ptr<BaseStatistics> NumericStats::CreateEmpty(LogicalType type) {
-	auto result = BaseStatistics::Construct(std::move(type));
-	result->InitializeEmpty();
-	SetMin(*result, Value::MaximumValue(result->GetType()));
-	SetMax(*result, Value::MinimumValue(result->GetType()));
+BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
+	BaseStatistics result(std::move(type));
+	result.InitializeEmpty();
+	SetMin(result, Value::MaximumValue(result.GetType()));
+	SetMax(result, Value::MinimumValue(result.GetType()));
 	return result;
 }
 

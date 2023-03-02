@@ -135,7 +135,7 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 		return nullptr;
 	}
 	if (!stats) {
-		stats = BaseStatistics::CreateEmpty(type);
+		stats = BaseStatistics::CreateEmpty(type).ToUnique();
 	}
 	if (validity_stats) {
 		stats->Merge(*validity_stats);

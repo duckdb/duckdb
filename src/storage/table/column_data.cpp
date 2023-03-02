@@ -389,7 +389,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
-	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
 	auto nodes = data.MoveSegments(l);

@@ -57,9 +57,9 @@ struct NumericStatsData {
 
 struct NumericStats {
 	//! Unknown statistics - i.e. "has_min" is false, "has_max" is false
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	//! Empty statistics - i.e. "min = MaxValue<type>, max = MinValue<type>"
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
 	//! Whether or not the statistics are numeric
 	DUCKDB_API static bool IsNumeric(const BaseStatistics &stats);

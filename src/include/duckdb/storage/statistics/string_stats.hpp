@@ -39,9 +39,9 @@ struct StringStatsData {
 
 struct StringStats {
 	//! Unknown statistics - i.e. "has_unicode" is true, "max_string_length" is unknown, "min" is \0, max is \xFF
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateUnknown(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	//! Empty statistics - i.e. "has_unicode" is false, "max_string_length" is 0, "min" is \xFF, max is \x00
-	DUCKDB_API static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 
 	//! Whether or not the statistics are string
 	DUCKDB_API static bool IsString(const BaseStatistics &stats);

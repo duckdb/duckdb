@@ -21,27 +21,25 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
 	// `max_value`. All are optional. such elegance.
+	Value min;
+	Value max;
 	if (parquet_stats.__isset.min) {
-		NumericStats::SetMin(
-		    *stats, ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type));
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type);
 	} else if (parquet_stats.__isset.min_value) {
-		NumericStats::SetMin(
-		    *stats,
-		    ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type));
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type);
 	} else {
-		NumericStats::SetMin(*stats, Value(type));
+		min = Value(type);
 	}
 	if (parquet_stats.__isset.max) {
-		NumericStats::SetMax(
-		    *stats, ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type));
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type);
 	} else if (parquet_stats.__isset.max_value) {
-		NumericStats::SetMax(
-		    *stats,
-		    ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type));
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type);
 	} else {
-		NumericStats::SetMax(*stats, Value(type));
+		max = Value(type);
 	}
-	return stats;
+	NumericStats::SetMin(stats, min);
+	NumericStats::SetMax(stats, max);
+	return stats.ToUnique();
 }
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
@@ -233,22 +231,22 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);
 		if (parquet_stats.__isset.min) {
-			StringStats::Update(*string_stats, parquet_stats.min);
+			StringStats::Update(string_stats, parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
-			StringStats::Update(*string_stats, parquet_stats.min_value);
+			StringStats::Update(string_stats, parquet_stats.min_value);
 		} else {
 			return nullptr;
 		}
 		if (parquet_stats.__isset.max) {
-			StringStats::Update(*string_stats, parquet_stats.max);
+			StringStats::Update(string_stats, parquet_stats.max);
 		} else if (parquet_stats.__isset.max_value) {
-			StringStats::Update(*string_stats, parquet_stats.max_value);
+			StringStats::Update(string_stats, parquet_stats.max_value);
 		} else {
 			return nullptr;
 		}
-		StringStats::SetContainsUnicode(*string_stats);
-		StringStats::ResetMaxStringLength(*string_stats);
-		row_group_stats = std::move(string_stats);
+		StringStats::SetContainsUnicode(string_stats);
+		StringStats::ResetMaxStringLength(string_stats);
+		row_group_stats = string_stats.ToUnique();
 		break;
 	}
 	default:
