@@ -7,7 +7,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types/row/row_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 
 namespace duckdb {
 
@@ -119,27 +119,28 @@ static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, Selection
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const RowLayout &layout,
-                                 const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
+                                 const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
+                                 idx_t &no_match_count) {
 	// Gather a dense Vector containing the column values being matched
-	Vector key(col.GetType());
-	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
-
-	// Densify the input column
-	Vector sliced(col, sel, count);
-
-	if (NO_MATCH_SEL) {
-		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
-		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
-		no_match_count += count - match_count;
-		count = match_count;
-	} else {
-		count = SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
-	}
+	//	Vector key(col.GetType());
+	//	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
+	//
+	//	// Densify the input column
+	//	Vector sliced(col, sel, count);
+	//
+	//	if (NO_MATCH_SEL) {
+	//		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
+	//		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
+	//		no_match_count += count - match_count;
+	//		count = match_count;
+	//	} else {
+	//		count = SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
+	//	}
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const RowLayout &layout, Vector &rows,
+static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
                              SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
                              idx_t &no_match_count) {
 	if (count == 0) {
@@ -202,17 +203,18 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const RowLay
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
-		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
-		break;
+		throw NotImplementedException("Nested match TODO!");
+		//		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
+		//		break;
 	default:
 		throw InternalException("Unsupported column type for RowOperations::Match");
 	}
 }
 
 template <bool NO_MATCH_SEL>
-static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
-                           const Predicates &predicates, SelectionVector &sel, idx_t &count, SelectionVector *no_match,
-                           idx_t &no_match_count) {
+static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout,
+                           Vector &rows, const Predicates &predicates, SelectionVector &sel, idx_t &count,
+                           SelectionVector *no_match, idx_t &no_match_count) {
 	for (idx_t col_no = 0; col_no < predicates.size(); ++col_no) {
 		auto &vec = columns.data[col_no];
 		auto &col = col_data[col_no];
@@ -249,9 +251,9 @@ static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], c
 	}
 }
 
-idx_t RowOperations::Match(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
-                           const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
-                           idx_t &no_match_count) {
+idx_t RowOperations::Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout,
+                           Vector &rows, const Predicates &predicates, SelectionVector &sel, idx_t count,
+                           SelectionVector *no_match, idx_t &no_match_count) {
 	if (no_match) {
 		TemplatedMatch<true>(columns, col_data, layout, rows, predicates, sel, count, no_match, no_match_count);
 	} else {

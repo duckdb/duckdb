@@ -12,6 +12,7 @@ add_library_unity(
   row_layout.cpp
   tuple_data_allocator.cpp
   tuple_data_collection.cpp
+  tuple_data_iterator.cpp
   tuple_data_layout.cpp
   tuple_data_segment.cpp)
 set(ALL_OBJECT_FILES

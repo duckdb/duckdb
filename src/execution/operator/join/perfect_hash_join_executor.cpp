@@ -27,11 +27,13 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
+	auto &data_collection = ht.GetDataCollection();
+
 	// pin all fixed-size blocks (variable-sized should still be pinned)
-	ht.PinAllBlocks();
+	data_collection.Pin();
 
 	// Now fill columns with build data
-	JoinHTScanState join_ht_state;
+	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount());
 	return FullScanHashTable(join_ht_state, key_type);
 }
 
@@ -40,7 +42,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
-	auto keys_count = ht.FillWithHTOffsets(key_locations, state);
+	auto keys_count = ht.FillWithHTOffsets(state, tuples_addresses);
 	// Scan the build keys in the hash table
 	Vector build_vector(key_type, keys_count);
 	RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, keys_count, 0);
@@ -57,14 +59,19 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 		perfect_join_statistics.is_build_dense = true;
 	}
 	keys_count = unique_keys; // do not consider keys out of the range
+
 	// Full scan the remaining build columns and fill the perfect hash table
+	auto &data_collection = ht.GetDataCollection();
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto build_size = perfect_join_statistics.build_range + 1;
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == ht.build_types[i]);
 		const auto col_no = ht.condition_types.size() + i;
-		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, ht.layout, col_no,
-		                      build_size);
+		throw NotImplementedException(
+		    "Need to use TupleDataCollection::Gather in PerfectHashJoinExecutor::FullScanHashTable");
+		//		data_collection.Gather(tuples_addresses, sel_tuples)
+		//		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, ht.layout, col_no,
+		//		                      build_size);
 	}
 	return true;
 }

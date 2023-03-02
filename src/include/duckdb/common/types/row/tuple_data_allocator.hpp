@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "tuple_data_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
 
@@ -53,7 +54,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	explicit TupleDataAllocator(ClientContext &context, const TupleDataLayout &layout);
+	explicit TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
 
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
@@ -63,8 +64,9 @@ public:
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment);
-	//! Prepares a chunk for scanning
-	void InitializeChunkState(TupleDataManagementState &state, TupleDataChunk &chunk);
+	//! Initializes a chunk, making its pointers valid
+	void InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment, idx_t chunk_idx,
+	                          TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 
 private:
 	//! Builds out a single part (grabs the lock)
@@ -77,6 +79,9 @@ private:
 	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
 	//! Gets the base pointer to the heap for the given segment
 	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
+	//! Releases or stores any handles that are no longer required
+	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk,
+	                           TupleDataPinProperties properties) const;
 
 private:
 	//! The lock (for shared allocations)

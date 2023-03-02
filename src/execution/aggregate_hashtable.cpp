@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-using ValidityBytes = RowLayout::ValidityBytes;
+using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
@@ -438,8 +438,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		}
 
 		// for each of the locations that are empty, serialize the group columns to the locations
-		RowOperations::Scatter(group_chunk, group_data.get(), layout, addresses, *string_heap, empty_vector,
-		                       new_entry_count);
+		throw NotImplementedException(
+		    "Use TupleDataCollection::Scatter in GroupedAggregateHashTable::FindOrCreateGroupsInternal");
+		//		RowOperations::Scatter(group_chunk, group_data.get(), layout, addresses, *string_heap, empty_vector,
+		//		                       new_entry_count);
 		RowOperations::InitializeStates(layout, addresses, empty_vector, new_entry_count);
 
 		// now we have only the tuples remaining that might match to an existing group
@@ -490,7 +492,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 struct FlushMoveState {
-	FlushMoveState(Allocator &allocator, RowLayout &layout)
+	FlushMoveState(Allocator &allocator, TupleDataLayout &layout)
 	    : new_groups(STANDARD_VECTOR_SIZE), group_addresses(LogicalType::POINTER),
 	      new_groups_sel(STANDARD_VECTOR_SIZE) {
 		vector<LogicalType> group_types(layout.GetTypes().begin(), layout.GetTypes().end() - 1);
@@ -512,8 +514,9 @@ void GroupedAggregateHashTable::FlushMove(FlushMoveState &state, Vector &source_
 	state.groups.SetCardinality(count);
 	for (idx_t col_no = 0; col_no < state.groups.ColumnCount(); col_no++) {
 		auto &column = state.groups.data[col_no];
-		RowOperations::Gather(source_addresses, *FlatVector::IncrementalSelectionVector(), column,
-		                      *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
+		throw NotImplementedException("Use TupleDataCollection::Gather in GroupedAggregateHashTable::FlushMove");
+		//		RowOperations::Gather(source_addresses, *FlatVector::IncrementalSelectionVector(), column,
+		//		                      *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
 	}
 
 	FindOrCreateGroups(state.groups, source_hashes, state.group_addresses, state.new_groups_sel);
@@ -641,8 +644,9 @@ idx_t GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChun
 	const auto group_cols = layout.ColumnCount() - 1;
 	for (idx_t col_no = 0; col_no < group_cols; col_no++) {
 		auto &column = result.data[col_no];
-		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
-		                      *FlatVector::IncrementalSelectionVector(), result.size(), layout, col_no);
+		throw NotImplementedException("Need to use TupleDataCollection::Gather in GroupedAggregateHashTable::Scan");
+		//		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
+		//		                      *FlatVector::IncrementalSelectionVector(), result.size(), layout, col_no);
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);

@@ -161,7 +161,8 @@ vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 }
 
 void PartitionedTupleData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared<TupleDataAllocator>(context, layout));
+	allocators->allocators.emplace_back(
+	    make_shared<TupleDataAllocator>(BufferManager::GetBufferManager(context), layout));
 }
 
 } // namespace duckdb

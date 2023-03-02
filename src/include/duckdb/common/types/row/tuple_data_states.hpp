@@ -13,12 +13,14 @@
 
 namespace duckdb {
 
-enum class TupleDataAppendProperties : uint8_t {
+enum class TupleDataPinProperties : uint8_t {
 	INVALID,
 	//! TODO
 	KEEP_EVERYTHING_PINNED,
 	//! TODO
-	UNPIN_AFTER_DONE
+	UNPIN_AFTER_DONE,
+	//! TODO
+	ASSUME_PINNED
 };
 
 struct TupleDataManagementState {
@@ -32,7 +34,7 @@ struct TupleDataManagementState {
 struct TupleDataAppendState {
 	TupleDataManagementState chunk_state;
 	vector<UnifiedVectorFormat> vector_data;
-	TupleDataAppendProperties properties;
+	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 	vector<column_t> column_ids;
 };
 
@@ -50,7 +52,7 @@ struct TupleDataScanState {
 	TupleDataManagementState chunk_state;
 	idx_t segment_index;
 	idx_t chunk_index;
-	TupleDataScanProperties properties;
+	TupleDataScanProperties properties = TupleDataScanProperties::INVALID;
 	vector<column_t> column_ids;
 };
 

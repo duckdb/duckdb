@@ -23,8 +23,8 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 	return *this;
 }
 
-TupleDataAllocator::TupleDataAllocator(ClientContext &context, const TupleDataLayout &layout)
-    : buffer_manager(BufferManager::GetBufferManager(context)), layout(layout) {
+TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout)
+    : buffer_manager(buffer_manager), layout(layout) {
 }
 
 Allocator &TupleDataAllocator::GetAllocator() {
@@ -35,49 +35,10 @@ const TupleDataLayout &TupleDataAllocator::GetLayout() {
 	return layout;
 }
 
-static void ReleaseHandles(unordered_map<uint32_t, BufferHandle> &handles, const unordered_set<uint32_t> &block_ids,
-                           vector<BufferHandle> *pinned_handles) {
-	bool found_handle;
-	do {
-		found_handle = false;
-		for (auto it = handles.begin(); it != handles.end(); it++) {
-			if (block_ids.find(it->first) != block_ids.end()) {
-				// still required: do not release
-				continue;
-			}
-			if (pinned_handles) {
-				pinned_handles->emplace_back(std::move(handles.erase(it)->second));
-			} else {
-				handles.erase(it);
-			}
-			found_handle = true;
-			break;
-		}
-	} while (found_handle);
-}
-
-static void ReleaseHandles(TupleDataManagementState &state, const TupleDataChunk &chunk, bool all_constant,
-                           vector<BufferHandle> *pinned_handles) {
-	ReleaseHandles(state.row_handles, chunk.row_block_ids, pinned_handles);
-	if (!all_constant) {
-		ReleaseHandles(state.heap_handles, chunk.heap_block_ids, pinned_handles);
-	}
-}
-
 void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment) {
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
-		vector<BufferHandle> *pinned_handles;
-		if (append_state.properties == TupleDataAppendProperties::KEEP_EVERYTHING_PINNED) {
-			// Keep handles pinned
-			pinned_handles = &segment.pinned_handles;
-		} else if (append_state.properties == TupleDataAppendProperties::UNPIN_AFTER_DONE) {
-			// Release any handles that are no longer required
-			pinned_handles = nullptr;
-		} else {
-			throw InternalException("Encountered TupleDataAppendProperties::INVALID");
-		}
-		ReleaseHandles(append_state.chunk_state, chunks.back(), layout.AllConstant(), pinned_handles);
+		ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back(), append_state.properties);
 	}
 
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
@@ -137,6 +98,7 @@ void TupleDataAllocator::BuildChunkPart(TupleDataAppendState &append_state, idx_
 	uint32_t heap_block_index = 0;
 	uint32_t heap_block_offset = 0;
 	data_ptr_t base_heap_ptr = nullptr;
+	uint32_t total_heap_size = 0;
 	uint32_t last_heap_size = 0;
 	if (!layout.AllConstant()) {
 		const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
@@ -153,7 +115,6 @@ void TupleDataAllocator::BuildChunkPart(TupleDataAppendState &append_state, idx_
 		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
 
 		// Determine how many we can read next
-		uint32_t total_heap_size = 0;
 		for (idx_t i = offset; i < count; i++) {
 			const auto &heap_size = heap_sizes[i];
 			if (total_heap_size + heap_size > heap_remaining) {
@@ -176,7 +137,7 @@ void TupleDataAllocator::BuildChunkPart(TupleDataAppendState &append_state, idx_
 
 	// Create the chunk part
 	chunk.AddPart(TupleDataChunkPart(row_block_index, row_block_offset, heap_block_index, heap_block_offset,
-	                                 base_heap_ptr, last_heap_size, next));
+	                                 base_heap_ptr, total_heap_size, last_heap_size, next));
 }
 
 static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
@@ -218,9 +179,12 @@ static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data
 	}
 }
 
-void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, TupleDataChunk &chunk) {
-	// Release any handles that are no longer required
-	ReleaseHandles(state, chunk, layout.AllConstant(), nullptr);
+void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment,
+                                              idx_t chunk_idx, TupleDataPinProperties properties) {
+	auto &chunk = segment.chunks[chunk_idx];
+
+	// Release or store any handles that are no longer required
+	ReleaseOrStoreHandles(state, segment, chunk, properties);
 
 	idx_t offset = 0;
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
@@ -230,7 +194,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, T
 		for (idx_t i = 0; i < part.count; i++) {
 			row_locations[offset + i] = base_row_ptr + i * layout.GetRowWidth();
 		}
-		if (!layout.AllConstant()) {
+		if (properties != TupleDataPinProperties::ASSUME_PINNED && !layout.AllConstant()) {
 			const auto old_base_heap_ptr = part.base_heap_ptr;
 			const auto new_base_heap_ptr = GetHeapPointer(state, part);
 			if (old_base_heap_ptr != new_base_heap_ptr) {
@@ -274,6 +238,46 @@ data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &state, co
 data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part) {
 	PinHeapBlock(state, part.heap_block_index);
 	return state.heap_handles[part.heap_block_index].Ptr() + part.heap_block_offset;
+}
+
+static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
+                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
+                                          TupleDataPinProperties properties) {
+	bool found_handle;
+	do {
+		found_handle = false;
+		for (auto it = handles.begin(); it != handles.end(); it++) {
+			if (block_ids.find(it->first) != block_ids.end()) {
+				// still required: do not release
+				continue;
+			}
+			switch (properties) {
+			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
+				lock_guard<mutex> guard(segment.pinned_handles_lock);
+				segment.pinned_handles.emplace_back(std::move(handles.erase(it)->second));
+				break;
+			}
+			case TupleDataPinProperties::UNPIN_AFTER_DONE:
+				handles.erase(it);
+				break;
+			default:
+				throw InternalException("Encountered TupleDataPinProperties::INVALID");
+			}
+			found_handle = true;
+			break;
+		}
+	} while (found_handle);
+}
+
+void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment,
+                                               TupleDataChunk &chunk, TupleDataPinProperties properties) const {
+	if (properties == TupleDataPinProperties::ASSUME_PINNED) {
+		return;
+	}
+	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, properties);
+	if (!layout.AllConstant()) {
+		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, properties);
+	}
 }
 
 } // namespace duckdb

@@ -21,9 +21,11 @@ struct TupleDataGatherFunction;
 //! TupleDataCollection represents a set of buffer-managed data stored in row format
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
+	friend class TupleDataChunkIterator;
+
 public:
 	//! Constructs a buffer-managed tuple data collection with the specified layout
-	TupleDataCollection(ClientContext &context, TupleDataLayout layout);
+	TupleDataCollection(BufferManager &buffer_manager, TupleDataLayout layout);
 	//! TODO:
 	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
 
@@ -31,20 +33,20 @@ public:
 
 public:
 	//! The layout of the stored rows
-	const TupleDataLayout &GetLayout() const {
-		return layout;
-	}
+	const TupleDataLayout &GetLayout() const;
 	//! The number of rows stored in the tuple data collection
-	const idx_t &Count() const {
-		return count;
-	}
+	const idx_t &Count() const;
+	//! The number of chunks stored in the tuple data collection
+	idx_t ChunkCount() const;
+	//! The size (in bytes) of the blocks held by this tuple data collection
+	idx_t SizeInBytes() const;
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
 	void InitializeAppend(TupleDataAppendState &append_state,
-	                      TupleDataAppendProperties properties = TupleDataAppendProperties::UNPIN_AFTER_DONE);
+	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
-	                      TupleDataAppendProperties properties = TupleDataAppendProperties::UNPIN_AFTER_DONE);
+	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally TODO
@@ -56,6 +58,9 @@ public:
 	             const SelectionVector &sel);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
+
+	//! TODO:
+	void Pin();
 	//! TODO:
 	void Unpin();
 
@@ -79,6 +84,8 @@ public:
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
+	//! TODO
+	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, DataChunk &result) const;
 	//! Scans a DataChunk from the TupleDataCollection TODO
 	void Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
 	            const idx_t scan_count, DataChunk &result) const;

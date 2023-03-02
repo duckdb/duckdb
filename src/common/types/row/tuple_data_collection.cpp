@@ -31,8 +31,8 @@ struct TupleDataGatherFunction {
 	vector<TupleDataGatherFunction> child_functions;
 };
 
-TupleDataCollection::TupleDataCollection(ClientContext &context, TupleDataLayout layout_p)
-    : layout(std::move(layout_p)), allocator(make_shared<TupleDataAllocator>(context, layout)) {
+TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, TupleDataLayout layout_p)
+    : layout(std::move(layout_p)), allocator(make_shared<TupleDataAllocator>(buffer_manager, layout)) {
 	Initialize();
 }
 
@@ -59,6 +59,30 @@ void TupleDataCollection::Initialize() {
 	}
 }
 
+const TupleDataLayout &TupleDataCollection::GetLayout() const {
+	return layout;
+}
+
+const idx_t &TupleDataCollection::Count() const {
+	return count;
+}
+
+idx_t TupleDataCollection::ChunkCount() const {
+	idx_t total_chunk_count = 0;
+	for (const auto &segment : segments) {
+		total_chunk_count += segment.ChunkCount();
+	}
+	return total_chunk_count;
+}
+
+idx_t TupleDataCollection::SizeInBytes() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment.SizeInBytes();
+	}
+	return total_size;
+}
+
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -81,7 +105,7 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 #endif
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, TupleDataAppendProperties properties) {
+void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, TupleDataPinProperties properties) {
 	vector<column_t> column_ids;
 	column_ids.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -91,7 +115,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, T
 }
 
 void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
-                                           TupleDataAppendProperties properties) {
+                                           TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	append_state.vector_data.resize(layout.ColumnCount());
 	append_state.properties = properties;
@@ -150,15 +174,28 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (other.count == 0) {
 		return;
 	}
-	if (layout.GetTypes() != other.GetLayout().GetTypes()) {
+	if (this->layout.GetTypes() != other.GetLayout().GetTypes()) {
 		throw InternalException("Attempting to combine TupleDataCollection with mismatching types");
 	}
-	this->count += other.count;
-	this->segments.reserve(segments.size() + other.segments.size());
-	for (auto &other_seg : other.segments) {
-		segments.push_back(std::move(other_seg));
+	if (this->segments.size() == 1 && other.segments.size() == 1 &&
+	    this->segments[0].allocator.get() == other.segments[0].allocator.get()) {
+		// Same allocator - combine segments
+		this->segments[0].Combine(other.segments[0]);
+	} else {
+		// Different allocator - append segments
+		for (auto &other_seg : other.segments) {
+			this->segments.emplace_back(std::move(other_seg));
+		}
 	}
+	other.segments.clear();
+	other.count = 0;
+
+	this->count += other.count;
 	Verify();
+}
+
+void TupleDataCollection::Pin() {
+	throw NotImplementedException("TupleDataCollection::Pin");
 }
 
 void TupleDataCollection::Unpin() {
@@ -242,6 +279,17 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	}
 	ScanAtIndex(lstate.chunk_state, gstate.scan_state.column_ids, segment_index, chunk_index, result);
 	return true;
+}
+
+void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count,
+                                 DataChunk &result) const {
+	D_ASSERT(result.ColumnCount() == layout.ColumnCount());
+	vector<column_t> column_ids;
+	column_ids.reserve(layout.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+	Gather(row_locations, sel, column_ids, scan_count, result);
 }
 
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
@@ -491,7 +539,7 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 		// No more data left in the scan
 		return false;
 	}
-	// check within the current segment if we still have chunks to scan
+	// Check within the current segment if we still have chunks to scan
 	while (state.chunk_index >= segments[state.segment_index].ChunkCount()) {
 		// Exhausted all chunks for this segment: Move to the next one
 		state.chunk_state.row_handles.clear();
@@ -511,8 +559,10 @@ void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, con
                                       idx_t segment_index, idx_t chunk_index, DataChunk &result) {
 	auto &segment = segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
-	segment.allocator->InitializeChunkState(chunk_state, chunk);
+	segment.allocator->InitializeChunkState(chunk_state, segment, chunk_index,
+	                                        TupleDataPinProperties::UNPIN_AFTER_DONE);
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), column_ids, chunk.count, result);
+	result.SetCardinality(chunk.count);
 }
 
 template <class T>
