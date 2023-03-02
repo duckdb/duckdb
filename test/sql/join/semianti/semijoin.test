@@ -123,9 +123,14 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a)
 statement ok
 INSERT INTO right_table VALUES (1, 42);
 
-# test complex predicates
 query III
-SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
 ----
 42	1	1
 43	1	1
+
+# correlated subqueries
+query II
+SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+42	42
