@@ -455,8 +455,8 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				NumericStats::Update<T>(*state->current_segment->stats.statistics, state->state.minimum);
-				NumericStats::Update<T>(*state->current_segment->stats.statistics, state->state.maximum);
+				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.minimum);
+				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.maximum);
 			}
 		}
 	};

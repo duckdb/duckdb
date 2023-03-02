@@ -410,7 +410,7 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = *stats.statistics;
+	auto &validity_stats = stats.statistics;
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);

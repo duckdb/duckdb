@@ -150,7 +150,7 @@ public:
 
 		if (is_valid) {
 			T floating_point_value = Load<T>((const_data_ptr_t)&value);
-			NumericStats::Update<T>(*current_segment->stats.statistics, floating_point_value);
+			NumericStats::Update<T>(current_segment->stats.statistics, floating_point_value);
 		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL
 			// store this as "value_identical", only using 9 bits for a NULL

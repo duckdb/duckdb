@@ -49,7 +49,7 @@ public:
 			}
 
 			if (is_valid) {
-				NumericStats::Update<VALUE_TYPE>(*state_wrapper->current_segment->stats.statistics, value);
+				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
 			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));

@@ -39,7 +39,7 @@ struct VersionNode;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
-	vector<unique_ptr<BaseStatistics>> statistics;
+	vector<BaseStatistics> statistics;
 };
 
 class RowGroup : public SegmentBase {
@@ -70,7 +70,7 @@ private:
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 	//! The segment statistics for each of the columns
-	vector<shared_ptr<SegmentStatistics>> stats;
+	vector<SegmentStatistics> stats;
 
 public:
 	DatabaseInstance &GetDatabase();

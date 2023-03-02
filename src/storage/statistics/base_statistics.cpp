@@ -14,6 +14,25 @@ BaseStatistics::BaseStatistics(LogicalType type) : type(std::move(type)), distin
 BaseStatistics::~BaseStatistics() {
 }
 
+BaseStatistics::BaseStatistics(BaseStatistics &&other) noexcept {
+	std::swap(type, other.type);
+	has_null = other.has_null;
+	has_no_null = other.has_no_null;
+	distinct_count = other.distinct_count;
+	stats_union = other.stats_union;
+	std::swap(child_stats, other.child_stats);
+}
+
+BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
+	std::swap(type, other.type);
+	has_null = other.has_null;
+	has_no_null = other.has_no_null;
+	distinct_count = other.distinct_count;
+	stats_union = other.stats_union;
+	std::swap(child_stats, other.child_stats);
+	return *this;
+}
+
 void BaseStatistics::InitializeUnknown() {
 	has_null = true;
 	has_no_null = true;
@@ -151,12 +170,30 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	return result;
 }
 
+void BaseStatistics::Copy(const BaseStatistics &other) {
+	CopyBase(other);
+	stats_union = other.stats_union;
+	for (auto &stats : other.child_stats) {
+		child_stats.push_back(stats ? stats->Copy() : nullptr);
+	}
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::Copy() const {
 	auto result = BaseStatistics::Construct(type);
 	result->CopyBase(*this);
 	result->stats_union = stats_union;
 	for (auto &stats : child_stats) {
 		result->child_stats.push_back(stats ? stats->Copy() : nullptr);
+	}
+	return result;
+}
+
+BaseStatistics BaseStatistics::CopyRegular() const {
+	BaseStatistics result(type);
+	result.CopyBase(*this);
+	result.stats_union = stats_union;
+	for (auto &stats : child_stats) {
+		result.child_stats.push_back(stats ? stats->Copy() : nullptr);
 	}
 	return result;
 }

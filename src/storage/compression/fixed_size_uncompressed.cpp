@@ -192,7 +192,7 @@ struct StandardFixedSizeAppend {
 				auto target_idx = target_offset + i;
 				bool is_null = !adata.validity.RowIsValid(source_idx);
 				if (!is_null) {
-					NumericStats::Update<T>(*stats.statistics, sdata[source_idx]);
+					NumericStats::Update<T>(stats.statistics, sdata[source_idx]);
 					tdata[target_idx] = sdata[source_idx];
 				} else {
 					// we insert a NullValue<T> in the null gap for debuggability
@@ -204,7 +204,7 @@ struct StandardFixedSizeAppend {
 			for (idx_t i = 0; i < count; i++) {
 				auto source_idx = adata.sel->get_index(offset + i);
 				auto target_idx = target_offset + i;
-				NumericStats::Update<T>(*stats.statistics, sdata[source_idx]);
+				NumericStats::Update<T>(stats.statistics, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}

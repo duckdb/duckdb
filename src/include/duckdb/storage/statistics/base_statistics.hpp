@@ -41,7 +41,13 @@ class BaseStatistics {
 	friend struct ListStats;
 
 public:
-	~BaseStatistics();
+	DUCKDB_API ~BaseStatistics();
+	// disable copy constructors
+	BaseStatistics(const BaseStatistics &other) = delete;
+	BaseStatistics &operator=(const BaseStatistics &) = delete;
+	//! enable move constructors
+	DUCKDB_API BaseStatistics(BaseStatistics &&other) noexcept;
+	DUCKDB_API BaseStatistics &operator=(BaseStatistics &&) noexcept;
 
 public:
 	//! Creates a set of statistics for data that is unknown, i.e. "has_null" is true, "has_no_null" is true, etc
@@ -76,7 +82,10 @@ public:
 
 	void Merge(const BaseStatistics &other);
 
+	void Copy(const BaseStatistics &other);
+
 	unique_ptr<BaseStatistics> Copy() const;
+	BaseStatistics CopyRegular() const;
 	void CopyBase(const BaseStatistics &orig);
 
 	void Serialize(Serializer &serializer) const;

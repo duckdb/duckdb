@@ -173,7 +173,7 @@ public:
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		StringStats::Update(*stats.statistics, new_value);
+		StringStats::Update(stats.statistics, new_value);
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
