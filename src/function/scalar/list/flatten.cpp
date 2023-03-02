@@ -121,10 +121,7 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 
 static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &list_child_stats = ListStats::GetChildStats(*child_stats[0]);
+	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
 	auto child_copy = list_child_stats.Copy();
 	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	return child_copy;

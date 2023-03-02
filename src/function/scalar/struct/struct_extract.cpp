@@ -102,12 +102,9 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
 
 	auto &info = (StructExtractBindData &)*bind_data;
-	auto struct_child_stats = StructStats::GetChildStats(*child_stats[0]);
+	auto struct_child_stats = StructStats::GetChildStats(child_stats[0]);
 	return struct_child_stats[info.index].ToUnique();
 }
 

@@ -106,12 +106,9 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	D_ASSERT(child_stats.size() == 2);
-	if (!child_stats[0] || !child_stats[1]) {
-		return nullptr;
-	}
 
-	auto &left_stats = *child_stats[0];
-	auto &right_stats = *child_stats[1];
+	auto &left_stats = child_stats[0];
+	auto &right_stats = child_stats[1];
 
 	auto stats = left_stats.Copy();
 	stats->Merge(right_stats);

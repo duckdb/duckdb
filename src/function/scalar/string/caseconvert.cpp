@@ -153,10 +153,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	if (!StringStats::CanContainUnicode(*child_stats[0])) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = CaseConvertFunctionASCII<IS_UPPER>;
 	}
 	return nullptr;

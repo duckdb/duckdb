@@ -161,11 +161,11 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 }
 
 template <int64_t MIN, int64_t MAX>
-static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatistics> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
 	auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
-	result->CopyValidity(child_stats[0].get());
+	result->CopyValidity(child_stats[0]);
 	NumericStats::SetMin(*result, Value::BIGINT(MIN));
 	NumericStats::SetMax(*result, Value::BIGINT(MAX));
 	return result;
@@ -173,12 +173,9 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 
 struct DatePart {
 	template <class T, class OP>
-	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats) {
 		// we can only propagate complex date part stats if the child has stats
-		if (!child_stats[0]) {
-			return nullptr;
-		}
-		auto &nstats = *child_stats[0];
+		auto &nstats = child_stats[0];
 		if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
 			return nullptr;
 		}
@@ -197,7 +194,7 @@ struct DatePart {
 		auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
 		NumericStats::SetMin(*result, Value::BIGINT(min_part));
 		NumericStats::SetMax(*result, Value::BIGINT(max_part));
-		result->CopyValidity(child_stats[0].get());
+		result->CopyValidity(child_stats[0]);
 		return result;
 	}
 

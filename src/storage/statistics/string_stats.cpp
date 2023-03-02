@@ -158,6 +158,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 		memcpy(string_data.max, other_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
 	string_data.has_unicode = string_data.has_unicode || other_data.has_unicode;
+	string_data.has_max_string_length = string_data.has_max_string_length && other_data.has_max_string_length;
 	string_data.max_string_length = MaxValue<uint32_t>(string_data.max_string_length, other_data.max_string_length);
 }
 

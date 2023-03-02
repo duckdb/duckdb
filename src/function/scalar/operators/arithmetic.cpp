@@ -139,11 +139,8 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0] || !child_stats[1]) {
-		return nullptr;
-	}
-	auto &lstats = *child_stats[0];
-	auto &rstats = *child_stats[1];
+	auto &lstats = child_stats[0];
+	auto &rstats = child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMin(lstats) && NumericStats::HasMax(lstats) && NumericStats::HasMin(rstats) &&
@@ -515,10 +512,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &istats = *child_stats[0];
+	auto &istats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMin(istats) && NumericStats::HasMax(istats)) {

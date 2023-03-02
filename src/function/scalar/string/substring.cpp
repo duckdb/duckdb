@@ -307,11 +307,8 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
 	// we only care about the stats of the first child (i.e. the string)
-	if (!StringStats::CanContainUnicode(*child_stats[0])) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = SubstringFunctionASCII;
 	}
 	return nullptr;

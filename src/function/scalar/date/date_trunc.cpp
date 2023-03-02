@@ -587,12 +587,9 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 template <class TA, class TR, class OP>
-static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_stats) {
 	// we can only propagate date stats if the child has stats
-	if (!child_stats[1]) {
-		return nullptr;
-	}
-	auto &nstats = *child_stats[1];
+	auto &nstats = child_stats[1];
 	if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
 		return nullptr;
 	}
@@ -612,7 +609,7 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 	auto result = NumericStats::CreateEmpty(min_value.type());
 	NumericStats::SetMin(*result, min_value);
 	NumericStats::SetMax(*result, max_value);
-	result->CopyValidity(child_stats[0].get());
+	result->CopyValidity(child_stats[0]);
 	return result;
 }
 

@@ -211,10 +211,7 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 
 static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &list_child_stats = ListStats::GetChildStats(*child_stats[0]);
+	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
 	auto child_copy = list_child_stats.Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
 	child_copy->Set(StatsInfo::CAN_HAVE_NULL_VALUES);

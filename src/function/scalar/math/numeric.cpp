@@ -76,10 +76,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &lstats = *child_stats[0];
+	auto &lstats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMin(lstats) && NumericStats::HasMax(lstats)) {
@@ -124,7 +121,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		} else {
 			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
 			*input.expr_ptr = std::move(input.expr.children[0]);
-			return std::move(child_stats[0]);
+			return child_stats[0].ToUnique();
 		}
 		new_min = Value::Numeric(expr.return_type, min_val);
 		new_max = Value::Numeric(expr.return_type, max_val);

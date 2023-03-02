@@ -42,11 +42,8 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Fu
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
 	// for strpos, we only care if the FIRST string has unicode or not
-	if (!StringStats::CanContainUnicode(*child_stats[0])) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator>;
 	}
 	return nullptr;
