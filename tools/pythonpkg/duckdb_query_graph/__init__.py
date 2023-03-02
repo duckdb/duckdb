@@ -31,17 +31,17 @@ def generate_html(graph_json, include_meta_info):
 
 	graph_json = graph_json.replace('\n', ' ').replace("'", "\\'").replace("\\n", "\\\\n")
 
-	chart_script = """<script>
-var graph_json = '${GRAPH_JSON}';
+	chart_script = f"""<script>
+var graph_json = '{graph_json}';
 var result = parse_profiling_output(graph_json);
 var meta_info = result[0];
 var graph_data = result[1];
-${META_INFO}
+{"" if not include_meta_info else "document.getElementById('meta-info').innerHTML = meta_info;"}
 if (graph_data !== null && graph_data !== undefined) {
 	create_graph(graph_data, '#query-profile', '.chart');
 }
 </script>
-	""".replace("${GRAPH_JSON}", graph_json).replace("${META_INFO}", "" if not include_meta_info else "document.getElementById('meta-info').innerHTML = meta_info;")
+	"""
 	return {
 		'css': css,
 		'libraries': libraries,
