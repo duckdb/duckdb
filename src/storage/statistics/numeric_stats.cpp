@@ -347,62 +347,61 @@ void NumericStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	SerializeNumericStatsValue(NumericStats::MaxOrNull(stats), writer);
 }
 
-Value DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader) {
+void DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader, NumericValueUnion &result,
+                                  bool &has_stats) {
 	auto is_null = reader.ReadRequired<bool>();
 	if (is_null) {
-		return Value(type);
+		has_stats = false;
+		return;
 	}
-	Value result;
+	has_stats = true;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		result = Value::BOOLEAN(reader.ReadRequired<bool>());
+		result.value_.boolean = reader.ReadRequired<bool>();
 		break;
 	case PhysicalType::INT8:
-		result = Value::TINYINT(reader.ReadRequired<int8_t>());
+		result.value_.tinyint = reader.ReadRequired<int8_t>();
 		break;
 	case PhysicalType::INT16:
-		result = Value::SMALLINT(reader.ReadRequired<int16_t>());
+		result.value_.smallint = reader.ReadRequired<int16_t>();
 		break;
 	case PhysicalType::INT32:
-		result = Value::INTEGER(reader.ReadRequired<int32_t>());
+		result.value_.integer = reader.ReadRequired<int32_t>();
 		break;
 	case PhysicalType::INT64:
-		result = Value::BIGINT(reader.ReadRequired<int64_t>());
+		result.value_.bigint = reader.ReadRequired<int64_t>();
 		break;
 	case PhysicalType::UINT8:
-		result = Value::UTINYINT(reader.ReadRequired<uint8_t>());
+		result.value_.utinyint = reader.ReadRequired<uint8_t>();
 		break;
 	case PhysicalType::UINT16:
-		result = Value::USMALLINT(reader.ReadRequired<uint16_t>());
+		result.value_.usmallint = reader.ReadRequired<uint16_t>();
 		break;
 	case PhysicalType::UINT32:
-		result = Value::UINTEGER(reader.ReadRequired<uint32_t>());
+		result.value_.uinteger = reader.ReadRequired<uint32_t>();
 		break;
 	case PhysicalType::UINT64:
-		result = Value::UBIGINT(reader.ReadRequired<uint64_t>());
+		result.value_.ubigint = reader.ReadRequired<uint64_t>();
 		break;
 	case PhysicalType::INT128:
-		result = Value::HUGEINT(reader.ReadRequired<hugeint_t>());
+		result.value_.hugeint = reader.ReadRequired<hugeint_t>();
 		break;
 	case PhysicalType::FLOAT:
-		result = Value::FLOAT(reader.ReadRequired<float>());
+		result.value_.float_ = reader.ReadRequired<float>();
 		break;
 	case PhysicalType::DOUBLE:
-		result = Value::DOUBLE(reader.ReadRequired<double>());
+		result.value_.double_ = reader.ReadRequired<double>();
 		break;
 	default:
 		throw InternalException("Unsupported type for deserializing numeric statistics");
 	}
-	result.Reinterpret(type);
-	return result;
 }
 
 BaseStatistics NumericStats::Deserialize(FieldReader &reader, LogicalType type) {
-	auto min = DeserializeNumericStatsValue(type, reader);
-	auto max = DeserializeNumericStatsValue(type, reader);
 	BaseStatistics result(std::move(type));
-	NumericStats::SetMin(result, min);
-	NumericStats::SetMax(result, max);
+	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
+	DeserializeNumericStatsValue(result.GetType(), reader, numeric_stats.min, numeric_stats.has_min);
+	DeserializeNumericStatsValue(result.GetType(), reader, numeric_stats.max, numeric_stats.has_max);
 	return result;
 }
 
