@@ -74,6 +74,7 @@ void StringStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	writer.WriteBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	writer.WriteBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	writer.WriteField<bool>(string_data.has_unicode);
+	writer.WriteField<bool>(string_data.has_max_string_length);
 	writer.WriteField<uint32_t>(string_data.max_string_length);
 }
 
@@ -83,6 +84,7 @@ BaseStatistics StringStats::Deserialize(FieldReader &reader, LogicalType type) {
 	reader.ReadBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	reader.ReadBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	string_data.has_unicode = reader.ReadRequired<bool>();
+	string_data.has_max_string_length = reader.ReadRequired<bool>();
 	string_data.max_string_length = reader.ReadRequired<uint32_t>();
 	return result;
 }
