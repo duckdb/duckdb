@@ -1,5 +1,6 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
@@ -138,7 +139,6 @@ void TupleDataCollection::Append(DataChunk &new_chunk, vector<column_t> column_i
 }
 
 void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &new_chunk) {
-	D_ASSERT(segments.size() == 1);                                    // Cannot append after Combine
 	D_ASSERT(append_state.vector_data.size() == layout.ColumnCount()); // Needs InitializeAppend
 	for (const auto &col_idx : append_state.column_ids) {
 		new_chunk.data[col_idx].ToUnifiedFormat(new_chunk.size(), append_state.vector_data[col_idx]);
@@ -147,19 +147,22 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 		ComputeHeapSizes(append_state, new_chunk);
 	}
 
-	allocator->Build(append_state, count, segments.back());
+	const auto chunk_count = new_chunk.size();
+	segments.back().allocator->Build(append_state, chunk_count, segments.back());
 
 	// Set the validity mask for each row before inserting data
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-	for (idx_t i = 0; i < count; ++i) {
+	for (idx_t i = 0; i < chunk_count; ++i) {
 		ValidityBytes(row_locations[i]).SetAllValid(layout.ColumnCount());
 	}
 
 	// Write the data
 	for (const auto &col_idx : append_state.column_ids) {
-		Scatter(append_state, new_chunk.data[col_idx], col_idx, new_chunk.size(),
-		        *FlatVector::IncrementalSelectionVector());
+		Scatter(append_state, new_chunk.data[col_idx], col_idx, chunk_count, *FlatVector::IncrementalSelectionVector());
 	}
+
+	count += chunk_count;
+	Verify();
 }
 
 void TupleDataCollection::Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id,
@@ -187,21 +190,10 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 			this->segments.emplace_back(std::move(other_seg));
 		}
 	}
+	this->count += other.count;
 	other.segments.clear();
 	other.count = 0;
-
-	this->count += other.count;
 	Verify();
-}
-
-void TupleDataCollection::Pin() {
-	throw NotImplementedException("TupleDataCollection::Pin");
-}
-
-void TupleDataCollection::Unpin() {
-	for (auto &segment : segments) {
-		segment.pinned_handles.clear();
-	}
 }
 
 void TupleDataCollection::InitializeScanChunk(DataChunk &chunk) const {
@@ -561,6 +553,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, con
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(chunk_state, segment, chunk_index,
 	                                        TupleDataPinProperties::UNPIN_AFTER_DONE);
+	result.Reset();
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), column_ids, chunk.count, result);
 	result.SetCardinality(chunk.count);
 }
@@ -716,6 +709,42 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const TupleDataLa
 	}
 	result.function = function;
 	return result;
+}
+
+void TupleDataCollection::Pin() {
+	// use TupleDataChunkIterator with KEEP_PINNED
+	throw NotImplementedException("TupleDataCollection::Pin");
+}
+
+void TupleDataCollection::Unpin() {
+	for (auto &segment : segments) {
+		segment.pinned_handles.clear();
+	}
+}
+
+string TupleDataCollection::ToString() {
+	DataChunk chunk;
+	InitializeScanChunk(chunk);
+
+	TupleDataScanState scan_state;
+	InitializeScan(scan_state);
+
+	string result = StringUtil::Format("TupleDataCollection - [%llu Chunks, %llu Rows]\n", ChunkCount(), Count());
+	idx_t chunk_idx = 0;
+	idx_t row_count = 0;
+	while (Scan(scan_state, chunk)) {
+		result +=
+		    StringUtil::Format("Chunk %llu - [Rows %llu - %llu]\n", chunk_idx, row_count, row_count + chunk.size()) +
+		    chunk.ToString();
+		chunk_idx++;
+		row_count += chunk.size();
+	}
+
+	return result;
+}
+
+void TupleDataCollection::Print() {
+	Printer::Print(ToString());
 }
 
 void TupleDataCollection::Verify() const {

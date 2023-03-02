@@ -23,8 +23,8 @@ public:
 	TupleDataChunkPart &operator=(const TupleDataChunkPart &) = delete;
 
 	//! Enable move constructors
-	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept;
-	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept;
+	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
+	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
 
 public:
 	//! Index/offset of the row block

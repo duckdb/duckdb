@@ -59,11 +59,6 @@ public:
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
 
-	//! TODO:
-	void Pin();
-	//! TODO:
-	void Unpin();
-
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	void InitializeScanChunk(DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
@@ -92,6 +87,16 @@ public:
 	//! TODO:
 	void Gather(Vector &row_locations, const SelectionVector &sel, const column_t column_id, const idx_t scan_count,
 	            Vector &result) const;
+
+	//! TODO:
+	void Pin();
+	//! TODO:
+	void Unpin();
+
+	//! Converts this TupleDataCollection to a string representation
+	string ToString();
+	//! Prints the string representation of this TupleDataCollection
+	void Print();
 
 private:
 	//! TODO:

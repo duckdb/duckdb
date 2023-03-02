@@ -89,7 +89,7 @@ private:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
-	const TupleDataLayout &layout;
+	const TupleDataLayout layout;
 	//! Blocks storing the fixed-size rows
 	vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)

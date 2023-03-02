@@ -31,25 +31,12 @@ struct ClientConfig;
 struct JoinHTScanState {
 public:
 	JoinHTScanState(TupleDataCollection &collection, idx_t chunk_idx_from, idx_t chunk_idx_to)
-	    : iterator(collection, TupleDataPinProperties::ASSUME_PINNED, chunk_idx_from, chunk_idx_to), offset_in_chunk(0),
-	      total(0), scan_index(0), scanned(0) {
+	    : iterator(collection, TupleDataPinProperties::ASSUME_PINNED, chunk_idx_from, chunk_idx_to),
+	      offset_in_chunk(0) {
 	}
 
 	TupleDataChunkIterator iterator;
 	idx_t offset_in_chunk;
-
-	//! Used for synchronization of parallel external join
-	idx_t total;
-	idx_t scan_index;
-	idx_t scanned;
-
-public:
-	void Reset() {
-		offset_in_chunk = 0;
-		total = 0;
-		scan_index = 0;
-		scanned = 0;
-	}
 
 private:
 	//! Implicit copying is not allowed
@@ -142,10 +129,8 @@ public:
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys, Vector *precomputed_hashes = nullptr);
-	//! Scan the HT to find the rows for the full outer join and return the number of found entries
+	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
-	//! Construct the full outer join result given the addresses and number of found entries
-	void GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries);
 
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);

@@ -35,7 +35,7 @@ private:
 	idx_t end_segment_idx;
 	idx_t end_chunk_idx;
 
-	TupleDataManagementState state;
+	TupleDataScanState state;
 	idx_t current_segment_idx;
 	idx_t current_chunk_idx;
 };

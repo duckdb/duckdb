@@ -104,8 +104,6 @@ public:
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
 	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
-		append_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
-
 		auto &allocator = Allocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
@@ -116,6 +114,8 @@ public:
 		join_keys.Initialize(allocator, op.condition_types);
 
 		hash_table = op.InitializeHashTable(context);
+
+		hash_table->GetDataCollection().InitializeAppend(append_state, TupleDataPinProperties::UNPIN_AFTER_DONE);
 	}
 
 public:
@@ -216,7 +216,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	auto approx_ptr_table_size = ht.Count() * 3 * sizeof(data_ptr_t);
+	//	auto approx_ptr_table_size = ht.Count() * 3 * sizeof(data_ptr_t);
 	//	if (can_go_external && ht.SizeInBytes() + approx_ptr_table_size >= gstate.sink_memory_per_thread) {
 	//		lstate.hash_table->SwizzleBlocks();
 	//		gstate.external = true;
@@ -395,7 +395,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+	auto use_perfect_hash = false; // sink.perfect_join_executor->CanDoPerfectHashJoin(); TODO: re-enable
 	if (use_perfect_hash) {
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];

@@ -320,27 +320,25 @@ void JoinHashTable::InitializePointerTable() {
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
-	memset(hash_map.get(), 0, capacity * sizeof(data_ptr_t));
+	std::fill_n((data_ptr_t *)hash_map.get(), capacity, nullptr);
 }
 
 void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
-	TupleDataManagementState state;
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to);
+	auto row_locations = iterator.GetRowLocations();
 	do {
 		auto count = iterator.GetCount();
-		auto row_locations = iterator.GetRowLocations();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
 		}
 		InsertHashes(hashes, count, row_locations, parallel);
-
 	} while (iterator.Next());
 }
 
@@ -834,30 +832,6 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	}
 }
 
-void JoinHashTable::GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries) {
-	if (found_entries == 0) {
-		return;
-	}
-	result.SetCardinality(found_entries);
-	idx_t left_column_count = result.ColumnCount() - build_types.size();
-	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
-	// set the left side as a constant NULL
-	for (idx_t i = 0; i < left_column_count; i++) {
-		Vector &vec = result.data[i];
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
-	}
-
-	// gather the values from the RHS
-	for (idx_t i = 0; i < build_types.size(); i++) {
-		auto &vector = result.data[left_column_count + i];
-		D_ASSERT(vector.GetType() == build_types[i]);
-		const auto col_no = condition_types.size() + i;
-		//		RowOperations::Gather(addresses, sel_vector, vector, sel_vector, found_entries, layout, col_no);
-		data_collection->Gather(addresses, sel_vector, col_no, found_entries, vector);
-	}
-}
-
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {
 	// TODO: needs KEEP_PINNED
 	// iterate over HT
@@ -986,7 +960,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	//	string_heap->Merge(*swizzled_string_heap);
 	//	D_ASSERT(count == Count());
 	//
-	//	return true;
+	return true;
 }
 
 static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk &payload, Vector &hashes) {

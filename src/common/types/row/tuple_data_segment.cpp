@@ -11,34 +11,27 @@ TupleDataChunkPart::TupleDataChunkPart(uint32_t row_block_index_p, uint32_t row_
       last_heap_size(last_heap_size_p), count(count_p) {
 }
 
-TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept {
-	std::swap(row_block_index, other.row_block_index);
-	std::swap(heap_block_index, other.heap_block_index);
-	std::swap(count, other.count);
+TupleDataChunk::TupleDataChunk() : count(0) {
 }
 
-TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) noexcept {
-	std::swap(row_block_index, other.row_block_index);
-	std::swap(heap_block_index, other.heap_block_index);
-	std::swap(count, other.count);
-	return *this;
-}
-
-TupleDataChunk::TupleDataChunk() {
+static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noexcept {
+	std::swap(a.parts, b.parts);
+	std::swap(a.row_block_ids, b.row_block_ids);
+	std::swap(a.heap_block_ids, b.heap_block_ids);
+	std::swap(a.count, b.count);
 }
 
 TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept {
-	std::swap(parts, other.parts);
-	std::swap(count, other.count);
+	SwapTupleDataChunk(*this, other);
 }
 
 TupleDataChunk &TupleDataChunk::operator=(TupleDataChunk &&other) noexcept {
-	std::swap(parts, other.parts);
-	std::swap(count, other.count);
+	SwapTupleDataChunk(*this, other);
 	return *this;
 }
 
 void TupleDataChunk::AddPart(TupleDataChunkPart &&part) {
+	count += part.count;
 	row_block_ids.insert(part.row_block_index);
 	heap_block_ids.insert(part.heap_block_index);
 	parts.emplace_back(std::move(part));
@@ -58,14 +51,19 @@ void TupleDataChunk::Verify() const {
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p) : allocator(allocator_p), count(0) {
 }
 
+void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
+	std::swap(a.allocator, b.allocator);
+	std::swap(a.chunks, b.chunks);
+	std::swap(a.count, b.count);
+	std::swap(a.pinned_handles, b.pinned_handles);
+}
+
 TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
-	std::swap(allocator, other.allocator);
-	std::swap(chunks, other.chunks);
+	SwapTupleDataSegment(*this, other);
 }
 
 TupleDataSegment &TupleDataSegment::operator=(TupleDataSegment &&other) noexcept {
-	std::swap(allocator, other.allocator);
-	std::swap(chunks, other.chunks);
+	SwapTupleDataSegment(*this, other);
 	return *this;
 }
 

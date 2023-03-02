@@ -8,6 +8,8 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
@@ -93,6 +95,9 @@ template class std::unique_ptr<RowDataCollection>;
 template class std::unique_ptr<ColumnDataCollection>;
 template class std::shared_ptr<ColumnDataAllocator>;
 template class std::unique_ptr<PartitionedColumnData>;
+template class std::unique_ptr<TupleDataCollection>;
+template class std::shared_ptr<TupleDataAllocator>;
+template class std::unique_ptr<PartitionedTupleData>;
 template class std::shared_ptr<PreparedStatementData>;
 template class std::unique_ptr<VacuumInfo>;
 
