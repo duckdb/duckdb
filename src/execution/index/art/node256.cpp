@@ -11,7 +11,7 @@ void Node256::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n256 = node.Get<Node256>(art.n256_nodes);
+	auto n256 = node.Get<Node256>(art);
 
 	// free all children
 	if (n256->count) {
@@ -26,7 +26,8 @@ void Node256::Free(ART &art, ARTNode &node) {
 }
 
 Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
-	auto n256 = node.Get<Node256>(art.n256_nodes);
+
+	auto n256 = node.Get<Node256>(art);
 	art.IncreaseMemorySize(sizeof(Node256));
 
 	n256->count = 0;
@@ -41,7 +42,7 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = node.Get<Node256>(art.n256_nodes);
+	auto n256 = node.Get<Node256>(art);
 
 	n256->count++;
 	n256->children[byte] = child;
@@ -51,7 +52,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = node.Get<Node256>(art.n256_nodes);
+	auto n256 = node.Get<Node256>(art);
 
 	// free the child and decrease the count
 	ARTNode::Free(art, n256->children[pos]);
@@ -60,7 +61,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	// shrink node to Node48
 	if (n256->count <= ARTNode::NODE_256_SHRINK_THRESHOLD) {
 
-		auto new_n48_node = ARTNode::New(art, ARTNodeType::N48);
+		auto new_n48_node = ARTNode::New(art, ARTNodeType::NODE_48);
 		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->prefix.Move(n256->prefix);
@@ -154,7 +155,7 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(ARTNodeType::N256);
+	writer.Write(ARTNodeType::NODE_256);
 	writer.Write<uint16_t>(count);
 	prefix.Serialize(art, writer);
 

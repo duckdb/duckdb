@@ -11,7 +11,7 @@ void Node4::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n4 = node.Get<Node4>(art.n4_nodes);
+	auto n4 = node.Get<Node4>(art);
 
 	// free all children
 	if (n4->count) {
@@ -24,7 +24,8 @@ void Node4::Free(ART &art, ARTNode &node) {
 }
 
 Node4 *Node4::Initialize(ART &art, const ARTNode &node) {
-	auto n4 = node.Get<Node4>(art.n4_nodes);
+
+	auto n4 = node.Get<Node4>(art);
 	art.IncreaseMemorySize(sizeof(Node4));
 
 	n4->count = 0;
@@ -45,7 +46,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n4 = node.Get<Node4>(art.n4_nodes);
+	auto n4 = node.Get<Node4>(art);
 
 	// insert new child node into node
 	if (n4->count < ARTNode::NODE_4_CAPACITY) {
@@ -66,7 +67,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 
 	} else {
 		// node is full, grow to Node16
-		auto new_n16_node = ARTNode::New(art, ARTNodeType::N16);
+		auto new_n16_node = ARTNode::New(art, ARTNodeType::NODE_16);
 		auto new_n16 = Node16::Initialize(art, new_n16_node);
 
 		new_n16->count = n4->count;
@@ -88,7 +89,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n4 = node.Get<Node4>(art.n4_nodes);
+	auto n4 = node.Get<Node4>(art);
 
 	D_ASSERT(pos < n4->count);
 	D_ASSERT(n4->count > 1);
@@ -192,7 +193,7 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(ARTNodeType::N4);
+	writer.Write(ARTNodeType::NODE_4);
 	writer.Write<uint16_t>(count);
 	prefix.Serialize(art, writer);
 

@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -27,8 +29,15 @@
 
 namespace duckdb {
 
+// classes
+enum class VerifyExistenceType : uint8_t {
+	APPEND = 0,    // appends to a table
+	APPEND_FK = 1, // appends to a table that has a foreign key
+	DELETE_FK = 2  // delete from a table that has a foreign key
+};
 class ConflictManager;
 
+// structs
 struct ARTIndexScanState : public IndexScanState {
 
 	//! Scan predicates (single predicate scan or range scan)
@@ -40,12 +49,6 @@ struct ARTIndexScanState : public IndexScanState {
 	vector<row_t> result_ids;
 	//! To iterate the leaves and scan their row IDs
 	Iterator iterator;
-};
-
-enum class VerifyExistenceType : uint8_t {
-	APPEND = 0,    // appends to a table
-	APPEND_FK = 1, // appends to a table that has a foreign key
-	DELETE_FK = 2  // delete from a table that has a foreign key
 };
 
 class ART : public Index {
@@ -60,17 +63,8 @@ public:
 	//! Root of the tree
 	ARTNode tree;
 
-	//! Fixed size allocators
-	FixedSizeAllocator prefix_segments;
-	FixedSizeAllocator leaf_segments;
-	FixedSizeAllocator leaf_nodes;
-	FixedSizeAllocator n4_nodes;
-	FixedSizeAllocator n16_nodes;
-	FixedSizeAllocator n48_nodes;
-	FixedSizeAllocator n256_nodes;
-
-	//! Used during vacuum, keeps track of the buffers that can be vacuumed (allows early aborts)
-	idx_t vacuum_count;
+	//! Unordered map containing all fixed size allocators
+	unordered_map<ARTNodeType, FixedSizeAllocator, ARTNodeTypeHash> nodes;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -99,9 +93,13 @@ public:
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
-	//! Returns true, if there is still memory allocated that can be vacuumed
-	void SetVacuumCount();
-	//! Vacuum the ART by freeing unnecessarily allocated memory
+	//! Initializes a vacuum operation by calling the initialize operation of the respective
+	//! node allocator, and returns a set containing all qualifying node allocators
+	unordered_set<ARTNodeType, ARTNodeTypeHash> InitializeVacuum();
+	//! Finalizes a vacuum operation by calling the finalize operation of the respective
+	//! node allocators
+	void FinalizeVacuum(unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
+	//! Traverses an ART and vacuums the qualifying nodes
 	void Vacuum();
 
 	//! Search equal values and fetches the row IDs

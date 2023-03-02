@@ -27,20 +27,21 @@ idx_t FixedSizeAllocator::New() {
 			D_ASSERT((position & 0xf000ffff) == 0);
 			position |= buffer_id;
 			D_ASSERT((position & 0xf0000000) == 0);
-			free_list.push(position);
+			free_list.insert(position);
 		}
 
 		buffers.push_back(buffer);
 	}
 
 	// return the minimum position in the free list
-	auto position = free_list.top();
-	free_list.pop();
+	D_ASSERT(!free_list.empty());
+	auto position = *free_list.begin();
+	free_list.erase(free_list.begin());
 	return position;
 }
 
 void FixedSizeAllocator::Free(const idx_t &position) {
-	free_list.push(position);
+	free_list.insert(position);
 }
 
 template <class T>
@@ -56,12 +57,12 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 
 	// merge the free lists
 	idx_t buffer_count = buffers.size();
-	while (!other.free_list.empty()) {
-		auto position = other.free_list.top() + buffer_count;
-		D_ASSERT((other.free_list.top() & 0xffff0000) == (position & 0xffff0000));
-		free_list.push(position);
-		other.free_list.pop();
+	for (const auto &other_position : other.free_list) {
+		auto position = other_position + buffer_count;
+		D_ASSERT((other_position & 0xffff0000) == (position & 0xffff0000));
+		free_list.insert(position);
 	}
+	other.free_list.clear();
 
 	// merge the buffers
 	for (auto &buffer : other.buffers) {
@@ -69,19 +70,48 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	}
 }
 
-idx_t FixedSizeAllocator::VacuumCount() {
-	return free_list.size() / offsets_per_buffer / 2;
+bool FixedSizeAllocator::InitializeVacuum() {
+	auto vacuum_count = free_list.size() / offsets_per_buffer / 2;
+	vacuum_threshold = buffers.size() - vacuum_count;
+	return vacuum_threshold < buffers.size();
+}
+
+void FixedSizeAllocator::FinalizeVacuum() {
+
+	// free all (now unused) buffers
+	while (vacuum_threshold < buffers.size()) {
+		Allocator().FreeData(buffers.back(), Storage::BLOCK_ALLOC_SIZE);
+		buffers.pop_back();
+	}
+
+	// remove all invalid positions from the free list
+	auto lower_bound = vacuum_threshold;
+	D_ASSERT((lower_bound & 0xffff0000) == 0);
+	auto lower_bound_it = free_list.lower_bound(lower_bound);
+	free_list.erase(lower_bound_it, free_list.end());
+
+	// ensure that finalizing was successful
+	if (InitializeVacuum()) {
+		throw InternalException("Failed to finalize vacuum operation");
+	}
+}
+
+bool FixedSizeAllocator::NeedsVacuum(const idx_t &position) const {
+
+	// get the buffer ID
+	D_ASSERT((position & 0xf0000000) == 0);
+	auto buffer_id = position & 0x0000ffff;
+
+	if (buffer_id >= vacuum_threshold) {
+		return true;
+	}
+	return false;
 }
 
 idx_t FixedSizeAllocator::Vacuum(const idx_t &position) {
 
-	if (!VacuumCount()) {
-		return position;
-	}
-
-	// TODO: ideally, check the vacuum count somewhere else
-	// TODO: ideally, also check if the position qualifies for a vacuum somewhere else
-	// TODO: don't push the free pointers back into the free list
+	// don't push the free pointers back into the free list, because we will remove
+	// all (then invalid) positions from the free list after the vacuum
 
 	auto new_position = New();
 	memcpy(Get(new_position), Get(position), allocation_size);

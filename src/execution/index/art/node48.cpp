@@ -12,7 +12,7 @@ void Node48::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n48 = node.Get<Node48>(art.n48_nodes);
+	auto n48 = node.Get<Node48>(art);
 
 	// free all children
 	if (n48->count) {
@@ -27,7 +27,8 @@ void Node48::Free(ART &art, ARTNode &node) {
 }
 
 Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
-	auto n48 = node.Get<Node48>(art.n48_nodes);
+
+	auto n48 = node.Get<Node48>(art);
 	art.IncreaseMemorySize(sizeof(Node48));
 
 	n48->count = 0;
@@ -45,7 +46,7 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n48 = node.Get<Node48>(art.n48_nodes);
+	auto n48 = node.Get<Node48>(art);
 
 	// insert new child node into node
 	if (n48->count < ARTNode::NODE_48_CAPACITY) {
@@ -64,7 +65,7 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 
 	} else {
 		// node is full, grow to Node256
-		auto new_n256_node = ARTNode::New(art, ARTNodeType::N256);
+		auto new_n256_node = ARTNode::New(art, ARTNodeType::NODE_256);
 		auto new_n256 = Node256::Initialize(art, new_n256_node);
 
 		new_n256->count = n48->count;
@@ -88,7 +89,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n48 = node.Get<Node48>(art.n48_nodes);
+	auto n48 = node.Get<Node48>(art);
 
 	// free the child and decrease the count
 	ARTNode::Free(art, n48->children[n48->child_index[pos]]);
@@ -98,7 +99,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	// shrink node to Node16
 	if (n48->count < ARTNode::NODE_48_SHRINK_THRESHOLD) {
 
-		auto new_n16_node = ARTNode::New(art, ARTNodeType::N16);
+		auto new_n16_node = ARTNode::New(art, ARTNodeType::NODE_16);
 		auto new_n16 = Node16::Initialize(art, new_n16_node);
 
 		new_n16->prefix.Move(n48->prefix);
@@ -194,7 +195,7 @@ BlockPointer Node48::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(ARTNodeType::N48);
+	writer.Write(ARTNodeType::NODE_48);
 	writer.Write<uint16_t>(count);
 	prefix.Serialize(art, writer);
 

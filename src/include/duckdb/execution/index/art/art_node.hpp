@@ -16,12 +16,27 @@
 namespace duckdb {
 
 // classes
-enum class ARTNodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
+enum class ARTNodeType : uint8_t {
+	PREFIX_SEGMENT = 0,
+	LEAF_SEGMENT = 1,
+	LEAF = 2,
+	NODE_4 = 3,
+	NODE_16 = 4,
+	NODE_48 = 5,
+	NODE_256 = 6
+};
 class ART;
 class ARTNode;
 class Prefix;
 
 // structs
+//! Workaround struct to allow the ARTNodeType as a key in an unordered map
+struct ARTNodeTypeHash {
+	template <typename T>
+	uint8_t operator()(T type) const {
+		return (uint8_t)(type);
+	}
+};
 struct MergeInfo {
 	MergeInfo(ART *l_art, ART *r_art, ART *root_l_art, ART *root_r_art, ARTNode *&l_node, ARTNode *&r_node)
 	    : l_art(l_art), r_art(r_art), root_l_art(root_l_art), root_r_art(root_r_art), l_node(l_node), r_node(r_node) {};
@@ -79,12 +94,12 @@ public:
 
 	//! Get the node
 	template <class T>
-	inline T *Get(FixedSizeAllocator &allocator) const;
+	inline T *Get(ART &art) const;
 
 	//! Set the leftmost byte to contain the node type
 	void EncodeARTNodeType(const ARTNodeType &type);
 	//! Retrieve the node type from the leftmost byte
-	ARTNodeType DecodeARTNodeType() const;
+	inline ARTNodeType DecodeARTNodeType() const;
 
 	//! Replace a child node at pos
 	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);

@@ -37,6 +37,8 @@ public:
 	} data;
 
 public:
+	//! Delete all prefix segments (if not inlined) and reset all fields
+	void Free(ART &art);
 	//! Initializes all the fields of an empty prefix
 	void Initialize();
 	//! Initialize a prefix from an ART key
@@ -68,8 +70,6 @@ public:
 	idx_t MemorySize();
 
 private:
-	//! Delete all prefix segments (if not inlined) and reset all fields
-	void Delete(ART &art);
 	//! Returns whether this prefix is inlined
 	bool IsInlined() const;
 	//! Moves all inlined bytes onto a prefix segment, does not change the size

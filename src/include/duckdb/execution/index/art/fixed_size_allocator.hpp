@@ -8,17 +8,17 @@
 
 #pragma once
 
-#include "duckdb/common/queue.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 
 //! Custom comparison function for the positions in the free list (priority queue) of the fixed size allocator
 struct CustomLess {
 	bool operator()(const idx_t left, const idx_t right) const {
-		if ((left & 0x0000ffff) > (right & 0x0000ffff)) {
-			return false;
+		if ((left & 0x0000ffff) < (right & 0x0000ffff)) {
+			return true;
 		}
-		return ((left & 0x0fff0000) > (right & 0x0fff0000));
+		return ((left & 0x0fff0000) < (right & 0x0fff0000));
 	}
 };
 
@@ -37,8 +37,8 @@ public:
 	idx_t offsets_per_buffer;
 	//! Buffers containing the data
 	vector<data_ptr_t> buffers;
-	//! Minimum priority queue containing all free positions
-	priority_queue<idx_t, vector<idx_t>, CustomLess> free_list;
+	//! Set containing all free positions
+	set<idx_t, CustomLess> free_list;
 
 public:
 	//! Get a new position to data, might cause a new buffer allocation
@@ -51,12 +51,22 @@ public:
 
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
-	//! VacuumCount returns the number of buffers that can be vacuumed
-	idx_t VacuumCount();
-	//! Vacuums a position (if necessary), and returns the new position
+
+	//! Initializes a vacuum operation, and returns true, if the allocator requires a vacuum
+	bool InitializeVacuum();
+	//! Finalizes a vacuum operation by calling the finalize operation of the respective
+	//! fixed size allocators
+	void FinalizeVacuum();
+	//! Returns true, if the position qualifies for a vacuum operation
+	bool NeedsVacuum(const idx_t &position) const;
+	//! Vacuums a position and returns the new position
 	idx_t Vacuum(const idx_t &position);
 
 private:
+	//! Keeps track of the buffer id threshold for vacuum operations. This is
+	//! set once when starting a vacuum operation.
+	idx_t vacuum_threshold;
+
 	//! Returns a data_ptr_t to the position
 	data_ptr_t Get(const idx_t &position) const;
 };

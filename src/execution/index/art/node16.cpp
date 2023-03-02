@@ -12,7 +12,7 @@ void Node16::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n16 = node.Get<Node16>(art.n16_nodes);
+	auto n16 = node.Get<Node16>(art);
 
 	// free all children
 	if (n16->count) {
@@ -25,7 +25,8 @@ void Node16::Free(ART &art, ARTNode &node) {
 }
 
 Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
-	auto n16 = node.Get<Node16>(art.n16_nodes);
+
+	auto n16 = node.Get<Node16>(art);
 	art.IncreaseMemorySize(sizeof(Node16));
 
 	n16->count = 0;
@@ -41,7 +42,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = node.Get<Node16>(art.n16_nodes);
+	auto n16 = node.Get<Node16>(art);
 
 	// insert new child node into node
 	if (n16->count < ARTNode::NODE_16_CAPACITY) {
@@ -62,7 +63,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 
 	} else {
 		// node is full, grow to Node48
-		auto new_n48_node = ARTNode::New(art, ARTNodeType::N48);
+		auto new_n48_node = ARTNode::New(art, ARTNodeType::NODE_48);
 		auto new_n48 = Node48::Initialize(art, new_n48_node);
 
 		new_n48->count = n16->count;
@@ -84,7 +85,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = node.Get<Node16>(art.n16_nodes);
+	auto n16 = node.Get<Node16>(art);
 
 	D_ASSERT(pos < n16->count);
 
@@ -108,7 +109,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	// shrink node to Node4
 	if (n16->count < ARTNode::NODE_4_CAPACITY) {
 
-		auto new_n4_node = ARTNode::New(art, ARTNodeType::N4);
+		auto new_n4_node = ARTNode::New(art, ARTNodeType::NODE_4);
 		auto new_n4 = Node4::Initialize(art, new_n4_node);
 
 		new_n4->prefix.Move(n16->prefix);
@@ -196,7 +197,7 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(ARTNodeType::N16);
+	writer.Write(ARTNodeType::NODE_16);
 	writer.Write<uint16_t>(count);
 	prefix.Serialize(art, writer);
 
