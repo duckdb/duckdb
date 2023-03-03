@@ -19,6 +19,31 @@ SELECT ('0101011'::BITSTRING)
 statement ok
 CREATE TABLE bits (b bit);
 
+# test creating a bitstring of determined size
+query I
+SELECT bitstring('0101011', 15);
+----
+000000000101011
+
+query I
+SELECT bitstring('1', 6);
+----
+000001
+
+statement error
+SELECT bitstring('0101011', 3);
+----
+Invalid Input Error: Length must be equal or larger than input string
+
+statement error
+SELECT bitstring('', 6);
+
+statement error
+SELECT bitstring('5', 10);
+
+statement error
+SELECT bitstring('0101011');
+
 # insert valid bit strings
 statement ok
 INSERT INTO bits VALUES('101011010'), ('111'), ('1010010101111111001101')
