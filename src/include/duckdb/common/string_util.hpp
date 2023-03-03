@@ -21,6 +21,13 @@ namespace duckdb {
  */
 class StringUtil {
 public:
+	static const char *const BYTE_TO_HEXS;
+
+public:
+    static void WriteByteToHex(uint8_t byte, char *out) {
+        memcpy(out, &BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+    }
+
 	DUCKDB_API static bool CharacterIsSpace(char c) {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 	}
