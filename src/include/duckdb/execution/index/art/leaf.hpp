@@ -42,6 +42,11 @@ public:
 	//! Vacuum the leaf
 	void Vacuum(ART &art);
 
+	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
+	void InitializeMerge(ART &art, const idx_t &buffer_count);
+	//! Merge leaves
+	void Merge(ART &art, ARTNode &other);
+
 	//! Insert a row ID into a leaf
 	void Insert(ART &art, const row_t &row_id);
 	//! Remove a row ID from a leaf

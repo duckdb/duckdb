@@ -112,7 +112,7 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, A
 		}
 	}
 
-	switch (node.DecodeARTNodeType()) {
+	switch (type) {
 	case ARTNodeType::LEAF: {
 		if (vacuum_nodes.find(ARTNodeType::LEAF_SEGMENT) != vacuum_nodes.end()) {
 			node.Get<Leaf>(art)->Vacuum(art);
@@ -121,7 +121,7 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, A
 	}
 	case ARTNodeType::NODE_4:
 		return node.Get<Node4>(art)->Vacuum(art, vacuum_nodes);
-	case ARTNodeType::NODE_16: {
+	case ARTNodeType::NODE_16:
 		return node.Get<Node16>(art)->Vacuum(art, vacuum_nodes);
 	case ARTNodeType::NODE_48:
 		return node.Get<Node48>(art)->Vacuum(art, vacuum_nodes);
@@ -129,7 +129,6 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, A
 		return node.Get<Node256>(art)->Vacuum(art, vacuum_nodes);
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
-	}
 	}
 }
 
@@ -229,11 +228,11 @@ void ARTNode::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) const {
+ARTNode *ARTNode::GetChild(ART &art, const idx_t &pos) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	ARTNode child;
+	ARTNode *child;
 	switch (DecodeARTNodeType()) {
 	case ARTNodeType::NODE_4: {
 		child = Get<Node4>(art)->GetChild(pos);
@@ -256,9 +255,9 @@ ARTNode ARTNode::GetChild(ART &art, const idx_t &pos) const {
 	}
 
 	// unswizzle the ART node before returning it
-	if (child.IsSwizzled()) {
-		auto block = child.GetBlockInfo();
-		child.Deserialize(art, block.block_id, block.offset);
+	if (child->IsSwizzled()) {
+		auto block = child->GetBlockInfo();
+		child->Deserialize(art, block.block_id, block.offset);
 	}
 	return child;
 }
@@ -444,7 +443,7 @@ string ARTNode::ToString(ART &art) const {
 	auto next_pos = GetNextPos(art, DConstants::INVALID_INDEX);
 	while (next_pos != DConstants::INVALID_INDEX) {
 		auto child = GetChild(art, next_pos);
-		str += "(" + to_string(next_pos) + ", " + child.ToString(art) + ")";
+		str += "(" + to_string(next_pos) + ", " + child->ToString(art) + ")";
 		next_pos = GetNextPos(art, next_pos);
 	}
 
@@ -505,178 +504,185 @@ ARTNodeType ARTNode::GetARTNodeTypeByCount(const idx_t &count) {
 // Merging
 //===--------------------------------------------------------------------===//
 
-// forward declaration
-bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfARTNodes &parents);
+void ARTNode::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
 
-void UpdateParentsOfNodes(ARTNode *&l_node, ARTNode *&r_node, ParentsOfARTNodes &parents) {
-	// TODO
-	//	if (parents.l_parent) {
-	//		parents.l_parent->ReplaceChildPointer(parents.l_pos, l_node);
-	//	}
-	//	if (parents.r_parent) {
-	//		parents.r_parent->ReplaceChildPointer(parents.r_pos, r_node);
-	//	}
+	if (!*this) {
+		return;
+	}
+
+	if (IsSwizzled()) {
+		auto block_info = GetBlockInfo();
+		Deserialize(art, block_info.block_id, block_info.offset);
+	}
+
+	auto type = DecodeARTNodeType();
+
+	// initialize prefix
+	D_ASSERT(buffer_counts.find(ARTNodeType::PREFIX_SEGMENT) != buffer_counts.end());
+	GetPrefix(art)->InitializeMerge(art, buffer_counts.at(ARTNodeType::PREFIX_SEGMENT));
+
+	switch (type) {
+	case ARTNodeType::LEAF:
+		D_ASSERT(buffer_counts.find(ARTNodeType::LEAF_SEGMENT) != buffer_counts.end());
+		Get<Leaf>(art)->InitializeMerge(art, buffer_counts.at(ARTNodeType::LEAF_SEGMENT));
+		break;
+	case ARTNodeType::NODE_4:
+		Get<Node4>(art)->InitializeMerge(art, buffer_counts);
+		break;
+	case ARTNodeType::NODE_16:
+		Get<Node16>(art)->InitializeMerge(art, buffer_counts);
+		break;
+	case ARTNodeType::NODE_48:
+		Get<Node48>(art)->InitializeMerge(art, buffer_counts);
+		break;
+	case ARTNodeType::NODE_256:
+		Get<Node256>(art)->InitializeMerge(art, buffer_counts);
+		break;
+	default:
+		throw InternalException("Invalid node type for InitializeMerge.");
+	}
+
+	D_ASSERT(buffer_counts.find(type) != buffer_counts.end());
+	D_ASSERT((pointer & 0xffff0000) == ((pointer + buffer_counts.at(type)) & 0xffff0000));
+	pointer += buffer_counts.at(type);
 }
 
-void SwapNodes(MergeInfo &info, ParentsOfARTNodes &parents) {
-	// TODO
-	//
-	//	// actual swap
-	//	swap(info.l_art, info.r_art);
-	//	swap(info.l_node, info.r_node);
-	//	UpdateParentsOfNodes(info.l_node, info.r_node, parents);
+bool ARTNode::Merge(ART &art, ARTNode &other) {
+
+	if (!*this) {
+		*this = other;
+		other = ARTNode();
+		return true;
+	}
+
+	return ResolvePrefixes(art, other);
 }
 
-bool Merge(MergeInfo &info, ParentsOfARTNodes &parents) {
-	// TODO
-	//
-	//	D_ASSERT(info.l_node);
-	//	D_ASSERT(info.r_node);
-	//
-	//	// always try to merge the smaller node into the bigger node
-	//	// because maybe there is enough free space in the bigger node to fit the smaller one
-	//	// without too much recursion
-	//
-	//	if (info.l_node->type < info.r_node->type) {
-	//		// swap subtrees to ensure that l_node has the bigger node type
-	//		SwapNodes(info, parents);
-	//	}
-	//
-	//	if (info.r_node->type == NodeType::LEAF) {
-	//		D_ASSERT(info.l_node->type == NodeType::LEAF);
-	//		D_ASSERT(info.r_node->type == NodeType::LEAF);
-	//		if (info.l_art->IsUnique()) {
-	//			return false;
-	//		}
-	//		Leaf::Merge(*info.root_l_art, info.l_node, info.r_node);
-	//		return true;
-	//	}
-	//
-	//	uint8_t key_byte;
-	//	idx_t r_child_pos = DConstants::INVALID_INDEX;
-	//
-	//	while (true) {
-	//		r_child_pos = info.r_node->GetNextPosAndByte(r_child_pos, key_byte);
-	//		if (r_child_pos == DConstants::INVALID_INDEX) {
-	//			break;
-	//		}
-	//		auto r_child = info.r_node->GetChild(*info.r_art, r_child_pos);
-	//		auto l_child_pos = info.l_node->GetChildPos(key_byte);
-	//
-	//		if (l_child_pos == DConstants::INVALID_INDEX) {
-	//			// insert child at empty position
-	//			auto r_memory_size = r_child->MemorySize(*info.r_art, true);
-	//			Node::InsertChild(*info.root_l_art, info.l_node, key_byte, r_child);
-	//
-	//			info.root_l_art->IncreaseMemorySize(r_memory_size);
-	//			info.root_r_art->DecreaseMemorySize(r_memory_size);
-	//			if (parents.l_parent) {
-	//				parents.l_parent->ReplaceChildPointer(parents.l_pos, info.l_node);
-	//			}
-	//			info.r_node->ReplaceChildPointer(r_child_pos, nullptr);
-	//
-	//		} else {
-	//			// recurse
-	//			auto l_child = info.l_node->GetChild(*info.l_art, l_child_pos);
-	//			MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, l_child, r_child);
-	//			ParentsOfNodes child_parents(info.l_node, l_child_pos, info.r_node, r_child_pos);
-	//			if (!ResolvePrefixesAndMerge(child_info, child_parents)) {
-	//				return false;
-	//			}
-	//		}
-	//	}
-	//	return true;
+bool ARTNode::ResolvePrefixes(ART &art, ARTNode &other) {
+
+	// NOTE: we always merge into the left ART
+
+	D_ASSERT(*this);
+	D_ASSERT(other);
+
+	// make sure that r_node has the longer (or equally long) prefix
+	if (this->GetPrefix(art)->count > other.GetPrefix(art)->count) {
+		std::swap(*this, other);
+	}
+
+	ARTNode null_parent;
+	auto &l_node = *this;
+	auto &r_node = other;
+	auto l_prefix = l_node.GetPrefix(art);
+	auto r_prefix = r_node.GetPrefix(art);
+
+	auto mismatch_position = l_prefix->MismatchPosition(art, *r_prefix);
+
+	// both nodes have no prefix or the same prefix
+	if (mismatch_position == l_prefix->count && l_prefix->count == r_prefix->count) {
+		return MergeInternal(art, r_node);
+	}
+
+	if (mismatch_position == l_prefix->count) {
+		// r_node's prefix contains l_node's prefix
+		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
+		// which is not possible by our construction
+		D_ASSERT(l_node.DecodeARTNodeType() != ARTNodeType::LEAF);
+
+		// test if the next byte (mismatch_position) in r_node (longer prefix) exists in l_node
+		auto mismatch_byte = r_prefix->GetByte(art, mismatch_position);
+		auto child_position = l_node.GetChildPos(art, mismatch_byte);
+
+		// update the prefix of r_node to only consist of the bytes after mismatch_position
+		r_prefix->Reduce(art, mismatch_position);
+
+		// insert r_node as a child of l_node at empty position
+		if (child_position == DConstants::INVALID_INDEX) {
+
+			ARTNode::InsertChild(art, l_node, mismatch_byte, r_node);
+			r_node = ARTNode();
+			return true;
+		}
+
+		// recurse
+		auto child_node = l_node.GetChild(art, child_position);
+		return child_node->ResolvePrefixes(art, r_node);
+	}
+
+	// prefixes differ, create new node and insert both nodes as children
+
+	// create new node
+	auto new_n4_node = ARTNode::New(art, ARTNodeType::NODE_4);
+	auto new_n4 = Node4::Initialize(art, new_n4_node);
+	new_n4->prefix.Initialize(art, *l_prefix, mismatch_position);
+
+	// insert l_node, break up prefix of l_node
+	auto key_byte = l_prefix->Reduce(art, mismatch_position);
+	Node4::InsertChild(art, new_n4_node, key_byte, l_node);
+
+	// insert r_node, break up prefix of r_node
+	key_byte = r_prefix->Reduce(art, mismatch_position);
+	Node4::InsertChild(art, new_n4_node, key_byte, r_node);
+
+	l_node = new_n4_node;
+	r_node = ARTNode();
+	return true;
 }
 
-bool ResolvePrefixesAndMerge(MergeInfo &info, ParentsOfARTNodes &parents) {
-	// TODO
-	//	// NOTE: we always merge into the left ART
-	//
-	//	D_ASSERT(info.l_node);
-	//	D_ASSERT(info.r_node);
-	//
-	//	// make sure that r_node has the longer (or equally long) prefix
-	//	if (info.l_node->prefix.Size() > info.r_node->prefix.Size()) {
-	//		SwapNodes(info, parents);
-	//	}
-	//
-	//	Node *null_parent = nullptr;
-	//	auto &l_node = info.l_node;
-	//	auto &r_node = info.r_node;
-	//	auto l_prefix_size = l_node->prefix.Size();
-	//	auto r_prefix_size = r_node->prefix.Size();
-	//
-	//	auto mismatch_pos = l_node->prefix.MismatchPosition(r_node->prefix);
-	//
-	//	// both nodes have no prefix or the same prefix
-	//	if (mismatch_pos == l_prefix_size && l_prefix_size == r_prefix_size) {
-	//		return Merge(info, parents);
-	//	}
-	//
-	//	if (mismatch_pos == l_prefix_size) {
-	//		// r_node's prefix contains l_node's prefix
-	//		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
-	//		// which is not possible by our construction
-	//		D_ASSERT(l_node->type != NodeType::LEAF);
-	//
-	//		// test if the next byte (mismatch_pos) in r_node (longer prefix) exists in l_node
-	//		auto mismatch_byte = r_node->prefix[mismatch_pos];
-	//		auto child_pos = l_node->GetChildPos(mismatch_byte);
-	//
-	//		// update the prefix of r_node to only consist of the bytes after mismatch_pos
-	//		r_node->prefix.Reduce(*info.root_r_art, mismatch_pos);
-	//
-	//		// insert r_node as a child of l_node at empty position
-	//		if (child_pos == DConstants::INVALID_INDEX) {
-	//
-	//			auto r_memory_size = r_node->MemorySize(*info.r_art, true);
-	//			Node::InsertChild(*info.root_l_art, l_node, mismatch_byte, r_node);
-	//
-	//			info.root_l_art->IncreaseMemorySize(r_memory_size);
-	//			info.root_r_art->DecreaseMemorySize(r_memory_size);
-	//			UpdateParentsOfNodes(l_node, null_parent, parents);
-	//			r_node = nullptr;
-	//			return true;
-	//		}
-	//
-	//		// recurse
-	//		auto child_node = l_node->GetChild(*info.l_art, child_pos);
-	//		MergeInfo child_info(info.l_art, info.r_art, info.root_l_art, info.root_r_art, child_node, r_node);
-	//		ParentsOfNodes child_parents(l_node, child_pos, parents.r_parent, parents.r_pos);
-	//		return ResolvePrefixesAndMerge(child_info, child_parents);
-	//	}
-	//
-	//	// prefixes differ, create new node and insert both nodes as children
-	//
-	//	// create new node
-	//	Node *new_node = NODE_4:New();
-	//	new_node->prefix = Prefix(l_node->prefix, mismatch_pos);
-	//	info.root_l_art->IncreaseMemorySize(new_node->MemorySize(*info.l_art, false));
-	//
-	//	// insert l_node, break up prefix of l_node
-	//	auto key_byte = l_node->prefix.Reduce(*info.root_l_art, mismatch_pos);
-	//	NODE_4:InsertChild(*info.root_l_art, new_node, key_byte, l_node);
-	//
-	//	// insert r_node, break up prefix of r_node
-	//	key_byte = r_node->prefix.Reduce(*info.root_r_art, mismatch_pos);
-	//	auto r_memory_size = r_node->MemorySize(*info.r_art, true);
-	//	NODE_4:InsertChild(*info.root_l_art, new_node, key_byte, r_node);
-	//
-	//	info.root_l_art->IncreaseMemorySize(r_memory_size);
-	//	info.root_r_art->DecreaseMemorySize(r_memory_size);
-	//
-	//	l_node = new_node;
-	//	UpdateParentsOfNodes(l_node, null_parent, parents);
-	//	r_node = nullptr;
-	//	return true;
-}
+bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 
-bool ARTNode::MergeARTs(ART *l_art, ART *r_art) {
-	// TODO
-	//	Node *null_parent = nullptr;
-	//	MergeInfo info(l_art, r_art, l_art, r_art, l_art->tree, r_art->tree);
-	//	ParentsOfNodes parents(null_parent, 0, null_parent, 0);
-	//	return ResolvePrefixesAndMerge(info, parents);
+	D_ASSERT(*this);
+	D_ASSERT(other);
+
+	// always try to merge the smaller node into the bigger node
+	// because maybe there is enough free space in the bigger node to fit the smaller one
+	// without too much recursion
+	if (this->DecodeARTNodeType() < other.DecodeARTNodeType()) {
+		std::swap(*this, other);
+	}
+
+	ARTNode empty_node;
+	auto &l_node = *this;
+	auto &r_node = other;
+
+	if (r_node.DecodeARTNodeType() == ARTNodeType::LEAF) {
+		D_ASSERT(l_node.DecodeARTNodeType() == ARTNodeType::LEAF);
+
+		if (art.IsUnique()) {
+			return false;
+		}
+		Get<Leaf>(art)->Merge(art, r_node);
+		return true;
+	}
+
+	uint8_t key_byte;
+	idx_t r_child_position = DConstants::INVALID_INDEX;
+
+	while (true) {
+		r_child_position = r_node.GetNextPosAndByte(art, r_child_position, key_byte);
+		if (r_child_position == DConstants::INVALID_INDEX) {
+			break;
+		}
+		auto r_child = r_node.GetChild(art, r_child_position);
+		auto l_child_position = l_node.GetChildPos(art, key_byte);
+
+		if (l_child_position == DConstants::INVALID_INDEX) {
+			// insert child at empty position
+			ARTNode::InsertChild(art, l_node, key_byte, *r_child);
+			r_node.ReplaceChild(art, r_child_position, empty_node);
+
+		} else {
+			// recurse
+			auto l_child = l_node.GetChild(art, l_child_position);
+			if (!l_child->ResolvePrefixes(art, *r_child)) {
+				return false;
+			}
+		}
+	}
+
+	D_ASSERT(r_node.GetNextPos(art, DConstants::INVALID_INDEX) == DConstants::INVALID_INDEX);
+	ARTNode::Free(art, r_node);
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -701,7 +707,7 @@ idx_t ARTNode::MemorySize(ART &art, const bool &recurse) {
 		while (next_pos != DConstants::INVALID_INDEX) {
 			if (ChildIsInMemory(art, next_pos)) {
 				auto child = GetChild(art, next_pos);
-				memory_size_children += child.MemorySize(art, recurse);
+				memory_size_children += child->MemorySize(art, recurse);
 			}
 			next_pos = GetNextPos(art, next_pos);
 		}

@@ -45,6 +45,13 @@ void Node16::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> 
 	}
 }
 
+void Node16::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+
+	for (idx_t i = 0; i < count; i++) {
+		children[i].InitializeMerge(art, buffer_counts);
+	}
+}
+
 void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);
@@ -137,9 +144,9 @@ void Node16::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[pos] = child;
 }
 
-ARTNode Node16::GetChild(const idx_t &pos) const {
+ARTNode *Node16::GetChild(const idx_t &pos) {
 	D_ASSERT(pos < count);
-	return children[pos];
+	return &children[pos];
 }
 
 uint8_t Node16::GetKeyByte(const idx_t &pos) const {

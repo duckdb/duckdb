@@ -51,6 +51,15 @@ void Node48::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> 
 	}
 }
 
+void Node48::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != ARTNode::EMPTY_MARKER) {
+			children[child_index[i]].InitializeMerge(art, buffer_counts);
+		}
+	}
+}
+
 void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);
@@ -133,10 +142,10 @@ void Node48::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[child_index[pos]] = child;
 }
 
-ARTNode Node48::GetChild(const idx_t &pos) const {
+ARTNode *Node48::GetChild(const idx_t &pos) {
 	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
 	D_ASSERT(child_index[pos] < ARTNode::NODE_48_CAPACITY);
-	return children[child_index[pos]];
+	return &children[child_index[pos]];
 }
 
 uint8_t Node48::GetKeyByte(const idx_t &pos) const {

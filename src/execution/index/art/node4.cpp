@@ -44,6 +44,13 @@ void Node4::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &
 	}
 }
 
+void Node4::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+
+	for (idx_t i = 0; i < count; i++) {
+		children[i].InitializeMerge(art, buffer_counts);
+	}
+}
+
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);
@@ -116,10 +123,10 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 		// get only child and concatenate prefixes
 		auto child = n4->GetChild(0);
-		child.GetPrefix(art)->Concatenate(art, n4->key[0], *node.GetPrefix(art));
+		child->GetPrefix(art)->Concatenate(art, n4->key[0], *node.GetPrefix(art));
 
 		ARTNode::Free(art, node);
-		node = child;
+		node = *child;
 	}
 }
 
@@ -128,9 +135,9 @@ void Node4::ReplaceChild(const idx_t &pos, ARTNode &child) {
 	children[pos] = child;
 }
 
-ARTNode Node4::GetChild(const idx_t &pos) const {
+ARTNode *Node4::GetChild(const idx_t &pos) {
 	D_ASSERT(pos < count);
-	return children[pos];
+	return &children[pos];
 }
 
 uint8_t Node4::GetKeyByte(const idx_t &pos) const {

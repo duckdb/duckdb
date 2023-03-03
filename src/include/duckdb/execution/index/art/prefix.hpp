@@ -43,9 +43,14 @@ public:
 	void Initialize();
 	//! Initialize a prefix from an ART key
 	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
+	//! Initialize a prefix from another prefix up to count
+	void Initialize(ART &art, const Prefix &other, const uint32_t &count_p);
 
 	//! Vacuum the prefix
 	void Vacuum(ART &art);
+
+	//! Initializes a merge by incrementing the buffer IDs of the prefix segments
+	void InitializeMerge(ART &art, const idx_t &buffer_count);
 
 	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
 	void Move(Prefix &other);
@@ -60,6 +65,8 @@ public:
 	uint8_t GetByte(ART &art, const idx_t &position) const;
 	//! Compare the key with the prefix of the node, return the position where they mismatch
 	uint32_t KeyMismatchPosition(ART &art, const Key &key, const uint32_t &depth) const;
+	//! Compare this prefix to another prefix, return the position where they mismatch, or count otherwise
+	uint32_t MismatchPosition(ART &art, const Prefix &other) const;
 
 	//! Serialize this prefix
 	void Serialize(ART &art, MetaBlockWriter &writer);

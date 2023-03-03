@@ -110,6 +110,8 @@ public:
 	//! Serializes the index and returns the pair of block_id offset positions
 	BlockPointer Serialize(MetaBlockWriter &writer) override;
 
+	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
+	unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> InitializeMerge();
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;

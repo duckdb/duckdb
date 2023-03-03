@@ -83,7 +83,7 @@ void Iterator::FindMinimum(ARTNode &node) {
 
 	// recurse
 	nodes.push(IteratorEntry(node, position));
-	FindMinimum(next);
+	FindMinimum(*next);
 }
 
 void Iterator::PushKey(ARTNode &cur_node, uint16_t pos) {
@@ -157,7 +157,7 @@ bool Iterator::Next() {
 				cur_key.Push(next_node_prefix->GetByte(*art, i));
 			}
 			// next node found: push it
-			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
+			nodes.push(IteratorEntry(*next_node, DConstants::INVALID_INDEX));
 		} else {
 			// no node found: move up the tree and Pop prefix and key of current node
 			PopNode();
@@ -188,7 +188,7 @@ bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
 				auto min_pos = node.GetMinPos(*art);
 				PushKey(node, min_pos);
 				nodes.push(IteratorEntry(node, min_pos));
-				node = node.GetChild(*art, min_pos);
+				node = *node.GetChild(*art, min_pos);
 
 				// reconstruct the prefix
 				node_prefix = node.GetPrefix(*art);
@@ -254,7 +254,7 @@ bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
 			return Next();
 		}
 		PushKey(node, top.position);
-		node = node.GetChild(*art, top.position);
+		node = *node.GetChild(*art, top.position);
 		// This means all children of this node qualify as geq
 		depth++;
 	}

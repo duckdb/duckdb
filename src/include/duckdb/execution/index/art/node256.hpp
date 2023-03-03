@@ -31,6 +31,9 @@ public:
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
 
+	//! Initializes a merge by incrementing the buffer IDs of the node
+	void InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts);
+
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
@@ -40,7 +43,7 @@ public:
 	void ReplaceChild(const idx_t &pos, ARTNode &child);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode GetChild(const idx_t &pos) const;
+	ARTNode *GetChild(const idx_t &pos);
 	//! Get the byte at the specified position
 	uint8_t GetKeyByte(const idx_t &pos) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if

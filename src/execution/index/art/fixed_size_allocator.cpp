@@ -55,19 +55,25 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 		throw InternalException("Invalid FixedSizeAllocator for Combine.");
 	}
 
-	// merge the free lists
 	idx_t buffer_count = buffers.size();
+
+	// merge the buffers
+	for (auto &buffer : other.buffers) {
+		buffers.push_back(buffer);
+	}
+
+	if (!buffer_count) {
+		free_list = other.free_list;
+		return;
+	}
+
+	// merge the free lists
 	for (const auto &other_position : other.free_list) {
 		auto position = other_position + buffer_count;
 		D_ASSERT((other_position & 0xffff0000) == (position & 0xffff0000));
 		free_list.insert(position);
 	}
 	other.free_list.clear();
-
-	// merge the buffers
-	for (auto &buffer : other.buffers) {
-		buffers.push_back(buffer);
-	}
 }
 
 bool FixedSizeAllocator::InitializeVacuum() {

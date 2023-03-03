@@ -94,6 +94,72 @@ void Leaf::Vacuum(ART &art) {
 	}
 }
 
+void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
+
+	if (IsInlined()) {
+		return;
+	}
+
+	auto position = row_ids.position;
+	D_ASSERT((row_ids.position & 0xffff0000) == ((row_ids.position + buffer_count) & 0xffff0000));
+	row_ids.position += buffer_count;
+
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = LeafSegment::Get(art, position);
+		position = segment->next;
+		D_ASSERT((segment->next & 0xffff0000) == ((segment->next + buffer_count) & 0xffff0000));
+		segment->next += buffer_count;
+	}
+}
+
+void Leaf::Merge(ART &art, ARTNode &other) {
+
+	auto other_leaf = other.Get<Leaf>(art);
+
+	// copy inlined row ID
+	if (other_leaf->IsInlined()) {
+		Insert(art, other_leaf->row_ids.inlined);
+		ARTNode::Free(art, other);
+		return;
+	}
+
+	// get the first segment to copy to
+	LeafSegment *segment;
+	if (IsInlined()) {
+		// row ID was inlined, move to a new segment
+		auto position = LeafSegment::New(art);
+		segment = LeafSegment::Initialize(art, position);
+		D_ASSERT(ARTNode::LEAF_SEGMENT_SIZE >= 1);
+		segment->row_ids[0] = row_ids.inlined;
+		row_ids.position = position;
+	} else {
+		// get the tail of the segments of this leaf
+		segment = LeafSegment::Get(art, row_ids.position)->GetTail(art);
+	}
+
+	// initialize loop variables
+	auto position = other_leaf->row_ids.position;
+	auto remaining = other_leaf->count;
+
+	// copy row IDs
+	while (position != DConstants::INVALID_INDEX) {
+		auto other_segment = LeafSegment::Get(art, position);
+		auto copy_count = ARTNode::LEAF_SEGMENT_SIZE < remaining ? ARTNode::LEAF_SEGMENT_SIZE : remaining;
+
+		// adjust the loop variables
+		position = other_segment->next;
+		remaining -= copy_count;
+
+		// now copy the data
+		for (idx_t i = 0; i < copy_count; i++) {
+			segment = segment->Append(art, count, other_segment->row_ids[i]);
+		}
+	}
+	D_ASSERT(remaining == 0);
+
+	ARTNode::Free(art, other);
+}
+
 void Leaf::Insert(ART &art, const row_t &row_id) {
 
 	if (count == 0) {

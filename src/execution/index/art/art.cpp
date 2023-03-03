@@ -531,8 +531,8 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	idx_t position = node.GetChildPos(*this, key[depth]);
 	if (position != DConstants::INVALID_INDEX) {
 		auto child = node.GetChild(*this, position);
-		bool success = Insert(child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, position, child);
+		bool success = Insert(*child, key, depth + 1, row_id);
+		node.ReplaceChild(*this, position, *child);
 		return success;
 	}
 
@@ -617,9 +617,9 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 		auto child = node.GetChild(*this, position);
 		D_ASSERT(child);
 
-		if (child.DecodeARTNodeType() == ARTNodeType::LEAF) {
+		if (child->DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// leaf found, remove entry
-			auto leaf = child.Get<Leaf>(*this);
+			auto leaf = child->Get<Leaf>(*this);
 			leaf->Remove(*this, row_id);
 
 			if (leaf->count == 0) {
@@ -630,8 +630,8 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 		}
 
 		// recurse
-		Erase(child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, position, child);
+		Erase(*child, key, depth + 1, row_id);
+		node.ReplaceChild(*this, position, *child);
 	}
 }
 
@@ -742,7 +742,7 @@ Leaf *ART::Lookup(ARTNode &node, const Key &key, idx_t depth) {
 		}
 
 		// recurse into child
-		node = node.GetChild(*this, position);
+		node = *node.GetChild(*this, position);
 		D_ASSERT(node);
 		depth++;
 	}
@@ -1029,13 +1029,25 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 // Merging
 //===--------------------------------------------------------------------===//
 
+unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> ART::InitializeMerge() {
+
+	unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> buffer_counts;
+	for (auto &pair : nodes) {
+		buffer_counts[pair.first] = pair.second.buffers.size();
+	}
+	return buffer_counts;
+}
+
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 	auto other_art = (ART *)other_index;
 
-	//  TODO: traverse other_index and add the buffer ID size of this index to each ART Node, fully deserialize the
-	//  other index while
-	//  TODO: doing that
+	if (tree) {
+		//  fully deserialize other_index, and traverse it to increment its buffer IDs
+		//  FIXME: improve performance by directly iterating the underlying buffers (should be similar to Vacuum code)
+		auto buffer_counts = InitializeMerge();
+		other_art->tree.InitializeMerge(*this, buffer_counts);
+	}
 
 	// merge the node storage
 	for (auto &node : nodes) {
@@ -1043,18 +1055,16 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 		node.second.Merge(other_art->nodes.at(node.first));
 	}
 
-	// TODO: merge the ARTs
-
-	// TODO: vacuum
-
-	// TODO: this is wrong and old, memory needs to 'move'
-	if (!this->tree) {
-		IncreaseMemorySize(other_art->memory_size);
-		tree = other_art->tree;
-		other_art->tree = ARTNode();
-		return true;
+	// merge the ARTs
+	if (!tree.Merge(*this, other_art->tree)) {
+		return false;
 	}
-	return ARTNode::MergeARTs(this, other_art);
+
+	// vacuum excess memory
+	// FIXME: improve performance by directly iterating the underlying buffers (should be similar to InitializeMerge
+	// code)
+	Vacuum();
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

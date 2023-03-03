@@ -37,24 +37,6 @@ struct ARTNodeTypeHash {
 		return (uint8_t)(type);
 	}
 };
-struct MergeInfo {
-	MergeInfo(ART *l_art, ART *r_art, ART *root_l_art, ART *root_r_art, ARTNode *&l_node, ARTNode *&r_node)
-	    : l_art(l_art), r_art(r_art), root_l_art(root_l_art), root_r_art(root_r_art), l_node(l_node), r_node(r_node) {};
-	ART *l_art;
-	ART *r_art;
-	ART *root_l_art;
-	ART *root_r_art;
-	ARTNode *&l_node;
-	ARTNode *&r_node;
-};
-struct ParentsOfARTNodes {
-	ParentsOfARTNodes(ARTNode *&l_parent, idx_t l_pos, ARTNode *&r_parent, idx_t r_pos)
-	    : l_parent(l_parent), l_pos(l_pos), r_parent(r_parent), r_pos(r_pos) {};
-	ARTNode *&l_parent;
-	idx_t l_pos;
-	ARTNode *&r_parent;
-	idx_t r_pos;
-};
 
 //! The ARTNode is the swizzleable pointer class of the ART index.
 //! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.
@@ -109,7 +91,7 @@ public:
 	static void DeleteChild(ART &art, ARTNode &node, idx_t pos);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode GetChild(ART &art, const idx_t &pos) const;
+	ARTNode *GetChild(ART &art, const idx_t &pos) const;
 	//! Get the byte at the specified position
 	uint8_t GetKeyByte(ART &art, const idx_t &pos) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
@@ -141,8 +123,14 @@ public:
 	//! Returns the matching node type for a given count
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 
-	//! Merge two ARTs
-	static bool MergeARTs(ART *l_art, ART *r_art);
+	//! Initializes a merge by fully deserializing the subtree of a node and incrementing its buffer IDs
+	void InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts);
+	//! Merge a node into this node
+	bool Merge(ART &art, ARTNode &other);
+	//! Merge two nodes by first resolving their prefixes
+	bool ResolvePrefixes(ART &art, ARTNode &other);
+	//! Merge two nodes that have no prefix or the same prefix
+	bool MergeInternal(ART &art, ARTNode &other);
 
 	//! Returns whether the ART node is in-memory
 	bool InMemory();
