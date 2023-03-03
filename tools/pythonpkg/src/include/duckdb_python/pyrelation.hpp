@@ -244,7 +244,7 @@ public:
 	string ToString();
 	void Print();
 
-	string Explain();
+	string Explain(const string &type);
 
 	static bool IsRelation(const py::object &object);
 

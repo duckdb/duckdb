@@ -13,6 +13,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
 
@@ -940,9 +941,22 @@ void DuckDBPyRelation::Print() {
 	py::print(py::str(ToString()));
 }
 
-string DuckDBPyRelation::Explain() {
+ExplainType ExplainTypeFromString(const string &type) {
+	auto ltype = StringUtil::Lower(type);
+	if (ltype.empty() || ltype == "standard") {
+		return duckdb::ExplainType::EXPLAIN_STANDARD;
+	} else if (ltype == "analyze") {
+		return duckdb::ExplainType::EXPLAIN_ANALYZE;
+	} else {
+		throw InvalidInputException("Unrecognized type for 'explain'");
+	}
+}
+
+string DuckDBPyRelation::Explain(const string &type_str) {
+	ExplainType type = ExplainTypeFromString(type_str);
+
 	AssertRelation();
-	auto res = rel->Explain();
+	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
 	auto &coll = materialized.Collection();

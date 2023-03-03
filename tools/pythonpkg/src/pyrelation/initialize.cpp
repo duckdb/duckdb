@@ -146,7 +146,7 @@ static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	m.def("describe", &DuckDBPyRelation::Describe,
 	      "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("explain", &DuckDBPyRelation::Explain);
+	    .def("explain", &DuckDBPyRelation::Explain, py::arg("type") = "standard");
 }
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
