@@ -1,15 +1,31 @@
----
 name: Java JDBC
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
-      - "**.md"
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/jdbc/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Java.yml'
   pull_request:
     paths-ignore:
-      - "**"
-      - "!src/include/**"
-      - "!tools/jdbc/**"
-      - "!.github/workflows/Java.yml"
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/jdbc/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Java.yml'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
     github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha
@@ -264,11 +280,10 @@ jobs:
 
   jdbc-compliance:
     name: JDBC Compliance
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: java-linux-amd64
+    container: ubuntu:16.04
     env:
-      CC: gcc-10
-      CXX: g++-10
       BUILD_JDBC: 1
       GEN: ninja
 
@@ -276,11 +291,12 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/ubuntu_16_setup
 
       - name: Install
         shell: bash
         run: |
-          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build default-jre
           git clone https://github.com/cwida/jdbccts.git
 
       - name: Setup Ccache

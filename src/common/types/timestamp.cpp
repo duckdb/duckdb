@@ -88,11 +88,27 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	return true;
 }
 
-bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
-	return TryConvertTimestampTZ(str, len, result, has_offset, tz) && !tz.GetSize();
+	auto success = TryConvertTimestampTZ(str, len, result, has_offset, tz);
+	if (!success) {
+		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
+	}
+	if (tz.GetSize() == 0) {
+		// no timezone provided - success!
+		return TimestampCastResult::SUCCESS;
+	}
+	if (tz.GetSize() == 3) {
+		// we can ONLY handle UTC without ICU being loaded
+		auto tz_ptr = tz.GetDataUnsafe();
+		if ((tz_ptr[0] == 'u' || tz_ptr[0] == 'U') && (tz_ptr[1] == 't' || tz_ptr[1] == 'T') &&
+		    (tz_ptr[2] == 'c' || tz_ptr[2] == 'C')) {
+			return TimestampCastResult::SUCCESS;
+		}
+	}
+	return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
 }
 
 string Timestamp::ConversionError(const string &str) {
@@ -101,16 +117,31 @@ string Timestamp::ConversionError(const string &str) {
 	                          str);
 }
 
+string Timestamp::UnsupportedTimezoneError(const string &str) {
+	return StringUtil::Format("timestamp field value \"%s\" has a timestamp that is not UTC.\nUse the TIMESTAMPTZ type "
+	                          "with the ICU extension loaded to handle non-UTC timestamps.",
+	                          str);
+}
+
 string Timestamp::ConversionError(string_t str) {
 	return Timestamp::ConversionError(str.GetString());
 }
 
+string Timestamp::UnsupportedTimezoneError(string_t str) {
+	return Timestamp::UnsupportedTimezoneError(str.GetString());
+}
+
 timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	timestamp_t result;
-	if (!Timestamp::TryConvertTimestamp(str, len, result)) {
+	auto cast_result = Timestamp::TryConvertTimestamp(str, len, result);
+	if (cast_result == TimestampCastResult::SUCCESS) {
+		return result;
+	}
+	if (cast_result == TimestampCastResult::ERROR_NON_UTC_TIMEZONE) {
+		throw ConversionException(Timestamp::UnsupportedTimezoneError(string(str, len)));
+	} else {
 		throw ConversionException(Timestamp::ConversionError(string(str, len)));
 	}
-	return result;
 }
 
 bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset) {

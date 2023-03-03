@@ -169,6 +169,10 @@ private:
 };
 
 void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
+	//	Have we started to combine? Then just live with it.
+	if (grouping_data && !grouping_data->GetPartitions().empty()) {
+		return;
+	}
 	//	Is the average partition size too large?
 	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
@@ -180,31 +184,7 @@ void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		const auto hash_col_idx = payload_types.size();
-		auto new_grouping_data =
-		    make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
-
-		// We have to append to a shared copy for some reason
-		if (grouping_data) {
-			auto new_shared = new_grouping_data->CreateShared();
-			PartitionedColumnDataAppendState shared_append;
-			new_shared->InitializeAppendState(shared_append);
-
-			auto &partitions = grouping_data->GetPartitions();
-			for (auto &partition : partitions) {
-				ColumnDataScanState scanner;
-				partition->InitializeScan(scanner);
-
-				DataChunk scan_chunk;
-				partition->InitializeScanChunk(scan_chunk);
-				for (scan_chunk.Reset(); partition->Scan(scanner, scan_chunk); scan_chunk.Reset()) {
-					new_shared->Append(shared_append, scan_chunk);
-				}
-			}
-			new_shared->FlushAppendState(shared_append);
-			new_grouping_data->Combine(*new_shared);
-		}
-
-		grouping_data = std::move(new_grouping_data);
+		grouping_data = make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
 	}
 }
 
@@ -432,8 +412,6 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 	}
 
 	// OVER(...)
-	gstate.UpdateLocalPartition(local_partition, local_append);
-
 	payload_chunk.Reset();
 	auto &hash_vector = payload_chunk.data.back();
 	Hash(input_chunk, hash_vector);
@@ -442,6 +420,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 	}
 	payload_chunk.SetCardinality(input_chunk);
 
+	gstate.UpdateLocalPartition(local_partition, local_append);
 	local_partition->Append(*local_append, payload_chunk);
 }
 

@@ -36,6 +36,7 @@ PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object o
 void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &cache) {
 	load_attempted = true;
 	try {
+		py::gil_assert();
 		object = AddCache(cache, std::move(py::module::import(name.c_str())));
 	} catch (py::error_already_set &e) {
 		if (IsRequired()) {
@@ -45,6 +46,7 @@ void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &ca
 	}
 	LoadSubtypes(cache);
 }
+
 void PythonImportCacheItem::LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source) {
 	auto source_object = source();
 	object = AddCache(cache, std::move(source_object.attr(name.c_str())));

@@ -287,9 +287,12 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	// behold
 	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
+
 		if (index.unbound_expressions.size() > 1) {
+			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;
 		}
+
 		auto index_expression = index.unbound_expressions[0]->Copy();
 		bool rewrite_possible = true;
 		RewriteIndexExpression(index, get, *index_expression, rewrite_possible);

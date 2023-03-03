@@ -11,12 +11,57 @@ CREATE TABLE "select"(i INTEGER);
 statement ok
 CREATE VIEW v1 AS SELECT DATE '1992-01-01' AS k
 
+statement ok
+CREATE TABLE t2 (id INTEGER PRIMARY KEY, j VARCHAR UNIQUE)
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.tbl(i INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE tbl(i INTEGER PRIMARY KEY);
+
+# We test that right table is described (from s1 schema)
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE s1.tbl;
+----
+i	INTEGER	YES	UNI	NULL	NULL
+
+# We test that right table is described (from main schema)
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE tbl;
+----
+i	INTEGER	NO	PRI	NULL	NULL
+
+# Validate PRI and UNI constrains
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE t2
+----
+id	INTEGER	NO	PRI	NULL	NULL
+j	VARCHAR	YES	UNI	NULL	NULL
+
+# equivalent to DESCRIBE t2
+# column_name | column_type | null | key | default | extra
+query TTTITI
+PRAGMA SHOW('t2')
+----
+id	INTEGER	NO	PRI	NULL	NULL
+j	VARCHAR	YES	UNI	NULL	NULL
+
 # SHOW and DESCRIBE are aliases
 query T
 SHOW TABLES
 ----
 integers
 select
+t2
+tbl
+tbl
 v1
 
 query T
@@ -24,6 +69,9 @@ DESCRIBE TABLES
 ----
 integers
 select
+t2
+tbl
+tbl
 v1
 
 # internally they are equivalent to PRAGMA SHOW_TABLES();
@@ -32,6 +80,9 @@ PRAGMA show_tables
 ----
 integers
 select
+t2
+tbl
+tbl
 v1
 
 # column_name | column_type | null | key | default | extra

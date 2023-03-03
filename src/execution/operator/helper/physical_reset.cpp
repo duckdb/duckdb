@@ -27,15 +27,7 @@ void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 		auto &config = DBConfig::GetConfig(context.client);
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			// it is not!
-			// get a list of all options
-			vector<string> potential_names = DBConfig::GetOptionNames();
-			for (auto &entry : config.extension_parameters) {
-				potential_names.push_back(entry.first);
-			}
-
-			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+			throw Catalog::UnrecognizedConfigurationError(context.client, name);
 		}
 		ResetExtensionVariable(context, config, entry->second);
 		return;

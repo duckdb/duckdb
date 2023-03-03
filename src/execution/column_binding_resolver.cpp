@@ -65,9 +65,12 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// ON CONFLICT DO UPDATE clause
 		auto &insert_op = (LogicalInsert &)op;
 		if (insert_op.action_type != OnConflictAction::THROW) {
+			// Get the bindings from the children
 			VisitOperatorChildren(op);
-			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(
-			    insert_op.excluded_table_index, insert_op.table->GetColumns().PhysicalColumnCount());
+			auto column_count = insert_op.table->GetColumns().PhysicalColumnCount();
+			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(insert_op.excluded_table_index, column_count);
+			// Now insert our dummy bindings at the start of the bindings,
+			// so the first 'column_count' indices of the chunk are reserved for our 'excluded' columns
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
 			if (insert_op.on_conflict_condition) {
 				VisitExpression(&insert_op.on_conflict_condition);

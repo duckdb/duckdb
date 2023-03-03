@@ -1,16 +1,25 @@
 name: Windows
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Windows.yml'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
 
@@ -30,7 +39,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -55,6 +64,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -66,7 +76,7 @@ jobs:
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows
         path: |
@@ -89,7 +99,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -113,6 +123,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -123,7 +134,7 @@ jobs:
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows-32bit
         path: |
@@ -164,6 +175,11 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
+           
+       - name: Tools Test
+         shell: msys2 {0}
+         run: |
+           tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  odbc-win-64:
     name: ODBC Windows
@@ -174,7 +190,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -235,7 +251,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v2
+     - uses: actions/setup-python@v4
        with:
          python-version: '3.7'
 
