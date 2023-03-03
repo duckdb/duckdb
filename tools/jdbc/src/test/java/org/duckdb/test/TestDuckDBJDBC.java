@@ -37,7 +37,6 @@ import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDatabase;
 import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBResultSet;
 import org.duckdb.DuckDBTimestamp;
@@ -1474,76 +1473,78 @@ public class TestDuckDBJDBC {
 
 	public static void test_read_only() throws Exception {
 		Path database_file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb");
-		database_file.toFile().delete();
+		Files.deleteIfExists(database_file);
 
-		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		String jdbc_url = "jdbc:duckdb:" + database_file;
 		Properties ro_prop = new Properties();
 		ro_prop.setProperty("duckdb.read_only", "true");
 
 		Connection conn_rw = DriverManager.getConnection(jdbc_url);
 		assertFalse(conn_rw.isReadOnly());
+		assertFalse(conn_rw.getMetaData().isReadOnly());
 		Statement stmt = conn_rw.createStatement();
 		stmt.execute("CREATE TABLE test (i INTEGER)");
 		stmt.execute("INSERT INTO test VALUES (42)");
 		stmt.close();
-		// we cannot create other connections, be it read-write or read-only right now
-		try {
-			Connection conn2 = DriverManager.getConnection(jdbc_url);
-			fail();
-		} catch (Exception e) {
+
+		// Verify we can open additional write connections
+		// Using the Driver
+		try (Connection conn = DriverManager.getConnection(jdbc_url);
+				 Statement stmt1 = conn.createStatement();
+				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+			rs1.next();
+			assertEquals(rs1.getInt(1), 42);
+		}
+		// Using the direct API
+		try (Connection conn = ((DuckDBConnection) conn_rw).duplicate();
+				 Statement stmt1 = conn.createStatement();
+				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+			rs1.next();
+			assertEquals(rs1.getInt(1), 42);
 		}
 
-		try {
-			Connection conn2 = DriverManager.getConnection(jdbc_url, ro_prop);
-			fail();
-		} catch (Exception e) {
-		}
+		// At this time, mixing read and write connections on Windows doesn't work
+		// Read-only when we already have a read-write
+//		try (Connection conn = DriverManager.getConnection(jdbc_url, ro_prop);
+//				 Statement stmt1 = conn.createStatement();
+//				 ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+//			rs1.next();
+//			assertEquals(rs1.getInt(1), 42);
+//		}
 
-		// hard shutdown to not have to wait on gc
-		DuckDBDatabase db = ((DuckDBConnection) conn_rw).getDatabase();
 		conn_rw.close();
-		db.shutdown();
 
-		try {
-			Statement stmt2 = conn_rw.createStatement();
-			stmt2.executeQuery("SELECT 42");
-			stmt2.close();
-			fail();
+		try (Statement ignored = conn_rw.createStatement()) {
+			fail("Connection was already closed; shouldn't be able to create a statement");
 		} catch (SQLException e) {
 		}
 
-		try {
-			Connection conn_dup = ((DuckDBConnection) conn_rw).duplicate();
-			conn_dup.close();
-			fail();
+		try (Connection ignored = ((DuckDBConnection) conn_rw).duplicate()) {
+			fail("Connection was already closed; shouldn't be able to duplicate");
 		} catch (SQLException e) {
 		}
 
-		// FIXME: requires explicit database shutdown
 		// // we can create two parallel read only connections and query them, too
-		// Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
-		// Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop);
+		try (Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
+			Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop)) {
 
-		// assertTrue(conn_ro1.isReadOnly());
-		// assertTrue(conn_ro2.isReadOnly());
+			assertTrue(conn_ro1.isReadOnly());
+			assertTrue(conn_ro1.getMetaData().isReadOnly());
+			assertTrue(conn_ro2.isReadOnly());
+			assertTrue(conn_ro2.getMetaData().isReadOnly());
 
-		// Statement stmt1 = conn_ro1.createStatement();
-		// ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test");
-		// rs1.next();
-		// assertEquals(rs1.getInt(1), 42);
-		// rs1.close();
-		// stmt1.close();
+			try (Statement stmt1 = conn_ro1.createStatement();
+				ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test")) {
+				rs1.next();
+				assertEquals(rs1.getInt(1), 42);
+			}
 
-		// Statement stmt2 = conn_ro2.createStatement();
-		// ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test");
-		// rs2.next();
-		// assertEquals(rs2.getInt(1), 42);
-		// rs2.close();
-		// stmt2.close();
-
-		// conn_ro1.close();
-		// conn_ro2.close();
-
+			try (Statement stmt2 = conn_ro2.createStatement();
+				ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test")) {
+				rs2.next();
+				assertEquals(rs2.getInt(1), 42);
+			}
+		}
 	}
 
 	public static void test_hugeint() throws Exception {
@@ -1660,9 +1661,9 @@ public class TestDuckDBJDBC {
 
 		rs = md.getSchemas(null, "ma%");
 		assertTrue(rs.next());
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
 		assertTrue(rs.getObject("TABLE_CATALOG") != null);
-		assertEquals(rs.getString(1), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(1), DuckDBConnection.DEFAULT_SCHEMA);
 		rs.close();
 
 		rs = md.getSchemas(null, "xxx");
@@ -1673,8 +1674,8 @@ public class TestDuckDBJDBC {
 
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
 		assertEquals(rs.getString(3), "a");
 		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
@@ -1693,10 +1694,9 @@ public class TestDuckDBJDBC {
 		assertNull(rs.getObject(10));
 
 		assertTrue(rs.next());
-		assertNull(rs.getObject("TABLE_CAT"));
-		assertNull(rs.getObject(1));
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertTrue(rs.getObject("TABLE_CAT") != null);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "b");
 		assertEquals(rs.getString(3), "b");
 		assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
@@ -1717,12 +1717,12 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
-		rs = md.getTables(null, DuckDBDatabase.DEFAULT_SCHEMA, "a", null);
+		rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "a", null);
 
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
 		assertEquals(rs.getString(3), "a");
 		assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
@@ -1742,15 +1742,15 @@ public class TestDuckDBJDBC {
 
 		rs.close();
 
-		rs = md.getTables(null, DuckDBDatabase.DEFAULT_SCHEMA, "xxx", null);
+		rs = md.getTables(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", null);
 		assertFalse(rs.next());
 		rs.close();
 
 		rs = md.getColumns(null, null, "a", null);
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
 		assertEquals(rs.getString(3), "a");
 		assertEquals(rs.getString("COLUMN_NAME"), "i");
@@ -1768,11 +1768,11 @@ public class TestDuckDBJDBC {
 
 		rs.close();
 
-		rs = md.getColumns(null, DuckDBDatabase.DEFAULT_SCHEMA, "a", "i");
+		rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "i");
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);;
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
 		assertEquals(rs.getString(3), "a");
 		assertEquals(rs.getString("COLUMN_NAME"), "i");
@@ -1789,11 +1789,11 @@ public class TestDuckDBJDBC {
 		rs.close();
 
 		// try with catalog as well
-		rs = md.getColumns(conn.getCatalog(), DuckDBDatabase.DEFAULT_SCHEMA, "a", "i");
+		rs = md.getColumns(conn.getCatalog(), DuckDBConnection.DEFAULT_SCHEMA, "a", "i");
 		assertTrue(rs.next());
 		assertTrue(rs.getObject("TABLE_CAT") != null);
-		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBDatabase.DEFAULT_SCHEMA);
-		assertEquals(rs.getString(2), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(rs.getString("TABLE_SCHEM"), DuckDBConnection.DEFAULT_SCHEMA);
+		assertEquals(rs.getString(2), DuckDBConnection.DEFAULT_SCHEMA);
 		assertEquals(rs.getString("TABLE_NAME"), "a");
 		assertEquals(rs.getString(3), "a");
 		assertEquals(rs.getString("COLUMN_NAME"), "i");
@@ -1813,11 +1813,11 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
-		rs = md.getColumns(null, DuckDBDatabase.DEFAULT_SCHEMA, "xxx", "i");
+		rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "xxx", "i");
 		assertFalse(rs.next());
 		rs.close();
 
-		rs = md.getColumns(null, DuckDBDatabase.DEFAULT_SCHEMA, "a", "xxx");
+		rs = md.getColumns(null, DuckDBConnection.DEFAULT_SCHEMA, "a", "xxx");
 		assertFalse(rs.next());
 		rs.close();
 
@@ -2084,7 +2084,7 @@ public class TestDuckDBJDBC {
 
 		// int8, int4, int2, int1, float8, float4
 		stmt.execute("CREATE TABLE numbers (a BIGINT, b INTEGER, c SMALLINT, d TINYINT, e DOUBLE, f FLOAT)");
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "numbers");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "numbers");
 
 		for (int i = 0; i < 50; i++) {
 			appender.beginRow();
@@ -2130,7 +2130,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		stmt.execute("CREATE TABLE data (a INTEGER, s VARCHAR)");
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		for (int i = 0; i < 1000; i++) {
 			appender.beginRow();
@@ -2160,7 +2160,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE data (str_value VARCHAR(10))");
 		String expectedValue = "䭔\uD86D\uDF7C🔥\uD83D\uDE1C";
-		try (DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data")) {
+		try (DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data")) {
 			appender.beginRow();
 			appender.append(expectedValue);
 			appender.endRow();
@@ -2184,7 +2184,7 @@ public class TestDuckDBJDBC {
 
 		try {
 			@SuppressWarnings("unused")
-			DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+			DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 			fail();
 		} catch (SQLException e) {
 		}
@@ -2198,7 +2198,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		stmt.execute("CREATE TABLE data (a INTEGER)");
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		appender.beginRow();
 		appender.append(1);
@@ -2226,7 +2226,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE data (a INTEGER)");
 		stmt.close();
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		try {
 			appender.beginRow();
@@ -2245,7 +2245,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE data (a INTEGER, b INTEGER)");
 		stmt.close();
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		try {
 			appender.beginRow();
@@ -2263,7 +2263,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		stmt.execute("CREATE TABLE data (a INTEGER)");
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		try {
 			appender.beginRow();
@@ -2282,7 +2282,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE data (a INTEGER)");
 
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		appender.beginRow();
 		appender.append(null);
@@ -2307,7 +2307,7 @@ public class TestDuckDBJDBC {
 
 		stmt.execute("CREATE TABLE data (a VARCHAR)");
 
-		DuckDBAppender appender = conn.createAppender(DuckDBDatabase.DEFAULT_SCHEMA, "data");
+		DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
 		appender.beginRow();
 		appender.append(null);
@@ -2563,7 +2563,7 @@ public class TestDuckDBJDBC {
 	public static void test_get_schema() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 
-		assertEquals(conn.getSchema(), DuckDBDatabase.DEFAULT_SCHEMA);
+		assertEquals(conn.getSchema(), DuckDBConnection.DEFAULT_SCHEMA);
 
 		try (Statement stmt = conn.createStatement()) {
 			stmt.execute("CREATE SCHEMA alternate_schema;");
@@ -2678,7 +2678,7 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertEquals(message, "Catalog Error: unrecognized configuration parameter \"invalid config name\"\n\nDid you mean: \"enable_profiling\"");
+		assertTrue(message.contains("unrecognized configuration parameter \"invalid config name\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {
@@ -2708,18 +2708,6 @@ public class TestDuckDBJDBC {
 		}
 	}
 
-	public static void test_dont_leak_database() throws Exception {
-		DuckDBDatabase database;
-
-		try (DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:")) {
-			conn.duplicate().close();
-
-			database = conn.getDatabase();
-		}
-
-		assertTrue(database.isShutdown());
-	}
-
 	public static void test_null_bytes_in_string() throws Exception {
 		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
 			try (PreparedStatement stmt = conn.prepareStatement("select ?::varchar")) {
@@ -2734,11 +2722,11 @@ public class TestDuckDBJDBC {
 
 	public static void test_get_functions() throws Exception {
 		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-			ResultSet functions = conn.getMetaData().getFunctions(null, DuckDBDatabase.DEFAULT_SCHEMA, "string_split");
+			ResultSet functions = conn.getMetaData().getFunctions(null, DuckDBConnection.DEFAULT_SCHEMA, "string_split");
 
 			assertTrue(functions.next());
 			assertNull(functions.getObject("FUNCTION_CAT"));
-			assertEquals(DuckDBDatabase.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
+			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("string_split", functions.getString("FUNCTION_NAME"));
 			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionNoTable, functions.getInt("FUNCTION_TYPE"));
@@ -2746,22 +2734,148 @@ public class TestDuckDBJDBC {
 			assertFalse(functions.next());
 
 			// two items for two overloads?
-			functions = conn.getMetaData().getFunctions(null, DuckDBDatabase.DEFAULT_SCHEMA, "read_csv_auto");
+			functions = conn.getMetaData().getFunctions(null, DuckDBConnection.DEFAULT_SCHEMA, "read_csv_auto");
 			assertTrue(functions.next());
 			assertNull(functions.getObject("FUNCTION_CAT"));
-			assertEquals(DuckDBDatabase.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
+			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
 			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertTrue(functions.next());
 			assertNull(functions.getObject("FUNCTION_CAT"));
-			assertEquals(DuckDBDatabase.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
+			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
 			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertFalse(functions.next());
+		}
+	}
+
+	public static void test_get_primary_keys() throws Exception {
+		try (
+			Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			Statement stmt = conn.createStatement();
+		) {
+			Object[][] testData = new Object[12][6];
+			int testDataIndex = 0;
+
+			Object[][] params = new Object[6][5];
+			int paramIndex = 0;
+			
+			String catalog = conn.getCatalog();
+
+			for (int schemaNumber = 1; schemaNumber <= 2; schemaNumber++) {
+				String schemaName = "schema" + schemaNumber;
+				stmt.executeUpdate("CREATE SCHEMA " + schemaName);
+				stmt.executeUpdate("SET SCHEMA = '" + schemaName + "'");
+				for (int tableNumber = 1; tableNumber <= 3; tableNumber++) {
+					String tableName = "table" + tableNumber;
+					params[paramIndex] = new Object[] {catalog, schemaName, tableName, testDataIndex, -1};
+					String columns = null;
+					String pk = null;
+					for (int columnNumber = 1; columnNumber <= tableNumber; columnNumber++) {
+						String columnName = "column" + columnNumber;
+						String columnDef = columnName + " int not null";
+						columns = columns == null ? columnDef : columns + "," + columnDef;
+						pk = pk == null ? columnName : pk + "," + columnName;
+						testData[testDataIndex++] = new Object[] { catalog, schemaName, tableName, columnName, columnNumber, null };
+					}
+					stmt.executeUpdate("CREATE TABLE " + tableName + "(" + columns + ",PRIMARY KEY(" + pk + ") )");
+					params[paramIndex][4] = testDataIndex;
+					paramIndex += 1;
+				}
+			}
+
+			DatabaseMetaData databaseMetaData = conn.getMetaData();
+			for (paramIndex = 0; paramIndex < 6; paramIndex++) {
+				Object[] paramSet = params[paramIndex];
+				ResultSet resultSet = databaseMetaData.getPrimaryKeys(
+					(String)paramSet[0], 
+					(String)paramSet[1], 
+					(String)paramSet[2]
+				);
+				for(testDataIndex = (int)paramSet[3]; testDataIndex < (int)paramSet[4]; testDataIndex++) {
+					assertTrue(resultSet.next(), "Expected a row at position " + testDataIndex);
+					Object[] testDataRow = testData[testDataIndex];
+					for (int columnIndex = 0; columnIndex < testDataRow.length; columnIndex++) {
+						Object value = testDataRow[columnIndex];
+						if (value == null || value instanceof String) {
+							String columnValue = resultSet.getString(columnIndex + 1);
+							assertTrue(
+								value == null ? columnValue == null : value.equals(columnValue),
+								"row value " + testDataIndex + ", " + columnIndex + " " + value + 
+								" should equal column value "+ columnValue
+							);
+						} else {
+							int testValue = ((Integer) value).intValue();
+							int columnValue = resultSet.getInt(columnIndex + 1);
+							assertTrue(
+								testValue == columnValue,
+								"row value " + testDataIndex + ", " + columnIndex + " " + testValue + 
+								" should equal column value " + columnValue
+							);
+						}
+					}
+				}
+				resultSet.close();
+			}
+
+			
+			/*
+			StringWriter sw = new StringWriter();
+			PrintWriter pw = new PrintWriter(sw);
+			pw.println("WITH constraint_columns as (");
+			pw.println("select");
+			pw.println("  database_name as \"TABLE_CAT\"");
+			pw.println(", schema_name as \"TABLE_SCHEM\"");
+			pw.println(", table_name as \"TABLE_NAME\"");
+			pw.println(", unnest(constraint_column_names) as \"COLUMN_NAME\"");
+			pw.println(", cast(null as varchar) as \"PK_NAME\"");
+			pw.println("from duckdb_constraints");
+			pw.println("where constraint_type = 'PRIMARY KEY'");
+			pw.println(")");
+			pw.println("SELECT \"TABLE_CAT\"");
+			pw.println(", \"TABLE_SCHEM\"");
+			pw.println(", \"TABLE_NAME\"");
+			pw.println(", \"COLUMN_NAME\"");
+			pw.println(", cast(row_number() over ");
+			pw.println("(partition by \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\") as int) as \"KEY_SEQ\"");
+			pw.println(", \"PK_NAME\"");
+			pw.println("FROM constraint_columns");
+			pw.println("ORDER BY TABLE_CAT, TABLE_SCHEM, TABLE_NAME, KEY_SEQ");
+
+			ResultSet resultSet = stmt.executeQuery(sw.toString());
+			ResultSet resultSet = databaseMetaData.getPrimaryKeys(null, null, catalog);
+			for (testDataIndex = 0; testDataIndex < testData.length; testDataIndex++) {
+				assertTrue(resultSet.next(), "Expected a row at position " + testDataIndex);
+				Object[] testDataRow = testData[testDataIndex];
+				for (int columnIndex = 0; columnIndex < testDataRow.length; columnIndex++) {
+					Object value = testDataRow[columnIndex];
+					if (value == null || value instanceof String) {
+						String columnValue = resultSet.getString(columnIndex + 1);
+						assertTrue(
+							value == null ? columnValue == null : value.equals(columnValue),
+							"row value " + testDataIndex + ", " + columnIndex + " " + value + 
+							" should equal column value "+ columnValue
+						);
+					} else {
+						int testValue = ((Integer) value).intValue();
+						int columnValue = resultSet.getInt(columnIndex + 1);
+						assertTrue(
+							testValue == columnValue,
+							"row value " + testDataIndex + ", " + columnIndex + " " + testValue + 
+							" should equal column value " + columnValue
+						);
+					}
+				}
+			}
+			*/
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+			throw e;
 		}
 	}
 

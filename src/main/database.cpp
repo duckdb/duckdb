@@ -144,9 +144,15 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
-		// use storage extension to create the initial database
-		attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-		                                                  info.name, info, access_mode);
+
+		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+			// use storage extension to create the initial database
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                  info.name, info, access_mode);
+		} else {
+			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name,
+			                                                  info.path, access_mode);
+		}
 	} else {
 		// check if this is an in-memory database or not
 		attached_database =
@@ -199,6 +205,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
+
 	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
@@ -364,7 +371,8 @@ idx_t DuckDB::NumberOfThreads() {
 }
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
-	return loaded_extensions.find(name) != loaded_extensions.end();
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	return loaded_extensions.find(extension_name) != loaded_extensions.end();
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -372,7 +380,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
-	loaded_extensions.insert(name);
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	loaded_extensions.insert(extension_name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

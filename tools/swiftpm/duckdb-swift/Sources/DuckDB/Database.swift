@@ -23,37 +23,56 @@
 //  IN THE SOFTWARE.
 
 @_implementationOnly import Cduckdb
+import Foundation
 
-public final class Connection {
+public typealias DBInt = UInt64
 
-  private let database: Database
-  private let ptr = UnsafeMutablePointer<duckdb_connection?>.allocate(capacity: 1)
-
-  public init(database: Database) throws {
-    self.database = database
-    let status = database.withCDatabase { duckdb_connect($0, ptr) }
-    guard status == .success else { throw DatabaseError.failedToOpenConnection }
+public final class Database {
+  
+  public enum Store {
+    case file(at: URL)
+    case inMemory
   }
-
+  
+  private let ptr = UnsafeMutablePointer<duckdb_database?>.allocate(capacity: 1)
+  
+  public convenience init(store: Store = .inMemory) throws {
+    var fileURL: URL?
+    if case .file(let url) = store {
+      guard url.isFileURL else {
+        throw DatabaseError.databaseFailedToInitialize(
+          reason: "provided URL for database store file must be local")
+      }
+      fileURL = url
+    }
+    try self.init(path: fileURL?.path, config: nil)
+  }
+  
+  private init(path: String?, config: duckdb_config?) throws {
+    let outError = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 1)
+    defer { outError.deallocate() }
+    let status = path.withOptionalCString { strPtr in
+      duckdb_open_ext(strPtr, ptr, config, outError)
+    }
+    guard status == .success else {
+      let error = outError.pointee.map { ptr in
+        defer { duckdb_free(ptr) }
+        return String(cString: ptr)
+      }
+      throw DatabaseError.databaseFailedToInitialize(reason: error)
+    }
+  }
+  
   deinit {
-    duckdb_disconnect(ptr)
+    duckdb_close(ptr)
     ptr.deallocate()
   }
   
-  public func query(_ sql: String) throws -> QueryResult {
-    try QueryResult(connection: self, sql: sql)
+  public func connect() throws -> Connection {
+    try .init(database: self)
   }
   
-  public func execute(_ sql: String) throws {
-    let status = sql.withCString { queryStrPtr in
-      duckdb_query(ptr.pointee, queryStrPtr, nil)
-    }
-    guard status == .success else {
-      throw DatabaseError.queryError(reason: nil)
-    }
-  }
-  
-  func withCConnection<T>(_ body: (duckdb_connection?) throws -> T) rethrows -> T {
+  func withCDatabase<T>(_ body: (duckdb_database?) throws -> T) rethrows -> T {
     try body(ptr.pointee)
   }
 }

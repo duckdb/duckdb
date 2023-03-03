@@ -70,6 +70,11 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 			return false;
 		}
 	}
+	if (str_len == 0) {
+		string error = "Cannot cast empty string to BIT";
+		HandleCastError::AssignError(error, error_message);
+		return false;
+	}
 	str_len = ComputeBitstringLen(str_len);
 	return true;
 }

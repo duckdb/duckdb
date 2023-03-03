@@ -76,13 +76,15 @@ private:
 	atomic<uint32_t> queue_insertions;
 };
 
+struct TemporaryFileInformation {
+	string path;
+	idx_t size;
+};
+
 //! The BufferManager is in charge of handling memory management for a singke database. It cooperatively shares a
 //! BufferPool with other BufferManagers, belonging to different databases. It hands out memory buffers that can
 //! be used by the database internally, and offers configuration options specific to a database, which need not be
 //! shared by the BufferPool, including whether to support swapping temp buffers to disk, and where to swap them to.
-//
-//! BlockIds are NOT unique within the context of a BufferManager. A buffer manager
-//! can be shared by many BlockManagers.
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
@@ -158,6 +160,8 @@ public:
 	void SetLimit(idx_t limit = (idx_t)-1) {
 		buffer_pool.SetLimit(limit, InMemoryWarning());
 	}
+	//! Returns a list of all temporary files
+	vector<TemporaryFileInformation> GetTemporaryFiles();
 
 private:
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or

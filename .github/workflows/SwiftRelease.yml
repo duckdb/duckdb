@@ -22,6 +22,8 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v3
         with:
+          # we need tags for the ubiquity build script to run without errors
+          fetch-depth: '0'
           ref: ${{ env.SOURCE_REF }}
           path: 'source-repo'
           
