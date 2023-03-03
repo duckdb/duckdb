@@ -80,7 +80,8 @@ static void TemplatedContainsOrPosition(DataChunk &args, Vector &result, bool is
 
 template <class T, class OP, class LIST_ACCESSOR>
 void ListContainsOrPosition(DataChunk &args, Vector &result) {
-	switch (args.data[1].GetType().InternalType()) {
+	const auto physical_type = args.data[1].GetType().InternalType();
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedContainsOrPosition<int8_t, T, OP, LIST_ACCESSOR>(args, result);
@@ -118,12 +119,16 @@ void ListContainsOrPosition(DataChunk &args, Vector &result) {
 	case PhysicalType::VARCHAR:
 		TemplatedContainsOrPosition<string_t, T, OP, LIST_ACCESSOR>(args, result);
 		break;
+	case PhysicalType::INTERVAL:
+		TemplatedContainsOrPosition<interval_t, T, OP, LIST_ACCESSOR>(args, result);
+		break;
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 		TemplatedContainsOrPosition<int8_t, T, OP, LIST_ACCESSOR>(args, result, true);
 		break;
 	default:
-		throw NotImplementedException("This function has not been implemented for this type");
+		throw NotImplementedException("This function has not been implemented for physical type %s",
+		                              TypeIdToString(physical_type));
 	}
 }
 
