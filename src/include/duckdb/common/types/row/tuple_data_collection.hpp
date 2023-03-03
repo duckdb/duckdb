@@ -56,7 +56,7 @@ public:
 	//! TODO:
 	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id, const idx_t append_count,
 	             const SelectionVector &sel);
-	//! TODO:
+	//! Finalizes the append state, releasing or storing blo
 	void FinalizeAppendState(TupleDataAppendState &append_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
@@ -112,6 +112,8 @@ private:
 	//! TODO:
 	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
 	                             const idx_t count);
+	//! TODO
+	void FinalizeChunkState(TupleDataManagementState &state);
 	//! TODO:
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
 	//! TODO:

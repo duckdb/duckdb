@@ -174,11 +174,7 @@ void TupleDataCollection::Scatter(TupleDataAppendState &append_state, Vector &so
 }
 
 void TupleDataCollection::FinalizeAppendState(TupleDataAppendState &append_state) {
-	auto &chunk_state = append_state.chunk_state;
-	if (chunk_state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
-		TupleDataChunk dummy_chunk;
-		allocator->ReleaseOrStoreHandles(chunk_state, segments.back(), dummy_chunk);
-	}
+	FinalizeChunkState(append_state.chunk_state);
 }
 
 void TupleDataCollection::Combine(TupleDataCollection &other) {
@@ -531,6 +527,13 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleData
 	}
 	result.function = function;
 	return result;
+}
+
+void TupleDataCollection::FinalizeChunkState(TupleDataManagementState &state) {
+	if (state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
+		TupleDataChunk dummy_chunk;
+		allocator->ReleaseOrStoreHandles(state, segments.back(), dummy_chunk);
+	}
 }
 
 bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) const {

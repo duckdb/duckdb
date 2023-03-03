@@ -15,11 +15,11 @@ namespace duckdb {
 
 enum class TupleDataPinProperties : uint8_t {
 	INVALID,
-	//! TODO
+	//! Keeps all passed blocks pinned while scanning/iterating over the chunks
 	KEEP_EVERYTHING_PINNED,
-	//! TODO
+	//! Unpins blocks after they are done
 	UNPIN_AFTER_DONE,
-	//! TODO
+	//! Assumes all blocks are already pinned
 	ALREADY_PINNED
 };
 
