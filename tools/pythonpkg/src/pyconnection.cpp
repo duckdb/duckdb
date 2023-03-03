@@ -562,8 +562,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		name = py::str(name_p);
 	}
 
-	duckdb::Printer::Print(OutputStream::STREAM_STDOUT, name);
-
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
 	if (!py::none().is(header)) {
