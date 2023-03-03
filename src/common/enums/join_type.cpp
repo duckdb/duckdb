@@ -1,5 +1,6 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/serializer/enum_serializer.hpp"
+
 namespace duckdb {
 
 string JoinTypeToString(JoinType type) {

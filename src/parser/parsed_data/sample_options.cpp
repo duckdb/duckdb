@@ -30,6 +30,10 @@ template<> const char* EnumSerializer::EnumToString(SampleMethod value) {
 	}
 }
 
+string SampleMethodToString(SampleMethod method) {
+	return EnumSerializer::EnumToString(method);
+}
+
 void SampleOptions::Serialize(Serializer &serializer) {
 	FieldWriter writer(serializer);
 	writer.WriteSerializable(sample_size);

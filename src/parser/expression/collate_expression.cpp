@@ -52,5 +52,6 @@ unique_ptr<ParsedExpression> CollateExpression::FormatDeserialize(ExpressionType
 	auto child = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("child");
 	auto collation = deserializer.ReadProperty<string>("collation");
 	return make_unique_base<ParsedExpression, CollateExpression>(collation, std::move(child));
+}
 
 } // namespace duckdb

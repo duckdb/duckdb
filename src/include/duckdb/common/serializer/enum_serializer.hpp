@@ -124,44 +124,4 @@ struct EnumSerializer {
 	const char* EnumToString(SampleMethod value);
 };
 
-}
-
-/*
- * :'(
- *
-#define ENUM_NAME Colors
-#define ENUM_MEMBERS \
-    MEMBER(RED, 1)    \
-    MEMBER(BLUE, 2)   \
-    MEMBER(GREEN, 3)
-
-// Impl
-#define FROM_STRING_NAME_IMPL(name) name##FromString
-#define FROM_STRING_NAME(name) FROM_STRING_NAME_IMPL(name)
-
-#define TO_STRING_NAME_IMPL(name) name##ToString
-#define TO_STRING_NAME(name) TO_STRING_NAME_IMPL(name)
-
-enum class ENUM_NAME : uint8_t {
-#define MEMBER(name, val) name = val,
-	ENUM_MEMBERS
-#undef MEMBER
-};
-
-const char* TO_STRING_NAME(ENUM_NAME)(ENUM_NAME value) {
-#define MEMBER(name, val) case ENUM_NAME::name: return #name;
-	switch (value) {
-		ENUM_MEMBERS
-	default: throw InternalException("Unreachable");
-	}
-#undef MEMBER
-}
-
-ENUM_NAME FROM_STRING_NAME(ENUM_NAME)(const char* value) {
-#define MEMBER(name, val) else if (strcmp(value, #name) == 0) { return ENUM_NAME::name; }
-	if(false) {}
-	ENUM_MEMBERS
-	else { throw InternalException("Unreachable"); }
-#undef MEMBER
-}
-*/
+} // namespace duckdb
