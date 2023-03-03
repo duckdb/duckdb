@@ -31,7 +31,9 @@ expr_constant <- rapi_expr_constant
 #' @noRd
 #' @examples
 #' call_expr <- expr_function("ABS", list(expr_constant(-42)))
-expr_function <- rapi_expr_function
+expr_function <- function(name, args, order_bys = list(), filter_bys = list()) {
+  rapi_expr_function(name, args, order_bys, filter_bys)
+}
 
 #' Convert an expression to a string for debugging purposes
 #' @param expr the expression
@@ -152,82 +154,14 @@ rel_aggregate <- rapi_rel_aggregate
 rel_order <- rapi_rel_order
 
 
+# expr_set_function_order <- rapi_expr_function_order
+#
+# expr_set_function_filter <- rapi_expr_function_filter
 
-expr_window <- function(window_function="sum", children=list(), partitions=list(), orders=list(),
+expr_window <- function(window_function, partitions=list(),
 				window_boundary_start="unbounded_preceding",
-				window_boundary_end="current_row_range", filter_expression = list(), start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
-	rapi_expr_window(window_function,
-	children,
-	partitions,
-	orders,
-	window_boundary_start,
-	window_boundary_end,
-	filter_expression,
-	start_expr,
-	end_expr,
-	offset_expr,
-	default_expr)
-}
-
-
-#' Lazily perform a window aggregation on a DuckDB relation object
-#' @param rel the DuckDB relation object
-#' @param paritions a list of DuckDB expressions to order by
-#' @return the now aggregated `duckdb_relation` object
-#' @noRd
-#' @examples
-#' blah 1
-#' blah 2
-window_functions <- c("sum", "avg", "count", "median", "min", "string_agg", "max", "rank", "rank_dense", "dense_rank", "percent_rank", "row_number", "first_value", "first", "last_value", "last", "nth_value",  "last", "cume_dist", "lead", "lag", "ntile")
-window_boundaries <- c("unbounded_preceding", "unbounded_following", "current_row_range", "current_row_rows", "expr_following_rows", "expr_preceding_rows", "expre_following_rows", "expr_preceding_range", "expr_following_range")
-
-rel_window <-function(rel=rel, window_function = "sum",
-							window_alias = "window_result",
-                            children = list(),
-                            partitions = list(),
-                            orders = list(),
-                            filter_expression = list(),
-                            window_boundary_start = "unbounded_preceding",
-                            window_boundary_end = "current_row_range",
-                            start_expr = list(),
-                            end_expr = list(),
-                            offset_expr = list(),
-                            default_expr = list()) {
-
-  rel_window_mandatory_args(rel, window_function, window_alias, children, partitions, orders, filter_expression, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
-}
-
-rel_window_mandatory_args <-function(rel,
-  window_function = window_functions,
-  window_alias = window_alias,
-  children = list(),
-  partitions = list(),
-  orders = list(),
-  filter_expression = list(),
-  window_boundary_start = window_boundaries,
-  window_boundary_end = window_boundaries,
-  start_expr = list(),
-  end_expr = list(),
-  offset_expr = list(),
-  default_expr = list()) {
-
-    window_function <- match.arg(window_function)
-    window_boundary_start <- match.arg(window_boundary_start)
-    window_boundary_end <- match.arg(window_boundary_end)
-
-    rapi_rel_window_aggregation(rel,
-                                window_function,
-                                window_alias,
-                                children,
-                                partitions,
-                                orders,
-                                window_boundary_start,
-                                window_boundary_end,
-                                filter_expression,
-                                start_expr,
-                                end_expr,
-                                offset_expr,
-                                default_expr)
+				window_boundary_end="current_row_range", start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
+	rapi_expr_window(window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 #' Lazily INNER join two DuckDB relation objects

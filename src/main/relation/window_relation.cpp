@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-//static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+// static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 //	if (window_boundary == "unbounded_preceding") {
 //		return WindowBoundary::UNBOUNDED_PRECEDING;
 //	} else if (window_boundary == "unbounded_following") {
@@ -27,7 +27,7 @@ namespace duckdb {
 //	} else {
 //		return WindowBoundary::EXPR_FOLLOWING_RANGE;
 //	}
-//}
+// }
 
 WindowRelation::WindowRelation(shared_ptr<Relation> rel, std::string window_function, std::string window_alias,
                                vector<unique_ptr<ParsedExpression>> children_,

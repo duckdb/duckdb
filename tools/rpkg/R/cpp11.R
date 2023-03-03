@@ -40,8 +40,8 @@ rapi_expr_constant <- function(val) {
   .Call(`_duckdb_rapi_expr_constant`, val)
 }
 
-rapi_expr_function <- function(name, args) {
-  .Call(`_duckdb_rapi_expr_function`, name, args)
+rapi_expr_function <- function(name, args, order_bys, filter_bys) {
+  .Call(`_duckdb_rapi_expr_function`, name, args, order_bys, filter_bys)
 }
 
 rapi_expr_set_alias <- function(expr, alias) {
@@ -72,12 +72,8 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
-rapi_expr_window <- function(window_function, children, partitions, orders, window_boundary_start, window_boundary_end, filter_expressions, start_exprs, end_exprs, offset_exprs, default_exprs) {
-  .Call(`_duckdb_rapi_expr_window`, window_function, children, partitions, orders, window_boundary_start, window_boundary_end, filter_expressions, start_exprs, end_exprs, offset_exprs, default_exprs)
-}
-
-rapi_rel_window_aggregation <- function(rel, window_function, window_alias, children, partitions, orders, window_boundary_start, window_boundary_end, filter_expressions, start_exprs, end_exprs, offset_exprs, default_exprs) {
-  .Call(`_duckdb_rapi_rel_window_aggregation`, rel, window_function, window_alias, children, partitions, orders, window_boundary_start, window_boundary_end, filter_expressions, start_exprs, end_exprs, offset_exprs, default_exprs)
+rapi_expr_window <- function(window_function, partitions, window_boundary_start, window_boundary_end, start_exprs, end_exprs, offset_exprs, default_exprs) {
+  .Call(`_duckdb_rapi_expr_window`, window_function, partitions, window_boundary_start, window_boundary_end, start_exprs, end_exprs, offset_exprs, default_exprs)
 }
 
 rapi_rel_join <- function(left, right, conds, join) {
