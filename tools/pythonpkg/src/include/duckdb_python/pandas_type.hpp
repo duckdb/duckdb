@@ -43,6 +43,15 @@ enum class PandasType : uint8_t {
 
 };
 
+enum class NumpyObjectType : uint8_t {
+	//! To identify supported Numpy objects for scaning
+	INVALID,	//! unsupported numpy object
+	NDARRAY1D,	//! numpy array with shape (n, )
+	NDARRAY2D,	//! numpy array with shape (n_rows, n_cols)
+	LIST,		//! list of numpy arrays of shape (n,)
+	DICT,		//! dict of numpy arrays of shape (n,)
+};
+
 PandasType ConvertPandasType(const py::object &col_type);
 LogicalType PandasToLogicalType(const PandasType &col_type);
 
