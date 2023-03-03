@@ -7,8 +7,10 @@ PRAGMA enable_verification
 
 foreach type FLOAT DOUBLE
 
-statement error
+query III
 SELECT SUM('inf'::${type}), SUM('-inf'::${type}), SUM('nan'::${type})
+----
+inf	-inf	nan
 
 query III
 SELECT MIN('inf'::${type}), MIN('-inf'::${type}), MIN('nan'::${type})

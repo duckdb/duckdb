@@ -174,7 +174,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 	// cte_map
 	auto cte_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> new_map;
+	case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>> new_map;
 	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();

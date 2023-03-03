@@ -813,12 +813,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 
 	unique_ptr<QueryResult> result;
 	QueryResult *last_result = nullptr;
+	bool last_had_result = false;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
 		PendingQueryParameters parameters;
 		parameters.allow_stream_result = allow_stream_result && is_last_statement;
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
+		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
 			current_result = make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
@@ -826,12 +828,17 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
 		// now append the result to the list of results
-		if (!last_result) {
+		if (!last_result || !last_had_result) {
 			// first result of the query
 			result = std::move(current_result);
 			last_result = result.get();
+			last_had_result = has_result;
 		} else {
 			// later results; attach to the result chain
+			// but only if there is a result
+			if (!has_result) {
+				continue;
+			}
 			last_result->next = std::move(current_result);
 			last_result = last_result->next.get();
 		}

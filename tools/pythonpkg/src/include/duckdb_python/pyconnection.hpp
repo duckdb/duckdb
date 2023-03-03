@@ -151,6 +151,10 @@ public:
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);

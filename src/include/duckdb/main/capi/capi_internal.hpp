@@ -40,6 +40,7 @@ struct ExtractStatementsWrapper {
 
 struct PendingStatementWrapper {
 	unique_ptr<PendingQueryResult> statement;
+	bool allow_streaming;
 };
 
 struct ArrowResultWrapper {
@@ -56,6 +57,7 @@ struct AppenderWrapper {
 enum class CAPIResultSetType : uint8_t {
 	CAPI_RESULT_TYPE_NONE = 0,
 	CAPI_RESULT_TYPE_MATERIALIZED,
+	CAPI_RESULT_TYPE_STREAMING,
 	CAPI_RESULT_TYPE_DEPRECATED
 };
 
