@@ -1171,7 +1171,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 			data = py::cast<py::dict>(entry);
 			break;
 		default:
-			NotImplementedException("Unsupported Numpy object");
+			throw NotImplementedException("Unsupported Numpy object");
 			break;
 		}
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
