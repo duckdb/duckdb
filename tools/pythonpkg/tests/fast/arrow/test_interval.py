@@ -34,7 +34,6 @@ class TestArrowInterval(object):
         assert (rel['c'] == expected_arrow['a'])
         assert (rel['d'] == expected_arrow['a'])
 
-
     def test_duration_overflow(self, duckdb_cursor):
         if not can_run:
             return

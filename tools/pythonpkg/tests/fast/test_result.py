@@ -42,7 +42,7 @@ class TestPythonResult(object):
 
     def test_result_interval(self):
         try:
-            import pyarrow
+            from pandas import DateOffset
         except:
             return
         connection = duckdb.connect()
@@ -53,7 +53,7 @@ class TestPythonResult(object):
         rel = connection.table("intervals")
         res = rel.execute()
         assert res.description == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
-        assert res.fetchall() == [(pyarrow.MonthDayNano([0, 1, 0]),), (pyarrow.MonthDayNano([0, 0, 2000000000]),), (pyarrow.MonthDayNano([0, 0, 1000]),)]
+        assert res.fetchall() == [(DateOffset(months=0, days=1, nanoseconds=0),), (DateOffset(months=0, days=0, nanoseconds=2000000000),), (DateOffset(months=0, days=0, nanoseconds=1000),)]
 
     def test_description_uuid(self):
         connection = duckdb.connect()

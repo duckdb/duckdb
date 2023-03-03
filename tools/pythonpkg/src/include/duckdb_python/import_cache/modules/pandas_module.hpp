@@ -40,6 +40,7 @@ public:
 		DataFrame.LoadAttribute("DataFrame", cache, *this);
 		libs.LoadModule("pandas._libs.missing", cache);
 		isnull.LoadAttribute("isnull", cache, *this);
+		DateOffset.LoadAttribute("DateOffset", cache, *this);
 	}
 
 public:
@@ -47,6 +48,7 @@ public:
 	PythonImportCacheItem DataFrame;
 	PandasLibsCacheItem libs;
 	PythonImportCacheItem isnull;
+	PythonImportCacheItem DateOffset;
 
 protected:
 	bool IsRequired() const override final {

@@ -38,10 +38,6 @@ def recursive_equality(o1, o2):
 
 class TestAllTypes(object):
     def test_fetchall(self, duckdb_cursor):
-        try:
-            import pyarrow
-        except:
-            return
         conn = duckdb.connect()
         # We replace these values since the extreme ranges are not supported in native-python.
         replacement_values = {
@@ -77,7 +73,7 @@ class TestAllTypes(object):
             , 'nested_int_array': [([],), ([[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],), (None,)], 'struct': [({'a': None, 'b': None},), ({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'},), (None,)]
             , 'struct_of_arrays': [({'a': None, 'b': None},), ({'a': [42, 999, None, None, -42], 'b': ['🦆🦆🦆🦆🦆🦆', 'goose', None, '']},), (None,)]
             , 'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)], 'map':[({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)]
-            , 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(pyarrow.MonthDayNano([0, 0, 0]),), (pyarrow.MonthDayNano([999, 999, 999999999000]),), (None,)]
+            , 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(pd.DateOffset(months=0, days=0, nanoseconds=0),), (pd.DateOffset(months=999, days=999, nanoseconds=999999999000),), (None,)]
             , 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
             , 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0),)],}
 

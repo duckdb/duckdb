@@ -403,12 +403,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
-		py::list list;
-		list.append(py::cast(interval_value.months));
-		list.append(py::cast(interval_value.days));
-		list.append(py::cast(interval_value.micros * Interval::MICROS_PER_MSEC));
-		auto arrow_interval = import_cache.arrow().lib.MonthDayNano()(std::move(list));
-		return py::cast<py::object>(arrow_interval);
+		return py::cast<py::object>(import_cache.pandas().DateOffset()(
+		    py::arg("months") = interval_value.months, py::arg("days") = interval_value.days,
+		    py::arg("nanoseconds") = interval_value.micros * Interval::MICROS_PER_MSEC));
 	}
 
 	default:
