@@ -270,7 +270,7 @@ idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
 	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
-	return physical_cores;
+	return MaxValue<idx_t>(cores_available_per_period, 1);
 #else
 	return physical_cores;
 #endif
