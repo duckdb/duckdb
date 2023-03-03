@@ -13,6 +13,8 @@ inf
 # overflow on cast from double to real results in an error
 statement error
 SELECT 1e308::REAL
+----
+Conversion Error
 
 # except we can cast inf -> inf
 query I
@@ -31,35 +33,55 @@ SELECT '1e100'::REAL
 ----
 inf
 
-# overflow in SUM/AVG results in an error
-statement error
+# overflow in SUM/AVG overflow
+query I
 SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+----
+inf
 
-statement error
+query I
 SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+----
+inf
 
 # overflow in arithmetic as well
-statement error
+query I
 SELECT 1e308+1e308
+----
+inf
 
-statement error
+query I
 SELECT 1e308*2
+----
+inf
 
-statement error
+query I
 SELECT -1e308-1e308
+----
+-inf
 
-statement error
+query I
 SELECT 1e308/0.1
+----
+inf
 
-statement error
+query I
 SELECT 2e38::REAL+2e38::REAL
+----
+inf
 
-statement error
+query I
 SELECT 2e38::REAL*2
+----
+inf
 
-statement error
+query I
 SELECT -2e38::REAL-2e38::REAL
+----
+-inf
 
-statement error
+query I
 SELECT 2e38::REAL/0.1::REAL
+----
+inf
 
