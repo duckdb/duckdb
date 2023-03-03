@@ -42,6 +42,15 @@ Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
 	return n48;
 }
 
+void Node48::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != ARTNode::EMPTY_MARKER) {
+			ARTNode::Vacuum(art, children[child_index[i]], vacuum_nodes);
+		}
+	}
+}
+
 void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);

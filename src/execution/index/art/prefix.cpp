@@ -55,7 +55,26 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 }
 
 void Prefix::Vacuum(ART &art) {
-	// TODO: vacuum prefix segments
+
+	if (IsInlined()) {
+		return;
+	}
+
+	// first position has special treatment because we don't obtain it from a leaf segment
+	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
+	auto &allocator = art.nodes.at(ARTNodeType::PREFIX_SEGMENT);
+	if (allocator.NeedsVacuum(data.position)) {
+		data.position = allocator.Vacuum(data.position);
+	}
+
+	auto position = data.position;
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = PrefixSegment::Get(art, position);
+		if (segment->next != DConstants::INVALID_INDEX && allocator.NeedsVacuum(segment->next)) {
+			segment->next = allocator.Vacuum(segment->next);
+		}
+		position = segment->next;
+	}
 }
 
 void Prefix::Move(Prefix &other) {

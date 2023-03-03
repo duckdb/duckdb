@@ -38,6 +38,15 @@ Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
 	return n256;
 }
 
+void Node256::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (children[i]) {
+			ARTNode::Vacuum(art, children[i], vacuum_nodes);
+		}
+	}
+}
+
 void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);

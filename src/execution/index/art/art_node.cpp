@@ -91,50 +91,46 @@ void ARTNode::Initialize(ART &art, ARTNode &node, const ARTNodeType &type) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void ARTNode::Vacuum(ART &art, ARTNode &node) {
-	// TODO
-	//	if (node.IsSwizzled()) {
-	//		return;
-	//	}
-	//
-	//	// possibly vacuum prefix
-	//	if (art.prefix_segments.VacuumCount()) {
-	//		auto prefix = node.GetPrefix(art);
-	//		prefix->Vacuum(art);
-	//	}
-	//
-	//	// early abort, if finished
-	//	if (!art.vacuum_count) {
-	//		return;
-	//	}
-	//
-	//	auto position = node.pointer & 0x0fffffff;
-	//
-	//	switch (node.DecodeARTNodeType()) {
-	//	case ARTNodeType::LEAF: {
-	//		auto new_position = art.leaf_nodes.Vacuum(position);
-	//		auto leaf = node.Get<Leaf>(art.leaf_nodes);
-	//		return leaf->Vacuum(art, node);
-	//	}
-	//	case ARTNodeType::NODE_4 {
-	//		auto n4 = node.Get<Node4>(art.n4_nodes);
-	//		return n4->Vacuum(art, node);
-	//	}
-	//	case ARTNodeType::NODE_16: {
-	//		auto n16 = node.Get<Node16>(art.n16_nodes);
-	//		return n16->Vacuum(art, node);
-	//	}
-	//	case ARTNodeType::NODE_48: {
-	//		auto n48 = node.Get<Node48>(art.n48_nodes);
-	//		return n48->Vacuum(art, node);
-	//	}
-	//	case ARTNodeType::NODE_256: {
-	//		auto n256 = node.Get<Node256>(art.n256_nodes);
-	//		return n256->Vacuum(art, node);
-	//	}
-	//	default:
-	//		throw InternalException("Invalid node type for Vacuum.");
-	//	}
+void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+
+	if (node.IsSwizzled()) {
+		return;
+	}
+
+	// possibly vacuum prefix
+	if (vacuum_nodes.find(ARTNodeType::PREFIX_SEGMENT) != vacuum_nodes.end()) {
+		node.GetPrefix(art)->Vacuum(art);
+	}
+
+	auto type = node.DecodeARTNodeType();
+	if (vacuum_nodes.find(type) != vacuum_nodes.end()) {
+		D_ASSERT(art.nodes.find(type) != art.nodes.end());
+		auto position = node.pointer & 0x0fffffff;
+		if (art.nodes.at(type).NeedsVacuum(position)) {
+			node.pointer = art.nodes.at(type).Vacuum(position);
+			node.EncodeARTNodeType(type);
+		}
+	}
+
+	switch (node.DecodeARTNodeType()) {
+	case ARTNodeType::LEAF: {
+		if (vacuum_nodes.find(ARTNodeType::LEAF_SEGMENT) != vacuum_nodes.end()) {
+			node.Get<Leaf>(art)->Vacuum(art);
+		}
+		return;
+	}
+	case ARTNodeType::NODE_4:
+		return node.Get<Node4>(art)->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_16: {
+		return node.Get<Node16>(art)->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_48:
+		return node.Get<Node48>(art)->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_256:
+		return node.Get<Node256>(art)->Vacuum(art, vacuum_nodes);
+	default:
+		throw InternalException("Invalid node type for Vacuum.");
+	}
+	}
 }
 
 //===--------------------------------------------------------------------===//

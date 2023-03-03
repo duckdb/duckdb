@@ -28,8 +28,8 @@ public:
 	//! Initializes all the fields of the node
 	static Node256 *Initialize(ART &art, const ARTNode &node);
 
-	//! Vacuum the node (and its subtree)
-	static void Vacuum(ART &art, ARTNode &node);
+	//! Vacuum the children of the node
+	void Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);

@@ -71,6 +71,29 @@ Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint
 	return leaf;
 }
 
+void Leaf::Vacuum(ART &art) {
+
+	if (IsInlined()) {
+		return;
+	}
+
+	// first position has special treatment because we don't obtain it from a leaf segment
+	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
+	auto &allocator = art.nodes.at(ARTNodeType::LEAF_SEGMENT);
+	if (allocator.NeedsVacuum(row_ids.position)) {
+		row_ids.position = allocator.Vacuum(row_ids.position);
+	}
+
+	auto position = row_ids.position;
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = LeafSegment::Get(art, position);
+		if (segment->next != DConstants::INVALID_INDEX && allocator.NeedsVacuum(segment->next)) {
+			segment->next = allocator.Vacuum(segment->next);
+		}
+		position = segment->next;
+	}
+}
+
 void Leaf::Insert(ART &art, const row_t &row_id) {
 
 	if (count == 0) {

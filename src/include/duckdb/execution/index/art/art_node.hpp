@@ -90,7 +90,7 @@ public:
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
 	//! Vacuum the node (and its subtree)
-	static void Vacuum(ART &art, ARTNode &node);
+	static void Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
 
 	//! Get the node
 	template <class T>

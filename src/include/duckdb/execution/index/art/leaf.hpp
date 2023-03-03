@@ -40,7 +40,7 @@ public:
 	                        const idx_t &count);
 
 	//! Vacuum the leaf
-	static void Vacuum(ART &art, ARTNode &node);
+	void Vacuum(ART &art);
 
 	//! Insert a row ID into a leaf
 	void Insert(ART &art, const row_t &row_id);

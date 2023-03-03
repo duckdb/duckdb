@@ -38,6 +38,13 @@ Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
 	return n16;
 }
 
+void Node16::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+
+	for (idx_t i = 0; i < count; i++) {
+		ARTNode::Vacuum(art, children[i], vacuum_nodes);
+	}
+}
+
 void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
 
 	D_ASSERT(node);

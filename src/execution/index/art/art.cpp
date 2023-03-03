@@ -363,7 +363,8 @@ void ART::Vacuum() {
 		return;
 	}
 
-	// TODO: traverse the tree and vacuum qualifying nodes
+	// traverse the tree and vacuum qualifying nodes
+	ARTNode::Vacuum(*this, tree, vacuum_nodes);
 
 	// finalize the vacuum operation
 	FinalizeVacuum(vacuum_nodes);
@@ -1032,7 +1033,8 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 	auto other_art = (ART *)other_index;
 
-	//  TODO: traverse other_index and add the block ID size of this index, fully deserialize the other index while
+	//  TODO: traverse other_index and add the buffer ID size of this index to each ART Node, fully deserialize the
+	//  other index while
 	//  TODO: doing that
 
 	// merge the node storage
