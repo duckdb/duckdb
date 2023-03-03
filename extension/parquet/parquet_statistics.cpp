@@ -260,11 +260,8 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return nullptr;
 	}
 	row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-	if (column_chunk.meta_data.type != duckdb_parquet::format::Type::FLOAT &&
-	    column_chunk.meta_data.type != duckdb_parquet::format::Type::DOUBLE) {
-		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
-			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
-		}
+	if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
+		row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
 	return row_group_stats;
 }
