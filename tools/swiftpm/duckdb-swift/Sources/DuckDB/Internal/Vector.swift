@@ -312,10 +312,10 @@ extension Vector.Element {
   var structContents: [StructMemberContent]? {
     guard let names = vector.logicalType.structMemberNames else { return nil }
     var content = [StructMemberContent]()
-    let count = duckdb_list_vector_get_size(vector.cvector)
     for (i, name) in names.enumerated() {
-      let child = duckdb_struct_vector_get_child(vector.cvector, DBInt(i))!
-      content.append(.init(name: name, vector: Vector(child, count: Int(count))))
+      let memberCVector = duckdb_struct_vector_get_child(vector.cvector, DBInt(i))!
+      let memberVector = Vector(memberCVector, count: vector.count, offset: vector.offset)
+      content.append(.init(name: name, vector: memberVector))
     }
     return content
   }
