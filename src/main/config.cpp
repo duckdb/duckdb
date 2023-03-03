@@ -261,7 +261,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		return physical_cores;
 	}
 	if (quota > 0 && period > 0) {
-		return std::ceil(quota / period);
+		return idx_t(std::ceil((double)quota / (double)period));
 	} else {
 		return physical_cores;
 	}
