@@ -116,6 +116,9 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// Fill join_stats for invisible join
 	auto &stats_probe = *op.join_stats[1].get(); // rhs stats
+	if (!NumericStats::HasMin(stats_probe) || !NumericStats::HasMax(stats_probe)) {
+		return;
+	}
 
 	// The max size our build must have to run the perfect HJ
 	const idx_t MAX_BUILD_SIZE = 1000000;
@@ -125,8 +128,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_max = NumericStats::Max(stats_build);
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || NumericStats::Max(stats_probe).IsNull() ||
-	    NumericStats::Min(stats_probe).IsNull()) {
+	if (join_state.build_range > MAX_BUILD_SIZE) {
 		return;
 	}
 	if (NumericStats::Min(stats_build) <= NumericStats::Min(stats_probe) &&
