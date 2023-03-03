@@ -35,7 +35,10 @@
 #endif
 #endif
 
-// duplicate of duckdb/common/constants.hpp
+// API versions
+// if no explicit API version is defined, the latest API version is used
+// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
+// These will not be supported long-term, and will be removed in future versions.
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
 #endif
@@ -569,6 +572,14 @@ Use `duckdb_result_chunk_count` to figure out how many chunks there are in the r
 * returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
 */
 DUCKDB_API duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_index);
+
+/*!
+Checks if the type of the internal result is StreamQueryResult.
+
+* result: The result object to check.
+* returns: Whether or not the result object is of the type StreamQueryResult
+*/
+DUCKDB_API bool duckdb_result_is_streaming(duckdb_result result);
 
 /*!
 Returns the number of data chunks present in the result.
@@ -1105,6 +1116,21 @@ Note that after calling `duckdb_pending_prepared`, the pending result should alw
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement,
                                                 duckdb_pending_result *out_result);
+
+/*!
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+This pending result will create a streaming duckdb_result when executed.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The pending query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                                          duckdb_pending_result *out_result);
 
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
@@ -2318,6 +2344,28 @@ Returns true if execution of the current query is finished.
 * con: The connection on which to check
 */
 DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
+
+//===--------------------------------------------------------------------===//
+// Streaming Result Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
+exhausted.
+
+The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
+
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+mixed with the legacy result functions or the materialized result functions).
+
+It is not known beforehand how many chunks will be returned by this result.
+
+* result: The result object to fetch the data chunk from.
+* returns: The resulting data chunk. Returns `NULL` if the result has an error.
+*/
+DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 
 #ifdef __cplusplus
 }

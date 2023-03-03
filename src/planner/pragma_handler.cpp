@@ -4,7 +4,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
-
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/function/function.hpp"
 
@@ -22,6 +22,13 @@ PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements) {
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
+		if (statements[i]->type == StatementType::MULTI_STATEMENT) {
+			auto &multi_statement = (MultiStatement &)*statements[i];
+			for (auto &stmt : multi_statement.statements) {
+				statements.push_back(std::move(stmt));
+			}
+			continue;
+		}
 		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
 			// PRAGMA statement: check if we need to replace it by a new set of statements
 			PragmaHandler handler(context);
@@ -47,7 +54,8 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 	// first check if there are any pragma statements
 	bool found_pragma = false;
 	for (idx_t i = 0; i < statements.size(); i++) {
-		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
+		if (statements[i]->type == StatementType::PRAGMA_STATEMENT ||
+		    statements[i]->type == StatementType::MULTI_STATEMENT) {
 			found_pragma = true;
 			break;
 		}

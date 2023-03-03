@@ -145,6 +145,10 @@ CatalogEntry *DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, Cr
 		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
 		                                                                       (CreateScalarFunctionInfo *)info);
 		break;
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+		function =
+		    make_unique_base<StandardEntry, TableFunctionCatalogEntry>(catalog, this, (CreateTableFunctionInfo *)info);
+		break;
 	case CatalogType::MACRO_ENTRY:
 		// create a macro function
 		function = make_unique_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);

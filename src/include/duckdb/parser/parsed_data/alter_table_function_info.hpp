@@ -1,29 +1,29 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/alter_function_info.hpp
+// duckdb/parser/parsed_data/alter_scalar_function_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/alter_info.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Alter Table
+// Alter Table Function
 //===--------------------------------------------------------------------===//
-enum class AlterFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
+enum class AlterTableFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOADS = 1 };
 
-struct AlterFunctionInfo : public AlterInfo {
-	AlterFunctionInfo(AlterFunctionType type, AlterEntryData data);
-	virtual ~AlterFunctionInfo() override;
+struct AlterTableFunctionInfo : public AlterInfo {
+	AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data);
+	virtual ~AlterTableFunctionInfo() override;
 
-	AlterFunctionType alter_function_type;
+	AlterTableFunctionType alter_table_function_type;
 
 public:
 	CatalogType GetCatalogType() const override;
@@ -32,13 +32,13 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// AddFunctionOverloadInfo
+// AddTableFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
-struct AddFunctionOverloadInfo : public AlterFunctionInfo {
-	AddFunctionOverloadInfo(AlterEntryData data, ScalarFunctionSet new_overloads);
-	~AddFunctionOverloadInfo() override;
+struct AddTableFunctionOverloadInfo : public AlterTableFunctionInfo {
+	AddTableFunctionOverloadInfo(AlterEntryData data, TableFunctionSet new_overloads);
+	~AddTableFunctionOverloadInfo() override;
 
-	ScalarFunctionSet new_overloads;
+	TableFunctionSet new_overloads;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
