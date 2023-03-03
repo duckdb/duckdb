@@ -29,7 +29,7 @@ def generate_html(graph_json, include_meta_info):
 		css += f.read() + "\n"
 	css += "</style>"
 
-	graph_json = graph_json.replace('\n', ' ').replace("'", "\\'").replace("\\n", "\\\\n")
+	graph_json = graph_json.replace('\n', ' ').replace("'", "\\'").replace('"', '\\"').replace("\\n", "\\\\n")
 
 	chart_script = f"""<script>
 var graph_json = '{graph_json}';
