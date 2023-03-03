@@ -128,11 +128,6 @@ public:
 
 	//! Returns the string representation of an ART
 	string ToString() override;
-	//! Verifies that the in-memory size value of the index matches its actual size
-	void Verify() override;
-	//! Increases the memory size by the difference between the old size and the current size
-	//! and performs verifications
-	void IncreaseAndVerifyMemorySize(idx_t old_memory_size) override;
 
 private:
 	//! Insert a row ID into a leaf

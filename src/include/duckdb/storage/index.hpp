@@ -106,11 +106,6 @@ public:
 
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
-	//! Verifies that the in-memory size value of the index matches its actual size
-	virtual void Verify() = 0;
-	//! Increases the memory size by the difference between the old size and the current size
-	//! and performs verifications
-	virtual void IncreaseAndVerifyMemorySize(idx_t old_memory_size) = 0;
 
 	//! Increases the in-memory size value
 	inline void IncreaseMemorySize(idx_t size) {

@@ -244,20 +244,7 @@ void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
 		children[i] = ARTNode(reader);
 	}
 
-	art.IncreaseMemorySize(MemorySize());
-}
-
-idx_t Node16::MemorySize() {
-#ifdef DEBUG
-	return prefix.MemorySize() + sizeof(*this);
-#endif
-}
-
-bool Node16::ChildIsInMemory(const idx_t &pos) {
-#ifdef DEBUG
-	D_ASSERT(pos < count);
-	return children[pos].InMemory();
-#endif
+	art.IncreaseMemorySize(sizeof(Node16));
 }
 
 } // namespace duckdb

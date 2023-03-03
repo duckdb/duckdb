@@ -131,13 +131,6 @@ public:
 	bool ResolvePrefixes(ART &art, ARTNode &other);
 	//! Merge two nodes that have no prefix or the same prefix
 	bool MergeInternal(ART &art, ARTNode &other);
-
-	//! Returns whether the ART node is in-memory
-	bool InMemory();
-	//! Returns the size of the ART node in-memory and its subtree
-	idx_t MemorySize(ART &art, const bool &recurse);
-	//! Returns whether the child at pos is in-memory
-	bool ChildIsInMemory(ART &art, const idx_t &pos);
 };
 
 } // namespace duckdb

@@ -73,9 +73,6 @@ public:
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
-	//! Returns the in-memory size
-	idx_t MemorySize();
-
 private:
 	//! Returns whether this prefix is inlined
 	bool IsInlined() const;

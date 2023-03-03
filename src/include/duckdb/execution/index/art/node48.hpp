@@ -67,10 +67,5 @@ public:
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
 	void Deserialize(ART &art, MetaBlockReader &reader);
-
-	//! Returns the in-memory size
-	idx_t MemorySize();
-	//! Returns whether the child at pos is in-memory
-	bool ChildIsInMemory(const idx_t &pos);
 };
 } // namespace duckdb

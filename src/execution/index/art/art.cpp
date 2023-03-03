@@ -27,7 +27,6 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	tree = ARTNode();
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree.Deserialize(*this, block_id, block_offset);
-		Verify();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
@@ -65,7 +64,6 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 
 ART::~ART() {
 	if (tree) {
-		Verify();
 		tree = ARTNode();
 	}
 }
@@ -675,9 +673,9 @@ static Key CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value)
 
 bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 
-	auto old_memory_size = memory_size;
 	auto leaf = (Leaf *)(Lookup(tree, key, 0));
-	IncreaseAndVerifyMemorySize(old_memory_size);
+
+	// TODO: track memory
 
 	if (!leaf) {
 		return true;
@@ -695,9 +693,9 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	auto old_memory_size = memory_size;
 	auto leaf = Lookup(tree, key, 0);
-	IncreaseAndVerifyMemorySize(old_memory_size);
+
+	// TODO: track memory
 
 	if (!leaf) {
 		return;
@@ -1076,31 +1074,6 @@ string ART::ToString() {
 		return tree.ToString(*this);
 	}
 	return "[empty]";
-}
-
-void ART::Verify() {
-#ifdef DEBUG
-	// TODO: this is wrong, allocators always allocate block size
-	idx_t current_mem_size = 0;
-	if (tree) {
-		current_mem_size = tree.MemorySize(*this, true);
-	}
-	if (memory_size != current_mem_size) {
-		throw InternalException("Memory_size value (%d) does not match actual memory size (%d).", memory_size,
-		                        current_mem_size);
-	}
-#endif
-}
-
-void ART::IncreaseAndVerifyMemorySize(idx_t old_memory_size) {
-	// TODO: this is outdated
-	// since we lazily deserialize ART nodes, it is possible that its in-memory size
-	// increased during lookups
-	Verify();
-	D_ASSERT(memory_size >= old_memory_size);
-	if (track_memory) {
-		buffer_manager.IncreaseUsedMemory(memory_size - old_memory_size);
-	}
 }
 
 } // namespace duckdb

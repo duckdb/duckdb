@@ -349,15 +349,6 @@ void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
 	D_ASSERT(count_p == count);
 }
 
-idx_t Prefix::MemorySize() {
-#ifdef DEBUG
-	if (IsInlined()) {
-		return sizeof(*this);
-	}
-	return sizeof(*this) + ((count / ARTNode::PREFIX_SEGMENT_SIZE) + 1) * sizeof(PrefixSegment);
-#endif
-}
-
 bool Prefix::IsInlined() const {
 	return count <= ARTNode::PREFIX_INLINE_BYTES;
 }

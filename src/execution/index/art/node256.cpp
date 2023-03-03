@@ -196,20 +196,7 @@ void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
 		children[i] = ARTNode(reader);
 	}
 
-	art.IncreaseMemorySize(MemorySize());
-}
-
-idx_t Node256::MemorySize() {
-#ifdef DEBUG
-	return prefix.MemorySize() + sizeof(*this);
-#endif
-}
-
-bool Node256::ChildIsInMemory(const idx_t &pos) {
-#ifdef DEBUG
-	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
-	return children[pos].InMemory();
-#endif
+	art.IncreaseMemorySize(sizeof(Node256));
 }
 
 } // namespace duckdb
