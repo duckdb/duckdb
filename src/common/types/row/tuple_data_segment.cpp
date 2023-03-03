@@ -2,10 +2,7 @@
 
 namespace duckdb {
 
-TupleDataChunkPart::TupleDataChunkPart()
-    : row_block_index(INVALID_INDEX), row_block_offset(INVALID_INDEX), heap_block_index(INVALID_INDEX),
-      heap_block_offset(INVALID_INDEX), base_heap_ptr(nullptr), total_heap_size(INVALID_INDEX),
-      last_heap_size(INVALID_INDEX), count(INVALID_INDEX) {
+TupleDataChunkPart::TupleDataChunkPart() {
 }
 
 TupleDataChunk::TupleDataChunk() : count(0) {
@@ -49,11 +46,12 @@ void TupleDataChunk::MergeLastChunkPart() {
 	if (parts.size() < 2) {
 		return;
 	}
+
 	auto &second_to_last_part = parts[parts.size() - 2];
 	auto &last_part = parts[parts.size() - 1];
-
 	if (last_part.row_block_index == second_to_last_part.row_block_index &&
-	    last_part.heap_block_index == second_to_last_part.heap_block_index) {
+	    last_part.heap_block_index == second_to_last_part.heap_block_index &&
+	    last_part.base_heap_ptr == second_to_last_part.base_heap_ptr) {
 		// These parts have the same row and heap blocks - merge them
 		second_to_last_part.total_heap_size += last_part.total_heap_size;
 		second_to_last_part.last_heap_size = last_part.last_heap_size;
@@ -62,7 +60,8 @@ void TupleDataChunk::MergeLastChunkPart() {
 	}
 }
 
-TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p) : allocator(allocator_p), count(0) {
+TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
+    : allocator(std::move(allocator_p)), count(0) {
 }
 
 void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {

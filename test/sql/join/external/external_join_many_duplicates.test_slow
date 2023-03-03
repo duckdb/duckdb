@@ -8,7 +8,7 @@ require 64bit
 #statement ok
 #pragma verify_external
 
-mode skip
+#mode skip
 
 statement ok
 create table test1 as select range i from range(1000, 1029)
@@ -21,7 +21,7 @@ select count(*) from test1 join test2 using (i)
 ----
 29
 
-mode unskip
+mode skip
 
 # 10M build side with many useless duplicates (stress tests the compare-and-swap pointer table construction)
 statement ok

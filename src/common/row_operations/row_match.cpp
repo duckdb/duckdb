@@ -118,31 +118,122 @@ static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, Selection
 	count = match_count;
 }
 
+//! Forward declaration for recursion
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
-                                 const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
-                                 idx_t &no_match_count) {
+static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
+                             SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
+                             idx_t &no_match_count, const idx_t original_count);
+
+template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchStruct(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
+                                 SelectionVector &sel, idx_t &count, const idx_t col_no, SelectionVector *no_match,
+                                 idx_t &no_match_count, const idx_t original_count) {
+	// Precompute row_mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
+
+	// Work our way through the validity of the whole struct
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+	idx_t match_count = 0;
+	if (!col.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+
+			auto row = ptrs[idx];
+			ValidityBytes row_mask(row);
+			auto isnull = !row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+
+			auto col_idx = col.sel->get_index(idx);
+			if (!col.validity.RowIsValid(col_idx)) {
+				if (isnull) {
+					// match: move to next value to compare
+					sel.set_index(match_count++, idx);
+				} else {
+					if (NO_MATCH_SEL) {
+						no_match->set_index(no_match_count++, idx);
+					}
+				}
+			} else {
+				if (!isnull) {
+					sel.set_index(match_count++, idx);
+				} else {
+					if (NO_MATCH_SEL) {
+						no_match->set_index(no_match_count++, idx);
+					}
+				}
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+
+			auto row = ptrs[idx];
+			ValidityBytes row_mask(row);
+			auto isnull = !row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+
+			if (!isnull) {
+				sel.set_index(match_count++, idx);
+			} else {
+				if (NO_MATCH_SEL) {
+					no_match->set_index(no_match_count++, idx);
+				}
+			}
+		}
+	}
+	count = match_count;
+
+	// Now we construct row pointers to the structs
+	Vector struct_rows(LogicalTypeId::POINTER);
+	auto struct_ptrs = FlatVector::GetData<data_ptr_t>(struct_rows);
+
+	const auto col_offset = layout.GetOffsets()[col_no];
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto row = ptrs[idx];
+		struct_ptrs[idx] = row + col_offset;
+	}
+
+	// Get the struct layout, child columns, then recurse
+	D_ASSERT(layout.GetStructLayouts().find(col_no) != layout.GetStructLayouts().end());
+	const auto &struct_layout = layout.GetStructLayouts().find(col_no)->second;
+	auto &struct_entries = StructVector::GetEntries(vec);
+	D_ASSERT(struct_layout.ColumnCount() == struct_entries.size());
+	for (idx_t struct_col_no = 0; struct_col_no < struct_layout.ColumnCount(); struct_col_no++) {
+		auto &struct_vec = *struct_entries[struct_col_no];
+		UnifiedVectorFormat struct_col;
+		struct_vec.ToUnifiedFormat(original_count, struct_col);
+		TemplatedMatchOp<OP, NO_MATCH_SEL>(struct_vec, struct_col, struct_layout, struct_rows, sel, count,
+		                                   struct_col_no, no_match, no_match_count, original_count);
+	}
+}
+
+template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
+                               const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
+                               idx_t &no_match_count) {
+	throw NotImplementedException("TupleDataLayout in TemplatedMatchList");
 	// Gather a dense Vector containing the column values being matched
-	//	Vector key(col.GetType());
+	Vector key(col.GetType());
 	//	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
-	//
-	//	// Densify the input column
-	//	Vector sliced(col, sel, count);
-	//
-	//	if (NO_MATCH_SEL) {
-	//		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
-	//		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
-	//		no_match_count += count - match_count;
-	//		count = match_count;
-	//	} else {
-	//		count = SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
-	//	}
+
+	// Densify the input column
+	Vector sliced(col, sel, count);
+
+	if (NO_MATCH_SEL) {
+		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
+		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
+		no_match_count += count - match_count;
+		count = match_count;
+	} else {
+		count = SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
+	}
 }
 
 template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
                              SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
-                             idx_t &no_match_count) {
+                             idx_t &no_match_count, const idx_t original_count) {
 	if (count == 0) {
 		return;
 	}
@@ -201,8 +292,11 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleD
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);
 		break;
-	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+		TemplatedMatchStruct<OP, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match, no_match_count,
+		                                       original_count);
+		break;
+	case PhysicalType::LIST:
 		throw NotImplementedException("Nested match TODO!");
 		//		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
 		//		break;
@@ -222,28 +316,28 @@ static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], c
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                       no_match_count);
+			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match, no_match_count,
+			                                       count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                          no_match_count);
+			                                          no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
 			TemplatedMatchOp<GreaterThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                            no_match_count);
+			                                            no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			TemplatedMatchOp<GreaterThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                                  no_match_count);
+			                                                  no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			TemplatedMatchOp<LessThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                         no_match_count);
+			                                         no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			TemplatedMatchOp<LessThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
-			                                               no_match_count);
+			                                               no_match_count, count);
 			break;
 		default:
 			throw InternalException("Unsupported comparison type for RowOperations::Match");
