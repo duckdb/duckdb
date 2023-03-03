@@ -57,6 +57,7 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 
 lib_name = 'duckdb'
+extension_name = lib_name + '.__init__'
 
 extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel']
 
@@ -216,7 +217,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(extension_name,
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -234,7 +235,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(extension_name,
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -286,6 +287,7 @@ setup(
     license='MIT',
     data_files = data_files,
     packages=[
+		'pyduckdb',
         'duckdb_query_graph',
         'duckdb-stubs'
     ],

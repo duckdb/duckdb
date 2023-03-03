@@ -40,12 +40,28 @@
 
 #include <random>
 
+#include "duckdb/common/printer.hpp"
+
 namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+
+static std::string GenerateRandomName() {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, 15);
+
+	std::stringstream ss;
+	int i;
+	ss << std::hex;
+	for (i = 0; i < 16; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -526,7 +542,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
-    const string &name, const py::object &header, const py::object &compression, const py::object &sep,
+    const py::object &name_p, const py::object &header, const py::object &compression, const py::object &sep,
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
@@ -535,6 +551,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		throw ConnectionException("Connection has already been closed");
 	}
 	BufferedCSVReaderOptions options;
+
+	string name;
+	if (!py::isinstance<py::str>(name_p)) {
+		// Make sure that the object filesystem is initialized and registered
+		auto &fs = GetObjectFileSystem();
+		name = StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", GenerateRandomName());
+		fs.attr("add_file")(name_p, name);
+	} else {
+		name = py::str(name_p);
+	}
+
+	duckdb::Printer::Print(OutputStream::STREAM_STDOUT, name);
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -815,20 +843,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
-}
-
-static std::string GenerateRandomName() {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 15);
-
-	std::stringstream ss;
-	int i;
-	ss << std::hex;
-	for (i = 0; i < 16; i++) {
-		ss << dis(gen);
-	}
-	return ss.str();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
@@ -1307,6 +1321,18 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 		import_cache = make_shared<PythonImportCache>();
 	}
 	return import_cache.get();
+}
+
+ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
+	if (!internal_object_filesystem) {
+		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
+		auto &import_cache = *ImportCache();
+		internal_object_filesystem =
+		    make_shared<ModifiedMemoryFileSystem>(import_cache.pyduckdb().filesystem.modified_memory_filesystem()());
+		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
+		RegisterFilesystem(abstract_fs);
+	}
+	return *internal_object_filesystem;
 }
 
 bool DuckDBPyConnection::IsInteractive() {
