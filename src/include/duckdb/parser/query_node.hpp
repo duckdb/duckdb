@@ -38,7 +38,7 @@ public:
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	//static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
-	static CommonTableExpressionMap&& FormatDeserialize(FormatDeserializer &deserializer);
+	static CommonTableExpressionMap FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class QueryNode {

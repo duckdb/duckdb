@@ -45,6 +45,7 @@ public:
 	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &source);
 };
 
 } // namespace duckdb

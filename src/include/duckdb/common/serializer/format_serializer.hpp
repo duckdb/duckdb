@@ -19,6 +19,7 @@
 
 namespace duckdb {
 
+
 class FormatSerializer {
 protected:
 	bool serialize_enum_as_string = false;
@@ -27,7 +28,7 @@ public:
 	template <class T>
 	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
 	WriteProperty(const char *tag, T value) {
-		WriteTag(tag);
+		SetTag(tag);
 		WriteValue(value);
 	}
 
@@ -35,7 +36,7 @@ public:
 	template <class T>
 	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
 	WriteProperty(const char *tag, T &value) {
-		WriteTag(tag);
+		SetTag(tag);
 		WriteValue(value);
 	}
 
@@ -43,14 +44,14 @@ public:
 	template <class T>
 	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteProperty(const char *tag, const T start,
 	                                                                             idx_t count) {
-		WriteTag(tag);
+		SetTag(tag);
 		WriteValue(start, count);
 	}
 
 	// Serialize an enum
 	template <class T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value) {
-		WriteTag(tag);
+		SetTag(tag);
 		if (serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
 			auto str = EnumSerializer::EnumToString(value);
@@ -64,7 +65,7 @@ public:
 	template <class T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value,
 	                                                                          string (*to_string)(T)) {
-		WriteTag(tag);
+		SetTag(tag);
 		if (serialize_enum_as_string) {
 			// Use the provided tostring function
 			WriteValue(to_string(value));
@@ -78,14 +79,14 @@ public:
 	template <class T>
 	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
 	WriteOptionalProperty(const char *tag, T ptr) {
-		WriteTag(tag);
+		SetTag(tag);
 		if(ptr == nullptr) {
-			BeginWriteOptional(false);
-			EndWriteOptional(false);
+			OnOptionalBegin(false);
+			OnOptionalEnd(false);
 		} else {
-			BeginWriteOptional(true);
+			OnOptionalBegin(true);
 			WriteValue(*ptr);
-			EndWriteOptional(true);
+			OnOptionalEnd(true);
 		}
 	}
 
@@ -93,14 +94,14 @@ public:
 	template <class T>
 	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
 	WriteOptionalProperty(const char *tag, T& ptr) {
-		WriteTag(tag);
+		SetTag(tag);
 		if(ptr == nullptr) {
-			BeginWriteOptional(false);
-			EndWriteOptional(false);
+			OnOptionalBegin(false);
+			OnOptionalEnd(false);
 		} else {
-			BeginWriteOptional(true);
+			OnOptionalBegin(true);
 			WriteValue(*ptr);
-			EndWriteOptional(true);
+			OnOptionalEnd(true);
 		}
 	}
 
@@ -124,43 +125,47 @@ protected:
 
 	// data_ptr_t
 	void WriteValue(data_ptr_t ptr, idx_t count) {
-		BeginWriteList(count);
+		OnListBegin(count);
 		auto end = ptr + count;
 		while (ptr != end) {
 			WriteValue(*ptr);
 			ptr++;
 		}
-		EndWriteList(count);
+		OnListEnd(count);
 	}
 
 	void WriteValue(const_data_ptr_t ptr, idx_t count) {
-		BeginWriteList(count);
+		OnListBegin(count);
 		auto end = ptr + count;
 		while (ptr != end) {
 			WriteValue(*ptr);
 			ptr++;
 		}
-		EndWriteList(count);
+		OnListEnd(count);
 	}
 
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {
-		BeginWriteObject();
-		WriteProperty("key", pair.first);
-		WriteProperty("value", pair.second);
-		EndWriteObject();
+		OnPairBegin();
+		OnPairKeyBegin();
+		WriteValue(pair.first);
+		OnPairKeyEnd();
+		OnPairValueBegin();
+		WriteValue(pair.second);
+		OnPairValueEnd();
+		OnPairEnd();
 	}
 
 	// Vector
 	template <class T>
 	void WriteValue(const vector<T> &vec) {
 		auto count = vec.size();
-		BeginWriteList(count);
+		OnListBegin(count);
 		for (auto &item : vec) {
 			WriteValue(item);
 		}
-		EndWriteList(count);
+		OnListEnd(count);
 	}
 
 	// UnorderedSet
@@ -168,11 +173,11 @@ protected:
 	template <class T, class HASH, class CMP>
 	void WriteValue(const unordered_set<T, HASH, CMP> &set) {
 		auto count = set.size();
-		BeginWriteList(count);
+		OnListBegin(count);
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		EndWriteList(count);
+		OnListEnd(count);
 	}
 
 	// Set
@@ -180,69 +185,67 @@ protected:
 	template <class T, class HASH, class CMP>
 	void WriteValue(const set<T, HASH, CMP> &set) {
 		auto count = set.size();
-		BeginWriteList(count);
+		OnListBegin(count);
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		EndWriteList(count);
+		OnListEnd(count);
 	}
 
 	// Map
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const std::unordered_map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
-		BeginWriteMap(count);
+		OnMapBegin(count);
 		for (auto &item : map) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
 			WriteValue(item.first);
+			OnMapKeyEnd();
+			OnMapValueBegin();
 			WriteValue(item.second);
+			OnMapValueEnd();
+			OnMapEntryEnd();
 		}
-		EndWriteMap(count);
+		OnMapEnd(count);
 	}
 
-	// class or struct implementing `Serialize(FormatSerializer& FormatSerializer)`;
+	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize_v<T>(), void>::type WriteValue(T &value) {
-		// Else, we defer to the .Serialize method
-		BeginWriteObject();
+		// Else, we defer to the .FormatSerialize method
+		OnObjectBegin();
 		value.FormatSerialize(*this);
-		EndWriteObject();
+		OnObjectEnd();
 	}
 
-	// Hooks for subclasses to override (if they want to)
-	virtual void BeginWriteList(idx_t count) {
-		(void)count;
-	}
-
-	virtual void EndWriteList(idx_t count) {
-		(void)count;
-	}
-
-	virtual void BeginWriteMap(idx_t count) {
-		(void)count;
-	}
-
-	virtual void EndWriteMap(idx_t count) {
-		(void)count;
-	}
-
-	virtual void BeginWriteOptional(bool present) {
-		(void)present;
-	}
-
-	virtual void EndWriteOptional(bool present) {
-		(void)present;
-	}
-
-	virtual void BeginWriteObject() {
-	}
-
-	virtual void EndWriteObject() {
-	}
-
-	// Handle writing a "tag" (optional)
-	virtual void WriteTag(const char *tag) {
+	// Handle setting a "tag" (optional)
+	virtual void SetTag(const char *tag) {
 		(void)tag;
 	}
+
+	// Hooks for subclasses to override to implement custom behavior
+	virtual void OnListBegin(idx_t count) { (void)count; }
+	virtual void OnListEnd(idx_t count) { (void)count;}
+	virtual void OnMapBegin(idx_t count) { (void)count;}
+	virtual void OnMapEnd(idx_t count) { (void)count;}
+	virtual void OnMapEntryBegin() { }
+	virtual void OnMapEntryEnd() { }
+	virtual void OnMapKeyBegin() { }
+	virtual void OnMapKeyEnd() { }
+	virtual void OnMapValueBegin() { }
+	virtual void OnMapValueEnd() { }
+	virtual void OnOptionalBegin(bool present) { }
+	virtual void OnOptionalEnd(bool present) { }
+	virtual void OnObjectBegin() { }
+	virtual void OnObjectEnd() { }
+	virtual void OnPairBegin() { }
+	virtual void OnPairKeyBegin() { }
+	virtual void OnPairKeyEnd() { }
+	virtual void OnPairValueBegin() { }
+	virtual void OnPairValueEnd() { }
+	virtual void OnPairEnd() { }
+
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;

@@ -122,4 +122,12 @@ void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) con
 	serializer.WriteProperty("right", *right);
 }
 
+unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(duckdb::FormatDeserializer &deserializer) {
+	auto result = make_unique<SetOperationNode>();
+	deserializer.ReadProperty("set_op_type", result->setop_type);
+	deserializer.ReadProperty("left", result->left);
+	deserializer.ReadProperty("right", result->right);
+	return std::move(result);
+}
+
 } // namespace duckdb

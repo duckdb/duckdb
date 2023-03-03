@@ -18,20 +18,20 @@ void JsonSerializer::PushValue(yyjson_mut_val *val) {
 	}
 }
 
-void JsonSerializer::WriteTag(const char *tag) {
+void JsonSerializer::SetTag(const char *tag) {
 	current_tag = yyjson_mut_strcpy(doc, tag);
 }
 
 //===--------------------------------------------------------------------===//
 // Nested types
 //===--------------------------------------------------------------------===//
-void JsonSerializer::BeginWriteOptional(bool present) {
+void JsonSerializer::OnOptionalBegin(bool present) {
 	if(!present && !skip_if_null) {
 		WriteNull();
 	}
 }
 
-void JsonSerializer::BeginWriteList(idx_t count) {
+void JsonSerializer::OnListBegin(idx_t count) {
 	auto new_value = yyjson_mut_arr(doc);
 	// We always push a value to the stack, we just don't add it as a child to the current value
 	// if skipping empty. Even though it is "unnecessary" to create an empty value just to discard it,
@@ -42,29 +42,48 @@ void JsonSerializer::BeginWriteList(idx_t count) {
 	stack.push_back(new_value);
 }
 
-void JsonSerializer::EndWriteList(idx_t count) {
+void JsonSerializer::OnListEnd(idx_t count) {
 	stack.pop_back();
 }
 
-void JsonSerializer::BeginWriteMap(idx_t count) {
-	auto new_value = yyjson_mut_obj(doc);
+// Serialize maps as arrays of objects with "key" and "value" properties.
+void JsonSerializer::OnMapBegin(idx_t count) {
+	auto new_value = yyjson_mut_arr(doc);
 	if(!(count == 0 && skip_if_empty)) {
 		PushValue(new_value);
 	}
 	stack.push_back(new_value);
 }
 
-void JsonSerializer::EndWriteMap(idx_t count) {
+void JsonSerializer::OnMapEntryBegin() {
+	auto new_value = yyjson_mut_obj(doc);
+	stack.push_back(new_value);
+}
+
+void JsonSerializer::OnMapKeyBegin() {
+	SetTag("key");
+}
+
+void JsonSerializer::OnMapValueBegin() {
+	SetTag("value");
+}
+
+void JsonSerializer::OnMapEntryEnd() {
 	stack.pop_back();
 }
 
-void JsonSerializer::BeginWriteObject() {
+void JsonSerializer::OnMapEnd(idx_t count) {
+	stack.pop_back();
+}
+
+
+void JsonSerializer::OnObjectBegin() {
 	auto new_value = yyjson_mut_obj(doc);
 	PushValue(new_value);
 	stack.push_back(new_value);
 }
 
-void JsonSerializer::EndWriteObject() {
+void JsonSerializer::OnObjectEnd() {
 	auto obj = Current();
 	auto count = yyjson_mut_obj_size(obj);
 

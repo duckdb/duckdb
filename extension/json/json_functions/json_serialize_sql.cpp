@@ -1,5 +1,6 @@
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
+#include "json_deserializer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -113,6 +114,44 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	});
 }
 
+static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = local_state.json_allocator.GetYYJSONAllocator();
+	auto &inputs = args.data[0];
+
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+		auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+		if(!doc) {
+			throw ParserException("Could not parse json");
+		}
+		auto root = doc->root;
+		auto err = yyjson_obj_get(root, "error");
+		if(err && yyjson_is_true(err)) {
+			auto err_type = yyjson_obj_get(root, "error_type");
+			auto err_msg = yyjson_obj_get(root, "error_message");
+			if(err_type && err_msg) {
+				throw ParserException("Error parsing json: %s: %s", yyjson_get_str(err_type), yyjson_get_str(err_msg));
+			}
+			throw ParserException("Error parsing json");
+		}
+
+		auto statements = yyjson_obj_get(root, "statements");
+		if(!statements || !yyjson_is_arr(statements)) {
+			throw ParserException("Error parsing json: no statements array");
+		}
+		auto size = yyjson_arr_size(statements);
+		if(size == 0) {
+			return string_t();
+		}
+		auto stmt_json = yyjson_arr_get(statements, 0);
+		JsonDeserializer deserializer(stmt_json, doc);
+		auto node = QueryNode::FormatDeserialize(deserializer);
+
+
+		return StringVector::AddString(result, "stmt_str");
+	});
+}
+
 CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(),
@@ -122,6 +161,14 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
 	                               JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+
+	return CreateScalarFunctionInfo(set);
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetDeserializeSqlFunction() {
+	ScalarFunctionSet set("json_deserialize_sql");
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR,
+	                               JsonDeserializeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 
 	return CreateScalarFunctionInfo(set);
 }

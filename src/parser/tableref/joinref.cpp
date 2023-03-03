@@ -121,6 +121,19 @@ void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("using_columns", using_columns);
 }
 
+unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
+	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+
+	source.ReadProperty("left", result->left);
+	source.ReadProperty("right", result->right);
+	source.ReadOptionalProperty("condition", result->condition);
+	source.ReadProperty("join_type", result->type);
+	source.ReadProperty("ref_type", result->ref_type);
+	source.ReadProperty("using_columns", result->using_columns);
+
+	return std::move(result);
+}
+
 unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
 	result->left = reader.ReadRequiredSerializable<TableRef>();

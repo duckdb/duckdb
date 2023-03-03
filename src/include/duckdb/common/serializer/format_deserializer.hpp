@@ -28,7 +28,7 @@ public:
 	template<typename T>
 	T ReadProperty(const char* tag) {
 		SetTag(tag);
-		return std::move(Read<T>());
+		return std::move<T>(Read<T>());
 	}
 
 	template<typename T>
@@ -40,23 +40,27 @@ public:
 	template<typename T>
 	T ReadOptionalProperty(const char* tag, T&& default_value){
 		SetTag(tag);
-		auto present = BeginReadOptional();
+		auto present = OnOptionalBegin();
 		if (!present) {
+			OnOptionalEnd();
 			return std::forward<T>(default_value);
 		}
-		return Read<T>();
+		OnOptionalEnd();
+		return std::move(Read<T>());
 	}
 
 	// Read an optional property into a reference, if not present the default value argument is forwarded
 	template<typename T>
 	void ReadOptionalProperty(const char* tag, T& ret, T&& default_value){
 		SetTag(tag);
-		auto present = BeginReadOptional();
+		auto present = OnOptionalBegin();
 		if (!present) {
 			ret = std::forward<T>(default_value);
+			OnOptionalEnd();
 			return;
 		}
-		ret = Read<T>();
+		ret = std::move(Read<T>());
+		OnOptionalEnd();
 	}
 
 	// Read an optional property into a reference, if not present the default constructor is used
@@ -64,12 +68,136 @@ public:
 	typename std::enable_if<std::is_default_constructible<T>::value, void>::type
 	ReadOptionalProperty(const char* tag, T& ret){
 		SetTag(tag);
-		auto present = BeginReadOptional();
+		auto present = OnOptionalBegin();
 		if (!present) {
 			ret = T();
+			OnOptionalEnd();
 			return;
 		}
-		ret = Read<T>();
+		ret = std::move(Read<T>());
+		OnOptionalEnd();
+	}
+
+private:
+	// Structural types
+	// Deserialize anything implementing a "FormatDeserialize -> unique_ptr<T>" static method
+	template<typename T>
+	typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<typename is_unique_ptr<T>::inner_type>::value, T>::type
+	Read() {
+		using inner = typename is_unique_ptr<T>::inner_type;
+		OnObjectBegin();
+		auto ret = std::move(inner::FormatDeserialize(*this));
+		OnObjectEnd();
+		return std::move(ret);
+	}
+
+	// Deserialize anything implementing a "FormatDeserialize -> shared_ptr<T>" static method
+	template<typename T>
+	typename std::enable_if<is_shared_ptr<T>::value && has_deserialize<typename is_shared_ptr<T>::inner_type>::value, T>::type
+	Read() {
+		using inner = typename is_shared_ptr<T>::inner_type;
+		OnObjectBegin();
+		auto ret = std::move(inner::FormatDeserialize(*this));
+		OnObjectEnd();
+		return std::move(ret);
+	}
+
+	// Deserialize anything implementing a "FormatDeserialize -> T&&" static method
+	template <typename T>
+	typename std::enable_if<has_deserialize<T>::value, T>::type
+	Read() {
+		OnObjectBegin();
+		auto ret = std::move(T::FormatDeserialize(*this));
+		OnObjectEnd();
+		return std::move(ret);
+	};
+
+	// Deserialize a vector
+	template<typename T>
+	typename std::enable_if<is_vector<T>::value, T>::type
+	Read() {
+		using inner = typename is_vector<T>::inner_type;
+		auto size = OnListBegin();
+		T items;
+		for(idx_t i = 0; i < size; i++) {
+			auto item = std::move(Read<inner>());
+			items.push_back(std::move(item));
+		}
+		OnListEnd();
+		return std::move(items);
+	}
+
+	// Deserialize a map
+	template<typename T>
+	typename std::enable_if<is_unordered_map<T>::value, T>::type
+	Read() {
+		using key = typename is_unordered_map<T>::key_type;
+		using value = typename is_unordered_map<T>::value_type;
+		auto size = OnMapBegin();
+		T items;
+		for (idx_t i = 0; i < size; i++) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			key k = std::move(Read<key>());
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			value v = std::move(Read<value>());
+			OnMapValueEnd();
+			items.emplace(std::move(k), std::move(v));
+			OnMapEntryEnd();
+		}
+		OnMapEnd();
+		return std::move(items);
+	}
+
+	// Deserialize a pair
+	template<typename T>
+	typename std::enable_if<is_pair<T>::value, T>::type
+	Read() {
+		using first = typename is_pair<T>::first_type;
+		using second = typename is_pair<T>::second_type;
+		OnPairBegin();
+		OnPairKeyBegin();
+		auto first_item = std::move(Read<first>());
+		OnPairKeyEnd();
+		OnPairValueBegin();
+		auto second_item = std::move(Read<second>());
+		OnPairValueEnd();
+		OnPairEnd();
+		return std::move(std::make_pair(std::move(first_item), std::move(second_item)));
+	}
+
+	// Deserialize a set
+	template<typename T>
+	typename std::enable_if<is_set<T>::value, T&&>::type
+	Read() {
+		using inner = typename is_set<T>::inner_type;
+
+		auto size = OnListBegin();
+		T items;
+		for (idx_t i = 0; i < size; i++) {
+			auto item = std::move(Read<inner>());
+			items.insert(std::move(item));
+		}
+		OnListEnd();
+		return std::move(items);
+	}
+
+
+
+	template<typename T>
+	typename std::enable_if<is_unordered_set<T>::value, T&&>::type
+	Read() {
+		using inner = typename is_unordered_set<T>::inner_type;
+
+		auto size = OnListBegin();
+		T items;
+		for (idx_t i = 0; i < size; i++) {
+			auto item = std::move(Read<inner>());
+			items.insert(std::move(item));
+		}
+		OnListEnd();
+		return std::move(items);
 	}
 
 
@@ -173,179 +301,31 @@ public:
 		return ReadInterval();
 	}
 
-	// Structural types
-	// Deserialize anything implementing a "FormatDeserialize -> unique_ptr<T>" static method
-	template<typename T>
-	typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<typename is_unique_ptr<T>::inner_type>::value, T>::type
-	Read() {
-		using inner = typename is_unique_ptr<T>::inner_type;
-		BeginReadObject();
-		auto ret = std::move(inner::FormatDeserialize(*this));
-		EndReadObject();
-		return std::move(ret);
-	}
 
-	// Deserialize anything implementing a "FormatDeserialize -> shared_ptr<T>" static method
-	template<typename T>
-	typename std::enable_if<is_shared_ptr<T>::value && has_deserialize<typename is_shared_ptr<T>::inner_type>::value, T>::type
-	Read() {
-		using inner = typename is_shared_ptr<T>::inner_type;
-		BeginReadObject();
-		auto ret = std::move(inner::FormatDeserialize(*this));
-		EndReadObject();
-		return std::move(ret);
-	}
-
-	// Deserialize anything implementing a "FormatDeserialize -> T&&" static method
-	template <typename T>
-	typename std::enable_if<has_deserialize<T>::value, T&&>::type
-	Read() {
-		BeginReadObject();
-		auto ret = std::move(T::FormatDeserialize(*this));
-		EndReadObject();
-		return std::move(ret);
-	};
-
-	// Deserialize a vector
-	template<typename T>
-	typename std::enable_if<is_vector<T>::value, T&&>::type
-	Read() {
-		using inner = typename is_vector<T>::inner_type;
-		auto size = BeginReadList();
-		T items;
-		for(idx_t i = 0; i < size; i++) {
-			auto item = Read<inner>();
-			items.push_back(std::move(item));
-		}
-		EndReadList();
-		return std::move(items);
-	}
-
-	// Deserialize a map
-	template<typename T>
-	typename std::enable_if<is_unordered_map<T>::value, T&&>::type
-	Read() {
-		using key = typename is_unordered_map<T>::key_type;
-		using value = typename is_unordered_map<T>::value_type;
-		auto size = BeginReadMap();
-		T items;
-		for (idx_t i = 0; i < size; i++) {
-			key k = Read<key>();
-			value v = Read<value>();
-			items.emplace(std::move(k), std::move(v));
-		}
-		EndReadMap();
-		return std::move(items);
-	}
-
-	// Deserialize a pair
-	template<typename T>
-	typename std::enable_if<is_pair<T>::value, T&&>::type
-	Read() {
-		using first = typename is_pair<T>::first_type;
-		using second = typename is_pair<T>::second_type;
-		BeginReadObject();
-		SetTag("key");
-		auto first_item = Read<first>();
-		SetTag("value");
-		auto second_item = Read<second>();
-		EndReadObject();
-		return std::move(std::make_pair(std::move(first_item), std::move(second_item)));
-	}
-
-	// Deserialize a set
-	template<typename T>
-	typename std::enable_if<is_set<T>::value, T&&>::type
-	Read() {
-		using inner = typename is_set<T>::inner_type;
-
-		auto size = BeginReadList();
-		T items;
-		for (idx_t i = 0; i < size; i++) {
-			auto item = Read<inner>();
-			items.insert(std::move(item));
-		}
-		EndReadList();
-		return std::move(items);
-	}
-
-	template<typename T>
-	typename std::enable_if<is_unordered_set<T>::value, T&&>::type
-	Read() {
-		using inner = typename is_unordered_set<T>::inner_type;
-
-		auto size = BeginReadList();
-		T items;
-		for (idx_t i = 0; i < size; i++) {
-			auto item = Read<inner>();
-			items.insert(std::move(item));
-		}
-		EndReadList();
-		return std::move(items);
-	}
-
-	// Deserialize a list
-
-	// Alternative API
-	/*
-	template<typename T>
-	void ReadValueProperty(const char* tag, T &value) {
-		ReadValue(value);
-	}
-
-	template <typename T>
-	void ReadValue(vector<T> &ret) {
-		auto count = BeginReadList();
-		for (idx_t i = 0; i < count; i++) {
-			T item;
-			ReadValue(item);
-			ret.push_back(item);
-		}
-	}
-
-	template <typename T>
-	void ReadValue(unique_ptr<T> &ret) {
-		ReadValue(*ret);
-	}
-
-	template <typename T>
-	typename std::enable_if<is_unordered_map<T>::value, void>::type
-	ReadValue(T &ret) {
-		auto count = BeginReadMap();
-		for (idx_t i = 0; i < count; i++) {
-			typename is_unordered_map<T>::key_type key;
-			typename is_unordered_map<T>::value_type value;
-			ReadValue(key);
-			ReadValue(value);
-			ret.emplace(std::move(key), std::move(value));
-		}
-	}
-
-	template <typename T>
-	typename std::enable_if<has_deserialize<T>::value, void>::type
-	ReadValue(T &ret) {
-		unique_ptr<T> ptr = T::FormatDeserialize(*this);
-		ret = std::move(*ptr);
-	}
-
-	void ReadValue(bool &ret) {
-		ret = ReadBool();
-	}
-
-	void ReadValue(string &ret) {
-		ret = ReadString();
-	}
-	*/
 
 protected:
-	virtual void SetTag(const char* tag) = 0;
-	virtual void BeginReadObject() = 0;
-	virtual void EndReadObject() = 0;
-	virtual idx_t BeginReadList() = 0;
-	virtual void EndReadList() = 0;
-	virtual idx_t BeginReadMap() = 0;
-	virtual void EndReadMap() = 0;
-	virtual bool BeginReadOptional() = 0;
+	virtual void SetTag(const char* tag) { (void)tag; }
+
+	virtual idx_t OnListBegin() = 0;
+	virtual void OnListEnd() { }
+	virtual idx_t OnMapBegin() = 0;
+	virtual void OnMapEnd() { }
+	virtual void OnMapEntryBegin() { }
+	virtual void OnMapEntryEnd() { }
+	virtual void OnMapKeyBegin() { }
+	virtual void OnMapKeyEnd() { }
+	virtual void OnMapValueBegin() {}
+	virtual void OnMapValueEnd() { }
+	virtual bool OnOptionalBegin() = 0;
+	virtual void OnOptionalEnd() { }
+	virtual void OnObjectBegin() { }
+	virtual void OnObjectEnd() { }
+	virtual void OnPairBegin() { }
+	virtual void OnPairKeyBegin() { }
+	virtual void OnPairKeyEnd() { }
+	virtual void OnPairValueBegin() { }
+	virtual void OnPairValueEnd() { }
+	virtual void OnPairEnd() { }
 
 	virtual bool ReadBool() = 0;
 	virtual int8_t ReadSignedInt8() = 0;

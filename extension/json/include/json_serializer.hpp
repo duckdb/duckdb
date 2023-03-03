@@ -33,18 +33,22 @@ public:
 		return stack.front();
 	};
 
-	void WriteTag(const char *tag) final;
+	void SetTag(const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
-	void BeginWriteOptional(bool present) final;
-	void BeginWriteList(idx_t count) final;
-	void EndWriteList(idx_t count) final;
-	void BeginWriteMap(idx_t count) final;
-	void EndWriteMap(idx_t count) final;
-	void BeginWriteObject() final;
-	void EndWriteObject() final;
+	void OnOptionalBegin(bool present) final;
+	void OnListBegin(idx_t count) final;
+	void OnListEnd(idx_t count) final;
+	void OnMapBegin(idx_t count) final;
+	void OnMapEntryBegin() final;
+	void OnMapEntryEnd() final;
+	void OnMapKeyBegin() final;
+	void OnMapValueBegin() final;
+	void OnMapEnd(idx_t count) final;
+	void OnObjectBegin() final;
+	void OnObjectEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types

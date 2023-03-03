@@ -80,6 +80,14 @@ void ExpressionListRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("values", values);
 }
 
+unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &source) {
+	auto result = make_unique<ExpressionListRef>();
+	source.ReadProperty("expected_names", result->expected_names);
+	source.ReadProperty("expected_types", result->expected_types);
+	source.ReadProperty("values", result->values);
+	return result;
+}
+
 unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<ExpressionListRef>();
 	// value list

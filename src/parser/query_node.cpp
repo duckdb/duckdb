@@ -97,10 +97,10 @@ void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) con
 	serializer.WriteProperty("map", map);
 }
 
-CommonTableExpressionMap&& CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
+CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = CommonTableExpressionMap();
-	result.map = deserializer.ReadProperty<unordered_map<string, unique_ptr<CommonTableExpressionInfo>>>("map");
-	return std::move(result);
+	deserializer.ReadProperty("map", result.map);
+	return result;
 }
 
 string QueryNode::ResultModifiersToString() const {
@@ -217,10 +217,10 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 
 	auto type = deserializer.ReadProperty<QueryNodeType>("type");
 
-	unique_ptr<QueryNode> result;
-
 	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
 	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
+
+	unique_ptr<QueryNode> result;
 
 	switch (type) {
 	case QueryNodeType::SELECT_NODE:

@@ -37,6 +37,17 @@ void BaseTableRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("catalog_name", catalog_name);
 }
 
+unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<BaseTableRef>();
+
+	deserializer.ReadProperty("schema_name", result->schema_name);
+	deserializer.ReadProperty("table_name", result->table_name);
+	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
+	deserializer.ReadProperty("catalog_name", result->catalog_name);
+
+	return std::move(result);
+}
+
 unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<BaseTableRef>();
 
@@ -47,6 +58,8 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 
 	return std::move(result);
 }
+
+
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
 	auto copy = make_unique<BaseTableRef>();

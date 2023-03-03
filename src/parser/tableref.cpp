@@ -133,7 +133,7 @@ unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserialize
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
-		throw NotImplementedException("Deserialize not implemented for type INVALID");
+		throw InternalException("Unsupported type for TableRef::FormatDeserialize");
 	}
 	result->alias = alias;
 	result->sample = std::move(sample);

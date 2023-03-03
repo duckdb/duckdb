@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-void BinarySerializer::WriteTag(const char *tag) {
+void BinarySerializer::SetTag(const char *tag) {
 
 	printf("%s", tag);
 	trace.push_back(tag);
@@ -13,30 +13,30 @@ void BinarySerializer::WriteTag(const char *tag) {
 //===--------------------------------------------------------------------===//
 // Nested types
 //===--------------------------------------------------------------------===//
-void BinarySerializer::BeginWriteOptional(bool present) {
+void BinarySerializer::OnOptionalBegin(bool present) {
 	GetCurrent().Write(present);
 }
 
-void BinarySerializer::BeginWriteList(idx_t count) {
+void BinarySerializer::OnListBegin(idx_t count) {
 	GetCurrent().Write((uint32_t)count);
 }
 
-void BinarySerializer::BeginWriteMap(idx_t count) {
+void BinarySerializer::OnMapBegin(idx_t count) {
 	GetCurrent().Write((uint32_t)count);
 }
 
-void BinarySerializer::BeginWriteObject() {
+void BinarySerializer::OnObjectBegin() {
 	// Push a new object to the stack
 	stack.emplace_back();
 }
 
-void BinarySerializer::EndWriteList(idx_t count) {
+void BinarySerializer::OnListEnd(idx_t count) {
 }
 
-void BinarySerializer::EndWriteMap(idx_t count) {
+void BinarySerializer::OnMapEnd(idx_t count) {
 }
 
-void BinarySerializer::EndWriteObject() {
+void BinarySerializer::OnObjectEnd() {
 
 	// Pop the current object
 	auto inner = std::move(stack.back());
