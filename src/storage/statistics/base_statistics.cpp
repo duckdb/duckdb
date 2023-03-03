@@ -184,6 +184,14 @@ BaseStatistics BaseStatistics::CreateUnknown(LogicalType type) {
 }
 
 BaseStatistics BaseStatistics::CreateEmpty(LogicalType type) {
+	if (type.InternalType() == PhysicalType::BIT) {
+		// FIXME: this special case should not be necessary
+		// but currently InitializeEmpty sets StatsInfo::CAN_HAVE_VALID_VALUES
+		BaseStatistics result(std::move(type));
+		result.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		result.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+		return result;
+	}
 	auto result = CreateEmptyType(std::move(type));
 	result.InitializeEmpty();
 	return result;
