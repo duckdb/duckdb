@@ -411,10 +411,10 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 }
 
 void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &bind_columns,
-                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto df_columns = py::list(df.attr("keys")());
 	auto df_types = py::list();
-	for(auto item : py::cast<py::dict>(df)) {
+	for (auto item : py::cast<py::dict>(df)) {
 		if (string(py::str(item.second.attr("dtype").attr("char"))) == "U") {
 			df_types.attr("append")(py::str("string"));
 			continue;
@@ -423,14 +423,14 @@ void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<P
 	}
 	auto get_fun = df.attr("__getitem__");
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
-                throw InvalidInputException("Need a DataFrame with at least one column");
-        }
+		throw InvalidInputException("Need a DataFrame with at least one column");
+	}
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
-                PandasColumnBindData bind_data;
+		PandasColumnBindData bind_data;
 
-                names.emplace_back(py::str(df_columns[col_idx]));
-                bind_data.pandas_type = ConvertPandasType(df_types[col_idx]);
+		names.emplace_back(py::str(df_columns[col_idx]));
+		bind_data.pandas_type = ConvertPandasType(df_types[col_idx]);
 
 		auto column = get_fun(df_columns[col_idx]);
 
@@ -438,10 +438,10 @@ void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<P
 			bind_data.numpy_col = py::array(column.attr("astype")("float32"));
 			bind_data.pandas_type = PandasType::FLOAT_32;
 			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
-		} else if (bind_data.pandas_type == PandasType::OBJECT && 
-				string(py::str(df_types[col_idx])) == "string") {
-			bind_data.numpy_col = py::array(column.attr("astype")("object_"));
-                        bind_data.pandas_type = PandasType::OBJECT;
+		} else if (bind_data.pandas_type == PandasType::OBJECT && string(py::str(df_types[col_idx])) == "string") {
+			bind_data.numpy_col =
+			    py::array(column.attr("astype")("object_")); // treat the string array as numpy.object_ array
+			bind_data.pandas_type = PandasType::OBJECT;
 		} else {
 			bind_data.numpy_col = column;
 			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
