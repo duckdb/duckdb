@@ -43,7 +43,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getURL() throws SQLException {
-		return conn.db.url;
+		return conn.url;
 	}
 
 	@Override

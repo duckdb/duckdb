@@ -70,16 +70,23 @@ SELECT NULL::BIT
 ----
 NULL
 
+statement error
+SELECT ''::BIT
+----
+Conversion Error: Cannot cast empty string to BIT
+
 statement ok
 DELETE FROM bits
 
 statement ok
-INSERT INTO bits VALUES(''), (NULL)
+INSERT INTO bits VALUES (NULL)
+
+statement error
+INSERT INTO bits VALUES ('')
 
 query I
 SELECT * FROM bits
 ----
-(empty)
 NULL
 
 # try cast

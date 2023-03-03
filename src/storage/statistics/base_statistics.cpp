@@ -12,7 +12,7 @@
 namespace duckdb {
 
 BaseStatistics::BaseStatistics(LogicalType type, StatisticsType stats_type)
-    : type(std::move(type)), stats_type(stats_type) {
+    : type(std::move(type)), distinct_count(0), stats_type(stats_type) {
 }
 
 BaseStatistics::~BaseStatistics() {
@@ -72,9 +72,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 idx_t BaseStatistics::GetDistinctCount() {
 	if (distinct_stats) {
 		auto &d_stats = (DistinctStatistics &)*distinct_stats;
-		return d_stats.GetCount();
+		distinct_count = d_stats.GetCount();
 	}
-	return 0;
+	return distinct_count;
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type, StatisticsType stats_type) {

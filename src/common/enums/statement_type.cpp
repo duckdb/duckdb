@@ -59,6 +59,8 @@ string StatementTypeToString(StatementType type) {
 		return "ATTACH";
 	case StatementType::DETACH_STATEMENT:
 		return "DETACH";
+	case StatementType::MULTI_STATEMENT:
+		return "MULTI";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}
