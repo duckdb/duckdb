@@ -24,7 +24,7 @@ struct PositionFunctor {
 };
 
 template <class CHILD_TYPE, class RETURN_TYPE, class OP>
-static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result,
+static void TemplatedContainsOrPosition(DataChunk &args, Vector &result,
                                         bool is_nested = false) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
@@ -101,48 +101,48 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 }
 
 template <class T, class OP>
-static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListContainsOrPosition(DataChunk &args, Vector &result) {
 	switch (args.data[1].GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedContainsOrPosition<int8_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<int8_t, T, OP>(args, result);
 		break;
 	case PhysicalType::INT16:
-		TemplatedContainsOrPosition<int16_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<int16_t, T, OP>(args, result);
 		break;
 	case PhysicalType::INT32:
-		TemplatedContainsOrPosition<int32_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<int32_t, T, OP>(args, result);
 		break;
 	case PhysicalType::INT64:
-		TemplatedContainsOrPosition<int64_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<int64_t, T, OP>(args, result);
 		break;
 	case PhysicalType::INT128:
-		TemplatedContainsOrPosition<hugeint_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<hugeint_t, T, OP>(args, result);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedContainsOrPosition<uint8_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<uint8_t, T, OP>(args, result);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedContainsOrPosition<uint16_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<uint16_t, T, OP>(args, result);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedContainsOrPosition<uint32_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<uint32_t, T, OP>(args, result);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedContainsOrPosition<uint64_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<uint64_t, T, OP>(args, result);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedContainsOrPosition<float, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<float, T, OP>(args, result);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedContainsOrPosition<double, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<double, T, OP>(args, result);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedContainsOrPosition<string_t, T, OP>(args, state, result);
+		TemplatedContainsOrPosition<string_t, T, OP>(args, result);
 		break;
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		TemplatedContainsOrPosition<int8_t, T, OP>(args, state, result, true);
+		TemplatedContainsOrPosition<int8_t, T, OP>(args, result, true);
 		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for this type");
@@ -150,11 +150,13 @@ static void ListContainsOrPosition(DataChunk &args, ExpressionState &state, Vect
 }
 
 static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	return ListContainsOrPosition<bool, ContainsFunctor>(args, state, result);
+	(void)state;
+	return ListContainsOrPosition<bool, ContainsFunctor>(args, result);
 }
 
-static void ListPositionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	return ListContainsOrPosition<int32_t, PositionFunctor>(args, state, result);
+void ListPositionFun::ListPositionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	(void)state;
+	return ListContainsOrPosition<int32_t, PositionFunctor>(args, result);
 }
 
 template <LogicalTypeId RETURN_TYPE>

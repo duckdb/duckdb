@@ -125,6 +125,7 @@ struct ListFlattenFun {
 };
 
 struct ListPositionFun {
+	static void ListPositionFunction(DataChunk &args, ExpressionState &state, Vector &result);
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };

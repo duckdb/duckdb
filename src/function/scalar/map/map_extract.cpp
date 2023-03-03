@@ -5,19 +5,54 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
-void FillResult(Value &values, Vector &result, idx_t row) {
-	//! First Initialize List Vector
-	idx_t current_offset = ListVector::GetListSize(result);
-	//! Push Values to List Vector
-	auto &list_values = ListValue::GetChildren(values);
-	for (idx_t i = 0; i < list_values.size(); i++) {
-		ListVector::PushBack(result, list_values[i]);
-	}
+void FillResult(Vector &map, Vector& offsets, Vector &result, idx_t count) {
+	UnifiedVectorFormat map_data;
+	map.ToUnifiedFormat(count, map_data);
+	
+	UnifiedVectorFormat offset_data;
+	offsets.ToUnifiedFormat(count, offset_data);
 
-	//! now set the pointer
-	auto &entry = ListVector::GetData(result)[row];
-	entry.length = list_values.size();
-	entry.offset = current_offset;
+	UnifiedVectorFormat result_data;
+	result.ToUnifiedFormat(count, result_data);
+
+	auto& values_list = MapVector::GetValues(map);
+	UnifiedVectorFormat values_data;
+	values_list.ToUnifiedFormat(count, values_data);
+
+	auto entry_count = ListVector::GetListSize(values_list);
+	auto& values_entries = ListVector::GetEntry(values_list);
+	UnifiedVectorFormat values_entry_data;
+	// Note: this vector can have a different size than the map
+	values_entries.ToUnifiedFormat(entry_count, values_entry_data);
+
+	for (idx_t row = 0; row < count; row++) {
+		idx_t offset_idx = offset_data.sel->get_index(row);
+		auto offset = ((int32_t*)offset_data.data)[offset_idx];
+
+		if (!offset) {
+			// 'key' was not found in the keys list of the map
+			//FIXME: does this need to have the selection vector applied??
+			result_data.validity.SetInvalid(row);
+			continue;
+		}
+		// Get the current size of the list, for the offset
+		idx_t current_offset = ListVector::GetListSize(result);
+
+		// Get the 'values' list entry corresponding to the offset
+		idx_t value_index = map_data.sel->get_index(offset);
+		auto& value_list_entry = ((list_entry_t*)values_data.data)[value_index];
+
+		// Add the values to the result
+		idx_t list_offset = value_list_entry.offset;
+		idx_t length = value_list_entry.length;
+		ListVector::Append(result, values_entries, length, list_offset);
+
+		// Set the entry data for this result row
+		idx_t result_index = result_data.sel->get_index(row);
+		auto& entry = ((list_entry_t*)result_data.data)[result_index];
+		entry.length = length;
+		entry.offset = current_offset;
+	}
 }
 
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -25,6 +60,8 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
+	idx_t tuple_count = args.size();
+	// Optimization: because keys are not allowed to be NULL, we can early-out
 	if (args.data[1].GetType().id() == LogicalTypeId::SQLNULL) {
 		//! We don't need to look through the map if the 'key' to look for is NULL
 		ListVector::SetListSize(result, 0);
@@ -32,7 +69,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto list_data = ConstantVector::GetData<list_entry_t>(result);
 		list_data->offset = 0;
 		list_data->length = 0;
-		result.Verify(args.size());
+		result.Verify(tuple_count);
 		return;
 	}
 
@@ -42,25 +79,35 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	UnifiedVectorFormat map_data;
 
 	auto &map_keys = MapVector::GetKeys(map);
-	auto &map_values = MapVector::GetValues(map);
+	// Create a list vector that contains the list entries of the map
+	Vector key_list(LogicalType::LIST(map_keys.GetType()), map.GetData());
+	// Then we create a VectorListBuffer for it, which will reference the 'map_keys' vector
+	key_list.SetAuxiliary(make_buffer<VectorListBuffer>(map_keys, ListVector::GetListCapacity(map)));
 
-	map.ToUnifiedFormat(args.size(), map_data);
 
-	for (idx_t row = 0; row < args.size(); row++) {
-		idx_t row_index = map_data.sel->get_index(row);
-		auto key_value = key.GetValue(row);
+	// Create the chunk we'll feed to ListPosition
+	DataChunk list_position_chunk;
+	vector<LogicalType> chunk_types;
+	chunk_types.reserve(2);
+	chunk_types.push_back(map_keys.GetType());
+	chunk_types.push_back(key.GetType());
+	list_position_chunk.InitializeEmpty(chunk_types.begin(), chunk_types.end());
 
-		list_entry_t entry = ListVector::GetData(map)[row_index];
-		auto offsets = MapVector::Search(map_keys, args.size(), key_value, entry);
-		auto values = FlatVector::GetValuesFromOffsets(map_values, offsets);
-		FillResult(values, result, row);
-	}
+	// Populate it with the map keys list and the key vector
+	list_position_chunk.data[0].Reference(map_keys);
+	list_position_chunk.data[1].Reference(key);
 
-	if (args.size() == 1) {
+	Vector position_vector(LogicalType::LIST(LogicalType::INTEGER), tuple_count);
+	// We can pass around state as it's not used by ListPositionFunction anyways
+	ListPositionFun::ListPositionFunction(list_position_chunk, state, position_vector);
+
+	FillResult(map, position_vector, result, tuple_count);
+
+	if (tuple_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	result.Verify(args.size());
+	result.Verify(tuple_count);
 }
 
 static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFunction &bound_function,
