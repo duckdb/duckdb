@@ -63,7 +63,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 		auto &nstats = *stats;
 
-		if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
+		if (!NumericStats::HasMinMax(nstats)) {
 			return false;
 		}
 		// we have a min and a max value for the stats: use that to figure out how many bits we have

@@ -45,7 +45,7 @@ bool GetCastType(hugeint_t range, LogicalType &cast_type) {
 template <class T>
 unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, BaseStatistics &stats) {
 	// Compute range
-	if (!NumericStats::HasMin(stats) || !NumericStats::HasMax(stats)) {
+	if (!NumericStats::HasMinMax(stats)) {
 		return expr;
 	}
 

@@ -67,7 +67,7 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (!NumericStats::HasMin(stats) || !NumericStats::HasMax(stats)) {
+	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto min_value = NumericStats::Min(stats);
@@ -238,6 +238,10 @@ Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion 
 	Value result = NumericValueUnionToValueInternal(type, val);
 	result.GetTypeMutable() = type;
 	return result;
+}
+
+bool NumericStats::HasMinMax(const BaseStatistics &stats) {
+	return NumericStats::HasMin(stats) && NumericStats::HasMax(stats);
 }
 
 bool NumericStats::HasMin(const BaseStatistics &stats) {

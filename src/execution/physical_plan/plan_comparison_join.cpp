@@ -101,7 +101,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// and when the build range is smaller than the threshold
 	auto &stats_build = *op.join_stats[0].get(); // lhs stats
-	if (!NumericStats::HasMin(stats_build) || !NumericStats::HasMax(stats_build)) {
+	if (!NumericStats::HasMinMax(stats_build)) {
 		return;
 	}
 	int64_t min_value, max_value;
@@ -116,7 +116,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// Fill join_stats for invisible join
 	auto &stats_probe = *op.join_stats[1].get(); // rhs stats
-	if (!NumericStats::HasMin(stats_probe) || !NumericStats::HasMax(stats_probe)) {
+	if (!NumericStats::HasMinMax(stats_probe)) {
 		return;
 	}
 

@@ -5,7 +5,7 @@ namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
-	if (!NumericStats::HasMin(input) || !NumericStats::HasMax(input)) {
+	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}
 	Value min = NumericStats::Min(input);

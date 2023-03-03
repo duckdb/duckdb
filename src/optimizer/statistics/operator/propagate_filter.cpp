@@ -48,7 +48,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	if (!NumericStats::HasMin(stats) || !NumericStats::HasMax(stats)) {
+	if (!NumericStats::HasMinMax(stats)) {
 		// no stats available: skip this
 		return;
 	}
@@ -88,8 +88,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	if (!NumericStats::HasMin(lstats) || !NumericStats::HasMax(lstats) || !NumericStats::HasMin(rstats) ||
-	    !NumericStats::HasMax(rstats)) {
+	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {
 		// no stats available: skip this
 		return;
 	}

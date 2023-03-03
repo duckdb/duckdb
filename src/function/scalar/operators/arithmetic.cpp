@@ -139,8 +139,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	auto &rstats = child_stats[1];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (NumericStats::HasMin(lstats) && NumericStats::HasMax(lstats) && NumericStats::HasMin(rstats) &&
-	    NumericStats::HasMax(rstats)) {
+	if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
@@ -511,7 +510,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	auto &istats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (NumericStats::HasMin(istats) && NumericStats::HasMax(istats)) {
+	if (NumericStats::HasMinMax(istats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =

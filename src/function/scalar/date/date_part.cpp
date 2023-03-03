@@ -176,7 +176,7 @@ struct DatePart {
 	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats) {
 		// we can only propagate complex date part stats if the child has stats
 		auto &nstats = child_stats[0];
-		if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
+		if (!NumericStats::HasMinMax(nstats)) {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound

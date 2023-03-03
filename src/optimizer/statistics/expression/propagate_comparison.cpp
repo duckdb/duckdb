@@ -25,8 +25,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!NumericStats::HasMin(lstats) || !NumericStats::HasMax(lstats) || !NumericStats::HasMin(rstats) ||
-	    !NumericStats::HasMax(rstats)) {
+	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {
 		// no stats available: nothing to prune
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

@@ -79,7 +79,7 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	auto &lstats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (NumericStats::HasMin(lstats) && NumericStats::HasMax(lstats)) {
+	if (NumericStats::HasMinMax(lstats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow = NumericStats::Min(lstats).GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();

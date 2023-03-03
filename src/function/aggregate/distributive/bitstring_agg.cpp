@@ -173,7 +173,7 @@ idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
 
-	if (!NumericStats::HasMin(input.child_stats[0]) || !NumericStats::HasMax(input.child_stats[0])) {
+	if (!NumericStats::HasMinMax(input.child_stats[0])) {
 		throw BinderException("Could not retrieve required statistics. Alternatively, try by providing the statistics "
 		                      "explicitly: BITSTRING_AGG(col, min, max) ");
 	}

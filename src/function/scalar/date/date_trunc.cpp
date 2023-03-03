@@ -590,7 +590,7 @@ template <class TA, class TR, class OP>
 static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_stats) {
 	// we can only propagate date stats if the child has stats
 	auto &nstats = child_stats[1];
-	if (!NumericStats::HasMin(nstats) || !NumericStats::HasMax(nstats)) {
+	if (!NumericStats::HasMinMax(nstats)) {
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
