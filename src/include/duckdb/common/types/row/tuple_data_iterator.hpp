@@ -14,9 +14,9 @@ namespace duckdb {
 
 class TupleDataChunkIterator {
 public:
-	TupleDataChunkIterator(TupleDataCollection &collection, TupleDataPinProperties properties);
+	TupleDataChunkIterator(TupleDataCollection &collection, TupleDataPinProperties properties, bool init_heap);
 	TupleDataChunkIterator(TupleDataCollection &collection, TupleDataPinProperties properties, idx_t chunk_idx_from,
-	                       idx_t chunk_idx_to);
+	                       idx_t chunk_idx_to, bool init_heap);
 
 public:
 	bool Next();
@@ -29,7 +29,8 @@ private:
 
 private:
 	TupleDataCollection &collection;
-	TupleDataPinProperties properties;
+	bool init_heap;
+
 	idx_t start_segment_idx;
 	idx_t start_chunk_idx;
 	idx_t end_segment_idx;

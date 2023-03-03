@@ -2,13 +2,10 @@
 
 namespace duckdb {
 
-TupleDataChunkPart::TupleDataChunkPart(uint32_t row_block_index_p, uint32_t row_block_offset_p,
-                                       uint32_t heap_block_index_p, uint32_t heap_block_offset_p,
-                                       data_ptr_t base_heap_ptr_p, uint32_t total_heap_size_p,
-                                       uint32_t last_heap_size_p, uint32_t count_p)
-    : row_block_index(row_block_index_p), row_block_offset(row_block_offset_p), heap_block_index(heap_block_index_p),
-      heap_block_offset(heap_block_offset_p), base_heap_ptr(base_heap_ptr_p), total_heap_size(total_heap_size_p),
-      last_heap_size(last_heap_size_p), count(count_p) {
+TupleDataChunkPart::TupleDataChunkPart()
+    : row_block_index(INVALID_INDEX), row_block_offset(INVALID_INDEX), heap_block_index(INVALID_INDEX),
+      heap_block_offset(INVALID_INDEX), base_heap_ptr(nullptr), total_heap_size(INVALID_INDEX),
+      last_heap_size(INVALID_INDEX), count(INVALID_INDEX) {
 }
 
 TupleDataChunk::TupleDataChunk() : count(0) {
@@ -43,7 +40,7 @@ void TupleDataChunk::Verify() const {
 	for (const auto &part : parts) {
 		total_count += part.count;
 	}
-	D_ASSERT(total_count = this->count);
+	D_ASSERT(this->count == total_count);
 	D_ASSERT(this->count <= STANDARD_VECTOR_SIZE);
 #endif
 }

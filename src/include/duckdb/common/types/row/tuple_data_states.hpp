@@ -20,12 +20,13 @@ enum class TupleDataPinProperties : uint8_t {
 	//! TODO
 	UNPIN_AFTER_DONE,
 	//! TODO
-	ASSUME_PINNED
+	ALREADY_PINNED
 };
 
 struct TupleDataManagementState {
 	unordered_map<uint32_t, BufferHandle> row_handles;
 	unordered_map<uint32_t, BufferHandle> heap_handles;
+	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 	Vector row_locations = Vector(LogicalType::POINTER);
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
@@ -34,7 +35,6 @@ struct TupleDataManagementState {
 struct TupleDataAppendState {
 	TupleDataManagementState chunk_state;
 	vector<UnifiedVectorFormat> vector_data;
-	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 	vector<column_t> column_ids;
 };
 

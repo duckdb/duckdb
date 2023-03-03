@@ -39,13 +39,15 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	D_ASSERT(this == segment.allocator.get());
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
-		ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back(), append_state.properties);
+		if (chunks.back().count == STANDARD_VECTOR_SIZE) {
+
+		} else {
+			ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back());
+		}
 	}
 
-	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
-	auto heap_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.heap_locations);
-
+	// Build the chunk parts for the incoming data
+	vector<pair<idx_t, idx_t>> chunk_part_indices;
 	idx_t offset = 0;
 	while (offset != count) {
 		if (chunks.empty() || chunks.back().count == STANDARD_VECTOR_SIZE) {
@@ -54,96 +56,77 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 		auto &chunk = chunks.back();
 
 		// Build the next part
-		// TODO: maybe we can extend parts so we have less metadata
-		//  also maybe we can build all the chunk parts in one go before moving on
-		//  and we should re-use InitializeChunkState here!!!
-		BuildChunkPart(append_state, offset, count, chunk);
+		chunk.parts.emplace_back(BuildChunkPart(append_state.chunk_state, offset, count));
+		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
+
 		auto &chunk_part = chunk.parts.back();
 		const auto next = chunk_part.count;
+		chunk.count += next;
 		segment.count += next;
-
-		// Now set the pointers where the row data will be written
-		const auto base_row_ptr = GetRowPointer(append_state.chunk_state, chunk_part);
-		for (idx_t i = 0; i < next; i++) {
-			row_locations[offset + i] = base_row_ptr + i * layout.GetRowWidth();
-		}
-
-		if (!layout.AllConstant()) {
-			// Also set the pointers where the heap data will be written (if needed)
-			const auto base_heap_ptr = GetHeapPointer(append_state.chunk_state, chunk_part);
-			heap_locations[offset] = base_heap_ptr;
-			for (idx_t i = 1; i < next; i++) {
-				auto idx = offset + i;
-				heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
-			}
-
-			// Set the offset from the base heap pointer in each row
-			for (idx_t i = 0; i < next; i++) {
-				auto idx = offset + i;
-				Store<uint32_t>(heap_locations[idx] - base_heap_ptr, row_locations[idx] + layout.GetHeapOffset());
-			}
-		}
 
 		offset += next;
 	}
+
+	// Now initialize the pointers to write the data to
+	vector<TupleDataChunkPart *> parts;
+	parts.reserve(chunk_part_indices.size());
+	for (auto &indices : chunk_part_indices) {
+		parts.emplace_back(&segment.chunks[indices.first].parts[indices.second]);
+	}
+	InitializeChunkStateInternal(append_state.chunk_state, false, true, parts);
+
 	segment.Verify();
 }
 
-void TupleDataAllocator::BuildChunkPart(TupleDataAppendState &append_state, idx_t offset, idx_t count,
-                                        TupleDataChunk &chunk) {
+TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &state, idx_t offset, idx_t count) {
+	TupleDataChunkPart result;
+
 	lock_guard<mutex> guard(lock);
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
 	}
-	uint32_t row_block_index = row_blocks.size() - 1;
-	uint32_t row_block_offset = row_blocks.back().size;
+	result.row_block_index = row_blocks.size() - 1;
+	result.row_block_offset = row_blocks.back().size;
 
-	auto next = MinValue<idx_t>(row_blocks.back().RemainingCapacity(layout.GetRowWidth()), count - offset);
-
-	uint32_t heap_block_index = 0;
-	uint32_t heap_block_offset = 0;
-	data_ptr_t base_heap_ptr = nullptr;
-	uint32_t total_heap_size = 0;
-	uint32_t last_heap_size = 0;
+	// Set count (might be reduced later when checking heap space)
+	result.count = MinValue<idx_t>(row_blocks.back().RemainingCapacity(layout.GetRowWidth()), count - offset);
 	if (!layout.AllConstant()) {
-		const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
+		const auto heap_sizes = FlatVector::GetData<idx_t>(state.heap_sizes);
 
 		// Allocate heap block (if needed)
 		if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[offset]) {
 			const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[offset]);
 			heap_blocks.emplace_back(buffer_manager, size);
 		}
-		heap_block_index = heap_blocks.size() - 1;
-		heap_block_offset = heap_blocks.back().size;
-		PinHeapBlock(append_state.chunk_state, heap_block_index);
-		base_heap_ptr = append_state.chunk_state.heap_handles[heap_block_index].Ptr() + heap_block_offset;
-		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
+		result.heap_block_index = heap_blocks.size() - 1;
+		result.heap_block_offset = heap_blocks.back().size;
+		result.base_heap_ptr = GetHeapPointer(state, result);
 
 		// Determine how many we can read next
+		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
+		result.total_heap_size = 0;
 		for (idx_t i = offset; i < count; i++) {
 			const auto &heap_size = heap_sizes[i];
-			if (total_heap_size + heap_size > heap_remaining) {
-				next = i;
+			if (result.total_heap_size + heap_size > heap_remaining) {
+				result.count = i;
 				break;
 			}
-			total_heap_size += heap_size;
+			result.total_heap_size += heap_size;
 		}
 
 		// Set the size of the last heap row (all other sizes can be inferred from the pointer difference)
-		last_heap_size = heap_sizes[offset + next - 1];
+		result.last_heap_size = heap_sizes[offset + result.count - 1];
 
 		// Mark this portion of the heap block as filled
-		heap_blocks.back().size += total_heap_size;
+		heap_blocks.back().size += result.total_heap_size;
 	}
-	D_ASSERT(next != 0 && next <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(result.count != 0 && result.count <= STANDARD_VECTOR_SIZE);
 
 	// Mark this portion of the row block as filled
-	row_blocks.back().size += next * layout.GetRowWidth();
+	row_blocks.back().size += result.count * layout.GetRowWidth();
 
-	// Create the chunk part
-	chunk.AddPart(TupleDataChunkPart(row_block_index, row_block_offset, heap_block_index, heap_block_offset,
-	                                 base_heap_ptr, total_heap_size, last_heap_size, next));
+	return result;
 }
 
 static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
@@ -186,34 +169,83 @@ static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data
 }
 
 void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment,
-                                              idx_t chunk_idx, TupleDataPinProperties properties) {
+                                              idx_t chunk_idx, bool init_heap) {
 	D_ASSERT(this == segment.allocator.get());
 	D_ASSERT(chunk_idx < segment.chunks.size());
 	auto &chunk = segment.chunks[chunk_idx];
 
 	// Release or store any handles that are no longer required
-	ReleaseOrStoreHandles(state, segment, chunk, properties);
+	ReleaseOrStoreHandles(state, segment, chunk);
+
+	vector<TupleDataChunkPart *> parts;
+	parts.reserve(chunk.parts.size());
+	for (auto &part : chunk.parts) {
+		parts.emplace_back(&part);
+	}
+
+	InitializeChunkStateInternal(state, init_heap, init_heap, parts);
+}
+
+void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes,
+                                                      bool init_heap_pointers, vector<TupleDataChunkPart *> &parts) {
+	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(state.heap_sizes);
+	auto heap_locations = FlatVector::GetData<data_ptr_t>(state.heap_locations);
 
 	idx_t offset = 0;
-	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
-	for (auto &part : chunk.parts) {
+	for (auto &part : parts) {
+		const auto next = part->count;
+
 		// Set up row locations for the scan
-		const auto base_row_ptr = GetRowPointer(state, part);
-		for (idx_t i = 0; i < part.count; i++) {
-			row_locations[offset + i] = base_row_ptr + i * layout.GetRowWidth();
+		const auto row_width = layout.GetRowWidth();
+		const auto base_row_ptr = GetRowPointer(state, *part);
+		for (idx_t i = 0; i < next; i++) {
+			row_locations[offset + i] = base_row_ptr + i * row_width;
 		}
-		if (properties != TupleDataPinProperties::ASSUME_PINNED && !layout.AllConstant()) {
-			const auto old_base_heap_ptr = part.base_heap_ptr;
-			const auto new_base_heap_ptr = GetHeapPointer(state, part);
-			if (old_base_heap_ptr != new_base_heap_ptr) {
-				// Heap block has changed - re-compute the pointers within each row
-				RecomputeHeapPointers(old_base_heap_ptr, new_base_heap_ptr, row_locations, offset, part.count, layout,
-				                      0);
-				part.base_heap_ptr = new_base_heap_ptr;
+
+		if (!layout.AllConstant()) {
+			const auto base_heap_ptr = GetHeapPointer(state, *part);
+			const auto heap_offset = layout.GetHeapOffset();
+
+			// Check if heap block has changed - re-compute the pointers within each row if so
+			if (state.properties != TupleDataPinProperties::ALREADY_PINNED) {
+				const auto old_base_heap_ptr = part->base_heap_ptr;
+				if (old_base_heap_ptr != base_heap_ptr) {
+					RecomputeHeapPointers(old_base_heap_ptr, base_heap_ptr, row_locations, offset, next, layout, 0);
+					part->base_heap_ptr = base_heap_ptr;
+				}
+			}
+
+			if (compute_heap_sizes) {
+				// Compute the heap sizes using the offset diff - last one is stored in the TupleDataChunkPart
+				for (idx_t i = 0; i < next - 1; i++) {
+					auto idx = offset + i;
+					heap_sizes[idx] = Load<uint32_t>(row_locations[i + 1]) - Load<uint32_t>(row_locations[i]);
+				}
+				heap_sizes[offset + next - 1] = part->last_heap_size;
+			}
+
+			if (init_heap_pointers) {
+				// Set the pointers where the heap data will be written (if needed)
+				heap_locations[offset] = base_heap_ptr;
+				for (idx_t i = 1; i < next; i++) {
+					auto idx = offset + i;
+					heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
+				}
+
+				if (!compute_heap_sizes) {
+					// Set the offset from the base heap pointer in each row
+					for (idx_t i = 0; i < next; i++) {
+						auto idx = offset + i;
+						Store<uint32_t>(heap_locations[idx] - base_heap_ptr, row_locations[idx] + heap_offset);
+					}
+				}
 			}
 		}
-		offset += part.count;
+
+		offset += next;
 	}
+	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
 void TupleDataAllocator::PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index) {
@@ -253,6 +285,7 @@ data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, c
 static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
                                           const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
                                           TupleDataPinProperties properties) {
+	D_ASSERT(properties != TupleDataPinProperties::ALREADY_PINNED);
 	bool found_handle;
 	do {
 		found_handle = false;
@@ -263,6 +296,7 @@ static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> 
 			}
 			switch (properties) {
 			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
+				// TODO: need to think about what happens with the last pins (this function is not called for those)
 				lock_guard<mutex> guard(segment.pinned_handles_lock);
 				segment.pinned_handles.emplace_back(std::move(it->second));
 				break;
@@ -280,13 +314,13 @@ static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> 
 }
 
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment,
-                                               TupleDataChunk &chunk, TupleDataPinProperties properties) const {
-	if (properties == TupleDataPinProperties::ASSUME_PINNED) {
+                                               TupleDataChunk &chunk) const {
+	if (state.properties == TupleDataPinProperties::ALREADY_PINNED) {
 		return;
 	}
-	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, properties);
+	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, state.properties);
 	if (!layout.AllConstant()) {
-		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, properties);
+		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, state.properties);
 	}
 }
 

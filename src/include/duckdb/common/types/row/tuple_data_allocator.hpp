@@ -66,11 +66,14 @@ public:
 	void Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment);
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment, idx_t chunk_idx,
-	                          TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
+	                          bool init_heap);
 
 private:
 	//! Builds out a single part (grabs the lock)
-	void BuildChunkPart(TupleDataAppendState &append_state, idx_t offset, idx_t count, TupleDataChunk &chunk);
+	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &state, idx_t offset, idx_t count);
+	//! TODO:
+	void InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes, bool init_heap_pointers,
+	                                  vector<TupleDataChunkPart *> &parts);
 	//! Pins the given row block
 	void PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index);
 	//! Pins the given heap block
@@ -80,8 +83,7 @@ private:
 	//! Gets the base pointer to the heap for the given segment
 	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
 	//! Releases or stores any handles that are no longer required
-	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk,
-	                           TupleDataPinProperties properties) const;
+	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
 
 private:
 	//! The lock (for shared allocations)

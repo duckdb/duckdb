@@ -119,7 +119,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
                                            TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	append_state.vector_data.resize(layout.ColumnCount());
-	append_state.properties = properties;
+	append_state.chunk_state.properties = properties;
 	append_state.column_ids = std::move(column_ids);
 	if (segments.empty()) {
 		segments.emplace_back(allocator);
@@ -551,8 +551,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataManagementState &chunk_state, con
                                       idx_t segment_index, idx_t chunk_index, DataChunk &result) {
 	auto &segment = segments[segment_index];
 	auto &chunk = segment.chunks[chunk_index];
-	segment.allocator->InitializeChunkState(chunk_state, segment, chunk_index,
-	                                        TupleDataPinProperties::UNPIN_AFTER_DONE);
+	segment.allocator->InitializeChunkState(chunk_state, segment, chunk_index, false);
 	result.Reset();
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), column_ids, chunk.count, result);
 	result.SetCardinality(chunk.count);

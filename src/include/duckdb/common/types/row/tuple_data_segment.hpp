@@ -14,9 +14,7 @@ class TupleDataAllocator;
 
 struct TupleDataChunkPart {
 public:
-	TupleDataChunkPart(uint32_t row_block_index, uint32_t row_block_offset, uint32_t heap_block_index,
-	                   uint32_t heap_block_offset, data_ptr_t base_heap_ptr, uint32_t total_heap_size,
-	                   uint32_t last_heap_size, uint32_t count);
+	TupleDataChunkPart();
 
 	//! Disable copy constructors
 	TupleDataChunkPart(const TupleDataChunkPart &other) = delete;
@@ -25,6 +23,8 @@ public:
 	//! Enable move constructors
 	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
 	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
+
+	static constexpr const uint32_t INVALID_INDEX = uint32_t(-1);
 
 public:
 	//! Index/offset of the row block
@@ -97,9 +97,9 @@ public:
 	vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
-	//! TODO
+	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
-	//! TODO
+	//! Where handles will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
 	vector<BufferHandle> pinned_handles;
 };
 

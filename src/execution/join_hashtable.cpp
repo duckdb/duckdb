@@ -331,7 +331,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
-	                                chunk_idx_to);
+	                                chunk_idx_to, false);
 	auto row_locations = iterator.GetRowLocations();
 	do {
 		auto count = iterator.GetCount();

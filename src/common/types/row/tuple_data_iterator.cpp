@@ -2,13 +2,15 @@
 
 namespace duckdb {
 
-TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties_p)
-    : TupleDataChunkIterator(collection_p, properties_p, 0, collection_p.ChunkCount()) {
+TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties_p,
+                                               bool init_heap)
+    : TupleDataChunkIterator(collection_p, properties_p, 0, collection_p.ChunkCount(), init_heap) {
 }
 
-TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties_p,
-                                               idx_t chunk_idx_from, idx_t chunk_idx_to)
-    : collection(collection_p), properties(properties_p) {
+TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties,
+                                               idx_t chunk_idx_from, idx_t chunk_idx_to, bool init_heap_p)
+    : collection(collection_p), init_heap(init_heap_p) {
+	state.chunk_state.properties = properties;
 	D_ASSERT(chunk_idx_from < chunk_idx_to);
 	D_ASSERT(chunk_idx_to <= collection.ChunkCount());
 	idx_t overall_chunk_index = 0;
@@ -32,7 +34,7 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 
 void TupleDataChunkIterator::InitializeCurrentChunk() {
 	auto &segment = collection.segments[current_segment_idx];
-	segment.allocator->InitializeChunkState(state.chunk_state, segment, current_chunk_idx, properties);
+	segment.allocator->InitializeChunkState(state.chunk_state, segment, current_chunk_idx, init_heap);
 }
 
 bool TupleDataChunkIterator::Next() {
