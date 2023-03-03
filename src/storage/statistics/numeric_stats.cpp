@@ -241,10 +241,16 @@ Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion 
 }
 
 bool NumericStats::HasMin(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::SQLNULL) {
+		return false;
+	}
 	return NumericStats::GetDataUnsafe(stats).has_min;
 }
 
 bool NumericStats::HasMax(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::SQLNULL) {
+		return false;
+	}
 	return NumericStats::GetDataUnsafe(stats).has_max;
 }
 

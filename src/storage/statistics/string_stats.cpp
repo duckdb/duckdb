@@ -47,6 +47,9 @@ const StringStatsData &StringStats::GetDataUnsafe(const BaseStatistics &stats) {
 }
 
 bool StringStats::HasMaxStringLength(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::SQLNULL) {
+		return false;
+	}
 	return StringStats::GetDataUnsafe(stats).has_max_string_length;
 }
 
@@ -58,6 +61,9 @@ uint32_t StringStats::MaxStringLength(const BaseStatistics &stats) {
 }
 
 bool StringStats::CanContainUnicode(const BaseStatistics &stats) {
+	if (stats.GetType().id() == LogicalTypeId::SQLNULL) {
+		return true;
+	}
 	return StringStats::GetDataUnsafe(stats).has_unicode;
 }
 
