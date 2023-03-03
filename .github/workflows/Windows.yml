@@ -1,13 +1,14 @@
 name: Windows
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -75,7 +76,7 @@ jobs:
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows
         path: |
@@ -133,7 +134,7 @@ jobs:
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows-32bit
         path: |
