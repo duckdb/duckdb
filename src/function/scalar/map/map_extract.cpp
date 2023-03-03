@@ -5,51 +5,56 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
-void FillResult(Vector &map, Vector& offsets, Vector &result, idx_t count) {
+void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 	UnifiedVectorFormat map_data;
 	map.ToUnifiedFormat(count, map_data);
-	
+
 	UnifiedVectorFormat offset_data;
 	offsets.ToUnifiedFormat(count, offset_data);
 
 	UnifiedVectorFormat result_data;
 	result.ToUnifiedFormat(count, result_data);
 
-	auto& values_list = MapVector::GetValues(map);
-	UnifiedVectorFormat values_data;
-	values_list.ToUnifiedFormat(count, values_data);
-
-	auto entry_count = ListVector::GetListSize(values_list);
-	auto& values_entries = ListVector::GetEntry(values_list);
+	auto entry_count = ListVector::GetListSize(map);
+	auto &values_entries = MapVector::GetValues(map);
 	UnifiedVectorFormat values_entry_data;
 	// Note: this vector can have a different size than the map
 	values_entries.ToUnifiedFormat(entry_count, values_entry_data);
 
 	for (idx_t row = 0; row < count; row++) {
 		idx_t offset_idx = offset_data.sel->get_index(row);
-		auto offset = ((int32_t*)offset_data.data)[offset_idx];
+		auto offset = ((int32_t *)offset_data.data)[offset_idx];
 
 		if (!offset) {
 			// 'key' was not found in the keys list of the map
-			//FIXME: does this need to have the selection vector applied??
+			// FIXME: does this need to have the selection vector applied??
 			result_data.validity.SetInvalid(row);
+
+			// Get the current size of the list, for the offset
+			idx_t current_offset = ListVector::GetListSize(result);
+			// Set the entry data for this result row
+			idx_t result_index = result_data.sel->get_index(row);
+			auto &entry = ((list_entry_t *)result_data.data)[result_index];
+			entry.length = 0;
+			entry.offset = current_offset;
 			continue;
 		}
 		// Get the current size of the list, for the offset
 		idx_t current_offset = ListVector::GetListSize(result);
 
 		// Get the 'values' list entry corresponding to the offset
-		idx_t value_index = map_data.sel->get_index(offset);
-		auto& value_list_entry = ((list_entry_t*)values_data.data)[value_index];
+		idx_t value_index = map_data.sel->get_index(row);
+		auto &value_list_entry = ((list_entry_t *)map_data.data)[value_index];
 
 		// Add the values to the result
-		idx_t list_offset = value_list_entry.offset;
-		idx_t length = value_list_entry.length;
-		ListVector::Append(result, values_entries, length, list_offset);
+		idx_t list_offset = value_list_entry.offset + (offset - 1);
+		// All keys are unique, only one will ever match
+		idx_t length = 1;
+		ListVector::Append(result, values_entries, length + list_offset, list_offset);
 
 		// Set the entry data for this result row
 		idx_t result_index = result_data.sel->get_index(row);
-		auto& entry = ((list_entry_t*)result_data.data)[result_index];
+		auto &entry = ((list_entry_t *)result_data.data)[result_index];
 		entry.length = length;
 		entry.offset = current_offset;
 	}
@@ -78,28 +83,22 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	UnifiedVectorFormat map_data;
 
-	auto &map_keys = MapVector::GetKeys(map);
-	// Create a list vector that contains the list entries of the map
-	Vector key_list(LogicalType::LIST(map_keys.GetType()), map.GetData());
-	// Then we create a VectorListBuffer for it, which will reference the 'map_keys' vector
-	key_list.SetAuxiliary(make_buffer<VectorListBuffer>(map_keys, ListVector::GetListCapacity(map)));
-
-
 	// Create the chunk we'll feed to ListPosition
 	DataChunk list_position_chunk;
 	vector<LogicalType> chunk_types;
 	chunk_types.reserve(2);
-	chunk_types.push_back(map_keys.GetType());
+	chunk_types.push_back(map.GetType());
 	chunk_types.push_back(key.GetType());
 	list_position_chunk.InitializeEmpty(chunk_types.begin(), chunk_types.end());
 
 	// Populate it with the map keys list and the key vector
-	list_position_chunk.data[0].Reference(map_keys);
+	list_position_chunk.data[0].Reference(map);
 	list_position_chunk.data[1].Reference(key);
+	list_position_chunk.SetCardinality(tuple_count);
 
 	Vector position_vector(LogicalType::LIST(LogicalType::INTEGER), tuple_count);
 	// We can pass around state as it's not used by ListPositionFunction anyways
-	ListPositionFun::ListPositionFunction(list_position_chunk, state, position_vector);
+	ListContainsOrPosition<int32_t, PositionFunctor, MapKeyArgFunctor>(list_position_chunk, position_vector);
 
 	FillResult(map, position_vector, result, tuple_count);
 
