@@ -38,18 +38,17 @@ void TupleDataChunkIterator::InitializeCurrentChunk() {
 }
 
 bool TupleDataChunkIterator::Next() {
-	// This iterator has a different 'end' than the collection, check if we're there first
-	if (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx) {
-		return false;
-	}
+	// Check if called after already done
+	D_ASSERT(current_segment_idx != end_segment_idx && current_chunk_idx != end_chunk_idx);
 
-	// This sets the next indices and checks if we're at the end of the collection
-	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx)) {
-		return false;
-	}
-
-	// Check again because NextScanIndex can go past this iterators 'end'
-	if (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx) {
+	// Set the next indices and checks if we're at the end of the collection
+	// NextScanIndex can go past this iterators 'end', so we have to check the indices again
+	idx_t segment_idx_before = current_segment_idx;
+	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) ||
+	    (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx)) {
+		TupleDataChunk dummy_chunk;
+		collection.allocator->ReleaseOrStoreHandles(state.chunk_state, collection.segments[segment_idx_before],
+		                                            dummy_chunk);
 		return false;
 	}
 

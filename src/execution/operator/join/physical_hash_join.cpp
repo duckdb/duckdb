@@ -229,6 +229,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	auto &gstate = (HashJoinGlobalSinkState &)gstate_p;
 	auto &lstate = (HashJoinLocalSinkState &)lstate_p;
 	if (lstate.hash_table) {
+		lstate.hash_table->GetDataCollection().FinalizeAppendState(lstate.append_state);
 		lock_guard<mutex> local_ht_lock(gstate.lock);
 		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	}

@@ -67,13 +67,23 @@ public:
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment, idx_t chunk_idx,
 	                          bool init_heap);
+	//! Releases or stores any handles that are no longer required
+	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
 
 private:
 	//! Builds out a single part (grabs the lock)
 	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &state, idx_t offset, idx_t count);
-	//! TODO:
+	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes, bool init_heap_pointers,
 	                                  vector<TupleDataChunkPart *> &parts);
+	//! Recomputes the heap pointers if the heap block changed
+	static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
+	                                  const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
+	                                  const TupleDataLayout &layout, const idx_t base_col_offset);
+	//! Internal function for ReleaseOrStoreHandles
+	static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
+	                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
+	                                          TupleDataPinProperties properties);
 	//! Pins the given row block
 	void PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index);
 	//! Pins the given heap block
@@ -82,8 +92,6 @@ private:
 	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
 	//! Gets the base pointer to the heap for the given segment
 	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
-	//! Releases or stores any handles that are no longer required
-	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
 
 private:
 	//! The lock (for shared allocations)

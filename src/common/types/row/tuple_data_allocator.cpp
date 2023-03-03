@@ -56,12 +56,11 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 		auto &chunk = chunks.back();
 
 		// Build the next part
-		chunk.parts.emplace_back(BuildChunkPart(append_state.chunk_state, offset, count));
+		chunk.AddPart(BuildChunkPart(append_state.chunk_state, offset, count));
 		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
 
 		auto &chunk_part = chunk.parts.back();
 		const auto next = chunk_part.count;
-		chunk.count += next;
 		segment.count += next;
 
 		offset += next;
@@ -129,45 +128,6 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &
 	return result;
 }
 
-static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
-                                  const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
-                                  const TupleDataLayout &layout, const idx_t base_col_offset) {
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		const auto &col_offset = base_col_offset + layout.GetOffsets()[col_idx];
-		switch (layout.GetTypes()[col_idx].InternalType()) {
-		case PhysicalType::VARCHAR: {
-			for (idx_t i = 0; i < count; i++) {
-				const auto &string_location = row_locations[offset + i] + col_offset;
-				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
-					const auto diff = Load<data_ptr_t>(string_location + string_t::HEADER_SIZE) - old_base_heap_ptr;
-					Store<data_ptr_t>(new_base_heap_ptr + diff, string_location + string_t::HEADER_SIZE);
-				}
-			}
-			break;
-		}
-		case PhysicalType::LIST: {
-			for (idx_t i = 0; i < count; i++) {
-				const auto &pointer_location = row_locations[offset + i] + col_offset;
-				const auto diff = Load<data_ptr_t>(pointer_location) - old_base_heap_ptr;
-				Store<data_ptr_t>(new_base_heap_ptr + diff, pointer_location);
-			}
-			break;
-		}
-		case PhysicalType::STRUCT: {
-			D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
-			if (!struct_layout.AllConstant()) {
-				RecomputeHeapPointers(old_base_heap_ptr, new_base_heap_ptr, row_locations, offset, count, struct_layout,
-				                      col_offset);
-			}
-			break;
-		}
-		default:
-			continue;
-		}
-	}
-}
-
 void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment,
                                               idx_t chunk_idx, bool init_heap) {
 	D_ASSERT(this == segment.allocator.get());
@@ -189,7 +149,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, T
 void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes,
                                                       bool init_heap_pointers, vector<TupleDataChunkPart *> &parts) {
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(state.heap_sizes);
+	auto heap_sizes = FlatVector::GetData<idx_t>(state.heap_sizes);
 	auto heap_locations = FlatVector::GetData<data_ptr_t>(state.heap_locations);
 
 	idx_t offset = 0;
@@ -248,6 +208,87 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
+void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
+                                               const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
+                                               const TupleDataLayout &layout, const idx_t base_col_offset) {
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		const auto &col_offset = base_col_offset + layout.GetOffsets()[col_idx];
+		switch (layout.GetTypes()[col_idx].InternalType()) {
+		case PhysicalType::VARCHAR: {
+			for (idx_t i = 0; i < count; i++) {
+				const auto &string_location = row_locations[offset + i] + col_offset;
+				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
+					const auto diff = Load<data_ptr_t>(string_location + string_t::HEADER_SIZE) - old_base_heap_ptr;
+					Store<data_ptr_t>(new_base_heap_ptr + diff, string_location + string_t::HEADER_SIZE);
+				}
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			for (idx_t i = 0; i < count; i++) {
+				const auto &pointer_location = row_locations[offset + i] + col_offset;
+				const auto diff = Load<data_ptr_t>(pointer_location) - old_base_heap_ptr;
+				Store<data_ptr_t>(new_base_heap_ptr + diff, pointer_location);
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
+			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+			if (!struct_layout.AllConstant()) {
+				RecomputeHeapPointers(old_base_heap_ptr, new_base_heap_ptr, row_locations, offset, count, struct_layout,
+				                      col_offset);
+			}
+			break;
+		}
+		default:
+			continue;
+		}
+	}
+}
+
+void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment,
+                                               TupleDataChunk &chunk) const {
+	if (state.properties == TupleDataPinProperties::ALREADY_PINNED) {
+		return;
+	}
+	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, state.properties);
+	if (!layout.AllConstant()) {
+		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, state.properties);
+	}
+}
+
+void TupleDataAllocator::ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
+                                                       const unordered_set<uint32_t> &block_ids,
+                                                       TupleDataSegment &segment, TupleDataPinProperties properties) {
+	D_ASSERT(properties != TupleDataPinProperties::ALREADY_PINNED);
+	bool found_handle;
+	do {
+		found_handle = false;
+		for (auto it = handles.begin(); it != handles.end(); it++) {
+			if (block_ids.find(it->first) != block_ids.end()) {
+				// still required: do not release
+				continue;
+			}
+			switch (properties) {
+			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
+				// TODO: need to think about what happens with the last pins (this function is not called for those)
+				lock_guard<mutex> guard(segment.pinned_handles_lock);
+				segment.pinned_handles.emplace_back(std::move(it->second));
+				break;
+			}
+			case TupleDataPinProperties::UNPIN_AFTER_DONE:
+				break;
+			default:
+				throw InternalException("Encountered TupleDataPinProperties::INVALID");
+			}
+			handles.erase(it);
+			found_handle = true;
+			break;
+		}
+	} while (found_handle);
+}
+
 void TupleDataAllocator::PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index) {
 	if (state.row_handles.find(row_block_index) == state.row_handles.end()) {
 		shared_ptr<BlockHandle> handle;
@@ -280,48 +321,6 @@ data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &state, co
 data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part) {
 	PinHeapBlock(state, part.heap_block_index);
 	return state.heap_handles[part.heap_block_index].Ptr() + part.heap_block_offset;
-}
-
-static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
-                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
-                                          TupleDataPinProperties properties) {
-	D_ASSERT(properties != TupleDataPinProperties::ALREADY_PINNED);
-	bool found_handle;
-	do {
-		found_handle = false;
-		for (auto it = handles.begin(); it != handles.end(); it++) {
-			if (block_ids.find(it->first) != block_ids.end()) {
-				// still required: do not release
-				continue;
-			}
-			switch (properties) {
-			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
-				// TODO: need to think about what happens with the last pins (this function is not called for those)
-				lock_guard<mutex> guard(segment.pinned_handles_lock);
-				segment.pinned_handles.emplace_back(std::move(it->second));
-				break;
-			}
-			case TupleDataPinProperties::UNPIN_AFTER_DONE:
-				break;
-			default:
-				throw InternalException("Encountered TupleDataPinProperties::INVALID");
-			}
-			handles.erase(it);
-			found_handle = true;
-			break;
-		}
-	} while (found_handle);
-}
-
-void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment,
-                                               TupleDataChunk &chunk) const {
-	if (state.properties == TupleDataPinProperties::ALREADY_PINNED) {
-		return;
-	}
-	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, state.properties);
-	if (!layout.AllConstant()) {
-		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, state.properties);
-	}
 }
 
 } // namespace duckdb

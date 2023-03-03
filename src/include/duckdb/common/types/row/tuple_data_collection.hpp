@@ -56,6 +56,8 @@ public:
 	//! TODO:
 	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id, const idx_t append_count,
 	             const SelectionVector &sel);
+	//! TODO:
+	void FinalizeAppendState(TupleDataAppendState &append_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
 

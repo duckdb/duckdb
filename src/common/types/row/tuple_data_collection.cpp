@@ -173,6 +173,14 @@ void TupleDataCollection::Scatter(TupleDataAppendState &append_state, Vector &so
 	                          column_id, scatter_function.child_functions);
 }
 
+void TupleDataCollection::FinalizeAppendState(TupleDataAppendState &append_state) {
+	auto &chunk_state = append_state.chunk_state;
+	if (chunk_state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
+		TupleDataChunk dummy_chunk;
+		allocator->ReleaseOrStoreHandles(chunk_state, segments.back(), dummy_chunk);
+	}
+}
+
 void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (other.count == 0) {
 		return;
