@@ -24,8 +24,8 @@ struct CaseCheck {
 
 	static CaseCheck&& FormatDeserialize(FormatDeserializer &deserializer) {
 		CaseCheck check;
-		check.when_expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("when_expr");
-		check.then_expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("then_expr");
+		deserializer.ReadProperty("when_expr", check.when_expr);
+		deserializer.ReadProperty("then_expr", check.then_expr);
 		return std::move(check);
 	}
 };

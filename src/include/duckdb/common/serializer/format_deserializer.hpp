@@ -25,280 +25,197 @@ protected:
 
 public:
 	// We fake return-type overloading using templates and enable_if
+	/*
 	template<typename T>
 	T ReadProperty(const char* tag) {
 		SetTag(tag);
 		return std::move<T>(Read<T>());
 	}
+	 */
 
 	template<typename T>
 	void ReadProperty(const char* tag, T& ret) {
 		SetTag(tag);
-		ret = std::move(Read<T>());
+		Read(ret);
 	}
 
 	template<typename T>
-	T ReadOptionalProperty(const char* tag, T&& default_value){
+	void ReadOptionalProperty(const char* tag, T& ret, T&& default_value) {
 		SetTag(tag);
 		auto present = OnOptionalBegin();
-		if (!present) {
-			OnOptionalEnd();
-			return std::forward<T>(default_value);
-		}
-		OnOptionalEnd();
-		return std::move(Read<T>());
-	}
-
-	// Read an optional property into a reference, if not present the default value argument is forwarded
-	template<typename T>
-	void ReadOptionalProperty(const char* tag, T& ret, T&& default_value){
-		SetTag(tag);
-		auto present = OnOptionalBegin();
-		if (!present) {
+		if(present) {
+			Read(ret);
+		} else {
 			ret = std::forward<T>(default_value);
-			OnOptionalEnd();
-			return;
 		}
-		ret = std::move(Read<T>());
-		OnOptionalEnd();
 	}
 
-	// Read an optional property into a reference, if not present the default constructor is used
-	template<typename T>
-	typename std::enable_if<std::is_default_constructible<T>::value, void>::type
-	ReadOptionalProperty(const char* tag, T& ret){
+	template<typename T, typename = typename std::enable_if<std::is_default_constructible<T>::value>::type>
+	void ReadOptionalProperty(const char* tag, T& ret) {
 		SetTag(tag);
 		auto present = OnOptionalBegin();
-		if (!present) {
-			ret = T();
-			OnOptionalEnd();
-			return;
-		}
-		ret = std::move(Read<T>());
-		OnOptionalEnd();
+		if(present) {
+			Read(ret);
+		} // Otherwise leave ret as is
 	}
 
-private:
-	// Structural types
-	// Deserialize anything implementing a "FormatDeserialize -> unique_ptr<T>" static method
-	template<typename T>
-	typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<typename is_unique_ptr<T>::inner_type>::value, T>::type
-	Read() {
-		using inner = typename is_unique_ptr<T>::inner_type;
-		OnObjectBegin();
-		auto ret = std::move(inner::FormatDeserialize(*this));
-		OnObjectEnd();
+	// Helper: if its default constructible, we can create it ourselves
+	template<typename T, typename = typename
+	    std::enable_if<std::is_default_constructible<T>::value>::type>
+	T ReadProperty(const char* tag) {
+		SetTag(tag);
+		T ret;
+		Read(ret);
 		return std::move(ret);
 	}
 
-	// Deserialize anything implementing a "FormatDeserialize -> shared_ptr<T>" static method
-	template<typename T>
-	typename std::enable_if<is_shared_ptr<T>::value && has_deserialize<typename is_shared_ptr<T>::inner_type>::value, T>::type
-	Read() {
-		using inner = typename is_shared_ptr<T>::inner_type;
-		OnObjectBegin();
-		auto ret = std::move(inner::FormatDeserialize(*this));
-		OnObjectEnd();
-		return std::move(ret);
+	// Deserialize anything implementing a FormatDeserialize method
+	template<typename T, typename = typename std::enable_if<has_deserialize<T>::value>::type>
+	void Read(T &ret) {
+		ret = T::FormatDeserialize(*this);
 	}
 
-	// Deserialize anything implementing a "FormatDeserialize -> T&&" static method
-	template <typename T>
-	typename std::enable_if<has_deserialize<T>::value, T>::type
-	Read() {
-		OnObjectBegin();
-		auto ret = std::move(T::FormatDeserialize(*this));
-		OnObjectEnd();
-		return std::move(ret);
-	};
+	// Structural Types
+	// Deserialize a unique_ptr
+	template<typename T, typename... ARGS, typename = typename std::enable_if<has_deserialize<T>::value>::type>
+	void Read(unique_ptr<T, ARGS...> &ret) {
+		ret = std::move(T::FormatDeserialize(*this));
+	}
+
+	// Deserialize shared_ptr
+	template<typename T, typename... ARGS, typename = typename std::enable_if<has_deserialize<T>::value>::type>
+	void Read(shared_ptr<T> &ret) {
+		ret = std::move(T::FormatDeserialize(*this));
+	}
 
 	// Deserialize a vector
 	template<typename T>
-	typename std::enable_if<is_vector<T>::value, T>::type
-	Read() {
-		using inner = typename is_vector<T>::inner_type;
-		auto size = OnListBegin();
-		T items;
-		for(idx_t i = 0; i < size; i++) {
-			auto item = std::move(Read<inner>());
-			items.push_back(std::move(item));
+	void Read(vector<T> &ret) {
+		auto size = ReadUnsignedInt32();
+		ret.resize(size);
+		for (idx_t i = 0; i < size; i++) {
+			Read(ret[i]);
 		}
-		OnListEnd();
-		return std::move(items);
 	}
 
 	// Deserialize a map
-	template<typename T>
-	typename std::enable_if<is_unordered_map<T>::value, T>::type
-	Read() {
-		using key = typename is_unordered_map<T>::key_type;
-		using value = typename is_unordered_map<T>::value_type;
-		auto size = OnMapBegin();
-		T items;
+	template<typename K, typename V, typename ...ARGS>
+	void Read(unordered_map<K, V, ARGS...> &ret) {
+		auto size = ReadUnsignedInt32();
 		for (idx_t i = 0; i < size; i++) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			key k = std::move(Read<key>());
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			value v = std::move(Read<value>());
-			OnMapValueEnd();
-			items.emplace(std::move(k), std::move(v));
-			OnMapEntryEnd();
+			K key;
+			Read(key);
+			Read(ret[key]);
 		}
-		OnMapEnd();
-		return std::move(items);
 	}
 
-	// Deserialize a pair
-	template<typename T>
-	typename std::enable_if<is_pair<T>::value, T>::type
-	Read() {
-		using first = typename is_pair<T>::first_type;
-		using second = typename is_pair<T>::second_type;
-		OnPairBegin();
-		OnPairKeyBegin();
-		auto first_item = std::move(Read<first>());
-		OnPairKeyEnd();
-		OnPairValueBegin();
-		auto second_item = std::move(Read<second>());
-		OnPairValueEnd();
-		OnPairEnd();
-		return std::move(std::make_pair(std::move(first_item), std::move(second_item)));
+	// Deserialize an unordered set
+	template<typename T, typename ...ARGS>
+	void Read(unordered_set<T, ARGS...> &ret) {
+		auto size = ReadUnsignedInt32();
+		for (idx_t i = 0; i < size; i++) {
+			T key;
+			Read(key);
+			ret.insert(key);
+		}
 	}
 
 	// Deserialize a set
-	template<typename T>
-	typename std::enable_if<is_set<T>::value, T&&>::type
-	Read() {
-		using inner = typename is_set<T>::inner_type;
-
-		auto size = OnListBegin();
-		T items;
+	template<typename T, typename ...ARGS>
+	void Read(set<T, ARGS...> &ret) {
+		auto size = ReadUnsignedInt32();
 		for (idx_t i = 0; i < size; i++) {
-			auto item = std::move(Read<inner>());
-			items.insert(std::move(item));
+			T key;
+			Read(key);
+			ret.insert(key);
 		}
-		OnListEnd();
-		return std::move(items);
 	}
 
-
-
-	template<typename T>
-	typename std::enable_if<is_unordered_set<T>::value, T&&>::type
-	Read() {
-		using inner = typename is_unordered_set<T>::inner_type;
-
-		auto size = OnListBegin();
-		T items;
-		for (idx_t i = 0; i < size; i++) {
-			auto item = std::move(Read<inner>());
-			items.insert(std::move(item));
-		}
-		OnListEnd();
-		return std::move(items);
+	// Deserialize a pair
+	template<typename K, typename V>
+	void Read(std::pair<K, V> &ret) {
+		OnPairBegin();
+		OnPairKeyBegin();
+		Read(ret.first);
+		OnPairKeyEnd();
+		OnPairValueBegin();
+		Read(ret.second);
+		OnPairValueEnd();
+		OnPairEnd();
 	}
-
 
 	// Primitive types
 	// Deserialize a bool
-	template<typename T>
-	typename std::enable_if<std::is_same<T, bool>::value, bool>::type
-	Read() {
-		return ReadBool();
+	void Read(bool &ret) {
+		ret = ReadBool();
 	}
 
 	// Deserialize a int8_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, int8_t>::value, int8_t>::type
-	Read() {
-		return ReadSignedInt8();
+	void Read(int8_t &ret) {
+		ret = ReadSignedInt8();
 	}
 
 	// Deserialize a uint8_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, uint8_t>::value, uint8_t>::type
-	Read() {
-		return ReadUnsignedInt8();
+	void Read(uint8_t &ret) {
+		ret = ReadUnsignedInt8();
 	}
 
 	// Deserialize a int16_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, int16_t>::value, int16_t>::type
-	Read() {
-		return ReadSignedInt16();
+	void Read(int16_t &ret) {
+		ret = ReadSignedInt16();
 	}
 
 	// Deserialize a uint16_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, uint16_t>::value, uint16_t>::type
-	Read() {
-		return ReadUnsignedInt16();
+	void Read(uint16_t &ret) {
+		ret = ReadUnsignedInt16();
 	}
 
 	// Deserialize a int32_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, int32_t>::value, int32_t>::type
-	Read() {
-		return ReadSignedInt32();
+	void Read(int32_t &ret) {
+		ret = ReadSignedInt32();
 	}
 
 	// Deserialize a uint32_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, uint32_t>::value, uint32_t>::type
-	Read() {
-		return ReadUnsignedInt32();
+	void Read(uint32_t &ret) {
+		ret = ReadUnsignedInt32();
 	}
 
 	// Deserialize a int64_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, int64_t>::value, int64_t>::type
-	Read() {
-		return ReadSignedInt64();
+	void Read(int64_t &ret) {
+		ret = ReadSignedInt64();
 	}
 
 	// Deserialize a uint64_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, uint64_t>::value, uint64_t>::type
-	Read() {
-		return ReadUnsignedInt64();
+	void Read(uint64_t &ret) {
+		ret = ReadUnsignedInt64();
 	}
 
 	// Deserialize a float
-	template<typename T>
-	typename std::enable_if<std::is_same<T, float>::value, bool>::type
-	Read() {
-		return ReadFloat();
+	void Read(float &ret) {
+		ret = ReadFloat();
 	}
 
 	// Deserialize a double
-	template<typename T>
-	typename std::enable_if<std::is_same<T, double>::value, bool>::type
-	Read() {
-		return ReadDouble();
+	void Read(double &ret) {
+		ret = ReadDouble();
 	}
 
 	// Deserialize a string
-	template<typename T>
-	typename std::enable_if<std::is_same<T, string>::value, string>::type
-	Read() {
-		return ReadString();
+	void Read(string &ret) {
+		ret = ReadString();
 	}
 
 	// Deserialize a Enum
 	template<typename T>
-	typename std::enable_if<std::is_enum<T>::value, T>::type
-	Read() {
+	typename std::enable_if<std::is_enum<T>::value, void>::type
+	Read(T &ret) {
 		auto str = ReadString();
-		return EnumSerializer::StringToEnum<T>(str.c_str());
+		ret = EnumSerializer::StringToEnum<T>(str.c_str());
 	}
 
 	// Deserialize a interval_t
-	template<typename T>
-	typename std::enable_if<std::is_same<T, interval_t>::value, interval_t>::type
-	Read() {
-		return ReadInterval();
+	void Read(interval_t &ret) {
+		ret = ReadInterval();
 	}
 
 

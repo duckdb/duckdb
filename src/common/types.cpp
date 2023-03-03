@@ -1297,8 +1297,8 @@ public:
 		return make_shared<StructTypeInfo>(std::move(child_list));
 	}
 
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto child_types = source.ReadProperty<child_list_t<LogicalType>>("child_types");
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer) {
+		auto child_types = deserializer.ReadProperty<child_list_t<LogicalType>>("child_types");
         return make_shared<StructTypeInfo>(std::move(child_types));
 	}
 
@@ -1758,7 +1758,8 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		auto alias = deserializer.ReadOptionalProperty<string>("alias", string());
+		string alias;
+		deserializer.ReadOptionalProperty("alias", alias);
 		if (!alias.empty()) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
@@ -1806,8 +1807,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
-	auto alias = deserializer.ReadOptionalProperty<string>("alias", string());
-	result->alias = alias;
+	deserializer.ReadOptionalProperty("alias", result->alias, string());
 	return result;
 }
 
