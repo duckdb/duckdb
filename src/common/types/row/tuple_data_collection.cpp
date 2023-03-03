@@ -531,8 +531,8 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleData
 
 void TupleDataCollection::FinalizeChunkState(TupleDataManagementState &state) {
 	if (state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
-		TupleDataChunk dummy_chunk;
-		allocator->ReleaseOrStoreHandles(state, segments.back(), dummy_chunk);
+		static TupleDataChunk DUMMY_CHUNK;
+		allocator->ReleaseOrStoreHandles(state, segments.back(), DUMMY_CHUNK);
 	}
 }
 

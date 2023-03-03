@@ -45,6 +45,23 @@ void TupleDataChunk::Verify() const {
 #endif
 }
 
+void TupleDataChunk::MergeLastChunkPart() {
+	if (parts.size() < 2) {
+		return;
+	}
+	auto &second_to_last_part = parts[parts.size() - 2];
+	auto &last_part = parts[parts.size() - 1];
+
+	if (last_part.row_block_index == second_to_last_part.row_block_index &&
+	    last_part.heap_block_index == second_to_last_part.heap_block_index) {
+		// These parts have the same row and heap blocks - merge them
+		second_to_last_part.total_heap_size += last_part.total_heap_size;
+		second_to_last_part.last_heap_size = last_part.last_heap_size;
+		second_to_last_part.count += last_part.count;
+		parts.pop_back();
+	}
+}
+
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p) : allocator(allocator_p), count(0) {
 }
 

@@ -88,10 +88,10 @@ private:
 	void PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index);
 	//! Pins the given heap block
 	void PinHeapBlock(TupleDataManagementState &state, const uint32_t heap_block_index);
-	//! Gets the base pointer to the rows for the given segment
+	//! Gets the pointer to the rows for the given chunk part
 	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
-	//! Gets the base pointer to the heap for the given segment
-	data_ptr_t GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
+	//! Gets the base pointer to the heap for the given chunk part
+	data_ptr_t GetBaseHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
 
 private:
 	//! The lock (for shared allocations)

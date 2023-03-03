@@ -40,7 +40,8 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
 		if (chunks.back().count == STANDARD_VECTOR_SIZE) {
-
+			static TupleDataChunk DUMMY_CHUNK;
+			ReleaseOrStoreHandles(append_state.chunk_state, segment, DUMMY_CHUNK);
 		} else {
 			ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back());
 		}
@@ -74,6 +75,10 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	}
 	InitializeChunkStateInternal(append_state.chunk_state, false, true, parts);
 
+	// To reduce metadata, we try to merge chunk parts where possible
+	// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
+	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart();
+
 	segment.Verify();
 }
 
@@ -100,7 +105,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &
 		}
 		result.heap_block_index = heap_blocks.size() - 1;
 		result.heap_block_offset = heap_blocks.back().size;
-		result.base_heap_ptr = GetHeapPointer(state, result);
+		result.base_heap_ptr = GetBaseHeapPointer(state, result);
 
 		// Determine how many we can read next
 		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
@@ -164,14 +169,15 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 		}
 
 		if (!layout.AllConstant()) {
-			const auto base_heap_ptr = GetHeapPointer(state, *part);
-			const auto heap_offset = layout.GetHeapOffset();
+			const auto base_heap_ptr = GetBaseHeapPointer(state, *part);
+			const auto new_heap_ptr = base_heap_ptr + part->heap_block_offset;
 
 			// Check if heap block has changed - re-compute the pointers within each row if so
 			if (state.properties != TupleDataPinProperties::ALREADY_PINNED) {
 				const auto old_base_heap_ptr = part->base_heap_ptr;
 				if (old_base_heap_ptr != base_heap_ptr) {
-					RecomputeHeapPointers(old_base_heap_ptr, base_heap_ptr, row_locations, offset, next, layout, 0);
+					auto old_heap_ptr = old_base_heap_ptr + part->heap_block_offset;
+					RecomputeHeapPointers(old_heap_ptr, new_heap_ptr, row_locations, offset, next, layout, 0);
 					part->base_heap_ptr = base_heap_ptr;
 				}
 			}
@@ -187,7 +193,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 
 			if (init_heap_pointers) {
 				// Set the pointers where the heap data will be written (if needed)
-				heap_locations[offset] = base_heap_ptr;
+				heap_locations[offset] = new_heap_ptr;
 				for (idx_t i = 1; i < next; i++) {
 					auto idx = offset + i;
 					heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
@@ -195,6 +201,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 
 				if (!compute_heap_sizes) {
 					// Set the offset from the base heap pointer in each row
+					const auto heap_offset = layout.GetHeapOffset();
 					for (idx_t i = 0; i < next; i++) {
 						auto idx = offset + i;
 						Store<uint32_t>(heap_locations[idx] - base_heap_ptr, row_locations[idx] + heap_offset);
@@ -208,7 +215,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
-void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
+void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_heap_ptr, const data_ptr_t new_heap_ptr,
                                                const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
                                                const TupleDataLayout &layout, const idx_t base_col_offset) {
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -218,8 +225,8 @@ void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_base_heap_pt
 			for (idx_t i = 0; i < count; i++) {
 				const auto &string_location = row_locations[offset + i] + col_offset;
 				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
-					const auto diff = Load<data_ptr_t>(string_location + string_t::HEADER_SIZE) - old_base_heap_ptr;
-					Store<data_ptr_t>(new_base_heap_ptr + diff, string_location + string_t::HEADER_SIZE);
+					const auto diff = Load<data_ptr_t>(string_location + string_t::HEADER_SIZE) - old_heap_ptr;
+					Store<data_ptr_t>(new_heap_ptr + diff, string_location + string_t::HEADER_SIZE);
 				}
 			}
 			break;
@@ -227,8 +234,8 @@ void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_base_heap_pt
 		case PhysicalType::LIST: {
 			for (idx_t i = 0; i < count; i++) {
 				const auto &pointer_location = row_locations[offset + i] + col_offset;
-				const auto diff = Load<data_ptr_t>(pointer_location) - old_base_heap_ptr;
-				Store<data_ptr_t>(new_base_heap_ptr + diff, pointer_location);
+				const auto diff = Load<data_ptr_t>(pointer_location) - old_heap_ptr;
+				Store<data_ptr_t>(new_heap_ptr + diff, pointer_location);
 			}
 			break;
 		}
@@ -236,7 +243,7 @@ void TupleDataAllocator::RecomputeHeapPointers(const data_ptr_t old_base_heap_pt
 			D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
 			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
 			if (!struct_layout.AllConstant()) {
-				RecomputeHeapPointers(old_base_heap_ptr, new_base_heap_ptr, row_locations, offset, count, struct_layout,
+				RecomputeHeapPointers(old_heap_ptr, new_heap_ptr, row_locations, offset, count, struct_layout,
 				                      col_offset);
 			}
 			break;
@@ -272,7 +279,6 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, B
 			}
 			switch (properties) {
 			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
-				// TODO: need to think about what happens with the last pins (this function is not called for those)
 				lock_guard<mutex> guard(segment.pinned_handles_lock);
 				segment.pinned_handles.emplace_back(std::move(it->second));
 				break;
@@ -318,9 +324,9 @@ data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &state, co
 	return state.row_handles[part.row_block_index].Ptr() + part.row_block_offset;
 }
 
-data_ptr_t TupleDataAllocator::GetHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part) {
+data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part) {
 	PinHeapBlock(state, part.heap_block_index);
-	return state.heap_handles[part.heap_block_index].Ptr() + part.heap_block_offset;
+	return state.heap_handles[part.heap_block_index].Ptr();
 }
 
 } // namespace duckdb
