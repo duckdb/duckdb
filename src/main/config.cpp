@@ -9,6 +9,9 @@
 #include "duckdb/common/thread.hpp"
 #endif
 
+#include <cstdio>
+#include <inttypes.h>
+
 namespace duckdb {
 
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
@@ -214,7 +217,6 @@ void DBConfig::SetDefaultMaxMemory() {
 	}
 }
 
-#ifdef __linux__
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	static constexpr const char *cpu_max = "/sys/fs/cgroup/cpu.max";
 	static constexpr const char *cfs_quota = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
@@ -232,7 +234,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		    fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
-		if (sscanf(byte_buffer, "%ld %ld", &quota, &period) != 2) {
+		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
 			return physical_cores;
 		}
 	} else if (fs.FileExists(cfs_quota) && fs.FileExists(cfs_period)) {
@@ -244,7 +246,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		                     FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
-		if (sscanf(byte_buffer, "%ld", &quota) != 1) {
+		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
 			return physical_cores;
 		}
 
@@ -253,7 +255,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		                     FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
-		if (sscanf(byte_buffer, "%ld", &period) != 1) {
+		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
 			return physical_cores;
 		}
 	} else {
@@ -266,7 +268,6 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		return physical_cores;
 	}
 }
-#endif
 
 idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
 	idx_t physical_cores = std::thread::hardware_concurrency();
