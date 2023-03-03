@@ -40,7 +40,7 @@ public final class Database {
     var fileURL: URL?
     if case .file(let url) = store {
       guard url.isFileURL else {
-        throw DatabaseError.failedToOpenDatabase(
+        throw DatabaseError.databaseFailedToInitialize(
           reason: "provided URL for database store file must be local")
       }
       fileURL = url
@@ -59,7 +59,7 @@ public final class Database {
         defer { duckdb_free(ptr) }
         return String(cString: ptr)
       }
-      throw DatabaseError.failedToOpenDatabase(reason: error)
+      throw DatabaseError.databaseFailedToInitialize(reason: error)
     }
   }
   
