@@ -35,10 +35,8 @@ SELECT bitstring('0101011', 3);
 ----
 Invalid Input Error: Length must be equal or larger than input string
 
-query I
+statement error
 SELECT bitstring('', 6);
-----
-000000
 
 statement error
 SELECT bitstring('5', 10);
