@@ -34,10 +34,11 @@ public final class PreparedStatement {
 
   public init(connection: Connection, query: String) throws {
     self.connection = connection
-    try withThrowingCommand {
-      query.withCString { queryStPtr in
-        connection.withCConnection { duckdb_prepare($0, queryStPtr, ptr) }
-      }
+    let status = query.withCString { queryStPtr in
+      connection.withCConnection { duckdb_prepare($0, queryStPtr, ptr) }
+    }
+    guard .success == status else {
+      throw DatabaseError.preparedStatementFailedToInitialize(reason: preparedStatementError())
     }
   }
 
@@ -194,11 +195,11 @@ private extension PreparedStatement {
   func withThrowingCommand(_ body: () throws -> duckdb_state) throws {
     let state = try body()
     guard state == .success else {
-      throw DatabaseError.failedToBindParameter(reason: preparationError())
+      throw DatabaseError.preparedStatementFailedToBindParameter(reason: preparedStatementError())
     }
   }
   
-  func preparationError() -> String? {
+  func preparedStatementError() -> String? {
     duckdb_prepare_error(ptr.pointee).map(String.init(cString:))
   }
 }
