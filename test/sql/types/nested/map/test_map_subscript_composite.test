@@ -10,126 +10,66 @@ select m[[2,0]] from (select MAP(LIST_VALUE([0], [1], [2,0], [3]),LIST_VALUE(10,
 
 #Element not present on MAP
 query I
-select m[0] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+select m[[2,3]] from (select MAP(LIST_VALUE([0], [1], [2,0], [3], [5]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
 []
 
 # Keys of a MAP can not be NULL
 statement error
-select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
+select m[NULL] from (select MAP(LIST_VALUE([2], [NULL], [3,0], [NULL,NULL],[5,4], NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
 
 # Null not present on map
 query I
-select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+select m[NULL] from (select MAP(LIST_VALUE({a:3}, {b:4}, {c:5}, {d:6},{e:7}),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
 []
 
 # Keys of a MAP have to be unique
 statement error
-select m[2] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
-
-# Empty maps
-query I
-select m[2] from (select MAP(LIST_VALUE(),LIST_VALUE()) as m) as T
+select m[2] from (select MAP(LIST_VALUE([2,2], [2], [3,3], [4,4,4],[2]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
-[]
-
-query I
-select m[2] from (select MAP() as m) as T
-----
-[]
+Invalid Input Error: Map keys have to be unique
 
 # Check autocast
 query I
-select m[2::TINYINT] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+select m[[2::TINYINT,3::BIGINT]] from (select MAP(LIST_VALUE([1], [2,3], [3], [2],[3,2]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
 [9]
 
-
-# Keys of a MAP have to be unique
-statement error
-select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
-
-query I
-select m['Spice Girls'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T
-----
-[]
-
-query I
-select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T
-----
-[]
-
-query I
-select m['Tenacious D'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,1)) as m) as T
-----
-[1]
-
-query I
-select m[0] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T
-----
-[]
-
-query I
-select map_extract(m,1) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-[10]
-
-query I
-select map_extract(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-[8]
-
-query I
-select element_at(m,1) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-[10]
-
-query I
-select element_at(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-[8]
-
 #Map with larger-than-vector-size cardinalities
 query I
-select m[10] from (select MAP(lst,lst) as m from (SELECT LIST(i) as lst FROM range(10000) tbl(i)) as lst_tbl) as T
+select m[[10,11]] from (select MAP(lst,lst) as m from (SELECT LIST([i,i+1]) as lst FROM range(10000) tbl(i)) as lst_tbl) as T
 ----
-[10]
+[[10, 11]]
 
 #Duplicate keys in a map
 statement error
-select m[1] from (select MAP(LIST_VALUE(1, 1, 1, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-
-#String search with a bunch of NULL values in the map
-statement error
-select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+select m[[1]] from (select MAP(LIST_VALUE([1], [1], [1], [4]),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
+Invalid Input Error: Map keys have to be unique
 
 query I
-select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Tenacious D'),LIST_VALUE(10,1)) as m) as T
+select m[['Tenacious D', 'test']] from (select MAP(LIST_VALUE(['Jon Lajoie'], ['test', NULL], ['Tenacious D', 'test'], ['test', 'Tenacious D']),LIST_VALUE(5,10,9,11)) as m) as T
+----
+[9]
+
+query I
+select m[['Jon Lajoie']] from (select MAP(LIST_VALUE(['Jon Lajoie'], ['Tenacious D', 'a', 'b', 'c']),LIST_VALUE(10,1)) as m) as T
 ----
 [10]
 
-#A map with only NULL values as key or value (or both)
-query I
-select m[10] from (select MAP(LIST_VALUE(10,9,1,11,13),LIST_VALUE(NULL, NULL, NULL,NULL,NULL)) as m) as T
-----
-[NULL]
-
-statement error
-select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
-
-statement error
-select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL, NULL),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as m) as T
-
 #Searching using a non-constant value (e.g. select m[a] from ...)
 statement ok
-create table ints (a integer, b integer)
+create table ints (a integer[], b integer[])
 
 statement ok
-insert into ints values (1,1), (2,2),(3,3),(4,4)
+insert into ints values ([1],[1]), ([2],[2]),([3],[3]),([4],[4])
+
+statement ok
+select * from (select MAP(lsta, lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a[0] < 4 and b[0] > 1) as lst_tbl);
 
 query I
-select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a < 4 and b > 1) as lst_tbl) as T
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a[0] < 4 and b[0] > 1) as lst_tbl) as T
 ----
 {2=2, 3=3}
 
