@@ -218,31 +218,31 @@ void DBConfig::SetDefaultMaxMemory() {
 }
 
 idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
-	static constexpr const char *cpu_max = "/sys/fs/cgroup/cpu.max";
-	static constexpr const char *cfs_quota = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-	static constexpr const char *cfs_period = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
+	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
+	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
+	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
 
 	int64_t quota, period;
 	char byte_buffer[1000];
 	unique_ptr<FileHandle> handle;
 	int64_t read_bytes;
 
-	if (fs.FileExists(cpu_max)) {
+	if (fs.FileExists(CPU_MAX)) {
 		// cgroup v2
 		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
 		handle =
-		    fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
+		    fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
 			return physical_cores;
 		}
-	} else if (fs.FileExists(cfs_quota) && fs.FileExists(cfs_period)) {
+	} else if (fs.FileExists(CFS_QUOTA) && fs.FileExists(CFS_PERIOD)) {
 		// cgroup v1
 		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
 
 		// Read the quota, this indicates how many microseconds the CPU can be utilized by this cgroup per period
-		handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 		                     FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
@@ -251,7 +251,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		}
 
 		// Read the time period, a cgroup can utilize the CPU up to quota microseconds every period
-		handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 		                     FileSystem::DEFAULT_COMPRESSION);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
