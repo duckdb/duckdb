@@ -96,217 +96,84 @@ extension QueryResult {
   func transformer(
     forColumn columnIndex: DBInt, to type: Void.Type
   ) -> (DBInt) -> Void? {
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      return isValidItem(at: path) ? () : nil
-    }
+    transformer(forColumn: columnIndex, to: type) { $0.unwrapNull() ? nil : () }
   }
   
   func transformer<T: PrimitiveDatabaseValue>(
     forColumn columnIndex: DBInt, to type: T.Type
   ) -> (DBInt) -> T? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == T.representedDatabaseTypeID else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(T.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: T.self, at: path) { $0 }
-    }
+    transformer(
+      forColumn: columnIndex, to: type, fromType: T.representedDatabaseTypeID
+    ) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: IntHuge.Type
   ) -> (DBInt) -> IntHuge? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .hugeint else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(IntHuge.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_hugeint.self, at: path) { $0.asIntHuge }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: String.Type
   ) -> (DBInt) -> String? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .varchar else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(String.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_string.self, at: path) { $0.asString }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .varchar) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: UUID.Type
   ) -> (DBInt) -> UUID? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .uuid else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(UUID.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_hugeint.self, at: path) { $0.asUUID }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .uuid) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Time.Type
   ) -> (DBInt) -> Time? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .time else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Time.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_time.self, at: path) { $0.asTime }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .time) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Date.Type
   ) -> (DBInt) -> Date? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .date else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Date.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_date.self, at: path) { $0.asDate }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .date) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Timestamp.Type
   ) -> (DBInt) -> Timestamp? {
-    let columnDataType = columnDataType(at: columnIndex)
     let columnTypes = [DBTypeID.timestamp_s, .timestamp_ms, .timestamp, .timestamp_ns]
-    guard columnTypes.contains(columnDataType) else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Timestamp.self)")
-      return { _ in nil }
-    }
-    let scaleF: (duckdb_timestamp) -> duckdb_timestamp
-    switch columnDataType {
-    case .timestamp_s:
-      scaleF = { duckdb_timestamp(micros: $0.micros * 1_000_000) }
-    case .timestamp_ms:
-      scaleF = { duckdb_timestamp(micros: $0.micros * 1_000) }
-    case .timestamp_ns:
-      scaleF = { duckdb_timestamp(micros: $0.micros / 1_000) }
-    default:
-      scaleF = { $0 }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_timestamp.self, at: path) { cTimestamp in
-        let scaled = scaleF(cTimestamp)
-        return scaled.asTimestamp
-      }
-    }
+    return transformer(
+      forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
+    ) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Interval.Type
   ) -> (DBInt) -> Interval? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .interval else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Interval.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_interval.self, at: path) { $0.asInterval }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .interval) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Data.Type
   ) -> (DBInt) -> Data? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .blob else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Data.self)")
-      return { _ in nil }
-    }
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: duckdb_blob.self, at: path) { $0.asData }
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .blob) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Decimal.Type
   ) -> (DBInt) -> Decimal? {
-    let columnDataType = columnDataType(at: columnIndex)
-    guard columnDataType == .decimal else {
-      let columnTypeString = columnDataType.description.uppercased()
-      assertionFailure("unsupported type conversion from \(columnTypeString) to \(Decimal.self)")
-      return { _ in nil }
-    }
-    let logicalType = LogicalType(result: self, index: columnIndex)
-    guard let props = logicalType.decimalProperties else {
-      fatalError("expected decimal logical type")
-    }
-    switch props.storageType {
-    case .tinyint:
-      return decimalTransformer(
-        forColumn: columnIndex, storageType: Int8.self, scale: props.scale)
-    case .smallint:
-      return decimalTransformer(
-        forColumn: columnIndex, storageType: Int16.self, scale: props.scale)
-    case .integer:
-      return decimalTransformer(
-        forColumn: columnIndex, storageType: Int32.self, scale: props.scale)
-    case .bigint:
-      return decimalTransformer(
-        forColumn: columnIndex, storageType: Int64.self, scale: props.scale)
-    case .hugeint:
-      return decimalTransformer(
-        forColumn: columnIndex, storageType: IntHuge.self, scale: props.scale)
-    case let unexpectedInternalType:
-      fatalError("unexpected internal decimal type: \(unexpectedInternalType)")
-    }
+    transformer(forColumn: columnIndex, to: type, fromType: .decimal) { try? $0.unwrap(type) }
   }
   
-  private func decimalTransformer<T: DecimalStorageType>(
-    forColumn columnIndex: DBInt, storageType: T.Type, scale: UInt8
-  ) -> (DBInt) -> Decimal? {
-    return { [self] itemIndex in
-      let path = Self.path(forColumn: columnIndex, item: itemIndex)
-      guard isValidItem(at: path) else { return nil }
-      return withAssumedCType(of: T.self, at: path) { decimalStorage in
-        let storageValue = decimalStorage.asDecimal
-        let sign = storageValue.sign
-        let exponent = -Int(scale)
-        let significand = abs(storageValue)
-        return Decimal(sign: sign, exponent: exponent, significand: significand)
+  func decodableTransformer<T: Decodable>(
+    forColumn columnIndex: DBInt, to type: T.Type
+  ) -> (DBInt) -> T? {
+    transformer(forColumn: columnIndex, to: type) { element in
+      do {
+        return try VectorElementDecoder.default.decode(T?.self, element: element)
+      }
+      catch {
+        print("decoding failed with error: \(error)")
+        return nil
       }
     }
   }
@@ -316,55 +183,44 @@ extension QueryResult {
 
 private extension QueryResult {
   
+  static let vectorSize = DBInt(duckdb_vector_size())
+  
   func dataChunk(at index: DBInt) -> DataChunk {
     precondition(index < chunkCount, "data chunk out of bounds")
     return DataChunk(result: self, index: index)
   }
   
-  func isValidItem(at path: Path) -> Bool {
-    let chunk = dataChunk(at: path.chunk)
-    return chunk.withCVector(at: path.column) { vector in
-      let validityMasks = duckdb_vector_get_validity(vector)
-      guard let validityMasks else { return true }
-      let validityMasksBuffer = UnsafeBufferPointer(
-        start: validityMasks, count: Int(duckdb_vector_size() / 64))
-      let validityEntryIndex = path.row / 64
-      let validityBitIndex = path.row % 64
-      let validityMask = validityMasksBuffer[Int(validityEntryIndex)]
-      let validityBit = (DBInt(1) << validityBitIndex)
-      return validityMask & validityBit != 0
+  func transformer<T>(
+    forColumn columnIndex: DBInt,
+    to type: T.Type,
+    fromType columnType: DBTypeID,
+    _ body: @escaping (Vector.Element) -> T?
+  ) -> (DBInt) -> T? {
+    transformer(forColumn: columnIndex, to: type, fromTypes: .init([columnType]), body)
+  }
+  
+  func transformer<T>(
+    forColumn columnIndex: DBInt,
+    to type: T.Type,
+    fromTypes columnTypes: Set<DBTypeID>? = nil,
+    _ body: @escaping (Vector.Element) -> T?
+  ) -> (DBInt) -> T? {
+    if let columnTypes {
+      let columnDataType = columnDataType(at: columnIndex)
+      guard columnTypes.contains(columnDataType) else {
+        let columnTypeString = columnDataType.description.uppercased()
+        assertionFailure("unsupported type conversion from \(columnTypeString) to \(type)")
+        return { _ in nil }
+      }
     }
-  }
-  
-  func withAssumedCType<T, Result>(
-    of type: T.Type, at path: Path, _ body: (T) throws -> Result
-  ) rethrows -> Result {
-    let chunk = dataChunk(at: path.chunk)
-    return try chunk.withCVector(at: path.column) { vector in
-      let dataPtr = duckdb_vector_get_data(vector)!
-      let itemDataPtr = dataPtr.assumingMemoryBound(to: T.self)
-      let pointer = itemDataPtr.advanced(by: Int(path.row))
-      return try body(pointer[0])
+    return { [self] itemIndex in
+      let chunkIndex = itemIndex / Self.vectorSize
+      let rowIndex = itemIndex % Self.vectorSize
+      let chunk = dataChunk(at: chunkIndex)
+      return chunk.withVector(at: columnIndex) { vector in
+        body(vector[Int(rowIndex)])
+      }
     }
-  }
-}
-
-// MARK: - Path Utilities
-
-private extension QueryResult {
-  
-  struct Path {
-    let column: DBInt
-    let chunk: DBInt
-    let row: DBInt
-  }
-  
-  static let vectorSize = DBInt(duckdb_vector_size())
-  
-  static func path(forColumn column: DBInt, item itemIndex: DBInt) -> Path {
-    let chunkIndex = itemIndex / Self.vectorSize
-    let rowIndex = itemIndex % Self.vectorSize
-    return Path(column: column, chunk: chunkIndex, row: rowIndex)
   }
 }
 
