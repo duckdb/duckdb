@@ -61,7 +61,7 @@ struct FromHexOperator {
 };
 
 template <bool SKIP_ZERO>
-struct HexNumericOperator {
+struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		char buffer[sizeof(INPUT_TYPE) * 2];
@@ -71,8 +71,54 @@ struct HexNumericOperator {
 		bool seen_non_zero = false;
 		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 8; offset -= 8) {
 			uint8_t byte = (uint8_t)(input >> (offset - 8));
-            // at least one byte space
+			// at least one byte space
 			if (byte == 0 && SKIP_ZERO && !seen_non_zero && offset > 8) {
+				continue;
+			}
+			seen_non_zero = true;
+			memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+			ptr += 2;
+			buffer_size += 2;
+		}
+
+		// Allocate empty space
+		auto target = StringVector::EmptyString(result, buffer_size);
+		auto output = target.GetDataWriteable();
+		memcpy(output, buffer, buffer_size);
+
+		target.Finalize();
+		return target;
+	}
+};
+
+struct HexHugeIntOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		char buffer[sizeof(INPUT_TYPE) * 2];
+		char *ptr = buffer;
+		idx_t buffer_size = 0;
+
+		uint64_t lower = input.lower;
+		int64_t upper = input.upper;
+
+		bool seen_non_zero = false;
+		for (idx_t offset = 64; offset >= 8; offset -= 8) {
+			uint8_t byte = (uint8_t)(upper >> (offset - 8));
+
+			if (byte == 0 && !seen_non_zero) {
+				continue;
+			}
+			seen_non_zero = true;
+			memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+			ptr += 2;
+			buffer_size += 2;
+		}
+
+		for (idx_t offset = 64; offset >= 8; offset -= 8) {
+			uint8_t byte = (uint8_t)(lower >> (offset - 8));
+
+			// at least one byte space
+			if (byte == 0 && !seen_non_zero && offset > 8) {
 				continue;
 			}
 			seen_non_zero = true;
@@ -126,37 +172,37 @@ static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		UnaryExecutor::ExecuteString<int8_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int8_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::INT16:
-		UnaryExecutor::ExecuteString<int16_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int16_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::INT32:
-		UnaryExecutor::ExecuteString<int32_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int32_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::INT64:
-		UnaryExecutor::ExecuteString<int64_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int64_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
-	// case PhysicalType::INT128:
-	//	UnaryExecutor::ExecuteString<hugeint_t, string_t, HexNumericOperator<true>>(input, result, count);
-	//	break;
+	case PhysicalType::INT128:
+		UnaryExecutor::ExecuteString<hugeint_t, string_t, HexHugeIntOperator>(input, result, count);
+		break;
 	case PhysicalType::UINT8:
-		UnaryExecutor::ExecuteString<uint8_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint8_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::UINT16:
-		UnaryExecutor::ExecuteString<uint16_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint16_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::UINT32:
-		UnaryExecutor::ExecuteString<uint32_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint32_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	case PhysicalType::UINT64:
-		UnaryExecutor::ExecuteString<uint64_t, string_t, HexNumericOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint64_t, string_t, HexIntegralOperator<true>>(input, result, count);
 		break;
 	// case PhysicalType::FLOAT:
-	//	UnaryExecutor::ExecuteString<float, string_t, HexNumericOperator<false>>(input, result, count);
+	//	UnaryExecutor::ExecuteString<float, string_t, HexIntegralOperator<false>>(input, result, count);
 	//	break;
 	// case PhysicalType::DOUBLE:
-	//	UnaryExecutor::ExecuteString<double, string_t, HexNumericOperator<false>>(input, result, count);
+	//	UnaryExecutor::ExecuteString<double, string_t, HexIntegralOperator<false>>(input, result, count);
 	//	break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
@@ -179,9 +225,6 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	to_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
 
 	for (auto &type : LogicalType::Integral()) {
-		if (type.id() == LogicalTypeId::HUGEINT) {
-			continue;
-		}
 		to_hex.AddFunction(ScalarFunction({type}, LogicalType::VARCHAR, ToHexFunction));
 	}
 
