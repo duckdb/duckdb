@@ -53,6 +53,9 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 }
 
 StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::SQLNULL) {
+		return StatisticsType::BASE_STATS;
+	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
