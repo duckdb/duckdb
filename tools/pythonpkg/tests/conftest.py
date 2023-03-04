@@ -16,14 +16,10 @@ def duckdb_empty_cursor(request):
 def require():
     def _require(extension_name, db_name=''):
         # Paths to search for extensions
-        this_dir = os.path.dirname(os.path.abspath(__file__))
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../build/debug/extension/*/*.duckdb_extension",
-            f"{this_dir}/../../../build/debug/extension/*/*.duckdb_extension",
-            f"{this_dir}/../../../build/release/extension/*/*.duckdb_extension",
             "../../*.duckdb_extension",
-            "../../*/*.duckdb_extension",
              "../../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../../build/debug/extension/*/*.duckdb_extension",
             "../../../*.duckdb_extension"
