@@ -391,7 +391,7 @@ dbplyr_fill0.duckdb_connection <- function(.con, .data, cols_to_fill, order_by_c
 # @param cache Enable object cache for parquet files
 tbl.duckdb_connection <- function(src, from, cache = FALSE, ...) {
   ident_q <- pkg_method("ident_q", "dbplyr")
-  if (!DBI::dbExistsTable(src, from)) from <- ident_q(from)
+  if (!inherits(from, "sql") & !DBI::dbExistsTable(src, from)) from <- ident_q(from)
   if (cache) DBI::dbExecute(src, "PRAGMA enable_object_cache")
   NextMethod("tbl")
 }

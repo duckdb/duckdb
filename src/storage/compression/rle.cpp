@@ -118,12 +118,12 @@ struct RLEConstants {
 	static constexpr const idx_t RLE_HEADER_SIZE = sizeof(uint64_t);
 };
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 struct RLECompressState : public CompressionState {
 	struct RLEWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
-			auto state = (RLECompressState<T> *)dataptr;
+			auto state = (RLECompressState<T, WRITE_STATISTICS> *)dataptr;
 			state->WriteValue(value, count, is_null);
 		}
 	};
@@ -160,7 +160,7 @@ struct RLECompressState : public CompressionState {
 		auto data = (T *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<RLECompressState<T>::RLEWriter>(data, vdata.validity, idx);
+			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
 		}
 	}
 
@@ -174,7 +174,7 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		if (!is_null) {
+		if (WRITE_STATISTICS && !is_null) {
 			NumericStatistics::Update<T>(current_segment->stats, value);
 		}
 		current_segment->count += count;
@@ -206,7 +206,7 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void Finalize() {
-		state.template Flush<RLECompressState<T>::RLEWriter>();
+		state.template Flush<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>();
 
 		FlushSegment();
 		current_segment.reset();
@@ -222,23 +222,23 @@ struct RLECompressState : public CompressionState {
 	idx_t max_rle_count;
 };
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_unique<RLECompressState<T>>(checkpointer);
+	return make_unique<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
 }
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (RLECompressState<T> &)state_p;
+	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 
 	state.Append(vdata, count);
 }
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 void RLEFinalizeCompress(CompressionState &state_p) {
-	auto &state = (RLECompressState<T> &)state_p;
+	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
 	state.Finalize();
 }
 
@@ -341,10 +341,11 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
-	                           RLEFinalAnalyze<T>, RLEInitCompression<T>, RLECompress<T>, RLEFinalizeCompress<T>,
+	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
+	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
 	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>);
 }
 
@@ -373,6 +374,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 		return GetRLEFunction<float>(type);
 	case PhysicalType::DOUBLE:
 		return GetRLEFunction<double>(type);
+	case PhysicalType::LIST:
+		return GetRLEFunction<uint64_t, false>(type);
 	default:
 		throw InternalException("Unsupported type for RLE");
 	}
@@ -392,6 +395,7 @@ bool RLEFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT64:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
 		return true;
 	default:
 		return false;

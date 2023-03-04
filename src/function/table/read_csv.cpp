@@ -31,6 +31,9 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 		auto found_files = fs.GlobFiles(file_pattern, context);
 		files.insert(files.end(), found_files.begin(), found_files.end());
 	}
+	if (files.empty()) {
+		throw IOException("CSV reader needs at least one file to read");
+	}
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
@@ -61,9 +64,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 
 	vector<string> patterns;
+	if (input.inputs[0].IsNull()) {
+		throw ParserException("CSV reader cannot take NULL as parameter");
+	}
 	if (input.inputs[0].type().id() == LogicalTypeId::LIST) {
 		// list of globs
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			if (val.IsNull()) {
+				throw ParserException("CSV reader cannot take NULL input as parameter");
+			}
 			patterns.push_back(StringValue::Get(val));
 		}
 	} else {
