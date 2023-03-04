@@ -52,102 +52,107 @@ public extension Column {
   }
   
   func cast(to type: Bool.Type) -> Column<Bool> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Bool.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Int8.Type) -> Column<Int8> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Int8.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Int16.Type) -> Column<Int16> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Int16.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Int32.Type) -> Column<Int32> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Int32.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Int64.Type) -> Column<Int64> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Int64.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: IntHuge.Type) -> Column<IntHuge> {
-    let transformer = result.transformer(forColumn: columnIndex, to: IntHuge.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: UInt8.Type) -> Column<UInt8> {
-    let transformer = result.transformer(forColumn: columnIndex, to: UInt8.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: UInt16.Type) -> Column<UInt16> {
-    let transformer = result.transformer(forColumn: columnIndex, to: UInt16.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: UInt32.Type) -> Column<UInt32> {
-    let transformer = result.transformer(forColumn: columnIndex, to: UInt32.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: UInt64.Type) -> Column<UInt64> {
-    let transformer = result.transformer(forColumn: columnIndex, to: UInt64.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Float.Type) -> Column<Float> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Float.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Double.Type) -> Column<Double> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Double.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: String.Type) -> Column<String> {
-    let transformer = result.transformer(forColumn: columnIndex, to: String.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: UUID.Type) -> Column<UUID> {
-    let transformer = result.transformer(forColumn: columnIndex, to: UUID.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Time.Type) -> Column<Time> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Time.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Date.Type) -> Column<Date> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Date.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Timestamp.Type) -> Column<Timestamp> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Timestamp.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Interval.Type) -> Column<Interval> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Interval.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Data.Type) -> Column<Data> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Data.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
   func cast(to type: Decimal.Type) -> Column<Decimal> {
-    let transformer = result.transformer(forColumn: columnIndex, to: Decimal.self)
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  func cast<T: Decodable>(to type: T.Type) -> Column<T> {
+    let transformer = result.decodableTransformer(forColumn: columnIndex, to: T.self)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
 }

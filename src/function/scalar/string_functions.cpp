@@ -51,6 +51,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<GetBitFun>();
 	Register<SetBitFun>();
 	Register<BitPositionFun>();
+	Register<BitStringFun>();
 
 	// uuid functions
 	Register<UUIDFun>();

@@ -24,7 +24,7 @@
 
 @_implementationOnly import Cduckdb
 
-public struct Date: Hashable, Equatable {
+public struct Date: Hashable, Equatable, Codable {
   var days: Int32
 }
 

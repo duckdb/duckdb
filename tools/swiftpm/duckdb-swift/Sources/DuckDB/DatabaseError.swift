@@ -34,4 +34,6 @@ enum DatabaseError: Error {
   case preparedStatementFailedToInitialize(reason: String?)
   case preparedStatementFailedToBindParameter(reason: String?)
   case preparedStatementQueryError(reason: String?)
+  case valueNotFound(Any.Type)
+  case typeMismatch(Any.Type)
 }
