@@ -1,0 +1,64 @@
+# name: test/sql/function/string/hex.test
+# description: Test the to_hex/from_hex function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT to_hex('duckdb');
+----
+6475636B6462
+
+query I
+SELECT from_hex('6475636B6462');
+----
+duckdb
+
+# Test at least one byte
+query I
+SELECT to_hex(0::TINYINT);
+----
+00
+
+# Test skip leading zero
+query I
+SELECT to_hex(8388609::INT);
+----
+800001
+
+query I
+SELECT to_hex(32767::SMALLINT);
+----
+7FFF
+
+query I
+SELECT to_hex(-32767::SMALLINT);
+----
+8001
+
+# Test hugeint
+query I
+SELECT to_hex(18446744073709551616::HUGEINT);
+----
+010000000000000000
+
+query I
+SELECT to_hex(170141183460469231731687303715884105727);
+----
+7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+query I
+SELECT from_hex('0110');
+----
+\x01\x10
+
+
+# Test '110' == '0110'
+query I
+SELECT from_hex('110');
+----
+\x01\x10
+
+
+
