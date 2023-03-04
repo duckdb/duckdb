@@ -941,19 +941,7 @@ void DuckDBPyRelation::Print() {
 	py::print(py::str(ToString()));
 }
 
-ExplainType ExplainTypeFromString(const string &type) {
-	auto ltype = StringUtil::Lower(type);
-	if (ltype.empty() || ltype == "standard") {
-		return duckdb::ExplainType::EXPLAIN_STANDARD;
-	} else if (ltype == "analyze") {
-		return duckdb::ExplainType::EXPLAIN_ANALYZE;
-	} else {
-		throw InvalidInputException("Unrecognized type for 'explain'");
-	}
-}
-
-string DuckDBPyRelation::Explain(const string &type_str) {
-	ExplainType type = ExplainTypeFromString(type_str);
+string DuckDBPyRelation::Explain(ExplainType type) {
 
 	AssertRelation();
 	auto res = rel->Explain(type);

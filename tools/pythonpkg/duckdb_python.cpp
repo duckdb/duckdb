@@ -207,6 +207,9 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
+	m.attr("EXPLAIN_STANDARD") = 0;
+	m.attr("EXPLAIN_ANALYZE") = 1;
+
 	RegisterExceptions(m);
 
 	m.def("connect", &DuckDBPyConnection::Connect,
