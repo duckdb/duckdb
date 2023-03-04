@@ -8,7 +8,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
@@ -588,18 +587,15 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 template <class TA, class TR, class OP>
-static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_stats) {
 	// we can only propagate date stats if the child has stats
-	if (!child_stats[1]) {
-		return nullptr;
-	}
-	auto &nstats = (NumericStatistics &)*child_stats[1];
-	if (nstats.min.IsNull() || nstats.max.IsNull()) {
+	auto &nstats = child_stats[1];
+	if (!NumericStats::HasMinMax(nstats)) {
 		return nullptr;
 	}
 	// run the operator on both the min and the max, this gives us the [min, max] bound
-	auto min = nstats.min.GetValueUnsafe<TA>();
-	auto max = nstats.max.GetValueUnsafe<TA>();
+	auto min = NumericStats::GetMinUnsafe<TA>(nstats);
+	auto max = NumericStats::GetMaxUnsafe<TA>(nstats);
 	if (min > max) {
 		return nullptr;
 	}
@@ -610,11 +606,11 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 
 	auto min_value = Value::CreateValue(min_part);
 	auto max_value = Value::CreateValue(max_part);
-	auto result = make_unique<NumericStatistics>(min_value.type(), min_value, max_value, StatisticsType::LOCAL_STATS);
-	if (child_stats[0]->validity_stats) {
-		result->validity_stats = child_stats[1]->validity_stats->Copy();
-	}
-	return std::move(result);
+	auto result = NumericStats::CreateEmpty(min_value.type());
+	NumericStats::SetMin(result, min_value);
+	NumericStats::SetMax(result, max_value);
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
 }
 
 template <class TA, class TR, class OP>
