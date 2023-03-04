@@ -41,6 +41,8 @@ struct FromHexOperator {
 		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
+		// Add a leading zero
+		// 'fff' is equivalent to '0fff'
 		idx_t i = 0;
 		if (size % 2 != 0) {
 			*output = StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])];
@@ -64,6 +66,7 @@ template <bool SKIP_ZERO>
 struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		// Sufficient space for maximum length
 		char buffer[sizeof(INPUT_TYPE) * 2];
 		char *ptr = buffer;
 		idx_t buffer_size = 0;
@@ -71,7 +74,7 @@ struct HexIntegralOperator {
 		bool seen_non_zero = false;
 		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 8; offset -= 8) {
 			uint8_t byte = (uint8_t)(input >> (offset - 8));
-			// at least one byte space
+			// offset == 8: do not continue. The result has at least one byte
 			if (byte == 0 && SKIP_ZERO && !seen_non_zero && offset > 8) {
 				continue;
 			}
@@ -136,30 +139,6 @@ struct HexHugeIntOperator {
 		return target;
 	}
 };
-
-/*
-static string_t ToHexScalarFunction(string_t input_str) {
-    auto size = input_str.GetSize();
-    auto raw_ptr = input_str.GetDataUnsafe();
-    for (idx_t i = 0; i < size; ++i) {
-
-    }
-}
-*/
-
-/*
-static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-    auto &input_vec = args.data[0];
-
-    vector<char> buffer;
-    UnaryExecutor::Execute<string_t, string_t>(
-        input_vec, result, args.size(),
-        [&](string_t input_string) {
-            return StringVector::AddString(result,
-                                           TranslateScalarFunction(input_string, needle_string, thread_string, buffer));
-        });
-}
-*/
 
 static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
