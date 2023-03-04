@@ -25,4 +25,8 @@ struct BitPositionFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct BitStringFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
