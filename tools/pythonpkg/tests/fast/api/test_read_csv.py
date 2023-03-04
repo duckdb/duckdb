@@ -3,6 +3,7 @@ import datetime
 import pandas
 import pytest
 import duckdb
+from io import StringIO
 
 def TestFile(name):
 	import os
@@ -186,3 +187,8 @@ class TestReadCSV(object):
 		column_names = list(df.columns.values)
 		# The filename is included in the returned columns
 		assert 'filename' in column_names
+
+	def test_read_filelike(self, duckdb_cursor):
+		string = StringIO("c1,c2,c3\na,b,c")
+		res = duckdb_cursor.read_csv(string, header=True).fetchall()
+		assert res == [('a', 'b', 'c')]

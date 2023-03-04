@@ -76,7 +76,7 @@ class DuckDBPyConnection:
     ) -> DuckDBPyRelation: ...
     def read_csv(
         self,
-        name: str,
+        path_or_buffer: object,
         header: Optional[bool | int] = None,
         compression: Optional[str] = None,
         sep: Optional[str] = None,
@@ -370,7 +370,7 @@ def read_json(
     connection: DuckDBPyConnection = ...
 ) -> DuckDBPyRelation: ...
 def read_csv(
-    name: str,
+    path_or_buffer: object,
     header: Optional[bool | int] = None,
     compression: Optional[str] = None,
     sep: Optional[str] = None,
