@@ -10,11 +10,8 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
 
 	def add_file(self, object, filename):
 		if (isinstance(object, io.BytesIO)):
-			print("BYTES IO")
 			with self.open(filename, 'wb') as f:
 				f.write(object.getvalue())
 		elif (isinstance(object, io.StringIO)):
-			print("STRING IO")
 			with self.open(filename, 'w') as f:
 				f.write(object.getvalue())
-
