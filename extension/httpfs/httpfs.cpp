@@ -122,8 +122,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw HTTPException(response.status, response.body, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    status, method, url);
+				throw HTTPException(response, "Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
 			} else {
 				throw IOException("%s error for HTTP %s to '%s'", to_string(err), method, url);
 			}
@@ -320,7 +319,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
 					             "if enabled, and confirm the server supports range requests.";
 				    }
-				    throw HTTPException(response.status, response.body, error);
+				    throw HTTPException(response, error);
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -566,9 +565,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			length = 0;
 			return;
 		} else {
-			throw HTTPException(res->code, res->error,
-			                    Exception::ConstructMessage("Unable to connect to URL \"%s\": %s (%s)", res->http_url,
-			                                                to_string(res->code), res->error));
+			throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
+			                    res->error);
 		}
 	}
 

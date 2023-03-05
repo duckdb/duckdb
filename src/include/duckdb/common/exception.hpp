@@ -283,13 +283,29 @@ public:
 
 class HTTPException : public IOException {
 public:
-	DUCKDB_API explicit HTTPException(int status_code, string response, const string &msg)
-	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(std::move(response)) {
+	template <typename>
+	struct ResponseShape {
+		typedef int status;
+	};
+
+	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
+	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
+	    : HTTPException(response.status, response.body, msg, params...) {
+	}
+
+	template <typename>
+	struct ResponseWrapperShape {
+		typedef int code;
+	};
+	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
+	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
+	    : HTTPException(response.code, response.error, msg, params...) {
 	}
 
 	template <typename... ARGS>
 	explicit HTTPException(int status_code, string response, const string &msg, ARGS... params)
-	    : HTTPException(status_code, std::move(response), ConstructMessage(msg, params...)) {
+	    : IOException(ExceptionType::HTTP, ConstructMessage(msg, params...)), status_code(status_code),
+	      response(std::move(response)) {
 	}
 
 	std::shared_ptr<Exception> Copy() const {
