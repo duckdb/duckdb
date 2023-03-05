@@ -34,7 +34,11 @@ struct FromHexOperator {
 		auto data = input.GetDataUnsafe();
 		auto size = input.GetSize();
 
-		D_ASSERT(size < NumericLimits<idx_t>::Maximum());
+		if (size > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Hexadecimal input length larger than 2^32 are not supported");
+		}
+
+		D_ASSERT(size <= NumericLimits<uint32_t>::Maximum());
 		auto buffer_size = (size + 1) / 2;
 
 		// Allocate empty space
