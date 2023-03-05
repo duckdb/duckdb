@@ -3,6 +3,7 @@
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -363,16 +364,19 @@ struct SortedAggregateFunction {
 	}
 };
 
-unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &bound_function,
-                                                             vector<unique_ptr<Expression>> &children,
-                                                             unique_ptr<FunctionData> bind_info,
-                                                             unique_ptr<BoundOrderModifier> order_bys) {
-
-	auto sorted_bind =
-	    make_unique<SortedAggregateBindData>(context, bound_function, children, std::move(bind_info), *order_bys);
+void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr) {
+	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
+		// not a sorted aggregate: return
+		return;
+	}
+	auto &bound_function = expr.function;
+	auto &children = expr.children;
+	auto &order_bys = *expr.order_bys;
+	auto sorted_bind = make_unique<SortedAggregateBindData>(context, bound_function, expr.children,
+	                                                        std::move(expr.bind_info), order_bys);
 
 	// The arguments are the children plus the sort columns.
-	for (auto &order : order_bys->orders) {
+	for (auto &order : order_bys.orders) {
 		children.emplace_back(std::move(order.expression));
 	}
 
@@ -392,9 +396,9 @@ unique_ptr<FunctionData> FunctionBinder::BindSortedAggregate(AggregateFunction &
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window, SortedAggregateFunction::Serialize, SortedAggregateFunction::Deserialize);
 
-	bound_function = std::move(ordered_aggregate);
-
-	return std::move(sorted_bind);
+	expr.function = std::move(ordered_aggregate);
+	expr.bind_info = std::move(sorted_bind);
+	expr.order_bys.reset();
 }
 
 } // namespace duckdb

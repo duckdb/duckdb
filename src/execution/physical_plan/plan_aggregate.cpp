@@ -10,6 +10,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/function/function_binder.hpp"
+
 namespace duckdb {
 
 static uint32_t RequiredBitsForValue(uint32_t n) {
@@ -175,9 +177,10 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 		expressions.push_back(std::move(group));
 		group = std::move(ref);
 	}
-
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		// bind any sorted aggregates
+		FunctionBinder::BindSortedAggregate(context, bound_aggr);
 		for (auto &child : bound_aggr.children) {
 			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
 			types.push_back(child->return_type);
