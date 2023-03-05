@@ -4,8 +4,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
-#include <string.h>
-
 namespace duckdb {
 
 struct HexStrOperator {
@@ -66,7 +64,6 @@ struct FromHexOperator {
 	}
 };
 
-template <bool SKIP_ZERO>
 struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -79,7 +76,7 @@ struct HexIntegralOperator {
 		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 8; offset -= 8) {
 			uint8_t byte = (uint8_t)(input >> (offset - 8));
 			// offset == 8: do not continue. The result has at least one byte
-			if (byte == 0 && SKIP_ZERO && !seen_non_zero && offset > 8) {
+			if (byte == 0 && !seen_non_zero && offset > 8) {
 				continue;
 			}
 			seen_non_zero = true;
@@ -155,31 +152,31 @@ static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		UnaryExecutor::ExecuteString<int8_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int8_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::INT16:
-		UnaryExecutor::ExecuteString<int16_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int16_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::INT32:
-		UnaryExecutor::ExecuteString<int32_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int32_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::INT64:
-		UnaryExecutor::ExecuteString<int64_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<int64_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::ExecuteString<hugeint_t, string_t, HexHugeIntOperator>(input, result, count);
 		break;
 	case PhysicalType::UINT8:
-		UnaryExecutor::ExecuteString<uint8_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint8_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::UINT16:
-		UnaryExecutor::ExecuteString<uint16_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint16_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::UINT32:
-		UnaryExecutor::ExecuteString<uint32_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint32_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::UINT64:
-		UnaryExecutor::ExecuteString<uint64_t, string_t, HexIntegralOperator<true>>(input, result, count);
+		UnaryExecutor::ExecuteString<uint64_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	// case PhysicalType::FLOAT:
 	//	UnaryExecutor::ExecuteString<float, string_t, HexIntegralOperator<false>>(input, result, count);
