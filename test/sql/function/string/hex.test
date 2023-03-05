@@ -60,5 +60,36 @@ SELECT from_hex('110');
 ----
 \x01\x10
 
+# Test NULL
+statement ok
+CREATE TABLE test (x INT);
 
+statement ok
+INSERT INTO test VALUES (1), (NULL), (2);
+
+query I
+SELECT to_hex(x) FROM test
+----
+01
+NULL
+02
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test (x BLOB);
+
+statement ok
+INSERT INTO test VALUES ('01'), (NULL), ('02');
+
+query I
+SELECT from_hex(x) FROM test
+----
+1
+NULL
+2
+
+statement ok
+DROP TABLE test
 
