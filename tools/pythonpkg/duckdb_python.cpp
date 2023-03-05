@@ -207,8 +207,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
-	m.attr("EXPLAIN_STANDARD") = 0;
-	m.attr("EXPLAIN_ANALYZE") = 1;
+	py::enum_<duckdb::ExplainType>(m, "ExplainType")
+	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
+	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
 
 	RegisterExceptions(m);
 
