@@ -142,10 +142,13 @@ class TestPythonFilesystem:
     def test_arrow_fs_wrapper(self, tmp_path: Path, duckdb_cursor: DuckDBPyConnection):
         fs = importorskip('pyarrow.fs')
         from fsspec.implementations.arrow import ArrowFSWrapper
+        class ExtendedArrowFSWrapper(ArrowFSWrapper):
+            protocol = ('local')
+            # defer to the original implementation that doesn't hardcode the protocol
+            _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
 
         local = fs.LocalFileSystem()
-        local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
-        local_fsspec.protocol = "local"
+        local_fsspec = ExtendedArrowFSWrapper(local, skip_instance_cache=True)
         # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
         filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:
