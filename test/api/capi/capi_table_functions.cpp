@@ -67,6 +67,11 @@ static void capi_register_table_function(duckdb_connection connection, const cha
 	duckdb_table_function_add_parameter(function, type);
 	duckdb_destroy_logical_type(&type);
 
+	// add a named parameter
+	duckdb_logical_type itype = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_table_function_add_named_parameter(function, "my_parameter", itype);
+	duckdb_destroy_logical_type(&itype);
+
 	// set up the function pointers
 	duckdb_table_function_set_bind(function, bind);
 	duckdb_table_function_set_init(function, init);
@@ -90,6 +95,10 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 
 	// now call it
 	result = tester.Query("SELECT * FROM my_function(1)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+
+	result = tester.Query("SELECT * FROM my_function(1, my_parameter=3)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 
