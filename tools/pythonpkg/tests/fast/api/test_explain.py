@@ -35,5 +35,5 @@ class TestExplain(object):
 		res = duckdb.sql('select 42').explain(duckdb.ExplainType.ANALYZE)
 		assert isinstance(res, str)
 
-		res = duckdb.sql('select 42').explain()
+		res = duckdb.sql('select 42').explain(1)
 		assert isinstance(res, str)
