@@ -35,7 +35,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr->return_type);
-	auto &patt_str = StringValue::Get(constant_value);
+	auto patt_str = StringValue::Get(constant_value);
 
 	duckdb_re2::RE2 pattern(patt_str);
 	if (!pattern.ok()) {
@@ -47,7 +47,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		auto contains = make_unique<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
 		                                                     std::move(root->children), nullptr);
 
-		contains->children[1] = make_unique<BoundConstantExpression>(Value(patt_str));
+		if (patt_str.size() == 3 && patt_str[0] == '[' && patt_str[2] == ']') {
+			// '[A]' is seen as equivalent to 'A' by RE2,
+			// we need to remove the brackets to forward this to 'contains'
+			patt_str = string(1, patt_str[1]);
+		}
+		contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(patt_str)));
 		return std::move(contains);
 	}
 	return nullptr;
