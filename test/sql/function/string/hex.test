@@ -78,7 +78,7 @@ statement ok
 DROP TABLE test
 
 statement ok
-CREATE TABLE test (x BLOB);
+CREATE TABLE test (x VARCHAR);
 
 statement ok
 INSERT INTO test VALUES ('01'), (NULL), ('02');
@@ -86,9 +86,9 @@ INSERT INTO test VALUES ('01'), (NULL), ('02');
 query I
 SELECT from_hex(x) FROM test
 ----
-1
+\x01
 NULL
-2
+\x02
 
 statement ok
 DROP TABLE test
