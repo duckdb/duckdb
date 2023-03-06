@@ -192,3 +192,26 @@ class TestReadCSV(object):
 		string = StringIO("c1,c2,c3\na,b,c")
 		res = duckdb_cursor.read_csv(string, header=True).fetchall()
 		assert res == [('a', 'b', 'c')]
+
+	def test_read_filelike_rel_out_of_scope(self, duckdb_cursor):
+		def keep_in_scope():
+			string = StringIO("c1,c2,c3\na,b,c")
+			# Create a ReadCSVRelation on a file-like object
+			# this will add the object to our internal object filesystem
+			rel = duckdb_cursor.read_csv(string, header=True)
+			# The file-like object will still exist, so we can execute this later
+			return rel
+		
+		def close_scope():
+			string = StringIO("c1,c2,c3\na,b,c")
+			# Create a ReadCSVRelation on a file-like object
+			# this will add the object to our internal object filesystem
+			res = duckdb_cursor.read_csv(string, header=True).fetchall()
+			# When the relation goes out of scope - we delete the file-like object from our filesystem
+			return res
+
+		relation = keep_in_scope()
+		res = relation.fetchall()
+
+		res2 = close_scope()
+		assert res == res2

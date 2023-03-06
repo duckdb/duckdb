@@ -37,6 +37,7 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb_python/filesystem_object.hpp"
 
 #include <random>
 
@@ -555,12 +556,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 	BufferedCSVReaderOptions options;
 
+	shared_ptr<ExternalDependency> file_like_object_wrapper;
 	string name;
 	if (!py::isinstance<py::str>(name_p)) {
 		// Make sure that the object filesystem is initialized and registered
 		auto &fs = GetObjectFileSystem();
 		name = StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", GenerateRandomName());
 		fs.attr("add_file")(name_p, name);
+		file_like_object_wrapper = make_unique<PythonDependencies>(make_unique<FileSystemObject>(fs, name));
 	} else {
 		name = py::str(name_p);
 	}
@@ -595,6 +598,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 
 	auto read_csv_p = connection->ReadCSV(name, options);
 	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
+	if (file_like_object_wrapper) {
+		D_ASSERT(!read_csv.extra_dependencies);
+		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
+	}
 
 	if (options.has_header) {
 		// 'options' is only used to initialize the ReadCSV relation
