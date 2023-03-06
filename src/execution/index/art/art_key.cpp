@@ -112,7 +112,7 @@ bool Key::ByteMatches(Key &other, idx_t &depth) {
 	return data[depth] == other[depth];
 }
 
-bool Key::Empty() {
+bool Key::Empty() const {
 	return len == 0;
 }
 

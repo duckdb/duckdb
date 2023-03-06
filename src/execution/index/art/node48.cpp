@@ -122,6 +122,16 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 		new_n16->prefix.Move(n48->prefix);
 
+#ifdef DEBUG
+		idx_t child_count = 0;
+		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+			if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
+				child_count++;
+			}
+		}
+		D_ASSERT(child_count == n48->count);
+#endif
+
 		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 			if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
 				new_n16->key[new_n16->count] = i;

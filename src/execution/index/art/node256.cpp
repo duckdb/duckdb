@@ -84,6 +84,16 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 
 		new_n48->prefix.Move(n256->prefix);
 
+#ifdef DEBUG
+		idx_t child_count = 0;
+		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+			if (n256->children[i]) {
+				child_count++;
+			}
+		}
+		D_ASSERT(child_count == n256->count);
+#endif
+
 		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 			if (n256->children[i]) {
 				new_n48->child_index[i] = new_n48->count;

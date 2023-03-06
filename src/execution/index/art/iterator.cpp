@@ -61,7 +61,7 @@ bool IteratorCurrentKey::operator==(const Key &k) const {
 	return true;
 }
 
-void Iterator::FindMinimum(ARTNode &node) {
+void Iterator::FindMinimum(const ARTNode &node) {
 
 	// reconstruct the prefix
 	auto node_prefix = node.GetPrefix(*art);
@@ -86,13 +86,14 @@ void Iterator::FindMinimum(ARTNode &node) {
 	FindMinimum(*next);
 }
 
-void Iterator::PushKey(ARTNode &cur_node, uint16_t pos) {
-	if (cur_node.DecodeARTNodeType() != ARTNodeType::LEAF) {
-		cur_key.Push(cur_node.GetKeyByte(*art, pos));
+void Iterator::PushKey(const ARTNode &node, const uint16_t &position) {
+	if (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
+		cur_key.Push(node.GetKeyByte(*art, position));
 	}
 }
 
-bool Iterator::Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive) {
+bool Iterator::Scan(const Key &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive) {
+
 	bool has_next;
 	do {
 		if (!bound.Empty()) {
@@ -166,7 +167,7 @@ bool Iterator::Next() {
 	return false;
 }
 
-bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
+bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive) {
 	bool equal = true;
 	if (!node) {
 		return false;
@@ -209,7 +210,7 @@ bool Iterator::LowerBound(ARTNode &node, Key &key, bool inclusive) {
 			// check if leaf is equal to the current key
 			if (cur_key == key) {
 				// if it's not inclusive check if there is a next leaf
-				if (!inclusive && !Next()) {
+				if (!is_inclusive && !Next()) {
 					return false;
 				} else {
 					return true;

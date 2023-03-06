@@ -55,11 +55,11 @@ public:
 	ART *art = nullptr;
 
 	//! Scan the tree
-	bool Scan(Key &bound, idx_t max_count, vector<row_t> &result_ids, bool is_inclusive);
+	bool Scan(const Key &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
 	//! Finds the minimum value of the tree
-	void FindMinimum(ARTNode &node);
+	void FindMinimum(const ARTNode &node);
 	//! Goes to the lower bound of the tree
-	bool LowerBound(ARTNode &node, Key &key, bool inclusive);
+	bool LowerBound(ARTNode node, const Key &key, const bool &is_inclusive);
 
 private:
 	//! Stack of iterator entries
@@ -70,7 +70,7 @@ private:
 	//! Go to the next node
 	bool Next();
 	//! Push part of the key to the current key
-	void PushKey(ARTNode &node, uint16_t pos);
+	void PushKey(const ARTNode &node, const uint16_t &position);
 	//! Pop node from the stack of iterator entries
 	void PopNode();
 };

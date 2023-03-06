@@ -23,13 +23,6 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
 
-	// set the root node of the tree
-	tree = ARTNode();
-	if (block_id != DConstants::INVALID_INDEX) {
-		tree.Deserialize(*this, block_id, block_offset);
-	}
-	serialized_data_pointer = BlockPointer(block_id, block_offset);
-
 	// initialize all allocators
 	nodes.emplace(ARTNodeType::PREFIX_SEGMENT, FixedSizeAllocator(sizeof(PrefixSegment)));
 	nodes.emplace(ARTNodeType::LEAF_SEGMENT, FixedSizeAllocator(sizeof(LeafSegment)));
@@ -38,6 +31,13 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	nodes.emplace(ARTNodeType::NODE_16, FixedSizeAllocator(sizeof(Node16)));
 	nodes.emplace(ARTNodeType::NODE_48, FixedSizeAllocator(sizeof(Node48)));
 	nodes.emplace(ARTNodeType::NODE_256, FixedSizeAllocator(sizeof(Node256)));
+
+	// set the root node of the tree
+	tree = ARTNode();
+	if (block_id != DConstants::INVALID_INDEX) {
+		tree.Deserialize(*this, block_id, block_offset);
+	}
+	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
 	// validate the types of the key columns
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -707,7 +707,7 @@ void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 // Lookup
 //===--------------------------------------------------------------------===//
 
-Leaf *ART::Lookup(ARTNode &node, const Key &key, idx_t depth) {
+Leaf *ART::Lookup(ARTNode node, const Key &key, idx_t depth) {
 
 	while (node) {
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {

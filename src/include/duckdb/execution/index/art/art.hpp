@@ -137,7 +137,7 @@ private:
 	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself
 	void Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id);
 	//! Find the node with a matching key, or return nullptr if not found
-	Leaf *Lookup(ARTNode &node, const Key &key, idx_t depth);
+	Leaf *Lookup(ARTNode node, const Key &key, idx_t depth);
 	//! Returns all row IDs belonging to a key greater (or equal) than the search key
 	bool SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	//! Returns all row IDs belonging to a key less (or equal) than the upper_bound

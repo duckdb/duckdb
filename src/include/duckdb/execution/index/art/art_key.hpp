@@ -63,7 +63,7 @@ public:
 	bool operator==(const Key &k) const;
 
 	bool ByteMatches(Key &other, idx_t &depth);
-	bool Empty();
+	bool Empty() const;
 	void ConcatenateKey(ArenaAllocator &allocator, Key &concat_key);
 
 private:
