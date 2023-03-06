@@ -20,7 +20,7 @@ class BytesIOWrapper:
 	def __getattr__(self, attr: str):
 		return getattr(self.buffer, attr)
 
-	def read(self, n: int | None = -1) -> bytes:
+	def read(self, n: Union[int, None] = -1) -> bytes:
 		assert self.buffer is not None
 		bytestring = self.buffer.read(n).encode(self.encoding)
 		#When n=-1/n greater than remaining bytes: Read entire file/rest of file
