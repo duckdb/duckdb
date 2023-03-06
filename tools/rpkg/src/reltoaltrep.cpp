@@ -210,7 +210,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 		return RelToAltrep::string_class;
 	default:
 		// custom string cast for R strings.
-		if (type.HasAlias() && type.GetAlias() == "r_string") {
+		if (type.HasAlias() && type.GetAlias() == R_STRING_TYPE_NAME) {
 			return RelToAltrep::string_class;
 		}
 
