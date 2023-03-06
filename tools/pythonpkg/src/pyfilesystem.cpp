@@ -56,8 +56,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 
 	string flags_s = DecodeFlags(flags);
 
-	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
-	const auto &handle = filesystem.attr("open")(path, py::str(flags_s), py::arg("seekable") = true);
+	const auto &handle = filesystem.attr("open")(path, py::str(flags_s));
 	return make_unique<PythonFileHandle>(*this, path, handle);
 }
 
