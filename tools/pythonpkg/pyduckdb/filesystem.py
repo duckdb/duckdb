@@ -1,42 +1,12 @@
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from shutil import copyfileobj
-from io import StringIO, TextIOBase
-from typing import Union
-
-# Shamelessly stolen from pandas
-class BytesIOWrapper:
-	# Wrapper that wraps a StringIO buffer and reads bytes from it
-	# Created for compat with pyarrow read_csv
-	def __init__(self, buffer: Union[StringIO, TextIOBase], encoding: str = "utf-8") -> None:
-		self.buffer = buffer
-		self.encoding = encoding
-		# Because a character can be represented by more than 1 byte,
-		# it is possible that reading will produce more bytes than n
-		# We store the extra bytes in this overflow variable, and append the
-		# overflow to the front of the bytestring the next time reading is performed
-		self.overflow = b""
-
-	def __getattr__(self, attr: str):
-		return getattr(self.buffer, attr)
-
-	def read(self, n: Union[int, None] = -1) -> bytes:
-		assert self.buffer is not None
-		bytestring = self.buffer.read(n).encode(self.encoding)
-		#When n=-1/n greater than remaining bytes: Read entire file/rest of file
-		combined_bytestring = self.overflow + bytestring
-		if n is None or n < 0 or n >= len(combined_bytestring):
-			self.overflow = b""
-			return combined_bytestring
-		else:
-			to_return = combined_bytestring[:n]
-			self.overflow = combined_bytestring[n:]
-			return to_return
+from .bytes_io_wrapper import BytesIOWrapper
+from io import TextIOBase
 
 def is_file_like(obj):
-	if not (hasattr(obj, "read") or hasattr(obj, "write")):
-		return False
-	return bool(hasattr(obj, "__iter__"))
+	# We only care that we can read from the file
+	return hasattr(obj, "read")
 
 class ModifiedMemoryFileSystem(MemoryFileSystem):
 	protocol = ('DUCKDB_INTERNAL_OBJECTSTORE',)
@@ -86,6 +56,7 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
 			raise ValueError("Can not read from a non file-like object")
 		path = self._strip_protocol(path)
 		if isinstance(object, TextIOBase):
+			# Wrap this so that we can return a bytes object from 'read'
 			self.store[path] = BytesIOWrapper(object)
 		else:
 			self.store[path] = object
