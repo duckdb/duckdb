@@ -7,7 +7,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
 
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
-		Allocator().FreeData(buffer, Storage::BLOCK_ALLOC_SIZE);
+		Allocator::DefaultAllocator().FreeData(buffer, Storage::BLOCK_ALLOC_SIZE);
 	}
 }
 
@@ -17,16 +17,17 @@ idx_t FixedSizeAllocator::New() {
 	if (free_list.empty()) {
 
 		// get a new buffer
-		auto buffer = Allocator().AllocateData(Storage::BLOCK_ALLOC_SIZE);
+
+		auto buffer = Allocator::DefaultAllocator().AllocateData(Storage::BLOCK_ALLOC_SIZE);
 		idx_t buffer_id = buffers.size();
-		D_ASSERT((buffer_id & 0xffff0000) == 0);
+		D_ASSERT((buffer_id & BUFFER_ID_TO_ZERO) == 0);
 
 		// add all new positions to the free list
 		for (idx_t offset = 0; offset < offsets_per_buffer; offset++) {
 			auto position = offset << sizeof(uint8_t) * 8 * 4;
-			D_ASSERT((position & 0xf000ffff) == 0);
+			D_ASSERT((position & OFFSET_TO_ZERO) == 0);
 			position |= buffer_id;
-			D_ASSERT((position & 0xf0000000) == 0);
+			D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
 			free_list.insert(position);
 		}
 
@@ -61,16 +62,18 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	for (auto &buffer : other.buffers) {
 		buffers.push_back(buffer);
 	}
+	other.buffers.clear();
 
 	if (!buffer_count) {
 		free_list = other.free_list;
+		other.free_list.clear();
 		return;
 	}
 
 	// merge the free lists
 	for (const auto &other_position : other.free_list) {
 		auto position = other_position + buffer_count;
-		D_ASSERT((other_position & 0xffff0000) == (position & 0xffff0000));
+		D_ASSERT((other_position & BUFFER_ID_TO_ZERO) == (position & BUFFER_ID_TO_ZERO));
 		free_list.insert(position);
 	}
 	other.free_list.clear();
@@ -86,13 +89,13 @@ void FixedSizeAllocator::FinalizeVacuum() {
 
 	// free all (now unused) buffers
 	while (vacuum_threshold < buffers.size()) {
-		Allocator().FreeData(buffers.back(), Storage::BLOCK_ALLOC_SIZE);
+		Allocator::DefaultAllocator().FreeData(buffers.back(), Storage::BLOCK_ALLOC_SIZE);
 		buffers.pop_back();
 	}
 
 	// remove all invalid positions from the free list
 	auto lower_bound = vacuum_threshold;
-	D_ASSERT((lower_bound & 0xffff0000) == 0);
+	D_ASSERT((lower_bound & BUFFER_ID_TO_ZERO) == 0);
 	auto lower_bound_it = free_list.lower_bound(lower_bound);
 	free_list.erase(lower_bound_it, free_list.end());
 
@@ -105,8 +108,8 @@ void FixedSizeAllocator::FinalizeVacuum() {
 bool FixedSizeAllocator::NeedsVacuum(const idx_t &position) const {
 
 	// get the buffer ID
-	D_ASSERT((position & 0xf0000000) == 0);
-	auto buffer_id = position & 0x0000ffff;
+	D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
+	auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
 
 	if (buffer_id >= vacuum_threshold) {
 		return true;
@@ -126,13 +129,13 @@ idx_t FixedSizeAllocator::Vacuum(const idx_t &position) {
 
 data_ptr_t FixedSizeAllocator::Get(const idx_t &position) const {
 
-	D_ASSERT((position & 0xf0000000) == 0);
-	auto buffer_id = position & 0x0000ffff;
+	D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
+	auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
 	auto offset = position >> sizeof(uint8_t) * 8 * 4;
 
 	D_ASSERT(buffer_id < buffers.size());
 	D_ASSERT(offset < offsets_per_buffer);
-	return buffers[buffer_id] + offset;
+	return buffers[buffer_id] + offset * allocation_size;
 }
 
 } // namespace duckdb

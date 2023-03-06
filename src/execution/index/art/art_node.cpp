@@ -32,7 +32,7 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 
 		node.GetPrefix(art)->Free(art);
 
-		auto position = node.pointer & 0x0fffffff;
+		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
 		auto type = node.DecodeARTNodeType();
 
 		// free the children of the node
@@ -105,7 +105,7 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, A
 	auto type = node.DecodeARTNodeType();
 	if (vacuum_nodes.find(type) != vacuum_nodes.end()) {
 		D_ASSERT(art.nodes.find(type) != art.nodes.end());
-		auto position = node.pointer & 0x0fffffff;
+		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
 		if (art.nodes.at(type).NeedsVacuum(position)) {
 			node.pointer = art.nodes.at(type).Vacuum(position);
 			node.EncodeARTNodeType(type);
@@ -141,7 +141,7 @@ T *ARTNode::Get(ART &art) const {
 
 	auto type = DecodeARTNodeType();
 	D_ASSERT(art.nodes.find(type) != art.nodes.end());
-	return art.nodes.at(type).Get<T>(pointer & 0x0fffffff);
+	return art.nodes.at(type).Get<T>(pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO);
 }
 
 //===--------------------------------------------------------------------===//
@@ -155,8 +155,9 @@ void ARTNode::EncodeARTNodeType(const ARTNodeType &type) {
 	type_64_bit <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
 
 	// ensure that we do not overwrite any bits
-	D_ASSERT(pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8) == 0);
-	pointer &= type_64_bit;
+	D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
+	pointer |= type_64_bit;
+	D_ASSERT(DecodeARTNodeType() == type);
 }
 
 ARTNodeType ARTNode::DecodeARTNodeType() const {
@@ -543,7 +544,8 @@ void ARTNode::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNod
 	}
 
 	D_ASSERT(buffer_counts.find(type) != buffer_counts.end());
-	D_ASSERT((pointer & 0xffff0000) == ((pointer + buffer_counts.at(type)) & 0xffff0000));
+	D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
+	         ((pointer + buffer_counts.at(type)) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 	pointer += buffer_counts.at(type);
 }
 

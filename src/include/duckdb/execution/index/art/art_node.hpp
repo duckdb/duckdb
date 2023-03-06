@@ -17,13 +17,13 @@ namespace duckdb {
 
 // classes
 enum class ARTNodeType : uint8_t {
-	PREFIX_SEGMENT = 0,
-	LEAF_SEGMENT = 1,
-	LEAF = 2,
-	NODE_4 = 3,
-	NODE_16 = 4,
-	NODE_48 = 5,
-	NODE_256 = 6
+	PREFIX_SEGMENT = 1,
+	LEAF_SEGMENT = 2,
+	LEAF = 3,
+	NODE_4 = 4,
+	NODE_16 = 5,
+	NODE_48 = 6,
+	NODE_256 = 7
 };
 class ART;
 class ARTNode;

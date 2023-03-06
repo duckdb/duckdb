@@ -14,11 +14,13 @@ namespace duckdb {
 
 //! Custom comparison function for the positions in the free list (priority queue) of the fixed size allocator
 struct CustomLess {
-	bool operator()(const idx_t left, const idx_t right) const {
-		if ((left & 0x0000ffff) < (right & 0x0000ffff)) {
+	bool operator()(idx_t left, idx_t right) const {
+		// compare buffer IDs: offset and first byte to zero
+		if ((left & 0x00000000FFFFFFFF) < (right & 0x00000000FFFFFFFF)) {
 			return true;
 		}
-		return ((left & 0x0fff0000) < (right & 0x0fff0000));
+		// compare offsets: buffer ID and first byte to zero
+		return ((left & 0x00FFFFFF00000000) < (right & 0x00FFFFFF00000000));
 	}
 };
 
@@ -27,6 +29,13 @@ struct CustomLess {
 //! The second to fourth byte store the offset into a buffer, and the last four bytes store the buffer ID,
 //! i.e., a position looks like this [0: empty, 1  - 3: offset, 4 - 7: buffer ID].
 class FixedSizeAllocator {
+public:
+	static constexpr idx_t BUFFER_ID_TO_ZERO = 0xFFFFFFFF00000000;
+	static constexpr idx_t OFFSET_TO_ZERO = 0xFF000000FFFFFFFF;
+	static constexpr idx_t OFFSET_AND_FIRST_BYTE_TO_ZERO = 0x00000000FFFFFFFF;
+	static constexpr idx_t BUFFER_ID_AND_OFFSET_TO_ZERO = 0xFF00000000000000;
+	static constexpr idx_t FIRST_BYTE_TO_ZERO = 0x00FFFFFFFFFFFFFF;
+
 public:
 	explicit FixedSizeAllocator(const idx_t &allocation_size);
 	~FixedSizeAllocator();
