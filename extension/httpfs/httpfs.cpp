@@ -324,10 +324,12 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
-				    auto content_length = stoll(response.get_header_value("Content-Length", 0));
-				    if ((idx_t)content_length != buffer_out_len) {
-					    throw IOException("HTTP GET error: Content-Length from server mismatches requested "
-					                      "range, server may not support range requests.");
+				    if (response.has_header("Content-Length")) {
+					    auto content_length = stoll(response.get_header_value("Content-Length", 0));
+					    if ((idx_t)content_length != buffer_out_len) {
+						    throw IOException("HTTP GET error: Content-Length from server mismatches requested "
+						                      "range, server may not support range requests.");
+					    }
 				    }
 			    }
 			    return true;
