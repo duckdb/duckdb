@@ -78,7 +78,6 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
 			f = self.store[path]
 			return f
 		else:
-			print(self.store.keys())
 			raise FileNotFoundError(path)
 
 	def add_file(self, object, path):
